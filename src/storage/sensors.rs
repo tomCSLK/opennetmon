@@ -6,12 +6,14 @@ use crate::error::{Error, Result};
 use crate::sensors::Unit;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
+use crate::status::Thresholds;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChannelRecord {
     pub id: i64,
     pub key: String,
     pub unit: Unit,
+    pub thresholds: Thresholds,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,6 +53,10 @@ struct ChannelRow {
     sensor_id: i64,
     key: String,
     unit: String,
+    warn_above: Option<f64>,
+    warn_below: Option<f64>,
+    down_above: Option<f64>,
+    down_below: Option<f64>,
 }
 
 fn corrupt(what: &str) -> Error {
@@ -90,7 +96,8 @@ const SENSOR_SELECT: &str =
 
 async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorRecord>> {
     let channels = sqlx::query_as::<_, ChannelRow>(
-        "SELECT id, sensor_id, key, unit FROM channels ORDER BY id",
+        "SELECT id, sensor_id, key, unit, warn_above, warn_below, down_above, down_below \
+         FROM channels ORDER BY id",
     )
     .fetch_all(pool)
     .await?;
@@ -104,6 +111,12 @@ async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorR
                         id: c.id,
                         key: c.key.clone(),
                         unit: Unit::parse(&c.unit).ok_or_else(|| corrupt("unit"))?,
+                        thresholds: Thresholds {
+                            warn_above: c.warn_above,
+                            warn_below: c.warn_below,
+                            down_above: c.down_above,
+                            down_below: c.down_below,
+                        },
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -213,6 +226,37 @@ pub async fn create_sensor(
     }
     tx.commit().await?;
     Ok(id)
+}
+
+/// Replaces the thresholds of channels, all or none. Every channel must belong to `sensor_id`.
+pub async fn set_thresholds(
+    pool: &SqlitePool,
+    sensor_id: i64,
+    limits: &[(i64, Thresholds)],
+) -> Result<()> {
+    for (_, t) in limits {
+        t.validate().map_err(|m| Error::Invalid(m.to_owned()))?;
+    }
+    let mut tx = pool.begin().await?;
+    for (channel_id, t) in limits {
+        let done = sqlx::query(
+            "UPDATE channels SET warn_above = ?, warn_below = ?, down_above = ?, down_below = ? \
+             WHERE id = ? AND sensor_id = ?",
+        )
+        .bind(t.warn_above)
+        .bind(t.warn_below)
+        .bind(t.down_above)
+        .bind(t.down_below)
+        .bind(channel_id)
+        .bind(sensor_id)
+        .execute(&mut *tx)
+        .await?;
+        if done.rows_affected() == 0 {
+            return Err(Error::NotFound);
+        }
+    }
+    tx.commit().await?;
+    Ok(())
 }
 
 pub async fn set_enabled(pool: &SqlitePool, id: i64, enabled: bool) -> Result<()> {
@@ -365,6 +409,71 @@ mod tests {
             assert!(matches!(err, Error::Invalid(_)), "{err:?}");
         }
         assert!(list_sensors(&pool, device).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn thresholds_are_stored_validated_and_scoped_to_the_sensor() {
+        let (_dir, pool, device) = setup().await;
+        let a = create_sensor(&pool, device, "A", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let b = create_sensor(&pool, device, "B", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let a_channel = get_sensor(&pool, a).await.unwrap().unwrap().channels[0].id;
+        let b_channel = get_sensor(&pool, b).await.unwrap().unwrap().channels[0].id;
+        assert!(
+            get_sensor(&pool, a).await.unwrap().unwrap().channels[0]
+                .thresholds
+                .is_empty()
+        );
+
+        let t = Thresholds {
+            warn_above: Some(50.0),
+            down_above: Some(200.0),
+            ..Thresholds::default()
+        };
+        set_thresholds(&pool, a, &[(a_channel, t)]).await.unwrap();
+        assert_eq!(
+            get_sensor(&pool, a).await.unwrap().unwrap().channels[0].thresholds,
+            t
+        );
+        assert!(
+            get_sensor(&pool, b).await.unwrap().unwrap().channels[0]
+                .thresholds
+                .is_empty()
+        );
+
+        // Foreign channel: nothing changes. Invalid limits: nothing changes.
+        let other = Thresholds {
+            warn_above: Some(1.0),
+            ..Thresholds::default()
+        };
+        assert!(matches!(
+            set_thresholds(&pool, a, &[(a_channel, other), (b_channel, other)]).await,
+            Err(Error::NotFound)
+        ));
+        assert_eq!(
+            get_sensor(&pool, a).await.unwrap().unwrap().channels[0].thresholds,
+            t
+        );
+        let bad = Thresholds {
+            warn_above: Some(9.0),
+            down_above: Some(1.0),
+            ..Thresholds::default()
+        };
+        assert!(matches!(
+            set_thresholds(&pool, a, &[(a_channel, bad)]).await,
+            Err(Error::Invalid(_))
+        ));
+        set_thresholds(&pool, a, &[(a_channel, Thresholds::default())])
+            .await
+            .unwrap();
+        assert!(
+            get_sensor(&pool, a).await.unwrap().unwrap().channels[0]
+                .thresholds
+                .is_empty()
+        );
     }
 
     #[tokio::test]

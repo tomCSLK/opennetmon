@@ -149,28 +149,47 @@ pub async fn record_poll(
     Ok(change)
 }
 
+type EventRow = (i64, i64, i64, Option<String>, String, String);
+
+fn event_from_row((id, ts_ms, sensor_id, from, to, message): EventRow) -> Result<Event> {
+    Ok(Event {
+        id,
+        ts_ms,
+        sensor_id,
+        from: from.as_deref().map(parse_status).transpose()?,
+        to: parse_status(&to)?,
+        message,
+    })
+}
+
+const EVENT_SELECT: &str =
+    "SELECT id, ts_ms, sensor_id, from_status, to_status, message FROM events";
+
 /// The newest events first.
 pub async fn recent_events(pool: &SqlitePool, limit: u32) -> Result<Vec<Event>> {
-    type Row = (i64, i64, i64, Option<String>, String, String);
-    let rows: Vec<Row> = sqlx::query_as(
-        "SELECT id, ts_ms, sensor_id, from_status, to_status, message FROM events \
-         ORDER BY ts_ms DESC, id DESC LIMIT ?",
-    )
+    sqlx::query_as::<_, EventRow>(&format!(
+        "{EVENT_SELECT} ORDER BY ts_ms DESC, id DESC LIMIT ?"
+    ))
     .bind(i64::from(limit))
     .fetch_all(pool)
-    .await?;
-    rows.into_iter()
-        .map(|(id, ts_ms, sensor_id, from, to, message)| {
-            Ok(Event {
-                id,
-                ts_ms,
-                sensor_id,
-                from: from.as_deref().map(parse_status).transpose()?,
-                to: parse_status(&to)?,
-                message,
-            })
-        })
-        .collect()
+    .await?
+    .into_iter()
+    .map(event_from_row)
+    .collect()
+}
+
+/// The newest events of one sensor first.
+pub async fn events_of_sensor(pool: &SqlitePool, sensor_id: i64, limit: u32) -> Result<Vec<Event>> {
+    sqlx::query_as::<_, EventRow>(&format!(
+        "{EVENT_SELECT} WHERE sensor_id = ? ORDER BY ts_ms DESC, id DESC LIMIT ?"
+    ))
+    .bind(sensor_id)
+    .bind(i64::from(limit))
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(event_from_row)
+    .collect()
 }
 
 #[cfg(test)]

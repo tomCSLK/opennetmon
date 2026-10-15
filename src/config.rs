@@ -48,6 +48,10 @@ pub struct Config {
     pub poller_enabled: bool,
     /// How many devices are polled at the same time (1 to 256).
     pub poll_concurrency: usize,
+    /// Days raw measurements are kept (1 to 3650); hourly and daily rollups serve longer ranges.
+    pub retention_raw_days: u32,
+    /// Days hourly rollups and status events are kept (at least `retention_raw_days`); daily rollups are kept forever.
+    pub retention_hourly_days: u32,
 }
 
 impl Default for Config {
@@ -61,6 +65,8 @@ impl Default for Config {
             session_ttl_hours: 168,
             poller_enabled: true,
             poll_concurrency: 16,
+            retention_raw_days: 7,
+            retention_hourly_days: 365,
         }
     }
 }
@@ -133,6 +139,16 @@ impl Config {
                 "poll_concurrency must be between 1 and 256",
             ));
         }
+        if !(1..=3_650).contains(&self.retention_raw_days) {
+            return Err(ConfigError::Invalid(
+                "retention_raw_days must be between 1 and 3650",
+            ));
+        }
+        if !(self.retention_raw_days..=36_500).contains(&self.retention_hourly_days) {
+            return Err(ConfigError::Invalid(
+                "retention_hourly_days must be between retention_raw_days and 36500",
+            ));
+        }
         Ok(())
     }
 }
@@ -156,6 +172,28 @@ mod tests {
         assert!(!parsed.poller_enabled);
         assert_eq!(parsed.poll_concurrency, 4);
         for bad in ["poll_concurrency = 0", "poll_concurrency = 257"] {
+            assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn retention_defaults_and_validation() {
+        let config = Config::from_sources(None, no_env).unwrap();
+        assert_eq!(
+            (config.retention_raw_days, config.retention_hourly_days),
+            (7, 365)
+        );
+        let ok = Config::from_sources(
+            Some("retention_raw_days = 14\nretention_hourly_days = 14"),
+            no_env,
+        );
+        assert!(ok.is_ok());
+        for bad in [
+            "retention_raw_days = 0",
+            "retention_raw_days = 3651",
+            "retention_raw_days = 30\nretention_hourly_days = 29",
+            "retention_hourly_days = 36501",
+        ] {
             assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
         }
     }

@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use netmon::auth::{self, Role};
 use netmon::config::Config;
 use netmon::crypto::SecretBox;
+use netmon::maintenance::Retention;
 use netmon::poller::Poller;
 use netmon::storage::{self, users};
 use netmon::web::{self, AppState};
@@ -139,6 +140,10 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
             pool.clone(),
             Arc::clone(&secrets),
             config.poll_concurrency,
+            Retention {
+                raw_days: config.retention_raw_days,
+                hourly_days: config.retention_hourly_days,
+            },
         ))
     } else {
         tracing::warn!("poller_enabled is false; no device is polled");

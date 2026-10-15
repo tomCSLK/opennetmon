@@ -7,6 +7,7 @@ pub mod crypto;
 pub mod devices;
 pub mod discovery;
 pub mod error;
+pub mod maintenance;
 pub mod poller;
 pub mod sensors;
 pub mod snmp;

@@ -79,3 +79,8 @@ h2 { margin: 0 0 1rem; font-size: 1.15rem; }
 .badge.status-unknown, .badge.status-paused { color: var(--fg); background: var(--border); }
 input[type=checkbox] { width: 1.1rem; height: 1.1rem; }
 .actions form { margin: 0; }
+
+nav.ranges { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; }
+.chart { margin-bottom: 1rem; }
+.u-legend { color: var(--fg); }
+td a, h1 a { color: inherit; }

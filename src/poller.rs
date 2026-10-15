@@ -22,6 +22,7 @@ use tokio::task::JoinHandle;
 use crate::crypto::SecretBox;
 use crate::devices::Device;
 use crate::error::Result;
+use crate::maintenance::{self, Retention};
 use crate::sensors::ping::PingClients;
 use crate::sensors::spec::SensorSpec;
 use crate::sensors::{PollContext, Sensor, SensorError};
@@ -39,10 +40,13 @@ const MAX_START_OFFSET: Duration = Duration::from_secs(30);
 /// Extra time on top of the device's own timeouts before a sensor poll is cut off.
 const POLL_GRACE: Duration = Duration::from_secs(2);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(10);
+const MAINTENANCE_FIRST_RUN: Duration = Duration::from_secs(30);
+const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(600);
 
 pub struct Poller {
     shutdown: watch::Sender<bool>,
     supervisor: JoinHandle<()>,
+    maintenance: JoinHandle<()>,
 }
 
 struct Shared {
@@ -53,19 +57,27 @@ struct Shared {
 }
 
 impl Poller {
-    /// Starts polling. `concurrency` is the number of devices polled in parallel.
-    pub fn spawn(pool: SqlitePool, secrets: Arc<SecretBox>, concurrency: usize) -> Self {
+    /// Starts polling and the periodic rollup/retention run. `concurrency` is the number of
+    /// devices polled in parallel.
+    pub fn spawn(
+        pool: SqlitePool,
+        secrets: Arc<SecretBox>,
+        concurrency: usize,
+        retention: Retention,
+    ) -> Self {
+        let (shutdown, signal) = watch::channel(false);
+        let maintenance = tokio::spawn(maintain(pool.clone(), retention, signal.clone()));
         let shared = Arc::new(Shared {
             pool,
             secrets,
             ping: PingClients::new(),
             permits: Semaphore::new(concurrency.max(1)),
         });
-        let (shutdown, signal) = watch::channel(false);
         let supervisor = tokio::spawn(supervise(shared, signal));
         Self {
             shutdown,
             supervisor,
+            maintenance,
         }
     }
 
@@ -73,6 +85,28 @@ impl Poller {
     pub async fn stop(self) {
         let _ = self.shutdown.send(true);
         let _ = self.supervisor.await;
+        let _ = self.maintenance.await;
+    }
+}
+
+/// Rolls measurements up and applies the retention: shortly after start, then periodically.
+async fn maintain(pool: SqlitePool, retention: Retention, mut shutdown: watch::Receiver<bool>) {
+    let mut pause = MAINTENANCE_FIRST_RUN;
+    loop {
+        tokio::select! {
+            _ = tokio::time::sleep(pause) => {}
+            _ = shutdown.changed() => return,
+        }
+        pause = MAINTENANCE_INTERVAL;
+        match maintenance::run(&pool, now_ms(), retention).await {
+            Ok(report) => {
+                tracing::debug!(?report, "maintenance finished");
+                if report.raw_deleted + report.hourly_deleted + report.events_deleted > 0 {
+                    tracing::info!(?report, "old data deleted");
+                }
+            }
+            Err(e) => tracing::error!(error = %e, "maintenance failed"),
+        }
     }
 }
 
@@ -317,7 +351,15 @@ pub async fn poll_device_once(
                     .collect(),
                 Err(_) => Vec::new(),
             };
-            (assess(spec, &result), samples)
+            let limits = |key: &str| {
+                record
+                    .channels
+                    .iter()
+                    .find(|c| c.key == key)
+                    .map(|c| c.thresholds)
+                    .unwrap_or_default()
+            };
+            (assess(spec, &result, &limits), samples)
         };
         let (assessment, samples) = assessment_and_values;
         if let Some(change) = record_poll(pool, record.id, started, &samples, &assessment).await? {
@@ -568,6 +610,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn thresholds_move_a_sensor_between_up_warning_and_down() {
+        use crate::status::Thresholds;
+        use crate::storage::sensors::{get_sensor, set_thresholds};
+        let env = env().await;
+        let oid = vec![1, 3, 6, 1, 4, 1, 99, 5, 0];
+        let sensor = create_sensor(
+            &env.pool,
+            env.device,
+            "Temp",
+            &SensorSpec::Oid {
+                oid: oid.clone(),
+                mode: OidMode::Gauge,
+                scale: 1.0,
+            },
+        )
+        .await
+        .unwrap();
+        let channel = get_sensor(&env.pool, sensor)
+            .await
+            .unwrap()
+            .unwrap()
+            .channels[0]
+            .id;
+        let limits = Thresholds {
+            warn_above: Some(100.0),
+            down_above: Some(300.0),
+            ..Thresholds::default()
+        };
+        set_thresholds(&env.pool, sensor, &[(channel, limits)])
+            .await
+            .unwrap();
+
+        let mut state = SensorSet::default();
+        for (value, expected) in [
+            (50, Status::Up),
+            (150, Status::Warning),
+            (400, Status::Down),
+            (50, Status::Up),
+        ] {
+            env.agent.set(&oid, FakeValue::Gauge32(value));
+            env.poll(&mut state).await;
+            assert_eq!(env.state_of(sensor).await, expected, "value {value}");
+        }
+        let message = get_state(&env.pool, sensor).await.unwrap().unwrap().message;
+        assert_eq!(message, "OK");
+        let events = recent_events(&env.pool, 10).await.unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|e| e.to == Status::Down && e.message.contains("Down-Grenze 300")),
+            "{events:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn disabled_and_deleted_sensors_are_not_polled() {
         let env = env().await;
         let a = create_sensor(&env.pool, env.device, "A", &SensorSpec::Uptime)
@@ -630,6 +727,10 @@ mod tests {
             env.pool.clone(),
             Arc::new(SecretBox::from_key([9u8; 32])),
             4,
+            Retention {
+                raw_days: 7,
+                hourly_days: 365,
+            },
         );
         tokio::time::sleep(Duration::from_millis(100)).await;
         let started = Instant::now();

@@ -3,6 +3,7 @@
 //! Pure functions only; persistence is in `storage::status`. Threshold evaluation per channel
 //! (warning/down limits) plugs into [`assess`] later.
 
+use crate::sensors::format::{channel_label, format_value};
 use crate::sensors::spec::SensorSpec;
 use crate::sensors::{Measurement, SensorError};
 
@@ -76,12 +77,93 @@ pub struct SensorState {
     pub consecutive_failures: u32,
 }
 
+/// Limits of one channel, in the channel's base unit. A value strictly beyond a limit trips it.
+/// Down limits win over warning limits.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Thresholds {
+    pub warn_above: Option<f64>,
+    pub warn_below: Option<f64>,
+    pub down_above: Option<f64>,
+    pub down_below: Option<f64>,
+}
+
+/// Which limit a value tripped.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Breach {
+    WarnAbove(f64),
+    WarnBelow(f64),
+    DownAbove(f64),
+    DownBelow(f64),
+}
+
+impl Breach {
+    pub fn is_down(self) -> bool {
+        matches!(self, Self::DownAbove(_) | Self::DownBelow(_))
+    }
+}
+
+impl Thresholds {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Down limits must not be milder than warning limits, otherwise a warning could never show.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let all = [
+            self.warn_above,
+            self.warn_below,
+            self.down_above,
+            self.down_below,
+        ];
+        if all.iter().flatten().any(|v| !v.is_finite()) {
+            return Err("Schwellwerte müssen endliche Zahlen sein.");
+        }
+        if let (Some(w), Some(d)) = (self.warn_above, self.down_above)
+            && d < w
+        {
+            return Err("Die obere Down-Grenze darf nicht unter der oberen Warngrenze liegen.");
+        }
+        if let (Some(w), Some(d)) = (self.warn_below, self.down_below)
+            && d > w
+        {
+            return Err("Die untere Down-Grenze darf nicht über der unteren Warngrenze liegen.");
+        }
+        let upper = self.warn_above.or(self.down_above);
+        let lower = self.warn_below.or(self.down_below);
+        if let (Some(u), Some(l)) = (upper, lower)
+            && u < l
+        {
+            return Err("Die obere Grenze darf nicht unter der unteren Grenze liegen.");
+        }
+        Ok(())
+    }
+
+    /// The most severe limit that `value` trips, if any.
+    pub fn breach(&self, value: f64) -> Option<Breach> {
+        if let Some(l) = self.down_above.filter(|l| value > *l) {
+            return Some(Breach::DownAbove(l));
+        }
+        if let Some(l) = self.down_below.filter(|l| value < *l) {
+            return Some(Breach::DownBelow(l));
+        }
+        if let Some(l) = self.warn_above.filter(|l| value > *l) {
+            return Some(Breach::WarnAbove(l));
+        }
+        self.warn_below
+            .filter(|l| value < *l)
+            .map(Breach::WarnBelow)
+    }
+}
+
 /// What one poll says about the sensor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Assessment {
     /// The measurement worked and the value is fine.
     Healthy(String),
-    /// The measurement worked but the value says the monitored thing is down (interface down).
+    /// The measurement worked but a warning limit is exceeded.
+    Degraded(String),
+    /// The measurement worked but the value says the monitored thing is down (interface down,
+    /// down limit exceeded).
     Unhealthy(String),
     /// The measurement itself failed (timeout, unreachable, unusable value).
     Failed(String),
@@ -119,7 +201,12 @@ fn oper_status_name(code: i64) -> &'static str {
     }
 }
 
-pub fn assess(spec: &SensorSpec, result: &Result<Measurement, SensorError>) -> Assessment {
+/// Judges a poll result. `limits` gives the thresholds of a channel by key.
+pub fn assess(
+    spec: &SensorSpec,
+    result: &Result<Measurement, SensorError>,
+    limits: &dyn Fn(&str) -> Thresholds,
+) -> Assessment {
     let measurement = match result {
         Ok(m) => m,
         Err(e) => return Assessment::Failed(truncate(e.user_message())),
@@ -135,13 +222,45 @@ pub fn assess(spec: &SensorSpec, result: &Result<Measurement, SensorError>) -> A
             None => Assessment::Failed("Kein Statuswert erhalten".to_owned()),
         };
     }
-    Assessment::Healthy("OK".to_owned())
+    let mut worst: Option<(Breach, String)> = None;
+    for reading in &measurement.channels {
+        let Some(value) = reading.value else { continue };
+        let Some(breach) = limits(&reading.key).breach(value) else {
+            continue;
+        };
+        if worst
+            .as_ref()
+            .is_none_or(|(w, _)| breach.is_down() && !w.is_down())
+        {
+            let (side, kind, limit) = match breach {
+                Breach::WarnAbove(l) => ("über", "Warngrenze", l),
+                Breach::WarnBelow(l) => ("unter", "Warngrenze", l),
+                Breach::DownAbove(l) => ("über", "Down-Grenze", l),
+                Breach::DownBelow(l) => ("unter", "Down-Grenze", l),
+            };
+            worst = Some((
+                breach,
+                format!(
+                    "{}: {} liegt {side} der {kind} {}",
+                    channel_label(&reading.key),
+                    format_value(reading.unit, value),
+                    format_value(reading.unit, limit),
+                ),
+            ));
+        }
+    }
+    match worst {
+        Some((breach, message)) if breach.is_down() => Assessment::Unhealthy(message),
+        Some((_, message)) => Assessment::Degraded(message),
+        None => Assessment::Healthy("OK".to_owned()),
+    }
 }
 
 /// The new state after a poll at `now_ms`, given the previous state (if any).
 pub fn advance(prev: Option<&SensorState>, assessment: &Assessment, now_ms: i64) -> SensorState {
     let (status, failures, message) = match assessment {
         Assessment::Healthy(m) => (Status::Up, 0, m),
+        Assessment::Degraded(m) => (Status::Warning, 0, m),
         Assessment::Unhealthy(m) => (Status::Down, 0, m),
         Assessment::Failed(m) => {
             let failures = prev.map_or(0, |p| p.consecutive_failures).saturating_add(1);
@@ -194,6 +313,10 @@ mod tests {
     use super::*;
     use crate::sensors::{ChannelReading, Unit};
     use crate::snmp::SnmpError;
+
+    fn none(_: &str) -> Thresholds {
+        Thresholds::default()
+    }
 
     fn failed() -> Assessment {
         Assessment::Failed("x".to_owned())
@@ -275,18 +398,18 @@ mod tests {
     fn interface_status_is_judged_by_oper_status() {
         let spec = SensorSpec::InterfaceStatus { if_index: 1 };
         assert!(matches!(
-            assess(&spec, &status_reading(Some(1.0))),
+            assess(&spec, &status_reading(Some(1.0)), &none),
             Assessment::Healthy(_)
         ));
-        let down = assess(&spec, &status_reading(Some(2.0)));
+        let down = assess(&spec, &status_reading(Some(2.0)), &none);
         assert!(
             matches!(&down, Assessment::Unhealthy(m) if m.contains("down")),
             "{down:?}"
         );
-        let lower = assess(&spec, &status_reading(Some(7.0)));
+        let lower = assess(&spec, &status_reading(Some(7.0)), &none);
         assert!(matches!(&lower, Assessment::Unhealthy(m) if m.contains("lowerLayerDown")));
         assert!(matches!(
-            assess(&spec, &status_reading(None)),
+            assess(&spec, &status_reading(None), &none),
             Assessment::Failed(_)
         ));
     }
@@ -295,11 +418,11 @@ mod tests {
     fn other_sensors_are_healthy_when_they_deliver() {
         let ok = Ok(Measurement::default());
         assert!(matches!(
-            assess(&SensorSpec::Uptime, &ok),
+            assess(&SensorSpec::Uptime, &ok, &none),
             Assessment::Healthy(_)
         ));
         assert!(matches!(
-            assess(&SensorSpec::Ping, &ok),
+            assess(&SensorSpec::Ping, &ok, &none),
             Assessment::Healthy(_)
         ));
     }
@@ -307,21 +430,21 @@ mod tests {
     #[test]
     fn errors_fail_with_a_german_message() {
         let err = Err(SensorError::Snmp(SnmpError::Timeout));
-        let a = assess(&SensorSpec::Uptime, &err);
+        let a = assess(&SensorSpec::Uptime, &err, &none);
         assert!(
             matches!(&a, Assessment::Failed(m) if m.contains("Keine Antwort")),
             "{a:?}"
         );
         let err = Err(SensorError::Unreachable("x".to_owned()));
         assert!(
-            matches!(assess(&SensorSpec::Ping, &err), Assessment::Failed(m) if m.starts_with("Nicht erreichbar"))
+            matches!(assess(&SensorSpec::Ping, &err, &none), Assessment::Failed(m) if m.starts_with("Nicht erreichbar"))
         );
     }
 
     #[test]
     fn long_messages_are_truncated() {
         let err = Err(SensorError::BadValue("ä".repeat(1_000)));
-        let Assessment::Failed(m) = assess(&SensorSpec::Uptime, &err) else {
+        let Assessment::Failed(m) = assess(&SensorSpec::Uptime, &err, &none) else {
             panic!("expected failure");
         };
         assert_eq!(m.chars().count(), MAX_MESSAGE_CHARS);
@@ -344,6 +467,131 @@ mod tests {
         assert_eq!(device_status([(true, Some(Up)), (false, Some(Down))]), Up);
         assert_eq!(device_status([(false, Some(Down))]), Paused);
         assert_eq!(device_status([]), Unknown);
+    }
+
+    fn rtt(value: f64) -> Result<Measurement, SensorError> {
+        Ok(Measurement {
+            channels: vec![ChannelReading {
+                key: "rtt".to_owned(),
+                unit: Unit::Milliseconds,
+                value: Some(value),
+            }],
+        })
+    }
+
+    fn rtt_limits(_: &str) -> Thresholds {
+        Thresholds {
+            warn_above: Some(50.0),
+            down_above: Some(200.0),
+            ..Thresholds::default()
+        }
+    }
+
+    #[test]
+    fn thresholds_turn_values_into_warning_and_down() {
+        let spec = SensorSpec::Ping;
+        assert!(matches!(
+            assess(&spec, &rtt(10.0), &rtt_limits),
+            Assessment::Healthy(_)
+        ));
+        assert!(
+            matches!(
+                assess(&spec, &rtt(50.0), &rtt_limits),
+                Assessment::Healthy(_)
+            ),
+            "limits are exclusive"
+        );
+        let warn = assess(&spec, &rtt(80.0), &rtt_limits);
+        assert!(
+            matches!(&warn, Assessment::Degraded(m) if m == "Antwortzeit: 80 ms liegt über der Warngrenze 50 ms"),
+            "{warn:?}"
+        );
+        let down = assess(&spec, &rtt(250.0), &rtt_limits);
+        assert!(
+            matches!(&down, Assessment::Unhealthy(m) if m.contains("Down-Grenze 200 ms")),
+            "{down:?}"
+        );
+    }
+
+    #[test]
+    fn a_down_breach_beats_a_warning_on_another_channel() {
+        let m = Ok(Measurement {
+            channels: vec![
+                ChannelReading {
+                    key: "in".to_owned(),
+                    unit: Unit::BitsPerSecond,
+                    value: Some(2_000_000.0),
+                },
+                ChannelReading {
+                    key: "out".to_owned(),
+                    unit: Unit::BitsPerSecond,
+                    value: Some(9_000_000.0),
+                },
+                ChannelReading {
+                    key: "gone".to_owned(),
+                    unit: Unit::BitsPerSecond,
+                    value: None,
+                },
+            ],
+        });
+        let limits = |key: &str| match key {
+            "in" => Thresholds {
+                warn_above: Some(1_000_000.0),
+                ..Thresholds::default()
+            },
+            "out" => Thresholds {
+                down_above: Some(8_000_000.0),
+                ..Thresholds::default()
+            },
+            _ => Thresholds {
+                down_above: Some(0.0),
+                ..Thresholds::default()
+            },
+        };
+        let a = assess(&SensorSpec::InterfaceTraffic { if_index: 1 }, &m, &limits);
+        assert!(
+            matches!(&a, Assessment::Unhealthy(m) if m.starts_with("Ausgehend: 9 Mbit/s")),
+            "{a:?}"
+        );
+    }
+
+    #[test]
+    fn degraded_polls_warn_without_debounce_and_recover() {
+        let s = advance(None, &Assessment::Degraded("hoch".to_owned()), 5);
+        assert_eq!((s.status, s.consecutive_failures), (Status::Warning, 0));
+        let s = advance(Some(&s), &healthy(), 6);
+        assert_eq!(s.status, Status::Up);
+    }
+
+    #[test]
+    fn threshold_validation_and_breach_logic() {
+        let t = |wa, wb, da, db| Thresholds {
+            warn_above: wa,
+            warn_below: wb,
+            down_above: da,
+            down_below: db,
+        };
+        assert!(Thresholds::default().validate().is_ok() && Thresholds::default().is_empty());
+        assert!(t(Some(1.0), None, Some(2.0), None).validate().is_ok());
+        assert!(t(Some(2.0), None, Some(1.0), None).validate().is_err());
+        assert!(t(None, Some(1.0), None, Some(2.0)).validate().is_err());
+        assert!(
+            t(Some(1.0), Some(5.0), None, None).validate().is_err(),
+            "upper below lower"
+        );
+        assert!(t(Some(f64::NAN), None, None, None).validate().is_err());
+        assert!(
+            t(Some(10.0), Some(1.0), Some(20.0), Some(0.0))
+                .validate()
+                .is_ok()
+        );
+
+        let both = t(Some(10.0), Some(1.0), Some(20.0), Some(0.0));
+        assert_eq!(both.breach(5.0), None);
+        assert_eq!(both.breach(11.0), Some(Breach::WarnAbove(10.0)));
+        assert_eq!(both.breach(0.5), Some(Breach::WarnBelow(1.0)));
+        assert_eq!(both.breach(21.0), Some(Breach::DownAbove(20.0)));
+        assert_eq!(both.breach(-1.0), Some(Breach::DownBelow(0.0)));
     }
 
     #[test]

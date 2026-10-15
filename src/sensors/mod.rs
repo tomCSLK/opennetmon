@@ -3,6 +3,7 @@
 //! New sensor types implement [`Sensor`]; the poller never special-cases a type.
 
 pub mod counter;
+pub mod format;
 pub mod ping;
 pub mod snmp;
 pub mod spec;

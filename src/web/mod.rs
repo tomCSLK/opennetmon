@@ -6,6 +6,7 @@ pub mod credentials;
 pub mod devices;
 pub mod groups;
 pub mod overview;
+pub mod sensor_detail;
 pub mod sensors;
 #[cfg(test)]
 pub(crate) mod testutil;
@@ -78,6 +79,12 @@ pub fn router(state: AppState) -> Router {
             "/devices/{id}/sensors/interfaces",
             post(sensors::create_interfaces),
         )
+        .route("/sensors/{id}", get(sensor_detail::detail))
+        .route("/sensors/{id}/data", get(sensor_detail::data))
+        .route(
+            "/sensors/{id}/thresholds",
+            post(sensor_detail::save_thresholds),
+        )
         .route("/sensors/{id}/toggle", post(sensors::toggle))
         .route("/sensors/{id}/delete", post(sensors::delete))
         .route("/healthz", get(healthz))
@@ -140,6 +147,7 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "sensor_deleted" => Some("Sensor gelöscht."),
         "sensor_paused" => Some("Sensor pausiert."),
         "sensor_resumed" => Some("Sensor fortgesetzt."),
+        "thresholds_saved" => Some("Schwellwerte gespeichert."),
         _ => None,
     }
 }
