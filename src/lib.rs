@@ -6,6 +6,7 @@ pub mod credentials;
 pub mod crypto;
 pub mod devices;
 pub mod error;
+pub mod sensors;
 pub mod snmp;
 pub mod storage;
 pub mod web;
