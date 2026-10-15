@@ -11,21 +11,19 @@ Entwickelt wird auf Zorin OS (Desktop), betrieben auf Ubuntu Server.
 
 Zielumgebung: privates Netz mit TP-Link Omada (Software-Controller, Site `MCS6`): Gateway ER605, drei Smart-Switches
 (2× SG2008, 1× SG2008P), drei Access Points (1× EAP225, 2× EAP653). SNMP wird im Controller site-weit konfiguriert
-(aktuell nur SNMPv3, v1/v2c aus). Ob und was Gateway und Access Points per SNMP liefern, ist im Spike zu klären;
-die Omada-Controller-API ist **nicht** Teil des SNMP-MVP.
+und ist dort nur als **SNMPv3 authNoPriv mit MD5** aktiv (v1/v2c aus, kein Privacy-Passwort). Gemessen im Spike:
+Switches und Access Points antworten, der ER605 nicht. Switches liefern 64-Bit-Counter (`ifXTable`), Access Points nur
+32-Bit-Counter (`ifTable`). Die Omada-Controller-API ist **nicht** Teil des SNMP-MVP.
 
-## Sprachentscheidung: Rust bevorzugt, Python als Fallback
+## Sprachentscheidung: Rust (entschieden)
 
-**Phase 0 (Spike, vor allem anderen):** Ein minimales Rust-CLI (`cargo run --example snmp_probe`)
-fragt `sysDescr`, `sysUpTime` und `IF-MIB::ifHCInOctets` von echten Omada-Geräten (mindestens ein Switch, zusätzlich Gateway und Access Point) ab:
-- SNMPv2c
-- SNMPv3 authPriv (SHA-256/AES-128, zusätzlich die tatsächlich auf den Geräten konfigurierte Kombination; Omada-Geräte: authNoPriv/MD5)
-- GETBULK-Walk über `ifTable`/`ifXTable`
+**Phase 0 (Spike) ist abgeschlossen, Entscheidung am 2026-10-15: Rust bleibt.** `examples/snmp_probe` fragt
+`sysDescr`, `sysUpTime`, `ifHCInOctets` und GETBULK-Walks über `ifTable`/`ifXTable` per SNMPv2c und SNMPv3
+(authNoPriv und authPriv) ab und lief gegen den lokalen `snmpd` (SHA-256/AES-128) sowie gegen alle SNMP-fähigen Omada-Geräte
+(authNoPriv/MD5). Details und Messwerte: `docs/decisions/0001-sprache.md`.
 
-**Fallback auf Python nur, wenn** SNMPv3 mit der auf den Geräten konfigurierten Auth/Priv-Kombination
-mit `snmp2` nicht zuverlässig funktioniert und sich das nicht mit vertretbarem Aufwand lösen lässt.
-Ergebnis des Spikes in `docs/decisions/0001-sprache.md` festhalten, bevor weitergebaut wird.
-Nicht eigenmächtig die Sprache wechseln – bei Problemen Befund dokumentieren und nachfragen.
+Der Python-Fallback (unten) ist **nicht** gewählt und nur noch als Dokumentation der Alternative erhalten.
+Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund dokumentieren und nachfragen.
 
 ## Stack (Rust)
 
@@ -37,13 +35,16 @@ Nicht eigenmächtig die Sprache wechseln – bei Problemen Befund dokumentieren 
 - Ping: `surge-ping`; bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
-  `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter),
-  `chacha20poly1305` (Verschlüsselung gespeicherter SNMP-Secrets)
+  `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
+  erzeugt den Salt selbst), `sha2` (Session-Token-Hash), `subtle` (Vergleich in konstanter Zeit), `rand` (Tokens),
+  `rpassword` (Passwortabfrage in der CLI), `chacha20poly1305` (Verschlüsselung gespeicherter SNMP-Secrets, noch nicht eingebaut)
 - Rust Edition 2024, stabile Toolchain
+- `rust-embed` braucht das Feature `mime-guess`; `sqlx` das Feature `macros` für `migrate!` (keine Compile-Time-Queries)
+- `snmp2` hat keinen eingebauten Timeout: jede Anfrage selbst mit `tokio::time::timeout` begrenzen
 
 Neue Abhängigkeiten nur mit kurzer Begründung im Commit; keine unmaintained Crates.
 
-## Stack (Python-Fallback, nur nach Entscheidung in Phase 0)
+## Stack (Python-Fallback, nicht gewählt)
 
 FastAPI + Uvicorn, Jinja2 + htmx, `pysnmp` 7.x (asyncio-API – ältere synchrone Beispiele aus dem Netz
 sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung mit `uv`,
@@ -64,7 +65,7 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
    (`ifOperStatus`), benutzerdefinierter OID-Sensor (Gauge/Counter)
 3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden
 4. Schwellwerte je Kanal → Statusberechnung; Statusübersicht und Detailseite mit Graph (1h/24h/7d/30d)
-5. Login (lokale Benutzer), Rolle Admin/Leser
+5. Login (lokale Benutzer), Rolle Admin/Leser – **umgesetzt** (Anlegen per CLI, siehe `docs/benutzer-und-login.md`)
 6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – erst nach 1–5
 
 **Nicht im MVP:** SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET,
@@ -73,14 +74,16 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 ## Architektur
 
 Ein Binary, ein Prozess, Module:
-- `config` – TOML-Datei + ENV-Overrides
-- `storage` – sqlx-Repository, Migrations, Rollups, Retention
+- `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`)
+- `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
+- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen), Migrations, Rollups, Retention
 - `poller` – Scheduler, verteilt Polls gleichmäßig über das Intervall (kein Burst zur vollen Minute);
   globale Nebenläufigkeit per `Semaphore`; Timeout und Retries pro Gerät; ein langsames Gerät blockiert nie andere
 - `sensors` – ein Trait `Sensor` + Implementierung je Sensortyp
 - `status` – Schwellwertauswertung, Statusübergänge, Ereignislog
 - `alerting` – Benachrichtigungen (entkoppelt über Channel/Queue)
-- `web` – axum-Router, Handler, Templates, Auth
+- `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
+  Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`)
 
 ### Messdaten
 
@@ -89,13 +92,20 @@ Ein Binary, ein Prozess, Module:
 - Counter → Rate: Differenz / Zeitdelta; Counter-Wrap und Reset (z. B. Gerätereboot, `sysUpTime` kleiner) erkennen
   und dann **keinen** Wert schreiben statt eines Ausreißers
 - Zeitstempel intern UTC; Anzeige in der Zeitzone des Browsers
+- Access Points liefern nur 32-Bit-Counter (`ifTable`, kein `ifXTable`): Wrap bei 32 Bit sauber behandeln, Intervall passend wählen
+- Interface-Indizes der Switches sind nicht fortlaufend (z. B. 49153): Namen über `ifName`/`ifDescr` auswerten
 
 ## Sicherheit
 
 - SNMP ausschließlich lesend
 - SNMP-Community/v3-Passwörter verschlüsselt in der DB; Schlüssel aus Datei mit Rechten 0600 (Pfad in Config)
 - Secrets niemals loggen, nie in HTML ausgeben (Formulare zeigen nur „gesetzt/nicht gesetzt")
-- Passwörter mit argon2; Session-Cookies `HttpOnly`, `SameSite=Strict`; CSRF-Schutz für alle POST-Formulare
+- Passwörter mit argon2; Session-Cookies `HttpOnly`, `SameSite=Strict`, `Secure` laut Config (`cookie_secure`, Standard `true`);
+  CSRF-Schutz für alle POST-Formulare (Login: Double-Submit-Cookie, danach Token pro Sitzung)
+- Sitzungen serverseitig; in der DB steht nur der SHA-256-Wert des Cookie-Tokens; kein Standardbenutzer, erster Admin per CLI
+- Sicherheits-Header auf allen Antworten (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`)
+- Bekannte Lücke: keine Begrenzung von Anmeldeversuchen (Reverse Proxy oder später eigene Begrenzung)
+- Omada-SNMP ist nur authNoPriv/MD5 (keine Verschlüsselung, schwacher Hash): nur im privaten Netz, Passwort lang und einzigartig wählen
 - Standard-Bind `127.0.0.1:8080`; TLS über vorgeschalteten Reverse Proxy (Caddy oder nginx)
 - Eingaben (IP, OID, Intervalle) serverseitig validieren
 
@@ -130,6 +140,8 @@ cargo fmt
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo run -- --config ./dev/config.toml
+cargo run -- --config ./dev/config.toml user add <name> --role admin    # auch: user passwd, user list
+cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv --auth md5   # Passwörter nur per Umgebung
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
@@ -139,8 +151,9 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 ## Offene Punkte (vom Nutzer zu klären)
 
 - Endgültiger Projektname
-- Welche SNMPv3-Auth/Priv-Kombination nutzen die Omada-Geräte? (Controller zeigt nur Benutzer und Passwort; Passwort
-  nie in Chat, Repo oder Drive, nur lokal als Umgebungsvariable)
-- Welche der Geräte (Switches, ER605, EAPs) antworten tatsächlich auf SNMP?
-- Erwartete Anzahl Geräte/Sensoren (bestimmt Polling-Nebenläufigkeit und DB-Wahl langfristig)
 - Ist der Server vom Internet getrennt? (relevant für Updates und E-Mail-Versand)
+- SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller auf ein längeres
+  Passwort ändern und lokal in `~/.config/netmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
+- ER605 (kein SNMP): nur per Ping überwachen oder später über die Omada-API?
+
+Geklärt: Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

@@ -7,15 +7,22 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+argon2 = "0.6.0"
+askama = "0.16.1"
 axum = "0.8"
 clap = { version = "4", features = ["derive"] }
+rand = "0.9"
+rpassword = "7.5.4"
+rust-embed = { version = "8.13.0", features = ["mime-guess"] }
 serde = { version = "1", features = ["derive"] }
+sha2 = "0.11.1"
 snmp2 = { version = "0.5", default-features = false, features = ["tokio", "crypto-rust"] }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "derive"] }
+subtle = "2.6.1"
 thiserror = "2.0.21"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "signal"] }
 toml = "1.1.8"
-tower-http = { version = "0.6", features = ["trace", "compression-gzip"] }
+tower-http = { version = "0.6", features = ["trace", "compression-gzip", "set-header"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
@@ -23,3 +30,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 http-body-util = "0.1.5"
 tempfile = "3.27.0"
 tower = { version = "0.5", features = ["util"] }
+
+# Argon2 is far too slow unoptimized; keep debug builds and tests usable.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3

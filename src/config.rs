@@ -9,6 +9,7 @@ use serde::Deserialize;
 const ENV_LISTEN: &str = "NETMON_LISTEN";
 const ENV_DATABASE_PATH: &str = "NETMON_DATABASE_PATH";
 const ENV_LOG_FILTER: &str = "NETMON_LOG_FILTER";
+const MAX_SESSION_TTL_HOURS: u64 = 24 * 90;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -34,6 +35,10 @@ pub struct Config {
     pub database_path: PathBuf,
     /// `tracing` filter directive, e.g. `info,netmon=debug`. `RUST_LOG` takes precedence.
     pub log_filter: String,
+    /// Mark session cookies `Secure`. Keep `true` behind a TLS reverse proxy; only plain-HTTP development needs `false`.
+    pub cookie_secure: bool,
+    /// Absolute session lifetime in hours.
+    pub session_ttl_hours: u64,
 }
 
 impl Default for Config {
@@ -42,6 +47,8 @@ impl Default for Config {
             listen: SocketAddr::from(([127, 0, 0, 1], 8080)),
             database_path: PathBuf::from("/var/lib/netmon/netmon.db"),
             log_filter: "info".to_owned(),
+            cookie_secure: true,
+            session_ttl_hours: 168,
         }
     }
 }
@@ -97,6 +104,11 @@ impl Config {
         }
         if self.log_filter.trim().is_empty() {
             return Err(ConfigError::Invalid("log_filter must not be empty"));
+        }
+        if !(1..=MAX_SESSION_TTL_HOURS).contains(&self.session_ttl_hours) {
+            return Err(ConfigError::Invalid(
+                "session_ttl_hours must be between 1 and 2160",
+            ));
         }
         Ok(())
     }
@@ -170,6 +182,21 @@ mod tests {
     fn empty_database_path_is_rejected() {
         let err = Config::from_sources(Some("database_path = \"\""), no_env).unwrap_err();
         assert!(matches!(err, ConfigError::Invalid(_)));
+    }
+
+    #[test]
+    fn cookies_are_secure_by_default_and_ttl_is_validated() {
+        let config = Config::from_sources(None, no_env).unwrap();
+        assert!(config.cookie_secure);
+        assert_eq!(config.session_ttl_hours, 168);
+
+        let config = Config::from_sources(Some("cookie_secure = false"), no_env).unwrap();
+        assert!(!config.cookie_secure);
+
+        for bad in ["session_ttl_hours = 0", "session_ttl_hours = 2161"] {
+            let err = Config::from_sources(Some(bad), no_env).unwrap_err();
+            assert!(matches!(err, ConfigError::Invalid(_)), "{bad}");
+        }
     }
 
     #[test]

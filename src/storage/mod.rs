@@ -1,5 +1,7 @@
 //! SQLite storage: connection pool (WAL mode) and migrations.
 
+pub mod users;
+
 use std::path::Path;
 use std::time::Duration;
 
