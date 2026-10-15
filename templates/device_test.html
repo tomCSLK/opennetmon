@@ -1,0 +1,29 @@
+{% extends "app.html" %}
+{% block title %}Verbindungstest – netmon{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Verbindungstest: {{ device.name }}</h1>
+  <p class="muted">{{ device.host }}:{{ device.polling.port }} · {{ profile_summary }}</p>
+  {% if let Some(ok) = success %}
+  <p class="flash" role="status">Verbindung erfolgreich ({{ ok.round_trip_ms }} ms).</p>
+  <table>
+    <tbody>
+      <tr><th scope="row">Gerätebeschreibung</th><td>{{ ok.sys_descr }}</td></tr>
+      <tr><th scope="row">Laufzeit</th><td>{{ ok.uptime }}</td></tr>
+    </tbody>
+  </table>
+  {% endif %}
+  {% if let Some(message) = failure %}
+  <p class="error" role="alert">{{ message }}</p>
+  {% endif %}
+  <div class="actions-row">
+    <form method="post" action="/devices/{{ device.id }}/test">
+      <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+      <button type="submit">Erneut testen</button>
+    </form>
+    <a class="button secondary" href="/devices/{{ device.id }}/edit">Gerät bearbeiten</a>
+    <a class="button secondary" href="/">Zur Übersicht</a>
+  </div>
+  <p class="muted">Der Test nutzt höchstens 10 Sekunden Timeout und eine Wiederholung.</p>
+</div>
+{% endblock %}

@@ -2,7 +2,55 @@
 {% block title %}Übersicht – netmon{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>Übersicht</h1>
+  <div class="head">
+    <h1>Übersicht</h1>
+    {% if layout.is_admin %}
+    <div class="actions">
+      <a class="button" href="/devices/new">Neues Gerät</a>
+      <a class="button secondary" href="/groups/new">Neue Gruppe</a>
+    </div>
+    {% endif %}
+  </div>
+  {% if let Some(message) = flash %}
+  <p class="flash" role="status">{{ message }}</p>
+  {% endif %}
+  {% if rows.is_empty() %}
   <p class="muted">Noch keine Geräte angelegt.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Adresse</th><th>Intervall</th>{% if layout.is_admin %}<th>SNMP-Profil</th><th></th>{% endif %}</tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+      {% if let Some(group) = row.group %}
+      <tr class="group indent-{{ row.indent }}">
+        <th colspan="{% if layout.is_admin %}4{% else %}3{% endif %}">{{ group.name }}</th>
+        {% if layout.is_admin %}
+        <td>{% if group.id > 0 %}<a href="/groups/{{ group.id }}/edit">Gruppe bearbeiten</a>{% endif %}</td>
+        {% endif %}
+      </tr>
+      {% endif %}
+      {% if let Some(device) = row.device %}
+      <tr class="indent-{{ row.indent }}">
+        <td>{{ device.name }}</td>
+        <td>{{ device.host }}:{{ device.polling.port }}</td>
+        <td>{{ device.polling.interval_secs }} s</td>
+        {% if layout.is_admin %}
+        <td>{{ device.profile_name }}</td>
+        <td class="row-actions">
+          <form method="post" action="/devices/{{ device.id }}/test">
+            <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+            <button type="submit" class="link small">Testen</button>
+          </form>
+          <a href="/devices/{{ device.id }}/edit">Bearbeiten</a>
+        </td>
+        {% endif %}
+      </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 </div>
 {% endblock %}

@@ -31,7 +31,8 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - Templates/UI: `askama` (server-seitiges HTML), **htmx** für Interaktivität, **uPlot** für Graphen.
   JS/CSS lokal vendoren (kein CDN – Server steht ggf. ohne Internet), per `rust-embed` ins Binary.
   Kein npm, kein WASM-Frontend.
-- SNMP: `snmp2` mit Features `tokio` und `crypto-rust` (keine OpenSSL-Abhängigkeit)
+- SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
+  auf dem Stack und überläuft in Tokio-Threads mit 2 MB Stack)
 - Ping: `surge-ping`; bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
@@ -61,8 +62,8 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
 
 ## MVP-Umfang
 
-1. Geräteverwaltung (CRUD), Gruppen, SNMP-Credentials (v2c, v3 authNoPriv/authPriv) als wiederverwendbare Profile –
-   Profile **umgesetzt** (`docs/snmp-profile.md`), Geräte und Gruppen folgen
+1. Geräteverwaltung (CRUD), Gruppen, SNMP-Credentials (v2c, v3 authNoPriv/authPriv) als wiederverwendbare Profile – **umgesetzt**
+   (`docs/snmp-profile.md`, `docs/geraete-und-gruppen.md`), inklusive Verbindungstest je Gerät
 2. Sensortypen: Ping, SNMP Uptime, Interface-Traffic (IF-MIB, 64-Bit-HC-Counter), Interface-Status
    (`ifOperStatus`), benutzerdefinierter OID-Sensor (Gauge/Counter)
 3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden
@@ -78,15 +79,17 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 Ein Binary, ein Prozess, Module:
 - `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`)
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
-- `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
-- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile), Migrations, Rollups, Retention
+- `snmp` – `SnmpClient` (GET mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; Poller und Sensoren bauen darauf auf
+- `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
+- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`), Migrations, Rollups, Retention
 - `poller` – Scheduler, verteilt Polls gleichmäßig über das Intervall (kein Burst zur vollen Minute);
   globale Nebenläufigkeit per `Semaphore`; Timeout und Retries pro Gerät; ein langsames Gerät blockiert nie andere
 - `sensors` – ein Trait `Sensor` + Implementierung je Sensortyp
 - `status` – Schwellwertauswertung, Statusübergänge, Ereignislog
 - `alerting` – Benachrichtigungen (entkoppelt über Channel/Queue)
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
-  Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`)
+  Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
+  (`web::overview`), Gruppen-, Geräte- und Profilseiten (`web::groups`, `web::devices`, `web::credentials`)
 
 ### Messdaten
 
@@ -134,9 +137,10 @@ Ein Binary, ein Prozess, Module:
 ## Tests
 
 - Unit-Tests für Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Config-Parsing
-- Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent; Gerätetests gegen echte
-  Omada-Hardware nur manuell, nicht in `cargo test`
-- Handler-Tests mit `axum`/`tower::ServiceExt::oneshot`
+- Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent (`tests/snmp_local.rs`, überspringen sich ohne Agent oder
+  ohne `NETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`)
+- Handler-Tests mit `axum`/`tower::ServiceExt::oneshot`, gemeinsame Helfer in `src/web/testutil.rs`; SNMP-Tests ohne Netz über den
+  Fake-v2c-Agenten `src/snmp/testagent.rs`
 
 ## Befehle
 
@@ -148,6 +152,7 @@ cargo run -- --config ./dev/config.toml
 cargo run -- --config ./dev/config.toml key generate                    # einmalig, vor dem ersten Serverstart
 cargo run -- --config ./dev/config.toml user add <name> --role admin    # auch: user passwd, user list
 cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv --auth md5   # Passwörter nur per Umgebung
+cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
@@ -162,5 +167,7 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   Passwort ändern und lokal in `~/.config/netmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
 - ER605 (kein SNMP): nur per Ping überwachen oder später über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
+- htmx und uPlot sind noch nicht eingebunden (die Oberfläche ist bisher rein serverseitig gerendert); die Skripte müssten aus dem Netz
+  geladen und lokal vendort werden, dafür braucht es dein Okay
 
 Geklärt: Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

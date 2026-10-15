@@ -242,8 +242,17 @@ pub async fn list_profiles(pool: &SqlitePool) -> Result<Vec<ProfileView>> {
     .collect()
 }
 
-/// Returns true if a profile was deleted.
+/// Returns true if a profile was deleted. A profile that devices still use is refused.
 pub async fn delete_profile(pool: &SqlitePool, id: i64) -> Result<bool> {
+    let in_use: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE profile_id = ?")
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
+    if in_use > 0 {
+        return Err(Error::Conflict(
+            "Das Profil wird noch von Geräten verwendet und kann nicht gelöscht werden.".to_owned(),
+        ));
+    }
     let done = sqlx::query("DELETE FROM credential_profiles WHERE id = ?")
         .bind(id)
         .execute(pool)

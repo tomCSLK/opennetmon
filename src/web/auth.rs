@@ -97,12 +97,6 @@ struct LoginTemplate<'a> {
     error: Option<&'a str>,
 }
 
-#[derive(Template)]
-#[template(path = "home.html")]
-struct HomeTemplate {
-    layout: Layout,
-}
-
 /// Deliberately has no `Debug`: the password must never end up in logs.
 #[derive(Deserialize)]
 pub struct LoginForm {
@@ -113,14 +107,7 @@ pub struct LoginForm {
 
 #[derive(Deserialize)]
 pub struct CsrfForm {
-    csrf_token: String,
-}
-
-pub async fn home(user: CurrentUser) -> Result<Html<String>> {
-    let page = HomeTemplate {
-        layout: user.layout(),
-    };
-    Ok(Html(page.render()?))
+    pub(crate) csrf_token: String,
 }
 
 pub async fn login_form(State(state): State<AppState>) -> Result<Response> {

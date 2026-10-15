@@ -1,6 +1,8 @@
 //! SQLite storage: connection pool (WAL mode) and migrations.
 
 pub mod credentials;
+pub mod devices;
+pub mod groups;
 pub mod users;
 
 use std::path::Path;

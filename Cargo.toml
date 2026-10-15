@@ -17,7 +17,7 @@ rpassword = "7.5.4"
 rust-embed = { version = "8.13.0", features = ["mime-guess"] }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.11.1"
-snmp2 = { version = "0.5", default-features = false, features = ["tokio", "crypto-rust"] }
+snmp2 = { version = "0.5", default-features = false, features = ["tokio", "crypto-rust", "heap_buffers"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "derive"] }
 subtle = "2.6.1"
 thiserror = "2.0.21"

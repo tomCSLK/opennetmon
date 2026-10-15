@@ -1,0 +1,67 @@
+{% extends "app.html" %}
+{% block title %}{{ heading }} – netmon{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ heading }}</h1>
+  {% if let Some(message) = error %}
+  <p class="error" role="alert">{{ message }}</p>
+  {% endif %}
+  {% if profiles.is_empty() %}
+  <p class="error" role="alert">Es gibt noch kein SNMP-Profil. <a href="/credentials/new">Zuerst ein Profil anlegen.</a></p>
+  {% endif %}
+  <form method="post" action="{{ action }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+
+    <label for="name">Name</label>
+    <input id="name" name="name" type="text" value="{{ form.name }}" required maxlength="64" autofocus>
+
+    <label for="host">IP-Adresse oder Hostname</label>
+    <input id="host" name="host" type="text" value="{{ form.host }}" required maxlength="253" autocapitalize="off" spellcheck="false">
+
+    <label for="group_id">Gruppe</label>
+    <select id="group_id" name="group_id">
+      <option value="">– keine Gruppe –</option>
+      {% for option in groups %}
+      <option value="{{ option.id }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="profile_id">SNMP-Profil</label>
+    <select id="profile_id" name="profile_id" required>
+      {% for option in profiles %}
+      <option value="{{ option.id }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+
+    <fieldset>
+      <legend>Abfrage</legend>
+      <label for="port">UDP-Port</label>
+      <input id="port" name="port" type="number" min="1" max="65535" value="{{ form.port }}" required>
+      <label for="interval_secs">Intervall (Sekunden, 10 bis 3600)</label>
+      <input id="interval_secs" name="interval_secs" type="number" min="10" max="3600" value="{{ form.interval_secs }}" required>
+      <label for="timeout_secs">Timeout je Versuch (Sekunden, 1 bis 60)</label>
+      <input id="timeout_secs" name="timeout_secs" type="number" min="1" max="60" value="{{ form.timeout_secs }}" required>
+      <label for="retries">Wiederholungen (0 bis 5)</label>
+      <input id="retries" name="retries" type="number" min="0" max="5" value="{{ form.retries }}" required>
+      <p class="muted">Timeout × (Wiederholungen + 1) darf das Intervall nicht überschreiten.</p>
+    </fieldset>
+
+    <button type="submit">Speichern</button>
+  </form>
+
+  {% if let Some(test_action) = test_action %}
+  <form method="post" action="{{ test_action }}" class="delete">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <button type="submit" class="link">Verbindung testen</button>
+    <span class="muted">Fragt <code>sysDescr</code> und <code>sysUpTime</code> mit den gespeicherten Einstellungen ab.</span>
+  </form>
+  {% endif %}
+  {% if let Some(delete_action) = delete_action %}
+  <form method="post" action="{{ delete_action }}" class="delete">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label class="inline"><input type="checkbox" name="confirm" value="yes" required> Ja, dieses Gerät löschen</label>
+    <button type="submit" class="danger">Gerät löschen</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

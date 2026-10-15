@@ -135,3 +135,17 @@ pub async fn login(h: &Harness, username: &str) -> (String, String) {
         .to_owned();
     (session, csrf)
 }
+
+/// Creates an SNMPv2c profile and returns its id.
+pub async fn add_v2c_profile(h: &Harness, name: &str, community: &str) -> i64 {
+    use crate::credentials::{ProfileInput, ProfileKind, Secret};
+    let input = ProfileInput {
+        name: name.to_owned(),
+        kind: ProfileKind::V2c {
+            community: Some(Secret::new(community)),
+        },
+    };
+    storage::credentials::save_profile(&h.state.pool, &h.state.secrets, None, &input)
+        .await
+        .unwrap()
+}
