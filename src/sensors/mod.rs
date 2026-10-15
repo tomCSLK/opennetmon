@@ -3,11 +3,16 @@
 //! New sensor types implement [`Sensor`]; the poller never special-cases a type.
 
 pub mod counter;
+pub mod ping;
+pub mod snmp;
+pub mod spec;
 
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 
 use crate::snmp::{SnmpClient, SnmpError};
+use ping::PingClients;
 
 /// Unit of a channel value (for display and graph axes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,6 +22,7 @@ pub enum Unit {
     Seconds,
     Percent,
     Count,
+    PerSecond,
     /// Status code, e.g. `ifOperStatus` (1 = up).
     State,
 }
@@ -44,6 +50,8 @@ pub enum SensorError {
     BadValue(String),
     #[error("sensor needs an SNMP session but none is available")]
     NoSession,
+    #[error("host not reachable: {0}")]
+    Unreachable(String),
 }
 
 /// What a sensor may use during a poll.
@@ -51,6 +59,9 @@ pub struct PollContext<'a> {
     pub host: &'a str,
     /// Poll time, milliseconds since the Unix epoch (UTC).
     pub now_ms: i64,
+    /// Per-attempt timeout of the device (used by ping).
+    pub timeout: Duration,
+    pub ping: &'a PingClients,
     /// `None` for sensors that do not use SNMP (ping) or if the session could not be opened.
     pub snmp: Option<&'a mut SnmpClient>,
 }
@@ -87,9 +98,12 @@ mod tests {
     #[tokio::test]
     async fn sensor_is_object_safe_and_reports_missing_session() {
         let mut sensor: Box<dyn Sensor> = Box::new(Fixed);
+        let ping = PingClients::new();
         let mut ctx = PollContext {
             host: "192.0.2.1",
             now_ms: 0,
+            timeout: Duration::from_secs(1),
+            ping: &ping,
             snmp: None,
         };
         assert!(matches!(

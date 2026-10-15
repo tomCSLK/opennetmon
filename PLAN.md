@@ -4,7 +4,7 @@
 > „PRTG" ist eine Marke von Paessler und nur ein interner Arbeitstitel.
 > **Status (2026-10-15): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 sind Login,
 > SNMP-Credential-Profile, Gruppen, Geräte und der Verbindungstest umgesetzt. **MVP-Schritt 1 ist damit komplett.**
-> Von MVP 2 sind `Sensor`-Trait und Counter-/Ratenlogik (`src/sensors/`) fertig; als Nächstes Sensortypen, Tabellen für Sensoren/Messwerte und der Poller.**
+> Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); als Nächstes der Poller.**
 
 ## Kontext
 
@@ -114,7 +114,7 @@ netmon/
    1. ✔ Benutzer, Login, Rollen, CSRF, Sicherheits-Header, CLI zum Anlegen von Benutzern.
    2. ✔ Credential-Profile (v2c, v3 authNoPriv/authPriv) mit verschlüsselten Secrets, Schlüsseldatei 0600; Formulare zeigen nur „gesetzt"; leere Passwortfelder behalten das gespeicherte Geheimnis.
    3. ✔ Geräte und Gruppen: CRUD mit serverseitiger Validierung (IP/Hostname, Intervall), hierarchische Gruppen, Profilauswahl pro Gerät (verwendetes Profil lässt sich nicht löschen), Gruppenbaum auf der Startseite, **Verbindungstest** je Gerät (`sysDescr`/`sysUpTime`, getestet gegen alle Omada-Geräte). Die Oberfläche ist serverseitig gerendert; htmx folgt, sobald das Skript lokal vendort ist.
-3. **MVP 2:** `Sensor`-Trait und Counter-/Ratenlogik inkl. Wrap/Reset (32 und 64 Bit) – **umgesetzt** (`src/sensors/`); Sensortypen und Poller offen.
+3. **MVP 2:** `Sensor`-Trait und Counter-/Ratenlogik inkl. Wrap/Reset (32 und 64 Bit) – **umgesetzt** (`src/sensors/`, `storage::sensors`, Migration 0005), auch die Sensortypen; Poller (Scheduler, Statuslogik) offen.
 4. **Poller:** Scheduler mit Jitter, Semaphore, Timeouts/Retries; Statuslogik und Ereignislog.
 5. **MVP 3:** Interface-Discovery per Walk mit Auswahl durch den Nutzer (Namen über `ifName`/`ifDescr`).
 6. **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph (1h/24h/7d/30d), Rollups und Retention.

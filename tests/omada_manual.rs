@@ -74,3 +74,59 @@ async fn access_point_answers_with_32_bit_counters_only() {
         "{values:?}"
     );
 }
+
+/// Runs the real sensors twice against a device and prints what they report.
+async fn poll_twice(
+    host: &str,
+    sensor: &mut dyn netmon::sensors::Sensor,
+) -> Vec<(String, Option<f64>)> {
+    use netmon::sensors::{PollContext, ping::PingClients};
+    let mut client = SnmpClient::connect(&target(host), &credentials())
+        .await
+        .unwrap();
+    let ping = PingClients::new();
+    let mut last = Vec::new();
+    for round in 0..2 {
+        let mut ctx = PollContext {
+            host,
+            now_ms: i64::try_from(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+            )
+            .unwrap(),
+            timeout: Duration::from_secs(3),
+            ping: &ping,
+            snmp: Some(&mut client),
+        };
+        let m = sensor.poll(&mut ctx).await.unwrap();
+        last = m.channels.into_iter().map(|c| (c.key, c.value)).collect();
+        println!("{host} round {round}: {last:?}");
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+    last
+}
+
+#[tokio::test]
+#[ignore = "needs the real Omada network"]
+async fn sensors_work_on_switch_and_access_point() {
+    use netmon::sensors::spec::SensorSpec;
+    // Switch port 1 has 64-bit counters, the access point's first interface only 32-bit ones.
+    for host in [SWITCH, ACCESS_POINT] {
+        for spec in [
+            SensorSpec::Uptime,
+            SensorSpec::InterfaceStatus { if_index: 1 },
+            SensorSpec::InterfaceTraffic { if_index: 1 },
+            SensorSpec::Ping,
+        ] {
+            let mut sensor = spec.build();
+            let last = poll_twice(host, sensor.as_mut()).await;
+            assert!(
+                last.iter().all(|(_, v)| v.is_some())
+                    || matches!(spec, SensorSpec::InterfaceTraffic { .. }),
+                "{host} {spec:?}: {last:?}"
+            );
+        }
+    }
+}

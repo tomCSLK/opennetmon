@@ -3,6 +3,7 @@
 pub mod credentials;
 pub mod devices;
 pub mod groups;
+pub mod sensors;
 pub mod users;
 
 use std::path::Path;

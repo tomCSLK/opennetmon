@@ -403,7 +403,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_reports_unknown_oids_as_no_such_object() {
+    async fn get_reports_unknown_oids_as_no_such_instance() {
         use crate::snmp::testagent::FakeAgent;
         let agent = FakeAgent::spawn("public", "x", 7).await;
         let creds = Credentials::V2c {
@@ -420,7 +420,7 @@ mod tests {
             values[0],
             ("1.3.6.1.2.1.1.3.0".to_owned(), SnmpValue::Timeticks(7))
         );
-        assert_eq!(values[1].1, SnmpValue::NoSuchObject);
+        assert_eq!(values[1].1, SnmpValue::NoSuchInstance);
     }
 
     #[tokio::test]

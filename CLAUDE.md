@@ -33,7 +33,7 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
   Kein npm, kein WASM-Frontend.
 - SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
   auf dem Stack und überläuft in Tokio-Threads mit 2 MB Stack)
-- Ping: `surge-ping`; bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
+- Ping: `surge-ping` (0.9, ein Socket je Adressfamilie für alle Ziele); bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
   `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
@@ -81,10 +81,10 @@ Ein Binary, ein Prozess, Module:
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
 - `snmp` – `SnmpClient` (GET mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; Poller und Sensoren bauen darauf auf
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
-- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`), Migrations, Rollups, Retention
+- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte), Migrations, Rollups, Retention
 - `poller` – Scheduler, verteilt Polls gleichmäßig über das Intervall (kein Burst zur vollen Minute);
   globale Nebenläufigkeit per `Semaphore`; Timeout und Retries pro Gerät; ein langsames Gerät blockiert nie andere
-- `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s; `value: None` = kein Sample) + Implementierung je Sensortyp (noch keine). `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
+- `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets), `sensors::spec` (`SensorSpec`: Validierung, Kanäle, `build()`, `parse_oid`). `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
 - `status` – Schwellwertauswertung, Statusübergänge, Ereignislog
 - `alerting` – Benachrichtigungen (entkoppelt über Channel/Queue)
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
@@ -93,7 +93,7 @@ Ein Binary, ein Prozess, Module:
 
 ### Messdaten
 
-- Rohwerte in `samples` (sensor_id, channel_id, ts, value); Rollups `samples_1h`, `samples_1d` (min/avg/max)
+- Rohwerte in `samples` (channel_id, ts in ms UTC, value; der Sensor ergibt sich über `channels`); Rollups `samples_1h`, `samples_1d` (min/avg/max)
 - Retention (konfigurierbar): Rohdaten 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt
 - Counter → Rate: Differenz / Zeitdelta; Counter-Wrap und Reset (z. B. Gerätereboot, `sysUpTime` kleiner) erkennen
   und dann **keinen** Wert schreiben statt eines Ausreißers
