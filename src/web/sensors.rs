@@ -22,7 +22,7 @@ use crate::storage::sensors::{self as store, SensorRecord};
 use crate::storage::{credentials, devices, status as status_store};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::overview::FlashQuery;
-use crate::web::{AppState, Layout, flash_message, format_utc};
+use crate::web::{AppState, Layout, flash_message, time_html};
 
 /// Discovery never blocks a request for long, whatever the device is configured to.
 const DISCOVERY_MAX_TIMEOUT_SECS: u32 = 10;
@@ -194,7 +194,7 @@ async fn render_sensors(
                 status_label: status.label(),
                 status_class: status.as_str(),
                 message: state.map(|s| s.message.clone()).unwrap_or_default(),
-                last_poll: state.map_or_else(String::new, |s| format_utc(s.last_poll_ms)),
+                last_poll: state.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
                 enabled: r.enabled,
             }
         })

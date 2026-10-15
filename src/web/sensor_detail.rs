@@ -22,7 +22,7 @@ use crate::storage::measurements::{Range, chart_data, latest_values};
 use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
 use crate::storage::status as status_store;
 use crate::web::auth::CurrentUser;
-use crate::web::{AppState, Layout, flash_message, format_utc};
+use crate::web::{AppState, Layout, flash_message, time_html};
 
 const EVENT_LIMIT: u32 = 20;
 
@@ -146,7 +146,7 @@ async fn render(
                     .map_or_else(|| "–".to_owned(), |(_, v)| format_value(c.unit, *v)),
                 latest_at: latest
                     .get(&c.id)
-                    .map_or_else(String::new, |(ts, _)| format_utc(*ts)),
+                    .map_or_else(String::new, |(ts, _)| time_html(*ts)),
                 fields,
                 unit_label: input_unit(c.unit),
                 has_thresholds: c.unit != Unit::State,
@@ -163,7 +163,7 @@ async fn render(
         .await?
         .into_iter()
         .map(|e| EventView {
-            at: format_utc(e.ts_ms),
+            at: time_html(e.ts_ms),
             change: match e.from {
                 Some(from) => format!("{} → {}", from.label(), e.to.label()),
                 None => format!("erste Abfrage: {}", e.to.label()),
@@ -180,7 +180,7 @@ async fn render(
             .as_ref()
             .map(|s| s.message.clone())
             .unwrap_or_default(),
-        last_poll: state_row.map_or_else(String::new, |s| format_utc(s.last_poll_ms)),
+        last_poll: state_row.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
         channels,
         ranges: Range::ALL
             .into_iter()
@@ -418,6 +418,8 @@ mod tests {
             "data-src=\"/sensors/1/data?range=24h\"",
             "/static/vendor/uplot/uPlot.iife.min.js",
             "/static/chart.js",
+            "/static/time.js",
+            "<time class=\"ts\" datetime=\"",
         ] {
             assert!(
                 page.body.contains(needle),
@@ -656,6 +658,7 @@ mod tests {
             ("/static/vendor/uplot/uPlot.iife.min.js", "javascript"),
             ("/static/vendor/uplot/uPlot.min.css", "css"),
             ("/static/chart.js", "javascript"),
+            ("/static/time.js", "javascript"),
             ("/static/vendor/uplot/LICENSE", ""),
         ] {
             let reply = send(&h.app, get(path, None)).await;

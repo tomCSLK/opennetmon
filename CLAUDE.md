@@ -101,7 +101,7 @@ Ein Binary, ein Prozess, Module:
 - Retention (konfigurierbar): Rohdaten 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt
 - Counter → Rate: Differenz / Zeitdelta; Counter-Wrap und Reset (z. B. Gerätereboot, `sysUpTime` kleiner) erkennen
   und dann **keinen** Wert schreiben statt eines Ausreißers
-- Zeitstempel intern UTC; Anzeige in der Zeitzone des Browsers
+- Zeitstempel intern UTC; Anzeige in der Zeitzone des Browsers (`<time class="ts">` aus `web::time_html`, umgeschrieben von `static/time.js`; Graphen in `static/chart.js`; E-Mails bleiben UTC)
 - Access Points liefern nur 32-Bit-Counter (`ifTable`, kein `ifXTable`): Wrap bei 32 Bit sauber behandeln, Intervall passend wählen
 - Interface-Indizes der Switches sind nicht fortlaufend (z. B. 49153): Namen über `ifName`/`ifDescr` auswerten
 

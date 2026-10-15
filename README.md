@@ -23,7 +23,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 - **Sensoren:** Ping, Uptime, Interface-Traffic, Interface-Status, benutzerdefinierte OID (Wert oder Zähler, mit Faktor). Interfaces werden per Walk gefunden und per Häkchen übernommen.
 - **Zähler richtig gerechnet:** Überlauf und Gerätereboot werden erkannt; dann gibt es **keinen** Messwert statt eines Ausreißers.
 - **Status:** `In Ordnung`, `Warnung`, `Ausfall`, `Unbekannt`, `Pausiert`. Ein einzelner Messfehler ist nur eine Warnung, erst der zweite in Folge ein Ausfall. Schwellwerte je Kanal (Warnung/Down, über/unter).
-- **Graphen:** [uPlot](https://github.com/leeoniya/uPlot), lokal eingebunden (kein CDN), Anzeige in der Zeitzone des Browsers.
+- **Graphen:** [uPlot](https://github.com/leeoniya/uPlot), lokal eingebunden (kein CDN), Alle Zeiten (Graphen und Tabellen) in der Zeitzone des Browsers.
 - **Benachrichtigung:** E-Mail bei Ausfall, Warnung und Wiederherstellung; gleichzeitige Wechsel (z. B. ein ausgefallenes Gerät) kommen als eine Mail. SMTP-Server, Anmeldung und Empfänger lassen sich jederzeit in der Oberfläche ändern (Testmail inklusive).
 - **Daten:** SQLite im WAL-Modus; Rohwerte 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt (einstellbar).
 

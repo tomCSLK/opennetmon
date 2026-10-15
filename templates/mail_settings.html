@@ -76,7 +76,7 @@
     <tbody>
     {% for row in log %}
       <tr>
-        <td>{{ row.at }}</td><td>{{ row.kind }}</td><td>{{ row.subject }}</td><td>{{ row.recipients }}</td>
+        <td>{{ row.at|safe }}</td><td>{{ row.kind }}</td><td>{{ row.subject }}</td><td>{{ row.recipients }}</td>
         <td>{% if row.ok %}<span class="badge status-up">gesendet</span>{% else %}<span class="badge status-down">Fehler</span> {{ row.error }}{% endif %}</td>
       </tr>
     {% endfor %}

@@ -37,7 +37,7 @@
         <td>{{ row.description }}</td>
         <td><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
         <td>{{ row.message }}</td>
-        <td>{% if row.last_poll.is_empty() %}–{% else %}{{ row.last_poll }}{% endif %}</td>
+        <td>{% if row.last_poll.is_empty() %}–{% else %}{{ row.last_poll|safe }}{% endif %}</td>
         {% if layout.is_admin %}
         <td class="row-actions">
           <form method="post" action="/sensors/{{ row.id }}/toggle">

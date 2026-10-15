@@ -16,7 +16,7 @@
   <p class="muted">{{ description }} · {{ device.name }} ({{ device.host }}) · Status:
     <span class="badge status-{{ status_class }}">{{ status_label }}</span>
     {% if !message.is_empty() %} · {{ message }}{% endif %}
-    {% if !last_poll.is_empty() %} · letzte Abfrage {{ last_poll }}{% endif %}</p>
+    {% if !last_poll.is_empty() %} · letzte Abfrage {{ last_poll|safe }}{% endif %}</p>
   {% if let Some(message) = flash %}
   <p class="flash" role="status">{{ message }}</p>
   {% endif %}
@@ -36,7 +36,7 @@
     <thead><tr><th>Kanal</th><th>Letzter Wert</th><th>Gemessen</th></tr></thead>
     <tbody>
     {% for c in channels %}
-      <tr><td>{{ c.label }}</td><td>{{ c.latest }}</td><td>{% if c.latest_at.is_empty() %}–{% else %}{{ c.latest_at }}{% endif %}</td></tr>
+      <tr><td>{{ c.label }}</td><td>{{ c.latest }}</td><td>{% if c.latest_at.is_empty() %}–{% else %}{{ c.latest_at|safe }}{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -80,7 +80,7 @@
     <thead><tr><th>Zeitpunkt</th><th>Wechsel</th><th>Meldung</th></tr></thead>
     <tbody>
     {% for e in events %}
-      <tr><td>{{ e.at }}</td><td>{{ e.change }}</td><td>{{ e.message }}</td></tr>
+      <tr><td>{{ e.at|safe }}</td><td>{{ e.change }}</td><td>{{ e.message }}</td></tr>
     {% endfor %}
     </tbody>
   </table>

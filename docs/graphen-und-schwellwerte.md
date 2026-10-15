@@ -12,7 +12,7 @@ Die Sensorliste eines Geräts (`/devices/<id>/sensors`) verlinkt jeden Sensor do
   ausgeliefert – kein CDN, kein npm. Eigener Code: `static/chart.js` (kein Inline-Skript, die CSP bleibt `default-src 'self'`).
 - Daten kommen als JSON von `/sensors/<id>/data?range=…`: `{"range","ts":[Sekunden…],"series":[{"key","label","unit","values":[…|null]}]}`.
   Alle Kanäle teilen die Zeitachse; fehlt ein Wert, ist er `null` (Lücke im Graph, keine Linie).
-- Je Einheit ein Diagramm (Eingehend und Ausgehend teilen sich eines). Anzeige in der **Zeitzone des Browsers**, 24-Stunden-Uhr, deutsche Zahlen und Einheiten
+- Je Einheit ein Diagramm (Eingehend und Ausgehend teilen sich eines). Anzeige in der **Zeitzone des Browsers** (`static/chart.js`), 24-Stunden-Uhr, deutsche Zahlen und Einheiten
   (bit/s, kbit/s, Mbit/s, Gbit/s). Der Graph lädt alle 30 s nach.
 - Herkunft der Punkte: 1 h und 24 h Rohwerte, 7 d Mittelwerte in 10-Minuten-Blöcken, 30 d Stundenwerte aus `samples_1h` (solange noch keine Rollups
   existieren, Stundenmittel direkt aus den Rohdaten). Höchstens 20 000 Punkte je Kanal.

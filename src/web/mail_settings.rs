@@ -15,7 +15,7 @@ use crate::mail::{self, MailInput, Security};
 use crate::storage::mail::{self as store, Kind, MailView};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::overview::FlashQuery;
-use crate::web::{AppState, Layout, flash_message, format_utc};
+use crate::web::{AppState, Layout, flash_message, time_html};
 
 const LOG_ENTRIES: u32 = 20;
 
@@ -162,7 +162,7 @@ async fn render(
         .await?
         .into_iter()
         .map(|n| LogRow {
-            at: format_utc(n.ts_ms),
+            at: time_html(n.ts_ms),
             kind: n.kind.label(),
             subject: n.subject,
             recipients: n.recipients,

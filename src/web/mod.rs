@@ -163,8 +163,8 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
     }
 }
 
-/// Formats Unix milliseconds as `2026-10-15 19:32:10 UTC`.
-pub fn format_utc(ms: i64) -> String {
+/// Civil date and time of Unix milliseconds in UTC: `(year, month, day, hour, minute, second)`.
+fn civil_utc(ms: i64) -> (i64, i64, i64, i64, i64, i64) {
     let secs = ms.div_euclid(1000);
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     // Civil-from-days (Howard Hinnant's algorithm).
@@ -177,11 +177,23 @@ pub fn format_utc(ms: i64) -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
+    (year, month, day, rem / 3_600, (rem % 3_600) / 60, rem % 60)
+}
+
+/// Formats Unix milliseconds as `2026-10-15 19:32:10 UTC` (plain text, e.g. for e-mails).
+pub fn format_utc(ms: i64) -> String {
+    let (y, mo, d, h, mi, s) = civil_utc(ms);
+    format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{s:02} UTC")
+}
+
+/// A timestamp for HTML pages: `<time>` with the exact instant in `datetime` and the UTC text as content.
+/// `static/time.js` rewrites it into the browser's time zone; without JavaScript the UTC text stays.
+/// The result contains only digits and fixed text, so it may be rendered with `|safe`.
+pub fn time_html(ms: i64) -> String {
+    let (y, mo, d, h, mi, s) = civil_utc(ms);
     format!(
-        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} UTC",
-        rem / 3_600,
-        (rem % 3_600) / 60,
-        rem % 60
+        "<time class=\"ts\" datetime=\"{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z\">{}</time>",
+        format_utc(ms)
     )
 }
 
@@ -236,6 +248,15 @@ mod tests {
         assert_eq!(format_utc(951_782_400_000), "2000-02-29 00:00:00 UTC");
         assert_eq!(format_utc(1_781_551_930_000), "2026-06-15 19:32:10 UTC");
         assert_eq!(format_utc(-1_000), "1969-12-31 23:59:59 UTC");
+    }
+
+    #[test]
+    fn html_timestamps_carry_the_instant_and_a_utc_fallback() {
+        assert_eq!(
+            time_html(1_781_551_930_000),
+            "<time class=\"ts\" datetime=\"2026-06-15T19:32:10Z\">2026-06-15 19:32:10 UTC</time>"
+        );
+        assert!(time_html(0).contains("datetime=\"1970-01-01T00:00:00Z\""));
     }
 
     #[tokio::test]
