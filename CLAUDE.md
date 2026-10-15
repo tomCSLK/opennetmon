@@ -158,6 +158,8 @@ cargo test --test omada_manual -- --ignored --nocapture                 # manuel
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
+`README.md` (GitHub-Startseite, Deutsch) bei Meilensteinen mitpflegen: Status-Tabelle, Konfigurationsbeispiel und Dokumentationsliste müssen zum Code passen.
+
 **Vor jedem Abschluss einer Aufgabe:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`
 und `cargo test` müssen fehlerfrei durchlaufen.
 
