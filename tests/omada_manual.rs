@@ -130,3 +130,88 @@ async fn sensors_work_on_switch_and_access_point() {
         }
     }
 }
+
+/// Full path with a temporary database: profile, devices, sensors, two poll cycles, stored state.
+#[tokio::test]
+#[ignore = "needs the real Omada network"]
+async fn poller_cycle_against_real_devices() {
+    use netmon::credentials::{ProfileInput, ProfileKind, SecurityLevel};
+    use netmon::crypto::SecretBox;
+    use netmon::devices::{DeviceInput, Polling};
+    use netmon::poller::{SensorSet, poll_device_once};
+    use netmon::sensors::ping::PingClients;
+    use netmon::sensors::spec::SensorSpec;
+    use netmon::status::Status;
+    use netmon::storage::{self, credentials, devices, sensors, status};
+
+    let dir = tempfile::tempdir().unwrap();
+    let pool = storage::connect(&dir.path().join("m.db")).await.unwrap();
+    storage::migrate(&pool).await.unwrap();
+    let secrets = SecretBox::from_key([1u8; 32]);
+    let profile = credentials::save_profile(
+        &pool,
+        &secrets,
+        None,
+        &ProfileInput {
+            name: "omada".to_owned(),
+            kind: ProfileKind::V3 {
+                username: "MCS6_SNMP".to_owned(),
+                level: SecurityLevel::AuthNoPriv,
+                auth_protocol: AuthProtocol::Md5,
+                auth_password: Some(Secret::new(
+                    std::env::var("NETMON_PROBE_AUTH_PASS").expect("NETMON_PROBE_AUTH_PASS"),
+                )),
+                priv_protocol: None,
+                priv_password: None,
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let ping = PingClients::new();
+    for (name, host) in [("switch", SWITCH), ("ap", ACCESS_POINT)] {
+        let device = devices::save_device(
+            &pool,
+            None,
+            DeviceInput {
+                name: name.to_owned(),
+                host: host.to_owned(),
+                group_id: None,
+                profile_id: profile,
+                polling: Polling::default(),
+            },
+        )
+        .await
+        .unwrap();
+        let mut ids = Vec::new();
+        for (sensor_name, spec) in [
+            ("Ping", SensorSpec::Ping),
+            ("Uptime", SensorSpec::Uptime),
+            ("Port 1 status", SensorSpec::InterfaceStatus { if_index: 1 }),
+            (
+                "Port 1 traffic",
+                SensorSpec::InterfaceTraffic { if_index: 1 },
+            ),
+        ] {
+            ids.push(
+                sensors::create_sensor(&pool, device, sensor_name, &spec)
+                    .await
+                    .unwrap(),
+            );
+        }
+        let mut state = SensorSet::default();
+        for _ in 0..2 {
+            poll_device_once(&pool, &secrets, &ping, device, &mut state)
+                .await
+                .unwrap()
+                .unwrap();
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+        for id in ids {
+            let s = status::get_state(&pool, id).await.unwrap().unwrap();
+            println!("{name} sensor {id}: {:?} {}", s.status, s.message);
+            assert_eq!(s.status, Status::Up, "{name} sensor {id}: {}", s.message);
+        }
+    }
+}

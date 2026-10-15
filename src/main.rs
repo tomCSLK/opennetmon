@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use netmon::auth::{self, Role};
 use netmon::config::Config;
 use netmon::crypto::SecretBox;
+use netmon::poller::Poller;
 use netmon::storage::{self, users};
 use netmon::web::{self, AppState};
 use sqlx::SqlitePool;
@@ -132,13 +133,26 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         .with_context(|| format!("binding {}", config.listen))?;
     tracing::info!(listen = %config.listen, db = %config.database_path.display(), "netmon started");
 
-    axum::serve(
-        listener,
-        web::router(AppState::new(pool, &config, Arc::new(secrets))),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await
-    .context("serving")?;
+    let secrets = Arc::new(secrets);
+    let poller = if config.poller_enabled {
+        Some(Poller::spawn(
+            pool.clone(),
+            Arc::clone(&secrets),
+            config.poll_concurrency,
+        ))
+    } else {
+        tracing::warn!("poller_enabled is false; no device is polled");
+        None
+    };
+
+    let served = axum::serve(listener, web::router(AppState::new(pool, &config, secrets)))
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .context("serving");
+    if let Some(poller) = poller {
+        poller.stop().await;
+    }
+    served?;
     tracing::info!("netmon stopped");
     Ok(())
 }

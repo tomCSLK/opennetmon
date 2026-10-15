@@ -77,15 +77,16 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 ## Architektur
 
 Ein Binary, ein Prozess, Module:
-- `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`)
+- `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`, `NETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
 - `snmp` – `SnmpClient` (GET mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; Poller und Sensoren bauen darauf auf
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
-- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte), Migrations, Rollups, Retention
-- `poller` – Scheduler, verteilt Polls gleichmäßig über das Intervall (kein Burst zur vollen Minute);
-  globale Nebenläufigkeit per `Semaphore`; Timeout und Retries pro Gerät; ein langsames Gerät blockiert nie andere
+- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse), Migrations, Rollups, Retention
+- `poller` – Supervisor + eine Aufgabe je Gerät, die Gerät/Sensoren/Profil in jedem Zyklus neu lädt; verteilt Startzeiten über das Intervall
+  (kein Burst zur vollen Minute); globale Nebenläufigkeit per `Semaphore` (`poll_concurrency`, `poller_enabled`); Timeout und Retries pro Gerät;
+  ein langsames Gerät blockiert nie andere; nach geräteweitem SNMP-Fehler werden die übrigen SNMP-Sensoren des Zyklus übersprungen (`docs/poller.md`)
 - `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets), `sensors::spec` (`SensorSpec`: Validierung, Kanäle, `build()`, `parse_oid`). `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
-- `status` – Schwellwertauswertung, Statusübergänge, Ereignislog
+- `status` – `assess` (Messergebnis → `Assessment`; Schwellwerte je Kanal folgen mit MVP 4), `advance` (Zustandsautomat: erster Fehler `Warning`, ab dem zweiten `Down`, Erfolg sofort `Up`), `device_status`; `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignislog (`sensor_status`, `events`) in einer Transaktion
 - `alerting` – Benachrichtigungen (entkoppelt über Channel/Queue)
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
@@ -138,7 +139,7 @@ Ein Binary, ein Prozess, Module:
 
 - Unit-Tests für Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Config-Parsing
 - Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent (`tests/snmp_local.rs`, überspringen sich ohne Agent oder
-  ohne `NETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`)
+  ohne `NETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`; u. a. `sensors_work_on_switch_and_access_point` und `poller_cycle_against_real_devices`)
 - Handler-Tests mit `axum`/`tower::ServiceExt::oneshot`, gemeinsame Helfer in `src/web/testutil.rs`; SNMP-Tests ohne Netz über den
   Fake-v2c-Agenten `src/snmp/testagent.rs`
 

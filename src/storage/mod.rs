@@ -4,6 +4,7 @@ pub mod credentials;
 pub mod devices;
 pub mod groups;
 pub mod sensors;
+pub mod status;
 pub mod users;
 
 use std::path::Path;

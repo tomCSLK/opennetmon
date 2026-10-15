@@ -11,6 +11,7 @@ const ENV_DATABASE_PATH: &str = "NETMON_DATABASE_PATH";
 const ENV_LOG_FILTER: &str = "NETMON_LOG_FILTER";
 const ENV_SECRET_KEY_FILE: &str = "NETMON_SECRET_KEY_FILE";
 const MAX_SESSION_TTL_HOURS: u64 = 24 * 90;
+const MAX_POLL_CONCURRENCY: usize = 256;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -43,6 +44,10 @@ pub struct Config {
     pub cookie_secure: bool,
     /// Absolute session lifetime in hours.
     pub session_ttl_hours: u64,
+    /// Run the poller. Disable to use the web interface without polling (e.g. on a second instance).
+    pub poller_enabled: bool,
+    /// How many devices are polled at the same time (1 to 256).
+    pub poll_concurrency: usize,
 }
 
 impl Default for Config {
@@ -54,6 +59,8 @@ impl Default for Config {
             secret_key_file: PathBuf::from("/etc/netmon/secret.key"),
             cookie_secure: true,
             session_ttl_hours: 168,
+            poller_enabled: true,
+            poll_concurrency: 16,
         }
     }
 }
@@ -121,6 +128,11 @@ impl Config {
                 "session_ttl_hours must be between 1 and 2160",
             ));
         }
+        if !(1..=MAX_POLL_CONCURRENCY).contains(&self.poll_concurrency) {
+            return Err(ConfigError::Invalid(
+                "poll_concurrency must be between 1 and 256",
+            ));
+        }
         Ok(())
     }
 }
@@ -131,6 +143,21 @@ mod tests {
 
     fn no_env(_: &str) -> Option<String> {
         None
+    }
+
+    #[test]
+    fn poller_settings_have_defaults_and_are_validated() {
+        let config = Config::from_sources(None, no_env).unwrap();
+        assert!(config.poller_enabled);
+        assert_eq!(config.poll_concurrency, 16);
+        let parsed =
+            Config::from_sources(Some("poller_enabled = false\npoll_concurrency = 4"), no_env)
+                .unwrap();
+        assert!(!parsed.poller_enabled);
+        assert_eq!(parsed.poll_concurrency, 4);
+        for bad in ["poll_concurrency = 0", "poll_concurrency = 257"] {
+            assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
+        }
     }
 
     #[test]
