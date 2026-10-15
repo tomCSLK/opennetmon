@@ -84,3 +84,4 @@ nav.ranges { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; }
 .chart { margin-bottom: 1rem; }
 .u-legend { color: var(--fg); }
 td a, h1 a { color: inherit; }
+textarea { width: 100%; padding: .55rem .65rem; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: .35rem; }

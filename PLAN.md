@@ -4,7 +4,7 @@
 > „PRTG" ist eine Marke von Paessler und nur ein interner Arbeitstitel.
 > **Status (2026-10-15): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 sind Login,
 > SNMP-Credential-Profile, Gruppen, Geräte und der Verbindungstest umgesetzt. **MVP-Schritt 1 ist damit komplett.**
-> Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); **der Poller mit Statuslogik und Ereignislog läuft ebenfalls** (`docs/poller.md`). **MVP 3 (Sensor-Oberfläche und Interface-Discovery) ist ebenfalls umgesetzt.** **MVP 4 ist umgesetzt** (Schwellwerte, Detailseite mit uPlot-Graph 1h/24h/7d/30d, Rollups und Retention; `docs/graphen-und-schwellwerte.md`). Als Nächstes: E-Mail-Benachrichtigung bei Statuswechsel (MVP 6), danach Betrieb (`deploy/netmon.service`), htmx und Feinschliff.**
+> Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); **der Poller mit Statuslogik und Ereignislog läuft ebenfalls** (`docs/poller.md`). **MVP 3 (Sensor-Oberfläche und Interface-Discovery) ist ebenfalls umgesetzt.** **MVP 4 ist umgesetzt** (Schwellwerte, Detailseite mit uPlot-Graph 1h/24h/7d/30d, Rollups und Retention; `docs/graphen-und-schwellwerte.md`). **MVP 6 (E-Mail-Benachrichtigung, einstellbar in der Oberfläche, getestet gegen Test-SMTP-Server) ist umgesetzt** (`docs/benachrichtigung.md`). Als Nächstes: Betrieb (`deploy/netmon.service`), echter Mailserver des Nutzers, htmx und Feinschliff.**
 
 ## Kontext
 
@@ -119,7 +119,7 @@ netmon/
 5. **MVP 3:** Interface-Discovery per Walk mit Auswahl durch den Nutzer (Namen über `ifName`/`ifDescr`) – **umgesetzt** (`src/discovery.rs`, `src/web/sensors.rs`, `docs/sensoren.md`).
 6. **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph (1h/24h/7d/30d), Rollups und Retention – **umgesetzt** (`docs/graphen-und-schwellwerte.md`).
 7. **Betrieb:** musl-Release-Build (zuletzt nach den Geräten geprüft: statisch gelinkt, 9,3 MB), `deploy/netmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
-8. **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel.
+8. **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel – **umgesetzt** (`docs/benachrichtigung.md`).
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**

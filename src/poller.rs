@@ -16,9 +16,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sqlx::SqlitePool;
-use tokio::sync::{Semaphore, watch};
+use tokio::sync::{Semaphore, mpsc, watch};
 use tokio::task::JoinHandle;
 
+use crate::alerting::{AlertEvent, Notifier};
 use crate::crypto::SecretBox;
 use crate::devices::Device;
 use crate::error::Result;
@@ -40,6 +41,7 @@ const MAX_START_OFFSET: Duration = Duration::from_secs(30);
 /// Extra time on top of the device's own timeouts before a sensor poll is cut off.
 const POLL_GRACE: Duration = Duration::from_secs(2);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(10);
+const NOTIFIER_GRACE: Duration = Duration::from_secs(20);
 const MAINTENANCE_FIRST_RUN: Duration = Duration::from_secs(30);
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(600);
 
@@ -47,9 +49,18 @@ pub struct Poller {
     shutdown: watch::Sender<bool>,
     supervisor: JoinHandle<()>,
     maintenance: JoinHandle<()>,
+    notifier: Notifier,
+}
+
+/// A status change of one sensor of the polled device.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SensorChange {
+    pub change: StatusChange,
+    pub sensor: String,
 }
 
 struct Shared {
+    alerts: mpsc::Sender<AlertEvent>,
     pool: SqlitePool,
     secrets: Arc<SecretBox>,
     ping: PingClients,
@@ -67,7 +78,9 @@ impl Poller {
     ) -> Self {
         let (shutdown, signal) = watch::channel(false);
         let maintenance = tokio::spawn(maintain(pool.clone(), retention, signal.clone()));
+        let notifier = Notifier::spawn(pool.clone(), Arc::clone(&secrets), signal.clone());
         let shared = Arc::new(Shared {
+            alerts: notifier.sender.clone(),
             pool,
             secrets,
             ping: PingClients::new(),
@@ -78,6 +91,7 @@ impl Poller {
             shutdown,
             supervisor,
             maintenance,
+            notifier,
         }
     }
 
@@ -86,6 +100,8 @@ impl Poller {
         let _ = self.shutdown.send(true);
         let _ = self.supervisor.await;
         let _ = self.maintenance.await;
+        // Pending alerts are still mailed on the way out.
+        self.notifier.finish(NOTIFIER_GRACE).await;
     }
 }
 
@@ -101,7 +117,12 @@ async fn maintain(pool: SqlitePool, retention: Retention, mut shutdown: watch::R
         match maintenance::run(&pool, now_ms(), retention).await {
             Ok(report) => {
                 tracing::debug!(?report, "maintenance finished");
-                if report.raw_deleted + report.hourly_deleted + report.events_deleted > 0 {
+                if report.raw_deleted
+                    + report.hourly_deleted
+                    + report.events_deleted
+                    + report.notifications_deleted
+                    > 0
+                {
                     tracing::info!(?report, "old data deleted");
                 }
             }
@@ -185,9 +206,10 @@ async fn device_loop(shared: Arc<Shared>, device_id: i64, mut shutdown: watch::R
         if permit.is_ok() {
             match poll_device(&shared, device_id, &mut state).await {
                 Ok(Some(changes)) => {
-                    for change in changes {
-                        log_change(&device, &change);
+                    for change in &changes {
+                        log_change(&device, &change.change);
                     }
+                    queue_alerts(&shared.alerts, &device.name, changes);
                 }
                 Ok(None) => return,
                 Err(e) => tracing::error!(device = %device.name, error = %e, "poll failed"),
@@ -204,6 +226,20 @@ async fn cancelled_during(shutdown: &mut watch::Receiver<bool>, pause: Duration)
     tokio::select! {
         _ = tokio::time::sleep(pause) => false,
         _ = shutdown.changed() => true,
+    }
+}
+
+/// Hands status changes to the alert queue without ever blocking the poller.
+fn queue_alerts(alerts: &mpsc::Sender<AlertEvent>, device: &str, changes: Vec<SensorChange>) {
+    for SensorChange { change, sensor } in changes {
+        let event = AlertEvent {
+            change,
+            device: device.to_owned(),
+            sensor,
+        };
+        if alerts.try_send(event).is_err() {
+            tracing::warn!(device, "alert queue is full or closed; dropping an alert");
+        }
     }
 }
 
@@ -263,7 +299,7 @@ pub async fn poll_device_once(
     ping: &PingClients,
     device_id: i64,
     state: &mut SensorSet,
-) -> Result<Option<Vec<StatusChange>>> {
+) -> Result<Option<Vec<SensorChange>>> {
     let Some(device) = get_device(pool, device_id).await? else {
         return Ok(None);
     };
@@ -363,7 +399,10 @@ pub async fn poll_device_once(
         };
         let (assessment, samples) = assessment_and_values;
         if let Some(change) = record_poll(pool, record.id, started, &samples, &assessment).await? {
-            changes.push(change);
+            changes.push(SensorChange {
+                change,
+                sensor: record.name.clone(),
+            });
         }
     }
     Ok(Some(changes))
@@ -373,7 +412,7 @@ async fn poll_device(
     shared: &Shared,
     device_id: i64,
     state: &mut SensorSet,
-) -> Result<Option<Vec<StatusChange>>> {
+) -> Result<Option<Vec<SensorChange>>> {
     poll_device_once(
         &shared.pool,
         &shared.secrets,
@@ -458,6 +497,9 @@ mod tests {
                 .await
                 .unwrap()
                 .unwrap()
+                .into_iter()
+                .map(|c| c.change)
+                .collect()
         }
 
         async fn state_of(&self, sensor: i64) -> Status {
@@ -661,6 +703,89 @@ mod tests {
                 .iter()
                 .any(|e| e.to == Status::Down && e.message.contains("Down-Grenze 300")),
             "{events:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_device_going_down_produces_one_summary_mail() {
+        use crate::mail::testsmtp::{Behavior, TestSmtp};
+        use crate::mail::{MailInput, Security};
+        let env = env().await;
+        let smtp = TestSmtp::spawn(Behavior::default()).await;
+        let input = MailInput {
+            enabled: true,
+            host: "127.0.0.1".to_owned(),
+            port: smtp.port,
+            security: Security::None,
+            username: String::new(),
+            password: None,
+            from_address: "netmon@example.org".to_owned(),
+            recipients: "admin@example.org".to_owned(),
+            notify_warnings: true,
+        };
+        crate::storage::mail::save(&env.pool, &env.secrets, &input.check().unwrap())
+            .await
+            .unwrap();
+        for name in ["Uptime", "Ping"] {
+            let spec = if name == "Ping" {
+                SensorSpec::Ping
+            } else {
+                SensorSpec::Uptime
+            };
+            create_sensor(&env.pool, env.device, name, &spec)
+                .await
+                .unwrap();
+        }
+
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let notifier = Notifier::spawn_with_window(
+            env.pool.clone(),
+            Arc::new(SecretBox::from_key([9u8; 32])),
+            shutdown_rx,
+            Duration::from_millis(300),
+        );
+        let mut state = SensorSet::default();
+        let queue = |changes: Vec<SensorChange>| queue_alerts(&notifier.sender, "dev", changes);
+        let first = poll_device_once(&env.pool, &env.secrets, &env.ping, env.device, &mut state)
+            .await
+            .unwrap()
+            .unwrap();
+        queue(first); // first readings: Up, no mail
+
+        // The device stops answering SNMP: Warning, then Down for the SNMP sensor.
+        let dead = FakeAgent::spawn("other", "x", 1).await;
+        sqlx::query("UPDATE devices SET port = ? WHERE id = ?")
+            .bind(i64::from(dead.port))
+            .bind(env.device)
+            .execute(&env.pool)
+            .await
+            .unwrap();
+        let mut burst = Vec::new();
+        for _ in 0..2 {
+            burst.extend(
+                poll_device_once(&env.pool, &env.secrets, &env.ping, env.device, &mut state)
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            );
+        }
+        // Delivered together, as when several sensors of one device fail in the same cycle.
+        queue(burst);
+        tokio::time::sleep(Duration::from_millis(900)).await;
+        shutdown_tx.send(true).unwrap();
+        notifier.finish(Duration::from_secs(5)).await;
+
+        let mails = smtp.received();
+        assert_eq!(
+            mails.len(),
+            1,
+            "all changes of the burst in one mail: {mails:?}"
+        );
+        assert!(mails[0].data.contains("dev / Uptime"), "{}", mails[0].data);
+        assert!(mails[0].data.contains("Ausfall"), "{}", mails[0].data);
+        assert!(
+            !mails[0].data.contains("erste Abfrage -> In Ordnung"),
+            "first Up readings are not news"
         );
     }
 

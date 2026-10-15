@@ -5,6 +5,7 @@ pub mod auth;
 pub mod credentials;
 pub mod devices;
 pub mod groups;
+pub mod mail_settings;
 pub mod overview;
 pub mod sensor_detail;
 pub mod sensors;
@@ -87,6 +88,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/sensors/{id}/toggle", post(sensors::toggle))
         .route("/sensors/{id}/delete", post(sensors::delete))
+        .route(
+            "/settings/mail",
+            get(mail_settings::show).post(mail_settings::save),
+        )
+        .route("/settings/mail/test", post(mail_settings::send_test))
         .route("/healthz", get(healthz))
         .route("/static/{*path}", get(assets::serve))
         .layer(security_header(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
@@ -148,6 +154,7 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "sensor_paused" => Some("Sensor pausiert."),
         "sensor_resumed" => Some("Sensor fortgesetzt."),
         "thresholds_saved" => Some("Schwellwerte gespeichert."),
+        "mail_saved" => Some("E-Mail-Einstellungen gespeichert."),
         _ => None,
     }
 }

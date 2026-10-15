@@ -12,6 +12,7 @@ askama = "0.16.1"
 axum = "0.8"
 chacha20poly1305 = "0.11.0"
 clap = { version = "4", features = ["derive"] }
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
 rand = "0.9"
 rpassword = "7.5.4"
 rust-embed = { version = "8.13.0", features = ["mime-guess"] }
@@ -29,6 +30,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [dev-dependencies]
+base64 = "0.23.1"
 http-body-util = "0.1.5"
 tempfile = "3.27.0"
 tower = { version = "0.5", features = ["util"] }

@@ -26,6 +26,7 @@ pub struct Report {
     pub raw_deleted: u64,
     pub hourly_deleted: u64,
     pub events_deleted: u64,
+    pub notifications_deleted: u64,
 }
 
 /// Rolls raw samples up into `samples_1h` and `samples_1d`.
@@ -106,10 +107,16 @@ pub async fn apply_retention(
         .execute(pool)
         .await?
         .rows_affected();
+    let notifications_deleted = sqlx::query("DELETE FROM notifications WHERE ts_ms < ?")
+        .bind(hourly_before)
+        .execute(pool)
+        .await?
+        .rows_affected();
     Ok(Report {
         raw_deleted,
         hourly_deleted,
         events_deleted,
+        notifications_deleted,
     })
 }
 
@@ -260,6 +267,13 @@ mod tests {
             .await
             .unwrap();
 
+        sqlx::query("INSERT INTO notifications (ts_ms, kind, subject, recipients, ok) VALUES (?, 'alert', 's', 'r', 1), (?, 'alert', 's', 'r', 1)")
+            .bind(very_old)
+            .bind(now - DAY_MS)
+            .execute(&pool)
+            .await
+            .unwrap();
+
         let report = apply_retention(
             &pool,
             now,
@@ -275,7 +289,8 @@ mod tests {
             Report {
                 raw_deleted: 2,
                 hourly_deleted: 1,
-                events_deleted: 1
+                events_deleted: 1,
+                notifications_deleted: 1
             }
         );
         let raw: Vec<(i64,)> = sqlx::query_as("SELECT ts FROM samples")

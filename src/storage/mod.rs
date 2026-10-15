@@ -3,6 +3,7 @@
 pub mod credentials;
 pub mod devices;
 pub mod groups;
+pub mod mail;
 pub mod measurements;
 pub mod sensors;
 pub mod status;

@@ -35,6 +35,7 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
   auf dem Stack und überläuft in Tokio-Threads mit 2 MB Stack)
 - Ping: `surge-ping` (0.9, ein Socket je Adressfamilie für alle Ziele); bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
+- Mail: `lettre` 0.11 (Features `builder`, `smtp-transport`, `tokio1`, `tokio1-rustls-tls`; ohne native-tls/OpenSSL, damit der musl-Build statisch bleibt)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
   `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
   erzeugt den Salt selbst), `sha2` (Session-Token-Hash), `subtle` (Vergleich in konstanter Zeit), `rand` (Tokens),
@@ -69,7 +70,7 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
 3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden – **umgesetzt** (`docs/sensoren.md`)
 4. Schwellwerte je Kanal → Statusberechnung; Statusübersicht und Detailseite mit Graph (1h/24h/7d/30d) – **umgesetzt** (`docs/graphen-und-schwellwerte.md`)
 5. Login (lokale Benutzer), Rolle Admin/Leser – **umgesetzt** (Anlegen per CLI, siehe `docs/benutzer-und-login.md`)
-6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – erst nach 1–5
+6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – **umgesetzt**, Einstellungen in der Oberfläche (`docs/benachrichtigung.md`)
 
 **Nicht im MVP:** SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET,
 Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benötigten TP-Link-OIDs.
@@ -88,7 +89,8 @@ Ein Binary, ein Prozess, Module:
 - `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets), `sensors::spec` (`SensorSpec`: Validierung, Kanäle, `build()`, `parse_oid`). `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
 - `maintenance` – Rollups (`samples_1h`, `samples_1d`) und Aufbewahrung (Config `retention_raw_days`, `retention_hourly_days`), vom Poller periodisch gestartet
 - `status` – `Thresholds` (je Kanal warn/down über/unter, strikt, sofort ohne Entprellung), `assess` (Messergebnis + Grenzen → `Assessment`), `advance` (Zustandsautomat: erster Fehler `Warning`, ab dem zweiten `Down`, Erfolg sofort `Up`), `device_status`; `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignislog (`sensor_status`, `events`) in einer Transaktion
-- `alerting` – Benachrichtigungen (entkoppelt über Channel/Queue)
+- `alerting` – `AlertEvent`, `is_alertworthy`, `compose`, `deliver`; `Notifier`-Aufgabe sammelt Wechsel 10 s lang zu einer Mail; vom Poller über eine `mpsc`-Queue gespeist (nie blockierend)
+- `mail` – SMTP-Einstellungen, Validierung, Versand mit `lettre` (rustls, kein OpenSSL); `storage::mail` – Einstellungen (Passwort verschlüsselt, Kontext `smtp.password`) und Sendelog `notifications`; Seite `web::mail_settings`
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
   (`web::overview`), Gruppen-, Geräte- und Profilseiten (`web::groups`, `web::devices`, `web::credentials`), Sensorseiten mit Discovery (`web::sensors`), Detailseite mit JSON-Endpoint für uPlot und Schwellwertformular (`web::sensor_detail`)

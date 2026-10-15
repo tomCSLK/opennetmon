@@ -8,12 +8,12 @@ Ein einzelnes, statisch gelinktes Binary (Rust) mit SQLite – gedacht für den 
 
 ## Status
 
-Funktionierender Stand nach MVP-Schritt 4 von 6. Details und Reihenfolge: [`PLAN.md`](PLAN.md).
+Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN.md`](PLAN.md).
 
 | | |
 |---|---|
-| Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung |
-| Offen | E-Mail-Benachrichtigung bei Statuswechsel, systemd-Unit, htmx-Feinschliff, Begrenzung von Anmeldeversuchen |
+| Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
+| Offen | systemd-Unit, Test mit dem echten Mailserver, htmx-Feinschliff, Begrenzung von Anmeldeversuchen |
 | Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
 
 ## Funktionen
@@ -24,6 +24,7 @@ Funktionierender Stand nach MVP-Schritt 4 von 6. Details und Reihenfolge: [`PLAN
 - **Zähler richtig gerechnet:** Überlauf und Gerätereboot werden erkannt; dann gibt es **keinen** Messwert statt eines Ausreißers.
 - **Status:** `In Ordnung`, `Warnung`, `Ausfall`, `Unbekannt`, `Pausiert`. Ein einzelner Messfehler ist nur eine Warnung, erst der zweite in Folge ein Ausfall. Schwellwerte je Kanal (Warnung/Down, über/unter).
 - **Graphen:** [uPlot](https://github.com/leeoniya/uPlot), lokal eingebunden (kein CDN), Anzeige in der Zeitzone des Browsers.
+- **Benachrichtigung:** E-Mail bei Ausfall, Warnung und Wiederherstellung; gleichzeitige Wechsel (z. B. ein ausgefallenes Gerät) kommen als eine Mail. SMTP-Server, Anmeldung und Empfänger lassen sich jederzeit in der Oberfläche ändern (Testmail inklusive).
 - **Daten:** SQLite im WAL-Modus; Rohwerte 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt (einstellbar).
 
 ## Schnellstart (Entwicklung)
@@ -37,6 +38,7 @@ cargo run -- --config ./dev/config.toml                                 # Server
 ```
 
 Danach im Browser: **SNMP-Profil** anlegen → **Neues Gerät** → beim Gerät **Interfaces suchen** → Sensoren anlegen. Die Messwerte erscheinen nach dem ersten Abfrageintervall.
+E-Mails lassen sich ohne echten Mailserver mit `python3 dev/smtp_sink.py` ausprobieren (Server `127.0.0.1`, Port `1025`, Verschlüsselung „Keine“); die Mails landen in `dev/data/mail/`.
 
 Tests und Qualität:
 
@@ -82,6 +84,7 @@ Eine systemd-Unit mit Hardening ist geplant (`deploy/netmon.service`).
 - Passwörter mit Argon2id, Sitzungen serverseitig, CSRF-Schutz auf allen Formularen, `HttpOnly`/`SameSite=Strict`-Cookies, strenge Content-Security-Policy (keine Inline-Skripte).
 - Standardmäßig nur auf `127.0.0.1`; für den Zugriff aus dem Netz einen TLS-terminierenden Reverse Proxy davorsetzen.
 - Bekannte Lücke: keine Begrenzung von Anmeldeversuchen (am Reverse Proxy begrenzen).
+- Das SMTP-Passwort wird wie die SNMP-Zugangsdaten verschlüsselt gespeichert und nie angezeigt.
 - Geheimnisse gehören nie ins Repository, in Logs oder in HTML-Ausgaben.
 
 ## Dokumentation
@@ -96,6 +99,7 @@ Eine systemd-Unit mit Hardening ist geplant (`deploy/netmon.service`).
 | [`docs/sensoren.md`](docs/sensoren.md) | Sensortypen, Zählerlogik, Discovery |
 | [`docs/poller.md`](docs/poller.md) | Abfrage, Statuslogik, Ereignislog |
 | [`docs/graphen-und-schwellwerte.md`](docs/graphen-und-schwellwerte.md) | Detailseite, Graphen, Schwellwerte, Rollups |
+| [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-Mail-Einstellungen, Regeln, Test-SMTP-Server |
 | [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Entscheidung für Rust (Spike-Ergebnisse) |
 
 ## Lizenz

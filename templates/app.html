@@ -4,7 +4,7 @@
   <span class="brand">netmon</span>
   <nav>
     <a href="/">Übersicht</a>
-    {% if layout.is_admin %}<a href="/credentials">SNMP-Profile</a>{% endif %}
+    {% if layout.is_admin %}<a href="/credentials">SNMP-Profile</a><a href="/settings/mail">E-Mail</a>{% endif %}
   </nav>
   <form method="post" action="/logout">
     <span class="muted">{{ layout.username }} ({{ layout.role_label }})</span>
