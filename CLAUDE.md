@@ -9,15 +9,17 @@ Agentloses Netzwerk-Monitoring per SNMP mit Web-Oberfläche, inspiriert vom Bedi
 Läuft headless auf einem **Ubuntu Server ohne GUI**; Bedienung ausschließlich über den Browser.
 Entwickelt wird auf Zorin OS (Desktop), betrieben auf Ubuntu Server.
 
-Zielumgebung: Extreme Networks – EXOS (Access/Distribution) und VOSS (Core).
-Access Points werden über ExtremeCloud IQ verwaltet und sind **nicht** Teil des SNMP-MVP.
+Zielumgebung: privates Netz mit TP-Link Omada (Software-Controller, Site `MCS6`): Gateway ER605, drei Smart-Switches
+(2× SG2008, 1× SG2008P), drei Access Points (1× EAP225, 2× EAP653). SNMP wird im Controller site-weit konfiguriert
+(aktuell nur SNMPv3, v1/v2c aus). Ob und was Gateway und Access Points per SNMP liefern, ist im Spike zu klären;
+die Omada-Controller-API ist **nicht** Teil des SNMP-MVP.
 
 ## Sprachentscheidung: Rust bevorzugt, Python als Fallback
 
 **Phase 0 (Spike, vor allem anderen):** Ein minimales Rust-CLI (`cargo run --example snmp_probe`)
-fragt `sysDescr`, `sysUpTime` und `IF-MIB::ifHCInOctets` von einem echten EXOS- und einem VOSS-Gerät ab:
+fragt `sysDescr`, `sysUpTime` und `IF-MIB::ifHCInOctets` von echten Omada-Geräten (mindestens ein Switch, zusätzlich Gateway und Access Point) ab:
 - SNMPv2c
-- SNMPv3 authPriv (SHA-256/AES-128, zusätzlich die tatsächlich auf den Geräten konfigurierte Kombination)
+- SNMPv3 authPriv (SHA-256/AES-128, zusätzlich die tatsächlich auf den Geräten konfigurierte Kombination; Omada-Geräte: authNoPriv/MD5)
 - GETBULK-Walk über `ifTable`/`ifXTable`
 
 **Fallback auf Python nur, wenn** SNMPv3 mit der auf den Geräten konfigurierten Auth/Priv-Kombination
@@ -57,7 +59,7 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
 
 ## MVP-Umfang
 
-1. Geräteverwaltung (CRUD), Gruppen, SNMP-Credentials (v2c, v3 authPriv) als wiederverwendbare Profile
+1. Geräteverwaltung (CRUD), Gruppen, SNMP-Credentials (v2c, v3 authNoPriv/authPriv) als wiederverwendbare Profile
 2. Sensortypen: Ping, SNMP Uptime, Interface-Traffic (IF-MIB, 64-Bit-HC-Counter), Interface-Status
    (`ifOperStatus`), benutzerdefinierter OID-Sensor (Gauge/Counter)
 3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden
@@ -66,7 +68,7 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
 6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – erst nach 1–5
 
 **Nicht im MVP:** SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET,
-Mandantenfähigkeit, XIQ-API, Herstellermibs außer gezielt benötigten Extreme-OIDs.
+Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benötigten TP-Link-OIDs.
 
 ## Architektur
 
@@ -118,7 +120,7 @@ Ein Binary, ein Prozess, Module:
 
 - Unit-Tests für Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Config-Parsing
 - Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent; Gerätetests gegen echte
-  Extreme-Hardware nur manuell, nicht in `cargo test`
+  Omada-Hardware nur manuell, nicht in `cargo test`
 - Handler-Tests mit `axum`/`tower::ServiceExt::oneshot`
 
 ## Befehle
@@ -137,6 +139,8 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 ## Offene Punkte (vom Nutzer zu klären)
 
 - Endgültiger Projektname
-- Welche SNMPv3-Auth/Priv-Kombination ist auf EXOS/VOSS konfiguriert?
+- Welche SNMPv3-Auth/Priv-Kombination nutzen die Omada-Geräte? (Controller zeigt nur Benutzer und Passwort; Passwort
+  nie in Chat, Repo oder Drive, nur lokal als Umgebungsvariable)
+- Welche der Geräte (Switches, ER605, EAPs) antworten tatsächlich auf SNMP?
 - Erwartete Anzahl Geräte/Sensoren (bestimmt Polling-Nebenläufigkeit und DB-Wahl langfristig)
 - Ist der Server vom Internet getrennt? (relevant für Updates und E-Mail-Versand)

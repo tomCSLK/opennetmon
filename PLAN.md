@@ -7,8 +7,9 @@
 ## Kontext
 
 PRTG gibt es nur für Windows. Ziel ist eine Linux-native Anwendung mit ähnlichem Bedienkonzept, die Netzwerkgeräte
-agentlos per SNMP überwacht. Zielumgebung: Extreme Networks EXOS (Access/Distribution) und VOSS (Core).
-Access Points (ExtremeCloud IQ) sind nicht Teil des MVP.
+agentlos per SNMP überwacht. Zielumgebung: privates Netz mit TP-Link Omada (Site `MCS6`): Gateway ER605, Switches 2× SG2008 und 1× SG2008P,
+Access Points 1× EAP225 und 2× EAP653. SNMP ist im Controller site-weit nur als SNMPv3 aktiviert (v1/v2c aus).
+Die Omada-Controller-API ist nicht Teil des MVP.
 Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedienung nur per Browser.
 
 ## Leitentscheidungen (aus CLAUDE.md)
@@ -17,7 +18,7 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 |---|---|
 | Sprache | Rust (Edition 2024, stable). Python/FastAPI nur als Fallback, falls der Phase-0-Spike scheitert |
 | Web | `axum`, `tower-http`, `askama`, htmx, uPlot (lokal vendort, per `rust-embed` ins Binary, kein CDN, kein npm) |
-| SNMP | `snmp2` (Features `tokio`, `crypto-rust`); v2c und v3 authPriv; ausschließlich lesend |
+| SNMP | `snmp2` (Features `tokio`, `crypto-rust`); v2c und v3 (authNoPriv/authPriv); Omada-Geräte nutzen v3 authNoPriv/MD5; ausschließlich lesend |
 | Ping | `surge-ping`, bevorzugt unprivilegierte ICMP-Sockets |
 | DB | SQLite über `sqlx`, WAL, Migrations in `migrations/` |
 | Auth | Lokale Benutzer, Rollen Admin/Leser, argon2, Session-Cookies, CSRF |
@@ -86,10 +87,10 @@ netmon/
 
 ## Vorbereitung (aktueller Schritt, ohne Code)
 
-1. **Offene Punkte klären** (siehe unten), v. a. SNMPv3-Kombination auf EXOS/VOSS.
+1. **Offene Punkte klären** (siehe unten), v. a. SNMPv3-Kombination der Omada-Geräte.
 2. **Entwicklungsumgebung prüfen:** Rust-Toolchain (stable, Edition 2024), Target `x86_64-unknown-linux-musl`,
    `net-snmp` (`snmpd`, `snmpwalk`) als lokaler Testagent, `sqlite3`, `ping_group_range` für unprivilegiertes ICMP.
-3. **Gerätezugang für Phase 0:** je ein EXOS- und ein VOSS-Gerät mit erreichbarer IP, SNMP-Zugangsdaten
+3. **Gerätezugang für Phase 0:** mindestens ein Omada-Switch (zusätzlich Gateway und Access Point, falls sie SNMP bieten) mit erreichbarer IP, SNMP-Zugangsdaten
    (v2c-Community, v3-Benutzer inkl. Auth/Priv-Protokolle) und Leserechten auf IF-MIB. Zugangsdaten nur lokal
    halten, nie ins Repo.
 4. **Repository vorbereiten:** `git init`, `.gitignore` (u. a. `target/`, `dev/*.local.toml`, Schlüsseldateien),
@@ -100,7 +101,7 @@ netmon/
 
 ## Umsetzungsphasen (nach Freigabe)
 
-0. **Spike:** `examples/snmp_probe` – `sysDescr`, `sysUpTime`, `ifHCInOctets` per v2c und v3 authPriv
+0. **Spike:** `examples/snmp_probe` – `sysDescr`, `sysUpTime`, `ifHCInOctets` per v2c und v3 (authNoPriv und authPriv)
    (SHA-256/AES-128 plus die real konfigurierte Kombination), GETBULK-Walk über `ifTable`/`ifXTable`.
    Ergebnis in `docs/decisions/0001-sprache.md`; bei Problemen dokumentieren und nachfragen, nicht eigenmächtig die Sprache wechseln.
 1. **Gerüst:** Config (TOML + ENV), Error-Typ mit `IntoResponse`, Logging, `/healthz`, Migrations, SQLite/WAL.
@@ -116,8 +117,8 @@ Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlos
 
 ## Bewusst nicht im MVP
 
-SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET, Mandantenfähigkeit, XIQ-API,
-Herstellermibs außer gezielt benötigten Extreme-OIDs.
+SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET, Mandantenfähigkeit, Omada-Controller-API,
+Herstellermibs außer gezielt benötigten TP-Link-OIDs.
 Zurückgestellt gegenüber früheren Ideen: CPU/RAM/Disk-Sensoren (HOST-RESOURCES/UCD), SNMP v1, Subnetz-Scan, Docker-Betrieb.
 
 ## Verifikation
@@ -126,7 +127,7 @@ Zurückgestellt gegenüber früheren Ideen: CPU/RAM/Disk-Sensoren (HOST-RESOURCE
 - **Integrationstests:** gegen lokalen `snmpd` (v2c und v3): Gerät anlegen → Discovery → Messwerte nach 1–2 Intervallen →
   Agent stoppen → `Down` → Agent starten → `Up`.
 - **Handler-Tests:** `axum` mit `tower::ServiceExt::oneshot`.
-- **Gerätetests** gegen echte Extreme-Hardware nur manuell, nicht in `cargo test`.
+- **Gerätetests** gegen echte Omada-Hardware nur manuell, nicht in `cargo test`.
 - **Vor jedem Abschluss:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 - **Packaging:** musl-Binary auf dem Ubuntu Server per systemd starten und `/healthz` prüfen.
 
@@ -139,7 +140,8 @@ Bind nur auf `127.0.0.1`, TLS über Reverse Proxy.
 ## Offene Punkte (vom Nutzer zu klären)
 
 - Endgültiger Projektname
-- Welche SNMPv3-Auth/Priv-Kombination ist auf EXOS/VOSS konfiguriert?
+- Welche SNMPv3-Auth/Priv-Kombination nutzen die Omada-Geräte (Controller zeigt nur Benutzer `MCS6_SNMP` und Passwort)?
+- Welche Geräte (Switches, ER605, EAPs) antworten tatsächlich auf SNMP?
 - Erwartete Anzahl Geräte/Sensoren (Polling-Nebenläufigkeit, DB-Wahl langfristig)
 - Ist der Server vom Internet getrennt? (Updates, E-Mail-Versand)
-- Zugang zu je einem EXOS- und einem VOSS-Testgerät für Phase 0
+- SNMPv3-Passwort als lokale Umgebungsvariable für den Spike (nie in Chat, Repo oder Drive)

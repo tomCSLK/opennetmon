@@ -2,7 +2,7 @@
 //!
 //! Secrets are read from the environment only, never from the command line:
 //!   NETMON_PROBE_COMMUNITY                    (v2c)
-//!   NETMON_PROBE_AUTH_PASS, NETMON_PROBE_PRIV_PASS (v3)
+//!   NETMON_PROBE_AUTH_PASS, NETMON_PROBE_PRIV_PASS (v3; the priv password only with `--level auth-priv`)
 //!
 //! Example:
 //!   NETMON_PROBE_COMMUNITY=public cargo run --example snmp_probe -- -t 127.0.0.1:161 v2c
@@ -42,15 +42,24 @@ struct Cli {
 enum Mode {
     /// SNMPv2c (community from NETMON_PROBE_COMMUNITY)
     V2c,
-    /// SNMPv3 authPriv (passwords from NETMON_PROBE_AUTH_PASS / NETMON_PROBE_PRIV_PASS)
+    /// SNMPv3 (passwords from NETMON_PROBE_AUTH_PASS / NETMON_PROBE_PRIV_PASS)
     V3 {
         #[arg(short, long)]
         user: String,
+        /// Security level (Omada switches use auth-no-priv)
+        #[arg(long, value_enum, default_value = "auth-priv")]
+        level: LevelArg,
         #[arg(long, value_enum, default_value = "sha256")]
         auth: AuthArg,
         #[arg(long = "priv", value_enum, default_value = "aes128")]
         priv_: PrivArg,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum LevelArg {
+    AuthNoPriv,
+    AuthPriv,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -132,15 +141,23 @@ async fn open(cli: &Cli) -> Result<AsyncSession> {
             let community = env_secret("NETMON_PROBE_COMMUNITY")?;
             Ok(AsyncSession::new_v2c(cli.target.as_str(), &community, 1).await?)
         }
-        Mode::V3 { user, auth, priv_ } => {
+        Mode::V3 {
+            user,
+            level,
+            auth,
+            priv_,
+        } => {
             let auth_pass = env_secret("NETMON_PROBE_AUTH_PASS")?;
-            let priv_pass = env_secret("NETMON_PROBE_PRIV_PASS")?;
+            let auth_mode = match level {
+                LevelArg::AuthNoPriv => Auth::AuthNoPriv,
+                LevelArg::AuthPriv => Auth::AuthPriv {
+                    cipher: (*priv_).into(),
+                    privacy_password: env_secret("NETMON_PROBE_PRIV_PASS")?,
+                },
+            };
             let security = Security::new(user.as_bytes(), &auth_pass)
                 .with_auth_protocol((*auth).into())
-                .with_auth(Auth::AuthPriv {
-                    cipher: (*priv_).into(),
-                    privacy_password: priv_pass,
-                });
+                .with_auth(auth_mode);
             let mut session = AsyncSession::new_v3(cli.target.as_str(), 1, security).await?;
             with_timeout(cli.timeout, session.init())
                 .await

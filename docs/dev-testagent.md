@@ -48,7 +48,7 @@ Der Rust-Spike (`snmp2`) ist damit noch nicht getestet.
 
 ## Weitere Kombinationen testen
 
-Zum Prüfen der auf EXOS/VOSS konfigurierten Kombination den Benutzer mit anderen Protokollen anlegen
+Zum Prüfen der auf den Omada-Geräten verwendeten Kombination den Benutzer mit anderen Protokollen anlegen
 (zum Beispiel `SHA` + `AES`, `SHA-512` + `AES`, `MD5` + `DES`). Pro Benutzer eine eigene `createUser`-Zeile
 und ein eigenes `rouser`. Welche Protokolle der lokale `snmpd` unterstützt, zeigt `snmpd --help`/`man snmpd.conf`.
 
