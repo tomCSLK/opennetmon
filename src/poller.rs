@@ -79,11 +79,18 @@ impl Poller {
         let (shutdown, signal) = watch::channel(false);
         let maintenance = tokio::spawn(maintain(pool.clone(), retention, signal.clone()));
         let notifier = Notifier::spawn(pool.clone(), Arc::clone(&secrets), signal.clone());
+        let ping = PingClients::new();
+        if !ping.ipv4_available() {
+            tracing::warn!(
+                "cannot open ICMP sockets: ping sensors will fail; allow them with \
+                 `sysctl net.ipv4.ping_group_range=\"0 2147483647\"` or run the service with CAP_NET_RAW"
+            );
+        }
         let shared = Arc::new(Shared {
             alerts: notifier.sender.clone(),
             pool,
             secrets,
-            ping: PingClients::new(),
+            ping,
             permits: Semaphore::new(concurrency.max(1)),
         });
         let supervisor = tokio::spawn(supervise(shared, signal));

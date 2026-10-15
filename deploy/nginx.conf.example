@@ -1,0 +1,33 @@
+# nginx: TLS termination, plus a rate limit for the login (netmon itself does not limit login attempts yet).
+# Put the limit_req_zone line in the http {} context (e.g. /etc/nginx/conf.d/netmon-limits.conf).
+limit_req_zone $binary_remote_addr zone=netmon_login:10m rate=10r/m;
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name netmon.example.org;
+
+    ssl_certificate     /etc/ssl/certs/netmon.example.org.pem;
+    ssl_certificate_key /etc/ssl/private/netmon.example.org.key;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    # At most 10 login requests per minute and address (bursts of 5 are tolerated).
+    location = /login {
+        limit_req zone=netmon_login burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8080;
+        include /etc/nginx/proxy_params;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        include /etc/nginx/proxy_params;
+    }
+}
+
+server {
+    listen 80;
+    server_name netmon.example.org;
+    return 301 https://$host$request_uri;
+}

@@ -123,11 +123,17 @@ Ein Binary, ein Prozess, Module:
 
 ## Betrieb auf Ubuntu Server
 
-- Release-Build als statisches Binary: Target `x86_64-unknown-linux-musl`
-  (vermeidet glibc-Versionskonflikte zwischen Zorin und dem Server)
-- systemd-Unit unter `deploy/netmon.service`, eigener Systembenutzer `netmon`, Hardening
-  (`ProtectSystem=strict`, `NoNewPrivileges=yes`, `ReadWritePaths=/var/lib/netmon`)
-- Pfade: Config `/etc/netmon/config.toml`, Daten `/var/lib/netmon/`, Logs über journald
+Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
+
+- Release-Build als statisches Binary: Target `x86_64-unknown-linux-musl` (vermeidet glibc-Versionskonflikte zwischen Zorin und dem Server)
+- `deploy/install.sh` (wiederholbar; `DESTDIR=… ` für einen Trockenlauf): Systembenutzer `netmon`, `/usr/local/bin/netmon` (alte Version als `.previous`),
+  `/etc/netmon/config.toml` und `secret.key` (werden nie überschrieben), Unit, sysctl für Ping, täglicher Backup-Timer
+- `deploy/netmon.service`: eigener Benutzer, `StateDirectory=netmon` (`/var/lib/netmon`), strenges Hardening (`ProtectSystem=strict`, `NoNewPrivileges`, leere Capabilities,
+  Syscall-Filter `@system-service` ohne `@privileged @resources`, `MemoryDenyWriteExecute`); `systemd-analyze security` ≈ 1,3; als transienter Dienst real getestet
+- Pfade: Config `/etc/netmon/config.toml`, Daten `/var/lib/netmon/`, Sicherungen `/var/backups/netmon`, Logs über journald
+- Ping über `net.ipv4.ping_group_range` (`deploy/99-netmon-ping.conf`); Alternative `CAP_NET_RAW` (Hinweis in der Unit); der Poller warnt beim Start, wenn keine ICMP-Sockets möglich sind
+- `netmon backup <datei>` (SQLite `VACUUM INTO`, Modus 0600, überschreibt nie, ohne Schlüssel) und `deploy/netmon-backup.sh` + `.timer` (täglich, 14 Kopien)
+- Reverse-Proxy-Beispiele: `deploy/Caddyfile.example`, `deploy/nginx.conf.example` (mit Login-Begrenzung)
 - Health-Endpoint `/healthz` (ohne Auth, ohne interne Details)
 
 ## Konventionen
@@ -155,6 +161,7 @@ cargo test
 cargo run -- --config ./dev/config.toml
 cargo run -- --config ./dev/config.toml key generate                    # einmalig, vor dem ersten Serverstart
 cargo run -- --config ./dev/config.toml user add <name> --role admin    # auch: user passwd, user list
+cargo run -- --config ./dev/config.toml backup ./dev/data/backup.db      # konsistente Kopie der Datenbank
 cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv --auth md5   # Passwörter nur per Umgebung
 cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
 cargo build --release --target x86_64-unknown-linux-musl

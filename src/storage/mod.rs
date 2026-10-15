@@ -42,6 +42,42 @@ pub async fn migrate(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
+/// Writes a consistent copy of the database to `target` (SQLite `VACUUM INTO`); safe while the server runs.
+/// The file is created with mode 0600 and an existing non-empty file is never overwritten.
+/// It contains the encrypted SNMP/SMTP secrets but not the key file, which is backed up separately.
+pub async fn backup_to(pool: &SqlitePool, target: &Path) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let target = std::path::absolute(target)?;
+    let text = target.to_str().ok_or_else(|| {
+        crate::error::Error::Invalid("Der Pfad der Sicherung ist kein gültiges UTF-8.".to_owned())
+    })?;
+    // SQLite accepts a missing or an empty target; create it ourselves so the mode is right from the start.
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&target)
+    {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            if std::fs::metadata(&target)?.len() > 0 {
+                return Err(crate::error::Error::Invalid(format!(
+                    "{} existiert bereits; eine vorhandene Sicherung wird nie überschrieben.",
+                    target.display()
+                )));
+            }
+        }
+        Err(e) => return Err(e.into()),
+    }
+    let done = sqlx::query("VACUUM INTO ?").bind(text).execute(pool).await;
+    if done.is_err() {
+        let _ = std::fs::remove_file(&target); // do not leave a half-made backup behind
+    }
+    done?;
+    Ok(())
+}
+
 /// Cheap liveness check for the health endpoint.
 pub async fn ping(pool: &SqlitePool) -> Result<()> {
     sqlx::query("SELECT 1").execute(pool).await?;
@@ -51,6 +87,56 @@ pub async fn ping(pool: &SqlitePool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn backup_is_a_consistent_private_copy_and_never_overwrites() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let pool = connect(&dir.path().join("live.db")).await.unwrap();
+        migrate(&pool).await.unwrap();
+        sqlx::query("INSERT INTO groups (name) VALUES ('Keller')")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let target = dir.path().join("backup.db");
+        backup_to(&pool, &target).await.unwrap();
+        assert_eq!(
+            std::fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+
+        let copy = connect(&target).await.unwrap();
+        let names: Vec<String> = sqlx::query_scalar("SELECT name FROM groups")
+            .fetch_all(&copy)
+            .await
+            .unwrap();
+        assert_eq!(names, ["Keller"]);
+        copy.close().await;
+
+        // A second run must not touch the first backup.
+        sqlx::query("INSERT INTO groups (name) VALUES ('Büro')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let err = backup_to(&pool, &target).await.unwrap_err();
+        assert!(matches!(err, crate::error::Error::Invalid(_)), "{err:?}");
+        let copy = connect(&target).await.unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM groups")
+            .fetch_one(&copy)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn a_failed_backup_leaves_no_file_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = connect(&dir.path().join("live.db")).await.unwrap();
+        let missing_dir = dir.path().join("nope").join("backup.db");
+        assert!(backup_to(&pool, &missing_dir).await.is_err());
+        assert!(!missing_dir.exists());
+    }
 
     #[tokio::test]
     async fn connect_enables_wal_and_migrations_apply() {

@@ -1,0 +1,7 @@
+# Caddy: automatic HTTPS with a public name, or `tls internal` for a private CA.
+# Replace the host name; then `systemctl reload caddy`.
+netmon.example.org {
+	# tls internal
+	reverse_proxy 127.0.0.1:8080
+	header -Server
+}

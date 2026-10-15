@@ -34,6 +34,11 @@ enum Command {
     /// Manage the key that encrypts stored SNMP secrets
     #[command(subcommand)]
     Key(KeyCommand),
+    /// Write a consistent copy of the database (safe while the server runs; never overwrites)
+    Backup {
+        /// Target file; created with mode 0600
+        target: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -94,6 +99,21 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if let Command::Backup { target } = &command {
+        let pool = storage::connect(&config.database_path)
+            .await
+            .context("opening database")?;
+        storage::backup_to(&pool, target)
+            .await
+            .context("writing the backup")?;
+        println!("Backup written: {}", target.display());
+        println!(
+            "It contains the encrypted secrets but not the key file ({}); back that up separately.",
+            config.secret_key_file.display()
+        );
+        return Ok(());
+    }
+
     let pool = storage::connect(&config.database_path)
         .await
         .context("opening database")?;
@@ -104,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
     match command {
         Command::Serve => serve(config, pool).await,
         Command::User(cmd) => manage_users(&pool, cmd).await,
-        Command::Key(_) => Ok(()),
+        Command::Key(_) | Command::Backup { .. } => Ok(()),
     }
 }
 

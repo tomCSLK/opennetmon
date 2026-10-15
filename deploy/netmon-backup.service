@@ -1,0 +1,26 @@
+[Unit]
+Description=netmon database backup
+Documentation=https://github.com/tomCSLK/netmon
+
+[Service]
+Type=oneshot
+User=netmon
+Group=netmon
+ExecStart=/usr/local/sbin/netmon-backup
+UMask=0077
+
+# Reading a WAL database needs write access to its -wal/-shm files, hence /var/lib/netmon.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/netmon /var/backups/netmon
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

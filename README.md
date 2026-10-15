@@ -13,7 +13,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 | | |
 |---|---|
 | Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
-| Offen | systemd-Unit, Test mit dem echten Mailserver, htmx-Feinschliff, Begrenzung von Anmeldeversuchen |
+| Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff, Begrenzung von Anmeldeversuchen |
 | Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
 
 ## Funktionen
@@ -67,15 +67,19 @@ retention_raw_days = 7
 retention_hourly_days = 365                # Tageswerte bleiben unbegrenzt
 ```
 
-## Release-Build für den Server
+## Betrieb auf dem Server
 
 ```bash
 rustup target add x86_64-unknown-linux-musl
-cargo build --release --target x86_64-unknown-linux-musl   # statisches Binary, keine glibc-Abhängigkeit
+cargo build --release --target x86_64-unknown-linux-musl     # statisches Binary, keine glibc-Abhängigkeit
+sudo deploy/install.sh --binary target/x86_64-unknown-linux-musl/release/netmon   # auf dem Server (nach dem Kopieren von Binary und deploy/)
+sudo -u netmon /usr/local/bin/netmon --config /etc/netmon/config.toml user add admin --role admin
+sudo systemctl start netmon
 ```
 
-Für den Ping ohne Root-Rechte: `sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"` (dauerhaft in `/etc/sysctl.d/`) oder `CAP_NET_RAW` für den Dienst.
-Eine systemd-Unit mit Hardening ist geplant (`deploy/netmon.service`).
+Der Installer legt Benutzer, Konfiguration, Schlüssel, gehärtete systemd-Unit, die Ping-Berechtigung und eine tägliche Datenbanksicherung an und lässt vorhandene Konfiguration,
+Schlüssel und Daten bei Updates unberührt. Dazu: Beispiele für Caddy und nginx (mit Begrenzung der Anmeldeversuche) und eine Anleitung zu Update, Rollback,
+Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb.md).
 
 ## Sicherheit
 
@@ -99,6 +103,7 @@ Eine systemd-Unit mit Hardening ist geplant (`deploy/netmon.service`).
 | [`docs/sensoren.md`](docs/sensoren.md) | Sensortypen, Zählerlogik, Discovery |
 | [`docs/poller.md`](docs/poller.md) | Abfrage, Statuslogik, Ereignislog |
 | [`docs/graphen-und-schwellwerte.md`](docs/graphen-und-schwellwerte.md) | Detailseite, Graphen, Schwellwerte, Rollups |
+| [`docs/betrieb.md`](docs/betrieb.md) | Installation, Proxy, Update, Sicherung, Fehlersuche |
 | [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-Mail-Einstellungen, Regeln, Test-SMTP-Server |
 | [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Entscheidung für Rust (Spike-Ergebnisse) |
 

@@ -1,0 +1,22 @@
+# /etc/netmon/config.toml - production configuration (all keys shown with their defaults).
+# Changes need `systemctl restart netmon`; the e-mail settings are edited in the web interface instead.
+
+# Where the web interface listens. Keep it on loopback and put a TLS reverse proxy in front
+# (deploy/Caddyfile.example, deploy/nginx.conf.example).
+listen = "127.0.0.1:8080"
+
+database_path = "/var/lib/netmon/netmon.db"
+log_filter = "info"                         # journalctl -u netmon; e.g. "info,netmon=debug"
+
+# 64 hex characters, mode 0600, owned by the service user. Created by deploy/install.sh.
+# BACK IT UP SEPARATELY from the database: without it the stored SNMP/SMTP passwords are unreadable.
+secret_key_file = "/etc/netmon/secret.key"
+
+cookie_secure = true                        # keep true behind HTTPS; false only for plain-HTTP testing
+session_ttl_hours = 168
+
+poller_enabled = true
+poll_concurrency = 16                       # devices polled at the same time
+
+retention_raw_days = 7                      # raw measurements
+retention_hourly_days = 365                 # hourly rollups and status events; daily rollups are kept forever

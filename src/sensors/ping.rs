@@ -24,6 +24,11 @@ impl PingClients {
         }
     }
 
+    /// Whether IPv4 echo requests can be sent (false: no permission for ICMP sockets).
+    pub fn ipv4_available(&self) -> bool {
+        self.v4.is_some()
+    }
+
     fn for_addr(&self, addr: IpAddr) -> Option<&Client> {
         if addr.is_ipv4() {
             self.v4.as_ref()

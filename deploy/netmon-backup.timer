@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily netmon database backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
