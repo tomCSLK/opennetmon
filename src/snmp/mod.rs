@@ -209,6 +209,74 @@ impl SnmpClient {
     }
 }
 
+impl SnmpClient {
+    /// Walks everything below `root` with GETBULK (rows in OID order). More than `max_rows` rows is an
+    /// error rather than a silently truncated result.
+    pub async fn walk(
+        &mut self,
+        root: &[u64],
+        max_rows: usize,
+    ) -> Result<Vec<(Vec<u64>, SnmpValue)>, SnmpError> {
+        const REPETITIONS: u32 = 20;
+        let root_oid =
+            Oid::from(root).map_err(|e| SnmpError::Request(format!("invalid OID: {e:?}")))?;
+        let mut cursor: Oid<'static> = root_oid.clone();
+        let mut rows: Vec<(Vec<u64>, SnmpValue)> = Vec::new();
+        'requests: loop {
+            let mut attempts_left = self.retries + 1;
+            let mut refreshed = false;
+            let pdu = loop {
+                attempts_left -= 1;
+                match tokio::time::timeout(
+                    self.timeout,
+                    self.session.getbulk(&[&cursor], 0, REPETITIONS),
+                )
+                .await
+                {
+                    Ok(Ok(pdu)) => break pdu,
+                    Ok(Err(snmp2::Error::AuthUpdated)) if !refreshed => refreshed = true,
+                    Ok(Err(e)) => return Err(e.into()),
+                    Err(_) if attempts_left > 0 => {}
+                    Err(_) => return Err(SnmpError::Timeout),
+                }
+            };
+            if pdu.error_status != 0 {
+                return Err(SnmpError::Protocol(format!(
+                    "agent error status {}",
+                    pdu.error_status
+                )));
+            }
+            let mut advanced = false;
+            for (oid, value) in pdu.varbinds {
+                if matches!(value, Value::EndOfMibView) || !oid.starts_with(&root_oid) {
+                    break 'requests;
+                }
+                let parts = parse_id_string(&oid.to_id_string())?;
+                if rows.last().is_some_and(|(last, _)| *last >= parts) {
+                    return Err(SnmpError::Protocol("OIDs are not increasing".to_owned()));
+                }
+                if rows.len() >= max_rows {
+                    return Err(SnmpError::Protocol(format!("more than {max_rows} rows")));
+                }
+                cursor = oid.to_owned();
+                rows.push((parts, SnmpValue::from(&value)));
+                advanced = true;
+            }
+            if !advanced {
+                break;
+            }
+        }
+        Ok(rows)
+    }
+}
+
+fn parse_id_string(id: &str) -> Result<Vec<u64>, SnmpError> {
+    id.split('.')
+        .map(|p| p.parse::<u64>())
+        .collect::<Result<_, _>>()
+        .map_err(|_| SnmpError::Protocol(format!("unparsable OID {id}")))
+}
+
 /// Result of a connection test.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProbeResult {
@@ -433,5 +501,68 @@ mod tests {
             ..target(161)
         };
         assert_eq!(probe(&t, &creds).await.unwrap_err(), SnmpError::Unreachable);
+    }
+
+    async fn walk_client(agent: &crate::snmp::testagent::FakeAgent) -> SnmpClient {
+        let creds = Credentials::V2c {
+            community: Secret::new("public"),
+        };
+        let mut t = target(agent.port);
+        t.timeout = Duration::from_secs(2);
+        SnmpClient::connect(&t, &creds).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn walk_returns_exactly_the_subtree_in_order_over_several_requests() {
+        use crate::snmp::testagent::{FakeAgent, FakeValue};
+        let agent = FakeAgent::spawn("public", "x", 1).await;
+        for i in (1..=45u64).rev() {
+            agent.set(
+                &[1, 3, 6, 1, 2, 1, 2, 2, 1, 2, i],
+                FakeValue::Text(format!("port{i}")),
+            );
+        }
+        agent.set(&[1, 3, 6, 1, 2, 1, 2, 2, 1, 3, 1], FakeValue::Integer(6)); // sibling column
+        let mut client = walk_client(&agent).await;
+        let rows = client
+            .walk(&[1, 3, 6, 1, 2, 1, 2, 2, 1, 2], 100)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 45);
+        assert_eq!(
+            rows[0],
+            (
+                vec![1, 3, 6, 1, 2, 1, 2, 2, 1, 2, 1],
+                SnmpValue::Text("port1".to_owned())
+            )
+        );
+        assert!(rows.windows(2).all(|w| w[0].0 < w[1].0));
+    }
+
+    #[tokio::test]
+    async fn walk_of_an_empty_subtree_and_the_end_of_the_mib_is_empty() {
+        use crate::snmp::testagent::FakeAgent;
+        let agent = FakeAgent::spawn("public", "x", 1).await;
+        let mut client = walk_client(&agent).await;
+        assert!(
+            client
+                .walk(&[1, 3, 6, 1, 4, 1, 77], 10)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(client.walk(&[1, 3, 6, 1, 9], 10).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn walk_fails_instead_of_truncating() {
+        use crate::snmp::testagent::{FakeAgent, FakeValue};
+        let agent = FakeAgent::spawn("public", "x", 1).await;
+        for i in 1..=30u64 {
+            agent.set(&[1, 3, 6, 1, 4, 1, 5, i], FakeValue::Integer(1));
+        }
+        let mut client = walk_client(&agent).await;
+        let err = client.walk(&[1, 3, 6, 1, 4, 1, 5], 10).await.unwrap_err();
+        assert!(matches!(err, SnmpError::Protocol(_)), "{err:?}");
     }
 }

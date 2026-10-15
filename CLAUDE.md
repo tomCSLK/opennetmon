@@ -66,7 +66,7 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
    (`docs/snmp-profile.md`, `docs/geraete-und-gruppen.md`), inklusive Verbindungstest je Gerät
 2. Sensortypen: Ping, SNMP Uptime, Interface-Traffic (IF-MIB, 64-Bit-HC-Counter), Interface-Status
    (`ifOperStatus`), benutzerdefinierter OID-Sensor (Gauge/Counter)
-3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden
+3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden – **umgesetzt** (`docs/sensoren.md`)
 4. Schwellwerte je Kanal → Statusberechnung; Statusübersicht und Detailseite mit Graph (1h/24h/7d/30d)
 5. Login (lokale Benutzer), Rolle Admin/Leser – **umgesetzt** (Anlegen per CLI, siehe `docs/benutzer-und-login.md`)
 6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – erst nach 1–5
@@ -79,7 +79,7 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 Ein Binary, ein Prozess, Module:
 - `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`, `NETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
-- `snmp` – `SnmpClient` (GET mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; Poller und Sensoren bauen darauf auf
+- `snmp` – `SnmpClient` (GET und GETBULK-`walk` mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; `discovery` – Interface-Discovery über IF-MIB-Walks (`merge` ist reine Logik); Poller und Sensoren bauen darauf auf
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse), Migrations, Rollups, Retention
 - `poller` – Supervisor + eine Aufgabe je Gerät, die Gerät/Sensoren/Profil in jedem Zyklus neu lädt; verteilt Startzeiten über das Intervall
@@ -90,7 +90,7 @@ Ein Binary, ein Prozess, Module:
 - `alerting` – Benachrichtigungen (entkoppelt über Channel/Queue)
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
-  (`web::overview`), Gruppen-, Geräte- und Profilseiten (`web::groups`, `web::devices`, `web::credentials`)
+  (`web::overview`), Gruppen-, Geräte- und Profilseiten (`web::groups`, `web::devices`, `web::credentials`), Sensorseiten mit Discovery (`web::sensors`)
 
 ### Messdaten
 
@@ -139,9 +139,9 @@ Ein Binary, ein Prozess, Module:
 
 - Unit-Tests für Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Config-Parsing
 - Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent (`tests/snmp_local.rs`, überspringen sich ohne Agent oder
-  ohne `NETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`; u. a. `sensors_work_on_switch_and_access_point` und `poller_cycle_against_real_devices`)
+  ohne `NETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`; u. a. `sensors_work_on_switch_and_access_point` und `poller_cycle_against_real_devices`, `interface_discovery_on_switch_and_access_point`)
 - Handler-Tests mit `axum`/`tower::ServiceExt::oneshot`, gemeinsame Helfer in `src/web/testutil.rs`; SNMP-Tests ohne Netz über den
-  Fake-v2c-Agenten `src/snmp/testagent.rs`
+  Fake-v2c-Agenten `src/snmp/testagent.rs` (setzbare OID-Tabelle, GET/GETNEXT/GETBULK)
 
 ## Befehle
 

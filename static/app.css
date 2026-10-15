@@ -69,3 +69,13 @@ tr.indent-8 td:first-child, tr.indent-8 th:first-child { padding-left: 10.6rem; 
 tr.indent-9 td:first-child, tr.indent-9 th:first-child { padding-left: 11.85rem; }
 code { font-family: ui-monospace, monospace; }
 @media (max-width: 40rem) { table { display: block; overflow-x: auto; } }
+
+h2 { margin: 0 0 1rem; font-size: 1.15rem; }
+.badge { display: inline-block; padding: .05rem .5rem; font-size: .85rem; font-weight: 600; border-radius: 1rem;
+  color: var(--fg); background: var(--border); }
+.badge.status-up { color: var(--accent-fg); background: var(--accent); }
+.badge.status-warning { color: #3d2c00; background: #f2b84b; }
+.badge.status-down { color: #fff; background: #b3261e; }
+.badge.status-unknown, .badge.status-paused { color: var(--fg); background: var(--border); }
+input[type=checkbox] { width: 1.1rem; height: 1.1rem; }
+.actions form { margin: 0; }

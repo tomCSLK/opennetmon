@@ -48,3 +48,19 @@ schlägt mit klarer Meldung fehl. Auf dem Server: `ping_group_range` setzen oder
 
 Unit-Tests gegen den Fake-Agenten (`src/snmp/testagent.rs`, jetzt mit setzbarer OID-Tabelle), Storage-Tests mit temporärer Datenbank.
 Manuell gegen die echte Hardware: `cargo test --test omada_manual sensors_work -- --ignored --nocapture` (Switch 64 Bit, AP 32 Bit, Ping).
+
+## Oberfläche (`src/web/sensors.rs`)
+
+- **Übersicht** (`/`): je Gerät Status (schlechtester Sensorstatus), Link auf die Sensorseite und Anzahl der Sensoren.
+- **Sensorseite** (`/devices/<id>/sensors`, alle angemeldeten Benutzer): Tabelle mit Name, Typ, Status, letzter Meldung und letzter Abfrage (UTC).
+  Administratoren sehen zusätzlich „Pausieren/Fortsetzen“, „Löschen“, „Interfaces suchen“ und das Formular „Sensor hinzufügen“ (Ping, Uptime, eigene OID mit
+  Modus Wert/Zähler und Faktor; Dezimalkomma wird akzeptiert). Fehler erscheinen auf derselben Seite, Eingaben bleiben erhalten.
+- **Interface-Discovery** (`POST /devices/<id>/discover`, nur Administratoren, CSRF): `SnmpClient::walk` (GETBULK) liest `ifDescr`, `ifType`, `ifSpeed`,
+  `ifOperStatus`, `ifName`, `ifHighSpeed` und `ifAlias` (`src/discovery.rs`) und führt sie je `ifIndex` zusammen. Name = `ifName`, sonst `ifDescr`
+  (Access Points haben keine `ifXTable`), sonst „Interface N“. Die Seite zeigt je Interface zwei Häkchen (Traffic, Status). **Vorausgewählt** ist Traffic bei
+  aktiven Ports der Typen Ethernet/WLAN; vorhandene Sensoren sind gesperrt. Der Test begrenzt wie der Verbindungstest auf 10 s Timeout und 1 Wiederholung,
+  höchstens 2000 Zeilen je Tabelle.
+- **Anlegen** (`POST /devices/<id>/sensors/interfaces`): Felder `t_<ifIndex>`, `s_<ifIndex>` und `n_<ifIndex>` (Anzeigename). Sensornamen „Traffic <Name>“ bzw.
+  „Status <Name>“ (höchstens 64 Zeichen); bei gleichem Namen wird „ #<Index>“ angehängt. Bereits vorhandene Interface-Sensoren werden nie doppelt angelegt.
+- Gemessen an der echten Hardware: Switch (9 Interfaces, Indizes 1 und 49153–49160, `ifName` z. B. „gigabitEthernet 1/0/1“, Alias „Port1“) und AP (13 Interfaces,
+  nur `ifDescr`, z. B. `eth0`, `ath0`).

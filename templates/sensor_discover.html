@@ -1,0 +1,54 @@
+{% extends "app.html" %}
+{% block title %}Interfaces {{ device.name }} – netmon{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Interfaces von {{ device.name }}</h1>
+  <p class="muted">{{ device.host }}:{{ device.polling.port }}</p>
+  {% if let Some(message) = failure %}
+  <p class="error" role="alert">{{ message }}</p>
+  <div class="actions-row">
+    <form method="post" action="/devices/{{ device.id }}/discover">
+      <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+      <button type="submit">Erneut suchen</button>
+    </form>
+    <a class="button secondary" href="/devices/{{ device.id }}/sensors">Zurück zu den Sensoren</a>
+  </div>
+  {% else if rows.is_empty() %}
+  <p class="muted">Das Gerät meldet keine Interfaces.</p>
+  <a class="button secondary" href="/devices/{{ device.id }}/sensors">Zurück zu den Sensoren</a>
+  {% else %}
+  <p>Wähle aus, wofür Sensoren angelegt werden. Vorausgewählt sind aktive Ports (Ethernet, WLAN). Bereits vorhandene Sensoren sind gesperrt.</p>
+  <form method="post" action="/devices/{{ device.id }}/sensors/interfaces">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <table>
+      <thead>
+        <tr><th>Traffic</th><th>Status</th><th>Index</th><th>Name</th><th>Beschreibung</th><th>Zustand</th><th>Tempo</th></tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>
+            <input type="checkbox" name="t_{{ row.index }}" value="on" aria-label="Traffic-Sensor für {{ row.name }}"
+              {% if row.has_traffic %}disabled checked{% else if row.preselect %}checked{% endif %}>
+          </td>
+          <td>
+            <input type="checkbox" name="s_{{ row.index }}" value="on" aria-label="Status-Sensor für {{ row.name }}"
+              {% if row.has_status %}disabled checked{% endif %}>
+          </td>
+          <td>{{ row.index }}</td>
+          <td>{{ row.name }}<input type="hidden" name="n_{{ row.index }}" value="{{ row.name }}"></td>
+          <td>{{ row.descr }}{% if !row.alias.is_empty() %} <span class="muted">({{ row.alias }})</span>{% endif %}</td>
+          <td>{{ row.status }}</td>
+          <td>{{ row.speed }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions-row">
+      <button type="submit">Sensoren anlegen</button>
+      <a class="button secondary" href="/devices/{{ device.id }}/sensors">Abbrechen</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

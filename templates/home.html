@@ -19,13 +19,13 @@
   {% else %}
   <table>
     <thead>
-      <tr><th>Name</th><th>Adresse</th><th>Intervall</th>{% if layout.is_admin %}<th>SNMP-Profil</th><th></th>{% endif %}</tr>
+      <tr><th>Name</th><th>Status</th><th>Adresse</th><th>Intervall</th>{% if layout.is_admin %}<th>SNMP-Profil</th>{% endif %}<th></th></tr>
     </thead>
     <tbody>
     {% for row in rows %}
       {% if let Some(group) = row.group %}
       <tr class="group indent-{{ row.indent }}">
-        <th colspan="{% if layout.is_admin %}4{% else %}3{% endif %}">{{ group.name }}</th>
+        <th colspan="5">{{ group.name }}</th>
         {% if layout.is_admin %}
         <td>{% if group.id > 0 %}<a href="/groups/{{ group.id }}/edit">Gruppe bearbeiten</a>{% endif %}</td>
         {% endif %}
@@ -33,19 +33,23 @@
       {% endif %}
       {% if let Some(device) = row.device %}
       <tr class="indent-{{ row.indent }}">
-        <td>{{ device.name }}</td>
+        <td><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a></td>
+        <td>{% if row.sensor_count > 0 %}<span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span>{% else %}<span class="muted">keine Sensoren</span>{% endif %}</td>
         <td>{{ device.host }}:{{ device.polling.port }}</td>
         <td>{{ device.polling.interval_secs }} s</td>
         {% if layout.is_admin %}
         <td>{{ device.profile_name }}</td>
+        {% endif %}
         <td class="row-actions">
+          <a href="/devices/{{ device.id }}/sensors">Sensoren ({{ row.sensor_count }})</a>
+          {% if layout.is_admin %}
           <form method="post" action="/devices/{{ device.id }}/test">
             <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
             <button type="submit" class="link small">Testen</button>
           </form>
           <a href="/devices/{{ device.id }}/edit">Bearbeiten</a>
+          {% endif %}
         </td>
-        {% endif %}
       </tr>
       {% endif %}
     {% endfor %}

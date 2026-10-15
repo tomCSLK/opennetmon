@@ -74,6 +74,29 @@ impl SensorSpec {
         }
     }
 
+    /// Short German description for lists, e.g. `Interface-Traffic (Index 49153)`.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Ping => "Ping".to_owned(),
+            Self::Uptime => "Uptime".to_owned(),
+            Self::InterfaceTraffic { if_index } => format!("Interface-Traffic (Index {if_index})"),
+            Self::InterfaceStatus { if_index } => format!("Interface-Status (Index {if_index})"),
+            Self::Oid { oid, mode, scale } => format!(
+                "OID {} ({}{})",
+                format_oid(oid),
+                match mode {
+                    OidMode::Gauge => "Wert",
+                    OidMode::Counter => "Zähler, Rate/s",
+                },
+                if *scale == 1.0 {
+                    String::new()
+                } else {
+                    format!(", Faktor {scale}")
+                }
+            ),
+        }
+    }
+
     pub fn channels(&self) -> Vec<ChannelDef> {
         let one = |key, unit| vec![ChannelDef { key, unit }];
         match self {

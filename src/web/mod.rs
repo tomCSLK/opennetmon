@@ -6,6 +6,7 @@ pub mod credentials;
 pub mod devices;
 pub mod groups;
 pub mod overview;
+pub mod sensors;
 #[cfg(test)]
 pub(crate) mod testutil;
 
@@ -68,6 +69,17 @@ pub fn router(state: AppState) -> Router {
         .route("/devices/{id}", post(devices::update))
         .route("/devices/{id}/delete", post(devices::delete))
         .route("/devices/{id}/test", post(devices::test_connection))
+        .route(
+            "/devices/{id}/sensors",
+            get(sensors::list).post(sensors::create),
+        )
+        .route("/devices/{id}/discover", post(sensors::discover))
+        .route(
+            "/devices/{id}/sensors/interfaces",
+            post(sensors::create_interfaces),
+        )
+        .route("/sensors/{id}/toggle", post(sensors::toggle))
+        .route("/sensors/{id}/delete", post(sensors::delete))
         .route("/healthz", get(healthz))
         .route("/static/{*path}", get(assets::serve))
         .layer(security_header(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
@@ -123,8 +135,35 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "device_created" => Some("Gerät angelegt."),
         "device_updated" => Some("Gerät gespeichert."),
         "device_deleted" => Some("Gerät gelöscht."),
+        "sensor_created" => Some("Sensor angelegt."),
+        "sensors_added" => Some("Sensoren angelegt."),
+        "sensor_deleted" => Some("Sensor gelöscht."),
+        "sensor_paused" => Some("Sensor pausiert."),
+        "sensor_resumed" => Some("Sensor fortgesetzt."),
         _ => None,
     }
+}
+
+/// Formats Unix milliseconds as `2026-10-15 19:32:10 UTC`.
+pub fn format_utc(ms: i64) -> String {
+    let secs = ms.div_euclid(1000);
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    // Civil-from-days (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} UTC",
+        rem / 3_600,
+        (rem % 3_600) / 60,
+        rem % 60
+    )
 }
 
 /// Data every logged-in page needs for the header (navigation, user, logout form).
@@ -170,6 +209,14 @@ mod tests {
         let status = response.status();
         let body = response.into_body().collect().await.unwrap().to_bytes();
         (status, String::from_utf8(body.to_vec()).unwrap())
+    }
+
+    #[test]
+    fn utc_timestamps_are_formatted() {
+        assert_eq!(format_utc(0), "1970-01-01 00:00:00 UTC");
+        assert_eq!(format_utc(951_782_400_000), "2000-02-29 00:00:00 UTC");
+        assert_eq!(format_utc(1_781_551_930_000), "2026-06-15 19:32:10 UTC");
+        assert_eq!(format_utc(-1_000), "1969-12-31 23:59:59 UTC");
     }
 
     #[tokio::test]

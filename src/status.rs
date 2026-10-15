@@ -32,6 +32,17 @@ impl Status {
         }
     }
 
+    /// German label for the UI.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Up => "In Ordnung",
+            Self::Warning => "Warnung",
+            Self::Down => "Ausfall",
+            Self::Unknown => "Unbekannt",
+            Self::Paused => "Pausiert",
+        }
+    }
+
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
             "up" => Self::Up,

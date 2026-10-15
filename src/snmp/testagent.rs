@@ -1,8 +1,9 @@
 //! A minimal SNMPv2c agent for tests: answers GET requests from a mutable OID table (preloaded with
 //! `sysDescr.0` and `sysUpTime.0`) and ignores requests with a wrong community (like real agents do).
-//! Unknown OIDs yield `noSuchInstance`. Not a general SNMP implementation.
+//! Unknown OIDs yield `noSuchInstance`. GETNEXT and GETBULK (no non-repeaters) walk the table in OID order and
+//! end with `endOfMibView`. Not a general SNMP implementation.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use tokio::net::UdpSocket;
@@ -21,7 +22,7 @@ pub enum FakeValue {
     Counter64(u64),
 }
 
-type Table = Arc<Mutex<HashMap<Vec<u64>, FakeValue>>>;
+type Table = Arc<Mutex<BTreeMap<Vec<u64>, FakeValue>>>;
 
 pub struct FakeAgent {
     pub port: u16,
@@ -42,7 +43,7 @@ impl FakeAgent {
             .expect("bind fake agent");
         let port = socket.local_addr().expect("local addr").port();
         let community = community.as_bytes().to_vec();
-        let table: Table = Arc::new(Mutex::new(HashMap::from([
+        let table: Table = Arc::new(Mutex::new(BTreeMap::from([
             (SYS_DESCR.to_vec(), FakeValue::Text(sys_descr.to_owned())),
             (SYS_UPTIME.to_vec(), FakeValue::Timeticks(uptime_ticks)),
         ])));
@@ -68,6 +69,24 @@ impl FakeAgent {
     pub fn set_uptime(&self, ticks: u32) {
         self.set(SYS_UPTIME, FakeValue::Timeticks(ticks));
     }
+}
+
+fn encode_oid(oid: &[u64]) -> Vec<u8> {
+    let mut out = Vec::new();
+    if let [first, second, rest @ ..] = oid {
+        out.push(u8::try_from(first * 40 + second).unwrap_or(0));
+        for arc in rest {
+            let mut groups = vec![u8::try_from(arc & 0x7f).unwrap_or(0)];
+            let mut n = arc >> 7;
+            while n > 0 {
+                groups.push(u8::try_from(n & 0x7f).unwrap_or(0) | 0x80);
+                n >>= 7;
+            }
+            groups.reverse();
+            out.extend(groups);
+        }
+    }
+    out
 }
 
 fn decode_oid(bytes: &[u8]) -> Vec<u64> {
@@ -156,31 +175,74 @@ fn unsigned(n: u64) -> Vec<u8> {
     bytes
 }
 
+fn integer(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0u64, |acc, b| (acc << 8) | u64::from(*b))
+}
+
+fn varbind(oid: &[u64], value: Vec<u8>) -> Vec<u8> {
+    tlv(0x30, &[tlv(0x06, &encode_oid(oid)), value].concat())
+}
+
 fn respond(request: &[u8], community: &[u8], table: &Table) -> Option<Vec<u8>> {
+    const GET: u8 = 0xa0;
+    const GET_NEXT: u8 = 0xa1;
+    const GET_BULK: u8 = 0xa5;
     let (_, message, _) = read(request)?;
     let (_, version, rest) = read(message)?;
     let (_, their_community, rest) = read(rest)?;
     let (pdu_tag, pdu, _) = read(rest)?;
-    if their_community != community || pdu_tag != 0xa0 {
+    if their_community != community || ![GET, GET_NEXT, GET_BULK].contains(&pdu_tag) {
         return None;
     }
     let (_, request_id, rest) = read(pdu)?;
-    let (_, _, rest) = read(rest)?; // error status
-    let (_, _, rest) = read(rest)?; // error index
+    let (_, first_field, rest) = read(rest)?; // error status / non-repeaters
+    let (_, second_field, rest) = read(rest)?; // error index / max-repetitions
     let (_, mut varbinds, _) = read(rest)?;
+    let repetitions = if pdu_tag == GET_BULK {
+        usize::try_from(integer(second_field))
+            .unwrap_or(0)
+            .clamp(1, 50)
+    } else {
+        1
+    };
+    let _ = first_field;
 
+    let table = table.lock().ok()?;
     let mut answers = Vec::new();
     while !varbinds.is_empty() {
-        let (_, varbind, remaining) = read(varbinds)?;
+        let (_, vb, remaining) = read(varbinds)?;
         varbinds = remaining;
-        let (_, oid, _) = read(varbind)?;
-        let oid_tlv = tlv(0x06, oid);
-        let looked_up = table.lock().ok()?.get(&decode_oid(oid)).cloned();
-        let value = match looked_up {
-            Some(v) => encode_value(&v),
-            None => vec![0x81, 0x00], // noSuchInstance
-        };
-        answers.extend(tlv(0x30, &[oid_tlv, value].concat()));
+        let (_, oid_bytes, _) = read(vb)?;
+        let oid = decode_oid(oid_bytes);
+        match pdu_tag {
+            GET => {
+                let value = table
+                    .get(&oid)
+                    .map_or_else(|| vec![0x81, 0x00], encode_value); // noSuchInstance
+                answers.extend(varbind(&oid, value));
+            }
+            _ => {
+                let mut cursor = oid;
+                for _ in 0..repetitions {
+                    let next = table
+                        .range::<[u64], _>((
+                            std::ops::Bound::Excluded(&cursor[..]),
+                            std::ops::Bound::Unbounded,
+                        ))
+                        .next();
+                    match next {
+                        Some((next_oid, value)) => {
+                            answers.extend(varbind(next_oid, encode_value(value)));
+                            cursor = next_oid.clone();
+                        }
+                        None => {
+                            answers.extend(varbind(&cursor, vec![0x82, 0x00])); // endOfMibView
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     let pdu = [

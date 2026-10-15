@@ -129,6 +129,14 @@ pub async fn list_sensors(pool: &SqlitePool, device_id: i64) -> Result<Vec<Senso
     assemble(pool, rows).await
 }
 
+/// All sensors of all devices (enabled or not), for overviews.
+pub async fn list_all_sensors(pool: &SqlitePool) -> Result<Vec<SensorRecord>> {
+    let rows = sqlx::query_as::<_, SensorRow>(&format!("{SENSOR_SELECT} ORDER BY device_id, name"))
+        .fetch_all(pool)
+        .await?;
+    assemble(pool, rows).await
+}
+
 /// All enabled sensors of all devices, as the poller needs them.
 pub async fn list_enabled_sensors(pool: &SqlitePool) -> Result<Vec<SensorRecord>> {
     let rows = sqlx::query_as::<_, SensorRow>(&format!(

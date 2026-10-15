@@ -215,3 +215,30 @@ async fn poller_cycle_against_real_devices() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "needs the real Omada network"]
+async fn interface_discovery_on_switch_and_access_point() {
+    for host in [SWITCH, ACCESS_POINT] {
+        let mut client = SnmpClient::connect(&target(host), &credentials())
+            .await
+            .unwrap();
+        let found = netmon::discovery::discover_interfaces(&mut client)
+            .await
+            .unwrap();
+        println!("{host}: {} interfaces", found.len());
+        for i in &found {
+            println!(
+                "  {:>6} {:<24} {:<8} type={:?} speed={:?} suggested={} alias={:?}",
+                i.index,
+                i.name,
+                i.oper_status_label(),
+                i.if_type,
+                i.speed_mbps,
+                i.suggested(),
+                i.alias
+            );
+        }
+        assert!(!found.is_empty());
+    }
+}
