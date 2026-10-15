@@ -1,6 +1,6 @@
 # 0001 – Programmiersprache
 
-- **Status:** Vorschlag Rust, zur Bestätigung durch den Nutzer (Spike gegen echte Omada-Geräte bestanden)
+- **Status:** Entschieden: Rust (vom Nutzer bestätigt am 2026-10-15, nach bestandenem Spike gegen echte Omada-Geräte)
 - **Vorläufige Entscheidung:** Rust (laut `CLAUDE.md`), Python nur als Fallback
 - **Datum:** 2026-10-15
 
@@ -38,7 +38,7 @@ Abgefragt werden `sysDescr`, `sysUpTime` und `IF-MIB::ifHCInOctets` sowie ein GE
 
 ## Entscheidung
 
-**Vorschlag: Rust bleibt.** `snmp2` mit `crypto-rust` arbeitet gegen alle SNMP-fähigen Omada-Geräte zuverlässig (v3 authNoPriv/MD5) und gegen den lokalen `snmpd` mit SHA-256/AES-128. Zu bestätigen durch den Nutzer. Fallback auf Python (FastAPI, `pysnmp` 7.x) nur, wenn SNMPv3 mit der
+**Entscheidung: Rust bleibt.** `snmp2` mit `crypto-rust` arbeitet gegen alle SNMP-fähigen Omada-Geräte zuverlässig (v3 authNoPriv/MD5) und gegen den lokalen `snmpd` mit SHA-256/AES-128. Fallback auf Python (FastAPI, `pysnmp` 7.x) nur, wenn SNMPv3 mit der
 konfigurierten Kombination mit `snmp2` nicht zuverlässig läuft und sich nicht mit vertretbarem Aufwand lösen lässt.
 Bei Problemen wird der Befund hier dokumentiert und nachgefragt, die Sprache wird nicht eigenmächtig gewechselt.
 
