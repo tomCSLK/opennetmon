@@ -13,7 +13,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 | | |
 |---|---|
 | Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
-| Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff, Begrenzung von Anmeldeversuchen |
+| Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
 | Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
 
 ## Funktionen
@@ -78,7 +78,7 @@ sudo systemctl start netmon
 ```
 
 Der Installer legt Benutzer, Konfiguration, Schlüssel, gehärtete systemd-Unit, die Ping-Berechtigung und eine tägliche Datenbanksicherung an und lässt vorhandene Konfiguration,
-Schlüssel und Daten bei Updates unberührt. Dazu: Beispiele für Caddy und nginx (mit Begrenzung der Anmeldeversuche) und eine Anleitung zu Update, Rollback,
+Schlüssel und Daten bei Updates unberührt. Dazu: Beispiele für Caddy und nginx (nginx zusätzlich mit Begrenzung der Anmeldeversuche) und eine Anleitung zu Update, Rollback,
 Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb.md).
 
 ## Sicherheit
@@ -87,7 +87,7 @@ Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb
 - SNMP-Zugangsdaten liegen mit XChaCha20-Poly1305 verschlüsselt in der Datenbank; der Schlüssel steht in einer separaten Datei. **Diese Datei getrennt von der Datenbank sichern** – ohne sie sind die Profile unbrauchbar.
 - Passwörter mit Argon2id, Sitzungen serverseitig, CSRF-Schutz auf allen Formularen, `HttpOnly`/`SameSite=Strict`-Cookies, strenge Content-Security-Policy (keine Inline-Skripte).
 - Standardmäßig nur auf `127.0.0.1`; für den Zugriff aus dem Netz einen TLS-terminierenden Reverse Proxy davorsetzen.
-- Bekannte Lücke: keine Begrenzung von Anmeldeversuchen (am Reverse Proxy begrenzen).
+- Fehlgeschlagene Anmeldungen werden je Benutzername und je Adresse gebremst (Ablehnung mit Wartezeit, nie dauerhafte Sperre). Hinter einem Proxy `client_ip_header` setzen.
 - Das SMTP-Passwort wird wie die SNMP-Zugangsdaten verschlüsselt gespeichert und nie angezeigt.
 - Geheimnisse gehören nie ins Repository, in Logs oder in HTML-Ausgaben.
 

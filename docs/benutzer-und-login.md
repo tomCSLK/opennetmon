@@ -38,8 +38,24 @@ Regeln: Benutzername 3 bis 32 Zeichen (`a-z A-Z 0-9 . _ -`, Groß-/Kleinschreibu
 |---|---|---|
 | `cookie_secure` | `true` | Cookies nur über HTTPS senden. Nur für Entwicklung über reines HTTP auf `false` setzen |
 | `session_ttl_hours` | `168` | Sitzungsdauer in Stunden (1 bis 2160) |
+| `client_ip_header` | nicht gesetzt | Hinter einem Reverse Proxy: `"x-forwarded-for"` (letzter Eintrag) oder `"x-real-ip"`, damit die Begrenzung die echte Client-Adresse sieht (siehe unten) |
 
-## Bekannte Lücke
+## Begrenzung der Anmeldeversuche (`src/auth/throttle.rs`)
 
-Es gibt noch keine Begrenzung der Anmeldeversuche. Hinter dem Reverse Proxy kann Caddy oder nginx
-(`limit_req`) das übernehmen; eine eigene Begrenzung folgt später.
+Fehlgeschlagene Anmeldungen werden in einem gleitenden Fenster von 15 Minuten gezählt, **je Benutzername** und **je Client-Adresse**. Ab einer Schwelle werden weitere
+Versuche **abgelehnt** (HTTP 429 mit `Retry-After`, ohne das Passwort zu prüfen – auch nicht das richtige), und die Wartezeit verdoppelt sich mit jedem weiteren Fehlversuch:
+
+| | Schwelle | Wartezeit | Obergrenze |
+|---|---|---|---|
+| je Benutzername (Groß-/Kleinschreibung egal) | 5 Fehlversuche | 5 s, 10 s, 20 s … | 60 s |
+| je Adresse (IPv6: je /64) | 10 Fehlversuche | 30 s, 60 s, 120 s … | 15 min |
+
+Der Benutzername wird bewusst nur **gebremst, nicht gesperrt**: Ein Angreifer kann den echten Administrator so höchstens eine Minute aufhalten, selbst wenn er die Adresse wechselt,
+und kommt dabei auf etwa ein Passwort pro Minute. Die strengere Adressgrenze verhindert, dass ein einzelner Rechner viele Konten durchprobiert.
+Ein erfolgreicher Login setzt die Zähler von Benutzername und Adresse zurück; ein Neustart des Servers ebenfalls (der Zustand liegt nur im Speicher und ist begrenzt).
+Die abgelehnte Antwort ist für richtige und falsche Benutzernamen gleich, so dass sich Konten darüber nicht erraten lassen.
+
+**Hinter einem Reverse Proxy** sieht der Server nur die Adresse des Proxys. Mit `client_ip_header = "x-forwarded-for"` (Caddy und nginx hängen die Client-Adresse an;
+verwendet wird der *letzte* Eintrag, also der vom eigenen Proxy) bzw. `"x-real-ip"` wird stattdessen die echte Adresse genommen. Nur setzen, wenn der Dienst ausschließlich über den Proxy
+erreichbar ist (Standard: `127.0.0.1`), sonst könnte ein Client die Adresse fälschen und die Adressgrenze umgehen (die Grenze je Benutzername bleibt wirksam).
+Ohne diese Einstellung zählen alle Zugriffe über den Proxy als eine Adresse – dann greift die strenge Adressgrenze für alle zusammen.

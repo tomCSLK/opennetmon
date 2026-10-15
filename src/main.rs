@@ -170,7 +170,9 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         None
     };
 
-    let served = axum::serve(listener, web::router(AppState::new(pool, &config, secrets)))
+    let app = web::router(AppState::new(pool, &config, secrets))
+        .into_make_service_with_connect_info::<std::net::SocketAddr>();
+    let served = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .context("serving");

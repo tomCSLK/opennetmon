@@ -116,7 +116,7 @@ Ein Binary, ein Prozess, Module:
   CSRF-Schutz für alle POST-Formulare (Login: Double-Submit-Cookie, danach Token pro Sitzung)
 - Sitzungen serverseitig; in der DB steht nur der SHA-256-Wert des Cookie-Tokens; kein Standardbenutzer, erster Admin per CLI
 - Sicherheits-Header auf allen Antworten (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`)
-- Bekannte Lücke: keine Begrenzung von Anmeldeversuchen (Reverse Proxy oder später eigene Begrenzung)
+- Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/benutzer-und-login.md`)
 - Omada-SNMP ist nur authNoPriv/MD5 (keine Verschlüsselung, schwacher Hash): nur im privaten Netz, Passwort lang und einzigartig wählen
 - Standard-Bind `127.0.0.1:8080`; TLS über vorgeschalteten Reverse Proxy (Caddy oder nginx)
 - Eingaben (IP, OID, Intervalle) serverseitig validieren

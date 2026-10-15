@@ -33,6 +33,8 @@ pub struct AppState {
     pub secrets: Arc<SecretBox>,
     pub cookie_secure: bool,
     pub session_ttl_secs: i64,
+    pub login_throttle: Arc<crate::auth::throttle::LoginThrottle>,
+    pub client_ip_header: Option<crate::auth::throttle::ClientIpHeader>,
 }
 
 impl AppState {
@@ -41,6 +43,8 @@ impl AppState {
             pool,
             secrets,
             cookie_secure: config.cookie_secure,
+            login_throttle: Arc::default(),
+            client_ip_header: config.client_ip_header,
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
                 .unwrap_or(i64::MAX),
         }

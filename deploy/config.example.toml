@@ -15,6 +15,10 @@ secret_key_file = "/etc/netmon/secret.key"
 cookie_secure = true                        # keep true behind HTTPS; false only for plain-HTTP testing
 session_ttl_hours = 168
 
+# Behind the reverse proxy, tell the login throttling where the real client address is: "x-forwarded-for" (the last
+# entry, appended by Caddy/nginx) or "x-real-ip". Only set it when the service is reachable through the proxy only.
+# client_ip_header = "x-forwarded-for"
+
 poller_enabled = true
 poll_concurrency = 16                       # devices polled at the same time
 

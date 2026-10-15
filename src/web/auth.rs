@@ -2,13 +2,15 @@
 
 use askama::Template;
 use axum::Form;
-use axum::extract::{FromRequestParts, State};
+use std::net::SocketAddr;
+
+use axum::extract::{ConnectInfo, FromRequestParts, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{AppendHeaders, Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
-use crate::auth::{self, Role};
+use crate::auth::{self, Role, throttle};
 use crate::error::{Error, Result};
 use crate::storage::users::{self, SessionUser};
 use crate::web::{AppState, Layout};
@@ -126,8 +128,20 @@ pub async fn login_form(State(state): State<AppState>) -> Result<Response> {
     Ok((AppendHeaders([(header::SET_COOKIE, cookie)]), Html(body)).into_response())
 }
 
+/// Human-readable waiting time, e.g. `20 Sekunden` or `3 Minuten`.
+fn wait_text(ms: i64) -> String {
+    let secs = (ms.max(0) + 999) / 1000;
+    let (n, one, many) = if secs < 60 {
+        (secs, "Sekunde", "Sekunden")
+    } else {
+        ((secs + 59) / 60, "Minute", "Minuten")
+    };
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
 pub async fn login_submit(
     State(state): State<AppState>,
+    extensions: axum::http::Extensions,
     headers: HeaderMap,
     Form(form): Form<LoginForm>,
 ) -> Result<Response> {
@@ -135,6 +149,34 @@ pub async fn login_submit(
     let cookie_csrf = cookie_value(&headers, LOGIN_CSRF_COOKIE).unwrap_or_default();
     if !auth::secrets_match(&cookie_csrf, &form.csrf_token) {
         return Err(Error::Forbidden);
+    }
+
+    // Refuse early (without touching the password) while this user name or address is being throttled.
+    let ip = throttle::client_ip(
+        extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|ConnectInfo(addr)| addr.ip()),
+        &headers,
+        state.client_ip_header,
+    );
+    let now_ms = auth::now_secs().saturating_mul(1000);
+    if let Err(wait_ms) = state.login_throttle.check(now_ms, &form.username, ip) {
+        tracing::warn!(?ip, wait_ms, "login attempt refused (too many failures)");
+        let body = LoginTemplate {
+            csrf_token: &cookie_csrf,
+            error: Some(&format!(
+                "Zu viele fehlgeschlagene Anmeldeversuche. Bitte in {} erneut versuchen.",
+                wait_text(wait_ms)
+            )),
+        }
+        .render()?;
+        let retry_after = ((wait_ms + 999) / 1000).max(1).to_string();
+        return Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            AppendHeaders([(header::RETRY_AFTER, retry_after)]),
+            Html(body),
+        )
+            .into_response());
     }
 
     let user = if form.username.chars().count() <= MAX_LOGIN_USERNAME_LEN
@@ -158,7 +200,10 @@ pub async fn login_submit(
     let user = match user {
         Some(user) if verified => user,
         _ => {
-            tracing::info!("failed login attempt");
+            state
+                .login_throttle
+                .record_failure(now_ms, &form.username, ip);
+            tracing::info!(?ip, "failed login attempt");
             let body = LoginTemplate {
                 csrf_token: &cookie_csrf,
                 error: Some("Benutzername oder Passwort ist falsch."),
@@ -168,6 +213,7 @@ pub async fn login_submit(
         }
     };
 
+    state.login_throttle.record_success(&form.username, ip);
     let now = auth::now_secs();
     users::purge_expired_sessions(&state.pool, now).await?;
     let token = auth::random_token();
@@ -453,5 +499,152 @@ mod tests {
             user(Role::Viewer).require_admin(),
             Err(Error::Forbidden)
         ));
+    }
+
+    /// One login attempt; `forwarded` becomes the `X-Forwarded-For` header.
+    async fn attempt(
+        app: &axum::Router,
+        cookie: &str,
+        csrf: &str,
+        user: &str,
+        password: &str,
+        forwarded: Option<&str>,
+    ) -> Reply {
+        let mut request = axum::http::Request::builder()
+            .method("POST")
+            .uri("/login")
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(header::COOKIE, cookie);
+        if let Some(addr) = forwarded {
+            request = request.header("x-forwarded-for", addr);
+        }
+        let body = format!("username={user}&password={password}&csrf_token={csrf}");
+        send(app, request.body(axum::body::Body::from(body)).unwrap()).await
+    }
+
+    #[tokio::test]
+    async fn repeated_failures_for_one_user_are_refused_even_with_the_right_password() {
+        let h = harness(true).await;
+        let (cookie, csrf) = open_login(&h).await;
+        for _ in 0..5 {
+            let reply = attempt(&h.app, &cookie, &csrf, "anna", "falsch", None).await;
+            assert_eq!(reply.status, StatusCode::UNAUTHORIZED);
+        }
+        let blocked = attempt(&h.app, &cookie, &csrf, "anna", PASSWORD, None).await;
+        assert_eq!(blocked.status, StatusCode::TOO_MANY_REQUESTS);
+        assert!(
+            blocked
+                .body
+                .contains("Zu viele fehlgeschlagene Anmeldeversuche"),
+            "{}",
+            blocked.body
+        );
+        assert!(blocked.body.contains("Sekunden"));
+        let retry: u32 = blocked.headers[header::RETRY_AFTER]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=5).contains(&retry), "{retry}");
+        assert!(
+            blocked.cookie_pair(SESSION_COOKIE).is_none(),
+            "no session while refused"
+        );
+
+        // The refusal is per user name: another user can still log in (and the wrong-password text is unchanged).
+        let other = attempt(&h.app, &cookie, &csrf, "bert", PASSWORD, None).await;
+        assert_eq!(other.status, StatusCode::SEE_OTHER);
+    }
+
+    #[tokio::test]
+    async fn a_successful_login_resets_the_counter() {
+        let h = harness(true).await;
+        let (cookie, csrf) = open_login(&h).await;
+        for round in 0..3 {
+            for _ in 0..4 {
+                let reply = attempt(&h.app, &cookie, &csrf, "anna", "falsch", None).await;
+                assert_eq!(reply.status, StatusCode::UNAUTHORIZED, "round {round}");
+            }
+            let ok = attempt(&h.app, &cookie, &csrf, "anna", PASSWORD, None).await;
+            assert_eq!(
+                ok.status,
+                StatusCode::SEE_OTHER,
+                "round {round}: four failures are still free"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn one_address_cannot_walk_through_many_accounts_but_others_are_unaffected() {
+        let mut h = harness(true).await;
+        h.state.client_ip_header = Some(throttle::ClientIpHeader::XForwardedFor);
+        let app = crate::web::router(h.state.clone());
+        let (cookie, csrf) = open_login(&h).await;
+        for i in 0..10 {
+            let reply = attempt(
+                &app,
+                &cookie,
+                &csrf,
+                &format!("nobody{i}"),
+                "x",
+                Some("198.51.100.1, 203.0.113.7"),
+            )
+            .await;
+            assert_eq!(reply.status, StatusCode::UNAUTHORIZED);
+        }
+        let blocked = attempt(
+            &app,
+            &cookie,
+            &csrf,
+            "bert",
+            PASSWORD,
+            Some("6.6.6.6, 203.0.113.7"),
+        )
+        .await;
+        assert_eq!(
+            blocked.status,
+            StatusCode::TOO_MANY_REQUESTS,
+            "the spoofed first entry does not help"
+        );
+        let elsewhere = attempt(&app, &cookie, &csrf, "bert", PASSWORD, Some("203.0.113.8")).await;
+        assert_eq!(elsewhere.status, StatusCode::SEE_OTHER);
+    }
+
+    #[tokio::test]
+    async fn without_a_configured_header_the_forwarded_header_is_ignored() {
+        let h = harness(true).await;
+        let (cookie, csrf) = open_login(&h).await;
+        for i in 0..10 {
+            // Different claimed addresses; all land in the same (unknown-peer) bucket.
+            attempt(
+                &h.app,
+                &cookie,
+                &csrf,
+                &format!("nobody{i}"),
+                "x",
+                Some(&format!("203.0.113.{i}")),
+            )
+            .await;
+        }
+        let blocked = attempt(
+            &h.app,
+            &cookie,
+            &csrf,
+            "bert",
+            PASSWORD,
+            Some("203.0.113.99"),
+        )
+        .await;
+        assert_eq!(blocked.status, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[test]
+    fn waiting_times_are_readable() {
+        assert_eq!(wait_text(1), "1 Sekunde");
+        assert_eq!(wait_text(5_000), "5 Sekunden");
+        assert_eq!(wait_text(59_000), "59 Sekunden");
+        assert_eq!(wait_text(60_000), "1 Minute");
+        assert_eq!(wait_text(61_000), "2 Minuten");
+        assert_eq!(wait_text(900_000), "15 Minuten");
     }
 }

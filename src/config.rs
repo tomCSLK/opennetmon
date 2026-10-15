@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::auth::throttle::ClientIpHeader;
+
 const ENV_LISTEN: &str = "NETMON_LISTEN";
 const ENV_DATABASE_PATH: &str = "NETMON_DATABASE_PATH";
 const ENV_LOG_FILTER: &str = "NETMON_LOG_FILTER";
@@ -44,6 +46,10 @@ pub struct Config {
     pub cookie_secure: bool,
     /// Absolute session lifetime in hours.
     pub session_ttl_hours: u64,
+    /// Header that carries the real client address behind a reverse proxy (`x-forwarded-for`, last entry, or
+    /// `x-real-ip`). Only set it if the proxy always overwrites/appends it and the service is not reachable
+    /// directly; the login throttling uses this address. Unset: the TCP peer address.
+    pub client_ip_header: Option<ClientIpHeader>,
     /// Run the poller. Disable to use the web interface without polling (e.g. on a second instance).
     pub poller_enabled: bool,
     /// How many devices are polled at the same time (1 to 256).
@@ -63,6 +69,7 @@ impl Default for Config {
             secret_key_file: PathBuf::from("/etc/netmon/secret.key"),
             cookie_secure: true,
             session_ttl_hours: 168,
+            client_ip_header: None,
             poller_enabled: true,
             poll_concurrency: 16,
             retention_raw_days: 7,
@@ -196,6 +203,20 @@ mod tests {
         ] {
             assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn the_proxy_header_is_off_by_default_and_accepts_known_names_only() {
+        assert_eq!(
+            Config::from_sources(None, no_env).unwrap().client_ip_header,
+            None
+        );
+        let xff =
+            Config::from_sources(Some("client_ip_header = \"x-forwarded-for\""), no_env).unwrap();
+        assert_eq!(xff.client_ip_header, Some(ClientIpHeader::XForwardedFor));
+        let real = Config::from_sources(Some("client_ip_header = \"x-real-ip\""), no_env).unwrap();
+        assert_eq!(real.client_ip_header, Some(ClientIpHeader::XRealIp));
+        assert!(Config::from_sources(Some("client_ip_header = \"forwarded\""), no_env).is_err());
     }
 
     #[test]

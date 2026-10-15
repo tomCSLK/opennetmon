@@ -1,5 +1,7 @@
 //! Authentication primitives: roles, password hashing, session tokens.
 
+pub mod throttle;
+
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 

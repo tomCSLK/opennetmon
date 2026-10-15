@@ -4,7 +4,7 @@
 > „PRTG" ist eine Marke von Paessler und nur ein interner Arbeitstitel.
 > **Status (2026-10-15): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 sind Login,
 > SNMP-Credential-Profile, Gruppen, Geräte und der Verbindungstest umgesetzt. **MVP-Schritt 1 ist damit komplett.**
-> Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); **der Poller mit Statuslogik und Ereignislog läuft ebenfalls** (`docs/poller.md`). **MVP 3 (Sensor-Oberfläche und Interface-Discovery) ist ebenfalls umgesetzt.** **MVP 4 ist umgesetzt** (Schwellwerte, Detailseite mit uPlot-Graph 1h/24h/7d/30d, Rollups und Retention; `docs/graphen-und-schwellwerte.md`). **MVP 6 (E-Mail-Benachrichtigung, einstellbar in der Oberfläche, getestet gegen Test-SMTP-Server) ist umgesetzt** (`docs/benachrichtigung.md`). **Der Betrieb ist vorbereitet** (systemd-Unit, Installer, Backup, Proxy-Beispiele; `docs/betrieb.md`). Als Nächstes: Installation auf dem echten Server, echter Mailserver des Nutzers, Begrenzung der Anmeldeversuche, Browser-Zeitzone in Tabellen, htmx und Feinschliff.**
+> Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); **der Poller mit Statuslogik und Ereignislog läuft ebenfalls** (`docs/poller.md`). **MVP 3 (Sensor-Oberfläche und Interface-Discovery) ist ebenfalls umgesetzt.** **MVP 4 ist umgesetzt** (Schwellwerte, Detailseite mit uPlot-Graph 1h/24h/7d/30d, Rollups und Retention; `docs/graphen-und-schwellwerte.md`). **MVP 6 (E-Mail-Benachrichtigung, einstellbar in der Oberfläche, getestet gegen Test-SMTP-Server) ist umgesetzt** (`docs/benachrichtigung.md`). **Die Begrenzung der Anmeldeversuche ist umgesetzt.** **Der Betrieb ist vorbereitet** (systemd-Unit, Installer, Backup, Proxy-Beispiele; `docs/betrieb.md`). Als Nächstes: Installation auf dem echten Server, echter Mailserver des Nutzers, Browser-Zeitzone in Tabellen, htmx und Feinschliff.**
 
 ## Kontext
 
@@ -146,7 +146,7 @@ Zurückgestellt gegenüber früheren Ideen: CPU/RAM/Disk-Sensoren (HOST-RESOURCE
 SNMP nur lesend; Secrets verschlüsselt in der DB (Schlüsseldatei 0600, Rechteprüfung beim Start), nie in Logs oder HTML; argon2;
 `HttpOnly`/`SameSite=Strict`-Cookies, `Secure` per Config; CSRF-Schutz für alle POST-Formulare; serverseitige Validierung
 von IP, OID, Intervallen; Bind nur auf `127.0.0.1`, TLS über Reverse Proxy.
-Bekannte Lücke: keine Begrenzung von Anmeldeversuchen (Reverse Proxy oder später eigene Begrenzung).
+Begrenzung der Anmeldeversuche: umgesetzt (`auth::throttle`, `docs/benutzer-und-login.md`).
 
 ## Offene Punkte (vom Nutzer zu klären)
 

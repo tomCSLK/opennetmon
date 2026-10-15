@@ -52,7 +52,7 @@ gespeicherten SNMP- und SMTP-Passwörter unbrauchbar. Die automatischen Datenban
 ## Reverse Proxy und Firewall
 
 - Caddy: `deploy/Caddyfile.example` (automatisches HTTPS; für ein privates Netz `tls internal`).
-- nginx: `deploy/nginx.conf.example` (TLS, HSTS und eine **Begrenzung der Login-Versuche**: 10 pro Minute und Adresse – netmon selbst begrenzt noch nicht).
+- nginx: `deploy/nginx.conf.example` (TLS, HSTS und eine **Begrenzung der Login-Versuche**: 10 pro Minute und Adresse – netmon begrenzt Fehlversuche zusätzlich selbst, siehe `docs/benutzer-und-login.md`).
 - `cookie_secure = true` (Standard) setzt voraus, dass die Seite über HTTPS aufgerufen wird. Nur zum Test ohne HTTPS auf `false` stellen.
 - Von außen nur 443 (und 80 für die Weiterleitung) öffnen, **nicht 8080**. Beispiel: `sudo ufw allow 443/tcp && sudo ufw allow 80/tcp`.
 - Der Server sollte nicht aus dem Internet erreichbar sein, wenn es nicht nötig ist; Zugriff besser per VPN oder nur im LAN.
@@ -60,6 +60,7 @@ gespeicherten SNMP- und SMTP-Passwörter unbrauchbar. Die automatischen Datenban
 ## Konfiguration
 
 `/etc/netmon/config.toml`, alle Schlüssel mit Erklärung in `deploy/config.example.toml`. Nach Änderungen `sudo systemctl restart netmon`.
+**Hinter dem Reverse Proxy** `client_ip_header = "x-forwarded-for"` eintragen (Details in `docs/benutzer-und-login.md`), sonst zählt die Login-Begrenzung alle Zugriffe als eine Adresse.
 Die E-Mail-Einstellungen sind **nicht** in der Datei, sondern in der Oberfläche („E-Mail“, siehe `docs/benachrichtigung.md`) und gelten sofort.
 
 Die Zugangsdaten der Geräte (SNMP-Profile) legst du ebenfalls in der Oberfläche an. Für die Omada-Geräte: SNMPv3, authNoPriv, MD5, Benutzer wie im
@@ -163,7 +164,7 @@ sudo systemctl daemon-reload
 
 - [ ] `secret.key` getrennt gesichert
 - [ ] Reverse Proxy mit gültigem Zertifikat, 8080 nicht von außen erreichbar
-- [ ] Login-Begrenzung am Proxy (nginx-Beispiel) oder Zugriff nur per VPN/LAN
+- [ ] `client_ip_header = "x-forwarded-for"` in der Config gesetzt (nur hinter dem Proxy), damit die eingebaute Login-Begrenzung die echte Adresse sieht; optional zusätzlich die nginx-Begrenzung oder Zugriff nur per VPN/LAN
 - [ ] SNMP-Passwort der Geräte lang und einzigartig (Omada: nur authNoPriv/MD5, daher nur im privaten Netz)
 - [ ] Sicherungen regelmäßig auf einen anderen Rechner kopiert, eine Wiederherstellung einmal probiert
 - [ ] Test-E-Mail angekommen
