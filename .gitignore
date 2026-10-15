@@ -1,0 +1,8 @@
+/target/
+/dev/*.local.toml
+/dev/sync-filter.txt.md5
+*.key
+*.db
+*.db-wal
+*.db-shm
+.claude/

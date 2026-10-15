@@ -1,0 +1,5 @@
+# rclone bisync filter: only the two Markdown docs go to Google Drive.
+# Source code is versioned on GitHub.
++ /CLAUDE.md
++ /PLAN.md
+- **
