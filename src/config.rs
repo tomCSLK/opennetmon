@@ -9,6 +9,7 @@ use serde::Deserialize;
 const ENV_LISTEN: &str = "NETMON_LISTEN";
 const ENV_DATABASE_PATH: &str = "NETMON_DATABASE_PATH";
 const ENV_LOG_FILTER: &str = "NETMON_LOG_FILTER";
+const ENV_SECRET_KEY_FILE: &str = "NETMON_SECRET_KEY_FILE";
 const MAX_SESSION_TTL_HOURS: u64 = 24 * 90;
 
 #[derive(Debug, thiserror::Error)]
@@ -35,6 +36,9 @@ pub struct Config {
     pub database_path: PathBuf,
     /// `tracing` filter directive, e.g. `info,netmon=debug`. `RUST_LOG` takes precedence.
     pub log_filter: String,
+    /// File with the 256-bit key (64 hex characters, mode 0600) that encrypts stored SNMP secrets.
+    /// Create it with `netmon key generate`; losing it makes stored secrets unreadable.
+    pub secret_key_file: PathBuf,
     /// Mark session cookies `Secure`. Keep `true` behind a TLS reverse proxy; only plain-HTTP development needs `false`.
     pub cookie_secure: bool,
     /// Absolute session lifetime in hours.
@@ -47,6 +51,7 @@ impl Default for Config {
             listen: SocketAddr::from(([127, 0, 0, 1], 8080)),
             database_path: PathBuf::from("/var/lib/netmon/netmon.db"),
             log_filter: "info".to_owned(),
+            secret_key_file: PathBuf::from("/etc/netmon/secret.key"),
             cookie_secure: true,
             session_ttl_hours: 168,
         }
@@ -93,6 +98,9 @@ impl Config {
         if let Some(value) = env(ENV_LOG_FILTER) {
             config.log_filter = value;
         }
+        if let Some(value) = env(ENV_SECRET_KEY_FILE) {
+            config.secret_key_file = PathBuf::from(value);
+        }
 
         config.validate()?;
         Ok(config)
@@ -101,6 +109,9 @@ impl Config {
     fn validate(&self) -> Result<(), ConfigError> {
         if self.database_path.as_os_str().is_empty() {
             return Err(ConfigError::Invalid("database_path must not be empty"));
+        }
+        if self.secret_key_file.as_os_str().is_empty() {
+            return Err(ConfigError::Invalid("secret_key_file must not be empty"));
         }
         if self.log_filter.trim().is_empty() {
             return Err(ConfigError::Invalid("log_filter must not be empty"));
@@ -151,6 +162,20 @@ mod tests {
         let config = Config::from_sources(Some("listen = \"0.0.0.0:9000\""), env).unwrap();
         assert_eq!(config.listen, "127.0.0.1:9999".parse().unwrap());
         assert_eq!(config.database_path, PathBuf::from("/data/env.db"));
+    }
+
+    #[test]
+    fn secret_key_file_default_and_override() {
+        let config = Config::from_sources(None, no_env).unwrap();
+        assert_eq!(
+            config.secret_key_file,
+            PathBuf::from("/etc/netmon/secret.key")
+        );
+        let env = |name: &str| (name == ENV_SECRET_KEY_FILE).then(|| "/k/x.key".to_owned());
+        let config = Config::from_sources(None, env).unwrap();
+        assert_eq!(config.secret_key_file, PathBuf::from("/k/x.key"));
+        let err = Config::from_sources(Some("secret_key_file = \"\""), no_env).unwrap_err();
+        assert!(matches!(err, ConfigError::Invalid(_)));
     }
 
     #[test]

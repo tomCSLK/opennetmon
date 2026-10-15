@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="bar">
+  <span class="brand">netmon</span>
+  <nav>
+    <a href="/">Übersicht</a>
+    {% if layout.is_admin %}<a href="/credentials">SNMP-Profile</a>{% endif %}
+  </nav>
+  <form method="post" action="/logout">
+    <span class="muted">{{ layout.username }} ({{ layout.role_label }})</span>
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <button type="submit" class="link">Abmelden</button>
+  </form>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+{% endblock %}

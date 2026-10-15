@@ -37,7 +37,8 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
   `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
   erzeugt den Salt selbst), `sha2` (Session-Token-Hash), `subtle` (Vergleich in konstanter Zeit), `rand` (Tokens),
-  `rpassword` (Passwortabfrage in der CLI), `chacha20poly1305` (Verschlüsselung gespeicherter SNMP-Secrets, noch nicht eingebaut)
+  `rpassword` (Passwortabfrage in der CLI), `chacha20poly1305` (XChaCha20-Poly1305 für gespeicherte SNMP-Secrets; API ab 0.11:
+  `XNonce::generate()`, `Key::from([u8; 32])`, AAD über `Payload`)
 - Rust Edition 2024, stabile Toolchain
 - `rust-embed` braucht das Feature `mime-guess`; `sqlx` das Feature `macros` für `migrate!` (keine Compile-Time-Queries)
 - `snmp2` hat keinen eingebauten Timeout: jede Anfrage selbst mit `tokio::time::timeout` begrenzen
@@ -60,7 +61,8 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
 
 ## MVP-Umfang
 
-1. Geräteverwaltung (CRUD), Gruppen, SNMP-Credentials (v2c, v3 authNoPriv/authPriv) als wiederverwendbare Profile
+1. Geräteverwaltung (CRUD), Gruppen, SNMP-Credentials (v2c, v3 authNoPriv/authPriv) als wiederverwendbare Profile –
+   Profile **umgesetzt** (`docs/snmp-profile.md`), Geräte und Gruppen folgen
 2. Sensortypen: Ping, SNMP Uptime, Interface-Traffic (IF-MIB, 64-Bit-HC-Counter), Interface-Status
    (`ifOperStatus`), benutzerdefinierter OID-Sensor (Gauge/Counter)
 3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden
@@ -76,7 +78,8 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 Ein Binary, ein Prozess, Module:
 - `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`)
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
-- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen), Migrations, Rollups, Retention
+- `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
+- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile), Migrations, Rollups, Retention
 - `poller` – Scheduler, verteilt Polls gleichmäßig über das Intervall (kein Burst zur vollen Minute);
   globale Nebenläufigkeit per `Semaphore`; Timeout und Retries pro Gerät; ein langsames Gerät blockiert nie andere
 - `sensors` – ein Trait `Sensor` + Implementierung je Sensortyp
@@ -98,7 +101,9 @@ Ein Binary, ein Prozess, Module:
 ## Sicherheit
 
 - SNMP ausschließlich lesend
-- SNMP-Community/v3-Passwörter verschlüsselt in der DB; Schlüssel aus Datei mit Rechten 0600 (Pfad in Config)
+- SNMP-Community/v3-Passwörter verschlüsselt in der DB (XChaCha20-Poly1305, Spaltenkontext als AAD); Schlüssel aus Datei mit Rechten 0600
+  (`secret_key_file`, Server startet sonst nicht, Erzeugung mit `netmon key generate`); Entschlüsselung nur für den Poller;
+  Profil-Seiten nur für Administratoren
 - Secrets niemals loggen, nie in HTML ausgeben (Formulare zeigen nur „gesetzt/nicht gesetzt")
 - Passwörter mit argon2; Session-Cookies `HttpOnly`, `SameSite=Strict`, `Secure` laut Config (`cookie_secure`, Standard `true`);
   CSRF-Schutz für alle POST-Formulare (Login: Double-Submit-Cookie, danach Token pro Sitzung)
@@ -140,6 +145,7 @@ cargo fmt
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo run -- --config ./dev/config.toml
+cargo run -- --config ./dev/config.toml key generate                    # einmalig, vor dem ersten Serverstart
 cargo run -- --config ./dev/config.toml user add <name> --role admin    # auch: user passwd, user list
 cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv --auth md5   # Passwörter nur per Umgebung
 cargo build --release --target x86_64-unknown-linux-musl
@@ -155,5 +161,6 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller auf ein längeres
   Passwort ändern und lokal in `~/.config/netmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
 - ER605 (kein SNMP): nur per Ping überwachen oder später über die Omada-API?
+- Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 
 Geklärt: Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

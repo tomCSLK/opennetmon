@@ -11,10 +11,10 @@ use serde::Deserialize;
 use crate::auth::{self, Role};
 use crate::error::{Error, Result};
 use crate::storage::users::{self, SessionUser};
-use crate::web::AppState;
+use crate::web::{AppState, Layout};
 
-const SESSION_COOKIE: &str = "netmon_session";
-const LOGIN_CSRF_COOKIE: &str = "netmon_login";
+pub(crate) const SESSION_COOKIE: &str = "netmon_session";
+pub(crate) const LOGIN_CSRF_COOKIE: &str = "netmon_login";
 const LOGIN_CSRF_TTL_SECS: i64 = 3600;
 /// Bounds for credentials in a login request; keeps Argon2 work bounded.
 const MAX_LOGIN_USERNAME_LEN: usize = 64;
@@ -45,6 +45,18 @@ impl CurrentUser {
             Ok(())
         } else {
             Err(Error::Forbidden)
+        }
+    }
+}
+
+impl CurrentUser {
+    /// Header data for page templates.
+    pub fn layout(&self) -> Layout {
+        Layout {
+            username: self.username.clone(),
+            role_label: self.role.label(),
+            csrf_token: self.csrf_token.clone(),
+            is_admin: self.role.is_admin(),
         }
     }
 }
@@ -87,10 +99,8 @@ struct LoginTemplate<'a> {
 
 #[derive(Template)]
 #[template(path = "home.html")]
-struct HomeTemplate<'a> {
-    username: &'a str,
-    role_label: &'a str,
-    csrf_token: &'a str,
+struct HomeTemplate {
+    layout: Layout,
 }
 
 /// Deliberately has no `Debug`: the password must never end up in logs.
@@ -108,9 +118,7 @@ pub struct CsrfForm {
 
 pub async fn home(user: CurrentUser) -> Result<Html<String>> {
     let page = HomeTemplate {
-        username: &user.username,
-        role_label: user.role.label(),
-        csrf_token: &user.csrf_token,
+        layout: user.layout(),
     };
     Ok(Html(page.render()?))
 }
@@ -256,134 +264,7 @@ fn set_cookie(name: &str, value: &str, max_age_secs: i64, secure: bool) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
-    use crate::storage;
-    use axum::Router;
-    use axum::body::Body;
-    use axum::http::Request;
-    use http_body_util::BodyExt;
-    use tower::ServiceExt;
-
-    const PASSWORD: &str = "correct-horse-battery";
-
-    struct Harness {
-        app: Router,
-        state: AppState,
-        _dir: tempfile::TempDir,
-    }
-
-    async fn harness(cookie_secure: bool) -> Harness {
-        let dir = tempfile::tempdir().unwrap();
-        let pool = storage::connect(&dir.path().join("a.db")).await.unwrap();
-        storage::migrate(&pool).await.unwrap();
-        let hash = auth::hash_password(PASSWORD).unwrap();
-        users::create_user(&pool, "anna", &hash, Role::Admin)
-            .await
-            .unwrap();
-        users::create_user(&pool, "bert", &hash, Role::Viewer)
-            .await
-            .unwrap();
-        let config = Config {
-            cookie_secure,
-            ..Config::default()
-        };
-        let state = AppState::new(pool, &config);
-        Harness {
-            app: crate::web::router(state.clone()),
-            state,
-            _dir: dir,
-        }
-    }
-
-    struct Reply {
-        status: StatusCode,
-        headers: HeaderMap,
-        body: String,
-    }
-
-    impl Reply {
-        fn set_cookies(&self) -> Vec<String> {
-            self.headers
-                .get_all(header::SET_COOKIE)
-                .iter()
-                .map(|v| v.to_str().unwrap().to_owned())
-                .collect()
-        }
-
-        /// `name=value` pair of the cookie set by this reply.
-        fn cookie_pair(&self, name: &str) -> Option<String> {
-            self.set_cookies()
-                .into_iter()
-                .find(|c| c.starts_with(&format!("{name}=")))
-                .map(|c| c.split(';').next().unwrap().to_owned())
-        }
-
-        fn location(&self) -> &str {
-            self.headers[header::LOCATION].to_str().unwrap()
-        }
-    }
-
-    async fn send(app: &Router, request: Request<Body>) -> Reply {
-        let response = app.clone().oneshot(request).await.unwrap();
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        Reply {
-            status,
-            headers,
-            body: String::from_utf8(body.to_vec()).unwrap(),
-        }
-    }
-
-    fn get(path: &str, cookie: Option<&str>) -> Request<Body> {
-        let mut b = Request::builder().uri(path);
-        if let Some(c) = cookie {
-            b = b.header(header::COOKIE, c);
-        }
-        b.body(Body::empty()).unwrap()
-    }
-
-    fn post(path: &str, cookie: Option<&str>, form: &str) -> Request<Body> {
-        let mut b = Request::builder()
-            .method("POST")
-            .uri(path)
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
-        if let Some(c) = cookie {
-            b = b.header(header::COOKIE, c);
-        }
-        b.body(Body::from(form.to_owned())).unwrap()
-    }
-
-    /// Loads the login form and returns (cookie pair, csrf token).
-    async fn open_login(h: &Harness) -> (String, String) {
-        let reply = send(&h.app, get("/login", None)).await;
-        assert_eq!(reply.status, StatusCode::OK);
-        let pair = reply.cookie_pair(LOGIN_CSRF_COOKIE).unwrap();
-        let token = pair.split_once('=').unwrap().1.to_owned();
-        assert!(reply.body.contains(&format!("value=\"{token}\"")));
-        (pair, token)
-    }
-
-    /// Logs in and returns (session cookie pair, session csrf token read from the home page).
-    async fn login(h: &Harness, username: &str) -> (String, String) {
-        let (cookie, csrf) = open_login(h).await;
-        let form = format!("username={username}&password={PASSWORD}&csrf_token={csrf}");
-        let reply = send(&h.app, post("/login", Some(&cookie), &form)).await;
-        assert_eq!(reply.status, StatusCode::SEE_OTHER);
-        assert_eq!(reply.location(), "/");
-        let session = reply.cookie_pair(SESSION_COOKIE).unwrap();
-        let home = send(&h.app, get("/", Some(&session))).await;
-        let csrf = home
-            .body
-            .split("name=\"csrf_token\" value=\"")
-            .nth(1)
-            .unwrap()
-            .split('"')
-            .next()
-            .unwrap()
-            .to_owned();
-        (session, csrf)
-    }
+    use crate::web::testutil::*;
 
     #[tokio::test]
     async fn anonymous_home_redirects_to_login() {

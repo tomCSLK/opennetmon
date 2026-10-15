@@ -2,8 +2,8 @@
 
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > „PRTG" ist eine Marke von Paessler und nur ein interner Arbeitstitel.
-> **Status (2026-10-15): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 ist der Login umgesetzt
-> (Commit 1 von 3). Als Nächstes: Credential-Profile, danach Geräte und Gruppen.**
+> **Status (2026-10-15): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 sind Login und
+> SNMP-Credential-Profile umgesetzt (Commits 1 und 2 von 3). Als Nächstes: Geräte und Gruppen.**
 
 ## Kontext
 
@@ -23,6 +23,7 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 | Ping | `surge-ping`, bevorzugt unprivilegierte ICMP-Sockets (`ping_group_range` ist auf dem Entwicklungsrechner gesetzt) |
 | DB | SQLite über `sqlx`, WAL, Migrations in `migrations/` |
 | Auth | Lokale Benutzer, Rollen Admin/Leser, argon2, serverseitige Sitzungen, CSRF – umgesetzt |
+| Secrets | SNMP-Passwörter mit XChaCha20-Poly1305 verschlüsselt, Schlüsseldatei 0600 (`netmon key generate`) – umgesetzt |
 | Betrieb | Statisches musl-Binary, systemd-Unit, Reverse Proxy (Caddy/nginx) für TLS, Standard-Bind `127.0.0.1:8080` |
 
 ## PRTG-Funktionsprinzip, das nachgebaut wird
@@ -47,8 +48,8 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 
 ## Architektur
 
-Ein Binary, ein Prozess, Module `config`, `auth`, `storage`, `poller`, `sensors`, `status`, `alerting`, `web`
-(Details und Regeln siehe CLAUDE.md). Vorhanden: `config`, `auth`, `storage`, `web`, `error`.
+Ein Binary, ein Prozess, Module `config`, `auth`, `crypto`, `credentials`, `storage`, `poller`, `sensors`, `status`, `alerting`, `web`
+(Details und Regeln siehe CLAUDE.md). Vorhanden: `config`, `auth`, `crypto`, `credentials`, `storage`, `web`, `error`.
 
 - **poller:** Polls gleichmäßig über das Intervall verteilt (Jitter), globale Nebenläufigkeit per `Semaphore`,
   Timeout/Retries pro Gerät, langsame Geräte blockieren andere nie.
@@ -58,8 +59,8 @@ Ein Binary, ein Prozess, Module `config`, `auth`, `storage`, `poller`, `sensors`
 
 ### Datenmodell
 
-Vorhanden (Migrations `0001`, `0002`): `meta`, `users`, `sessions`.
-Geplant: `groups` (hierarchisch), `credential_profiles` (v2c/v3, Secrets verschlüsselt), `devices`, `sensors`, `channels`
+Vorhanden (Migrations `0001`–`0003`): `meta`, `users`, `sessions`, `credential_profiles` (v2c/v3, Secrets verschlüsselt, `CHECK` für konsistente Spalten).
+Geplant: `groups` (hierarchisch), `devices` (Verweis auf Profil mit `ON DELETE RESTRICT`), `sensors`, `channels`
 (Einheit, Schwellwerte), `samples`, `samples_1h`, `samples_1d`, `status_events`.
 
 Retention (konfigurierbar): Rohdaten 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt.
@@ -78,24 +79,26 @@ netmon/
   Cargo.toml
   CLAUDE.md, PLAN.md
   src/
-    main.rs           # CLI: serve (Standard), user add|passwd|list
+    main.rs           # CLI: serve (Standard), user add|passwd|list, key generate
     lib.rs
     config.rs
     error.rs
     auth/             # Rollen, Argon2, Tokens, Validierung
-    storage/          # mod.rs (Pool, WAL, Migrations), users.rs (Benutzer, Sitzungen)
-    web/              # mod.rs (Router, State, Header, /healthz), auth.rs (Login, CurrentUser), assets.rs
+    crypto.rs         # SecretBox (XChaCha20-Poly1305), Schlüsseldatei
+    credentials.rs    # Profil-Domäne, Secret, Validierung
+    storage/          # mod.rs (Pool, WAL, Migrations), users.rs (Benutzer, Sitzungen), credentials.rs (Profile)
+    web/              # mod.rs (Router, State, Layout, Header, /healthz), auth.rs (Login, CurrentUser), credentials.rs (Profil-Seiten), assets.rs, testutil.rs (nur Tests)
     poller/           # geplant
     sensors/          # geplant: Trait + ping, uptime, if_traffic, if_status, custom_oid
     status/           # geplant
     alerting/         # geplant
-  templates/          # askama: base, login, home
+  templates/          # askama: base, app (Kopfzeile), login, home, credentials_list, credential_form
   static/             # app.css (htmx, uPlot folgen)
   examples/snmp_probe.rs
-  migrations/         # 0001_init, 0002_users_sessions
+  migrations/         # 0001_init, 0002_users_sessions, 0003_credential_profiles
   dev/                # config.toml, sync.sh, sync-filter.txt (Drive-Abgleich nur CLAUDE.md und PLAN.md)
   deploy/             # geplant: netmon.service
-  docs/               # decisions/0001-sprache.md, dev-testagent.md, benutzer-und-login.md
+  docs/               # decisions/0001-sprache.md, dev-testagent.md, benutzer-und-login.md, snmp-profile.md
 ```
 
 ## Umsetzungsphasen
@@ -104,13 +107,13 @@ netmon/
 1. ✔ **Gerüst:** Config (TOML + ENV), Error-Typ mit `IntoResponse`, Logging, `/healthz`, Migrations, SQLite/WAL, Graceful Shutdown.
 2. **MVP 1** (in drei Commits):
    1. ✔ Benutzer, Login, Rollen, CSRF, Sicherheits-Header, CLI zum Anlegen von Benutzern.
-   2. Credential-Profile (v2c, v3 authNoPriv/authPriv) mit `chacha20poly1305`-verschlüsselten Secrets, Schlüsseldatei 0600; Formulare zeigen nur „gesetzt/nicht gesetzt".
-   3. Geräte und Gruppen: CRUD mit serverseitiger Validierung (IP/Hostname, Intervall), hierarchische Gruppen, erste Oberfläche mit askama und htmx.
+   2. ✔ Credential-Profile (v2c, v3 authNoPriv/authPriv) mit verschlüsselten Secrets, Schlüsseldatei 0600; Formulare zeigen nur „gesetzt"; leere Passwortfelder behalten das gespeicherte Geheimnis.
+   3. Geräte und Gruppen: CRUD mit serverseitiger Validierung (IP/Hostname, Intervall), hierarchische Gruppen, Profilauswahl pro Gerät (Löschen eines verwendeten Profils sperren), htmx für die Oberfläche.
 3. **MVP 2:** `Sensor`-Trait, Sensortypen, Counter-/Ratenlogik inkl. Wrap/Reset (32 und 64 Bit).
 4. **Poller:** Scheduler mit Jitter, Semaphore, Timeouts/Retries; Statuslogik und Ereignislog.
 5. **MVP 3:** Interface-Discovery per Walk mit Auswahl durch den Nutzer (Namen über `ifName`/`ifDescr`).
 6. **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph (1h/24h/7d/30d), Rollups und Retention.
-7. **Betrieb:** musl-Release-Build (zuletzt in Phase 1 geprüft, nach dem Login noch nicht neu gebaut), `deploy/netmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
+7. **Betrieb:** musl-Release-Build (geprüft nach den Profilen: statisch gelinkt, 8,6 MB), `deploy/netmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
 8. **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel.
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
@@ -125,17 +128,17 @@ Zurückgestellt gegenüber früheren Ideen: CPU/RAM/Disk-Sensoren (HOST-RESOURCE
 ## Verifikation
 
 - **Unit-Tests:** Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik und Aggregation, Config-Parsing, Downsampling.
-  Vorhanden: Config, Auth, Fehlertyp, Storage (40 Tests).
+  Vorhanden: Config, Auth, Krypto, Profil-Validierung, Fehlertyp, Storage (75 Tests insgesamt).
 - **Integrationstests:** gegen lokalen `snmpd` (v2c und v3): Gerät anlegen → Discovery → Messwerte nach 1–2 Intervallen →
   Agent stoppen → `Down` → Agent starten → `Up`.
-- **Handler-Tests:** `axum` mit `tower::ServiceExt::oneshot` (Login, Logout, CSRF, abgelaufene Sitzung, Header, `/healthz`).
+- **Handler-Tests:** `axum` mit `tower::ServiceExt::oneshot` (Login, Logout, CSRF, abgelaufene Sitzung, Header, `/healthz`, Profil-Seiten mit Rollenprüfung, Maskierung, HTML-Escaping); gemeinsame Helfer in `web/testutil.rs`.
 - **Gerätetests** gegen echte Omada-Hardware nur manuell, nicht in `cargo test`.
 - **Vor jedem Abschluss:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 - **Packaging:** musl-Binary auf dem Ubuntu Server per systemd starten und `/healthz` prüfen.
 
 ## Sicherheit (Kurzfassung)
 
-SNMP nur lesend; Secrets verschlüsselt in der DB (Schlüsseldatei 0600), nie in Logs oder HTML; argon2;
+SNMP nur lesend; Secrets verschlüsselt in der DB (Schlüsseldatei 0600, Rechteprüfung beim Start), nie in Logs oder HTML; argon2;
 `HttpOnly`/`SameSite=Strict`-Cookies, `Secure` per Config; CSRF-Schutz für alle POST-Formulare; serverseitige Validierung
 von IP, OID, Intervallen; Bind nur auf `127.0.0.1`, TLS über Reverse Proxy.
 Bekannte Lücke: keine Begrenzung von Anmeldeversuchen (Reverse Proxy oder später eigene Begrenzung).
@@ -146,3 +149,4 @@ Bekannte Lücke: keine Begrenzung von Anmeldeversuchen (Reverse Proxy oder spät
 - Ist der Server vom Internet getrennt? (Updates, E-Mail-Versand)
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller ändern und lokal nachtragen
 - ER605 (kein SNMP): nur per Ping überwachen oder später über die Omada-API?
+- Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt

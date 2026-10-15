@@ -28,3 +28,24 @@ button.link { color: var(--fg); background: transparent; border: 1px solid var(-
 form.stack button { margin-top: 1.25rem; width: 100%; }
 .error { margin: 0 0 1rem; padding: .6rem .8rem; color: var(--danger); background: var(--danger-bg); border-radius: .35rem; }
 .muted { color: var(--muted); }
+
+header.bar nav { display: flex; gap: 1rem; margin-right: auto; margin-left: 1.5rem; }
+header.bar nav a { color: var(--fg); text-decoration: none; }
+header.bar nav a:hover, header.bar nav a:focus-visible { text-decoration: underline; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.head h1 { margin: 0; }
+a.button { display: inline-block; padding: .55rem 1rem; font-weight: 600; text-decoration: none;
+  color: var(--accent-fg); background: var(--accent); border-radius: .35rem; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .5rem .6rem; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-size: .85rem; color: var(--muted); }
+select { width: 100%; padding: .55rem .65rem; font: inherit; color: inherit; background: var(--bg);
+  border: 1px solid var(--border); border-radius: .35rem; }
+fieldset { margin: 1.25rem 0 0; padding: .25rem 1rem 1rem; border: 1px solid var(--border); border-radius: .35rem; }
+legend { padding: 0 .4rem; font-weight: 600; color: var(--muted); }
+input::placeholder { color: var(--muted); }
+.flash { margin: 0 0 1rem; padding: .6rem .8rem; color: var(--accent-fg); background: var(--accent); border-radius: .35rem; }
+form.delete { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+label.inline { display: flex; align-items: center; gap: .5rem; font-weight: 400; }
+button.danger { margin-top: .75rem; color: #fff; background: #b3261e; }
+.card + .card { margin-top: 1rem; }

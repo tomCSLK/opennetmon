@@ -126,7 +126,7 @@ pub fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes
         .iter()

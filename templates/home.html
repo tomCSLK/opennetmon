@@ -1,18 +1,8 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}Übersicht – netmon{% endblock %}
-{% block body %}
-<header class="bar">
-  <span class="brand">netmon</span>
-  <form method="post" action="/logout">
-    <span class="muted">{{ username }} ({{ role_label }})</span>
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit" class="link">Abmelden</button>
-  </form>
-</header>
-<main>
-  <div class="card">
-    <h1>Übersicht</h1>
-    <p class="muted">Noch keine Geräte angelegt.</p>
-  </div>
-</main>
+{% block content %}
+<div class="card">
+  <h1>Übersicht</h1>
+  <p class="muted">Noch keine Geräte angelegt.</p>
+</div>
 {% endblock %}

@@ -1,10 +1,12 @@
 use std::io::{IsTerminal, Read};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use netmon::auth::{self, Role};
 use netmon::config::Config;
+use netmon::crypto::SecretBox;
 use netmon::storage::{self, users};
 use netmon::web::{self, AppState};
 use sqlx::SqlitePool;
@@ -27,6 +29,15 @@ enum Command {
     /// Manage local users
     #[command(subcommand)]
     User(UserCommand),
+    /// Manage the key that encrypts stored SNMP secrets
+    #[command(subcommand)]
+    Key(KeyCommand),
+}
+
+#[derive(Subcommand)]
+enum KeyCommand {
+    /// Create a new random key file (mode 0600); never overwrites an existing file
+    Generate,
 }
 
 #[derive(Subcommand)]
@@ -71,6 +82,16 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
+    let command = args.command.unwrap_or(Command::Serve);
+    if let Command::Key(KeyCommand::Generate) = command {
+        SecretBox::generate_key_file(&config.secret_key_file).context("creating key file")?;
+        println!("Key file created: {}", config.secret_key_file.display());
+        println!(
+            "Back it up separately from the database: without it, stored SNMP secrets cannot be decrypted."
+        );
+        return Ok(());
+    }
+
     let pool = storage::connect(&config.database_path)
         .await
         .context("opening database")?;
@@ -78,13 +99,20 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("running migrations")?;
 
-    match args.command.unwrap_or(Command::Serve) {
+    match command {
         Command::Serve => serve(config, pool).await,
         Command::User(cmd) => manage_users(&pool, cmd).await,
+        Command::Key(_) => Ok(()),
     }
 }
 
 async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
+    let secrets = SecretBox::from_key_file(&config.secret_key_file).with_context(|| {
+        format!(
+            "loading the encryption key (create one with `netmon key generate`; config key secret_key_file = {})",
+            config.secret_key_file.display()
+        )
+    })?;
     if users::count_users(&pool).await? == 0 {
         tracing::warn!(
             "no users exist yet; create an admin with `netmon user add <name> --role admin`"
@@ -104,10 +132,13 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         .with_context(|| format!("binding {}", config.listen))?;
     tracing::info!(listen = %config.listen, db = %config.database_path.display(), "netmon started");
 
-    axum::serve(listener, web::router(AppState::new(pool, &config)))
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("serving")?;
+    axum::serve(
+        listener,
+        web::router(AppState::new(pool, &config, Arc::new(secrets))),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("serving")?;
     tracing::info!("netmon stopped");
     Ok(())
 }

@@ -2,8 +2,13 @@
 
 mod assets;
 pub mod auth;
+pub mod credentials;
+#[cfg(test)]
+pub(crate) mod testutil;
 
 use axum::Router;
+use std::sync::Arc;
+
 use axum::extract::State;
 use axum::http::{HeaderName, HeaderValue, StatusCode, header};
 use axum::routing::{get, post};
@@ -13,19 +18,22 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::config::Config;
+use crate::crypto::SecretBox;
 use crate::storage;
 
 #[derive(Clone)]
 pub struct AppState {
     pub pool: SqlitePool,
+    pub secrets: Arc<SecretBox>,
     pub cookie_secure: bool,
     pub session_ttl_secs: i64,
 }
 
 impl AppState {
-    pub fn new(pool: SqlitePool, config: &Config) -> Self {
+    pub fn new(pool: SqlitePool, config: &Config, secrets: Arc<SecretBox>) -> Self {
         Self {
             pool,
+            secrets,
             cookie_secure: config.cookie_secure,
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
                 .unwrap_or(i64::MAX),
@@ -38,6 +46,14 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(auth::home))
         .route("/login", get(auth::login_form).post(auth::login_submit))
         .route("/logout", post(auth::logout))
+        .route(
+            "/credentials",
+            get(credentials::list).post(credentials::create),
+        )
+        .route("/credentials/new", get(credentials::new_form))
+        .route("/credentials/{id}/edit", get(credentials::edit_form))
+        .route("/credentials/{id}", post(credentials::update))
+        .route("/credentials/{id}/delete", post(credentials::delete))
         .route("/healthz", get(healthz))
         .route("/static/{*path}", get(assets::serve))
         .layer(security_header(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
@@ -54,6 +70,14 @@ pub fn router(state: AppState) -> Router {
 
 fn security_header(name: HeaderName, value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value))
+}
+
+/// Data every logged-in page needs for the header (navigation, user, logout form).
+pub struct Layout {
+    pub username: String,
+    pub role_label: &'static str,
+    pub csrf_token: String,
+    pub is_admin: bool,
 }
 
 /// Unauthenticated health check; exposes no internal details.
@@ -79,7 +103,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pool = storage::connect(&dir.path().join("t.db")).await.unwrap();
         storage::migrate(&pool).await.unwrap();
-        (AppState::new(pool, &Config::default()), dir)
+        let secrets = Arc::new(SecretBox::from_key([1u8; 32]));
+        (AppState::new(pool, &Config::default(), secrets), dir)
     }
 
     async fn get_path(app: Router, path: &str) -> (StatusCode, String) {

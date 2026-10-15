@@ -2,5 +2,7 @@
 listen = "127.0.0.1:8080"
 database_path = "./dev/data/netmon.db"
 log_filter = "info,netmon=debug"
+# Create with: cargo run -- --config ./dev/config.toml key generate
+secret_key_file = "./dev/data/secret.key"
 # Plain HTTP on localhost: session cookies cannot be Secure here.
 cookie_secure = false
