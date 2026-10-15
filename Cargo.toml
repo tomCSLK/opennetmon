@@ -1,0 +1,12 @@
+[package]
+name = "netmon"
+version = "0.1.0"
+edition = "2024"
+description = "Agentless SNMP network monitor (working title)"
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+snmp2 = { version = "0.5", default-features = false, features = ["tokio", "crypto-rust"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

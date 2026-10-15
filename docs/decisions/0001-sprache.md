@@ -17,8 +17,8 @@ Abgefragt werden `sysDescr`, `sysUpTime` und `IF-MIB::ifHCInOctets` sowie ein GE
 
 | Ziel | Protokoll | Auth/Priv | Ergebnis |
 |---|---|---|---|
-| lokaler `snmpd` | v2c | – | offen |
-| lokaler `snmpd` | v3 authPriv | SHA-256 / AES-128 | offen |
+| lokaler `snmpd` | v2c | – | ok: `sysDescr`/`sysUpTime`. Walks leer, da die Standard-Community `public` auf Ubuntu auf die Systemgruppe beschränkt ist (gleiches Verhalten mit `snmpbulkwalk`) |
+| lokaler `snmpd` | v3 authPriv | SHA-256 / AES-128 | ok: `sysDescr`, `sysUpTime`, `ifHCInOctets` (3 Interfaces), GETBULK-Walk `ifXTable` 54 und `ifTable` 66 Varbinds, identisch zu net-snmp |
 | EXOS-Gerät | v2c | – | offen |
 | EXOS-Gerät | v3 authPriv | SHA-256 / AES-128 | offen |
 | EXOS-Gerät | v3 authPriv | konfigurierte Kombination: _noch zu klären_ | offen |
@@ -26,6 +26,13 @@ Abgefragt werden `sysDescr`, `sysUpTime` und `IF-MIB::ifHCInOctets` sowie ein GE
 | VOSS-Gerät | v3 authPriv | SHA-256 / AES-128 | offen |
 | VOSS-Gerät | v3 authPriv | konfigurierte Kombination: _noch zu klären_ | offen |
 | alle | GETBULK-Walk `ifTable`/`ifXTable` | – | offen |
+
+## Zwischenstand (2026-10-15, nur lokaler Agent)
+
+- `snmp2` 0.5.2 mit `tokio` + `crypto-rust` (ohne OpenSSL) baut und läuft; v3 SHA-256/AES-128 gegen net-snmp 5.9.4 funktioniert.
+- Falsches Auth-Passwort oder falsches Auth-Protokoll führt zu `AuthFailure(NotAuthenticated)`, ein nicht erreichbarer Agent zu `Receive`.
+- `snmp2` hat keinen eingebauten Timeout (`recv` wartet unbegrenzt), der Aufrufer muss jede Anfrage selbst mit `tokio::time::timeout` begrenzen.
+- Noch offen und entscheidend: die Geräte (EXOS/VOSS) mit der dort konfigurierten Auth/Priv-Kombination. Ohne diese Tests keine Entscheidung.
 
 ## Entscheidung
 
