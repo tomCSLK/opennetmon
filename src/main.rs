@@ -170,8 +170,15 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         None
     };
 
-    let app = web::router(AppState::new(pool, &config, secrets))
-        .into_make_service_with_connect_info::<std::net::SocketAddr>();
+    let state = AppState::new(pool, &config, secrets);
+    state.reload_mibs().await.context("loading the MIB files")?;
+    let mibs = state.mib_index();
+    tracing::info!(
+        objects = mibs.len(),
+        modules = mibs.reports().len(),
+        "MIBs loaded"
+    );
+    let app = web::router(state).into_make_service_with_connect_info::<std::net::SocketAddr>();
     let served = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await

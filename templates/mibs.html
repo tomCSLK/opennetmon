@@ -1,0 +1,113 @@
+{% extends "app.html" %}
+{% block title %}MIB-Dateien – netmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>MIB-Dateien</h1>
+    <p class="subtitle">{{ total_modules }} Module mit {{ total_objects }} Objekten geladen. Hochgeladene Hersteller-MIBs liefern Namen, Typen,
+      Einheiten und Klartext für Statuswerte bei eigenen OID-Sensoren.</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+{% if let Some(up) = upload %}
+<p class="flash" role="status">{{ up.accepted }} {% if up.accepted == 1 %}Datei{% else %}Dateien{% endif %} mit {{ up.modules }} {% if up.modules == 1 %}Modul{% else %}Modulen{% endif %} übernommen{% if up.replaced > 0 %}, {{ up.replaced }} ältere Fassung(en) ersetzt{% endif %}.</p>
+{% if !up.skipped.is_empty() %}
+<div class="notice" role="status"><div><strong>{{ up.skipped.len() }} übersprungen:</strong>
+  <ul class="plain">{% for s in up.skipped %}<li>{{ s }}</li>{% endfor %}</ul></div></div>
+{% endif %}
+{% endif %}
+
+<section class="card">
+  <h2>Hochladen</h2>
+  <form method="post" action="/mibs/upload" enctype="multipart/form-data" class="upload">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <input type="file" name="files" multiple accept=".mib,.my,.txt,.mi2,text/plain" required aria-label="MIB-Dateien auswählen">
+    <button type="submit">Hochladen</button>
+  </form>
+  <p class="hint">Mehrere Dateien auf einmal auswählen (z. B. den ganzen entpackten Ordner eines Herstellers). Eine Datei, die ein bereits
+    geladenes Modul enthält, ersetzt die ältere Fassung. Standard-MIBs wie IF-MIB oder HOST-RESOURCES-MIB sind schon dabei.</p>
+</section>
+
+<section class="card">
+  <h2>Suchen</h2>
+  <form method="get" action="/mibs" class="search">
+    <input type="text" name="q" value="{{ query }}" placeholder="Name oder Begriff, z. B. tpSysMonitorCpu, temperature, ifHCInOctets" aria-label="MIB-Objekt suchen">
+    <button type="submit" class="secondary">Suchen</button>
+  </form>
+  {% if !query.is_empty() %}
+  {% if results.is_empty() %}
+  <p class="empty small">Nichts gefunden.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>OID</th><th>Art / Typ</th><th>Beschreibung</th></tr></thead>
+    <tbody>
+    {% for o in results %}
+      <tr>
+        <td><strong>{{ o.name }}</strong><span class="sub">{{ o.module }}</span>
+          {% if o.pollable %}<span class="sub"><code>{{ o.suggestion }}</code></span>{% endif %}</td>
+        <td class="num"><code>{{ o.oid }}</code></td>
+        <td>{{ o.kind }}<span class="sub">{{ o.type_name }}{% if !o.units.is_empty() %} · {{ o.units }}{% endif %}{% if !o.access.is_empty() %} · {{ o.access }}{% endif %}</span></td>
+        <td class="wrap muted small">{{ o.description }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section class="card flush">
+  <div class="card-head"><h2>Hochgeladene Dateien</h2><span class="muted small">{{ files.len() }}</span></div>
+  {% if files.is_empty() %}
+  <p class="empty small">Noch keine Hersteller-MIBs hochgeladen.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Datei</th><th>Module</th><th>Hochgeladen</th><th></th></tr></thead>
+    <tbody>
+    {% for f in files %}
+      <tr>
+        <td><strong>{{ f.file_name }}</strong><span class="sub">{{ f.size_kb }}</span></td>
+        <td class="wrap">
+          {% for m in f.modules %}
+          <div>{% if m.ok %}<span class="badge status-up">{{ m.name }}</span>{% else %}<span class="badge status-warning">{{ m.name }}</span>{% endif %}
+            <span class="muted small">{{ m.objects }} Objekte{% if !m.problem.is_empty() %} · {{ m.problem }}{% endif %}</span></div>
+          {% endfor %}
+        </td>
+        <td class="num">{{ f.uploaded_at|safe }}</td>
+        <td class="right">
+          <form method="post" action="/mibs/files/{{ f.id }}/delete">
+            <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+            <button type="submit" class="ghost small">Löschen</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+
+<details class="card panel">
+  <summary><h2>Mitgelieferte Standard-MIBs ({{ bundled.len() }})</h2></summary>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Modul</th><th>Objekte</th></tr></thead>
+    <tbody>
+    {% for m in bundled %}
+      <tr><td>{{ m.name }}</td><td class="num">{{ m.objects }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</details>
+{% endblock %}

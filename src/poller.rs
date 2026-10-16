@@ -638,6 +638,7 @@ mod tests {
                 oid: oid.clone(),
                 mode: OidMode::Counter,
                 scale: 1.0,
+                unit: None,
             },
         )
         .await
@@ -672,6 +673,7 @@ mod tests {
                 oid: oid.clone(),
                 mode: OidMode::Gauge,
                 scale: 1.0,
+                unit: None,
             },
         )
         .await

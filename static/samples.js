@@ -62,8 +62,8 @@
         cols.push({ title: s.label + ' (Geschwindigkeit)', values: s.values,
           fmt: function (v) { return F.value('bps', v); }, sum: false });
       } else {
-        cols.push({ title: s.label, values: s.values,
-          fmt: function (v) { return F.value(s.unit, v, s.key); }, sum: false, state: s.unit === 'state' });
+        cols.push({ title: s.label + (s.unit_label ? ' (' + s.unit_label + ')' : ''), values: s.values,
+          fmt: F.forSeries(s), sum: false, state: s.unit === 'state' || (s.labels || []).length > 0 });
       }
     });
     return cols;

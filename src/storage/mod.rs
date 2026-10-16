@@ -5,6 +5,7 @@ pub mod devices;
 pub mod groups;
 pub mod mail;
 pub mod measurements;
+pub mod mibs;
 pub mod sensors;
 pub mod status;
 pub mod users;

@@ -60,5 +60,22 @@
     return two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + clock(ts, withSeconds);
   }
 
-  window.netmonFormat = { num: num, value: value, bytes: bytes, clock: clock, day: day, dateTime: dateTime };
+  // Formatter for one series of the chart JSON: MIB enumeration labels ("up (1)") and the unit
+  // label of custom OID sensors ("41,5 °C") on top of the channel unit.
+  function forSeries(s) {
+    var labels = {};
+    (s.labels || []).forEach(function (pair) { labels[pair[0]] = pair[1]; });
+    var hasLabels = (s.labels || []).length > 0;
+    return function (v) {
+      if (v === null || v === undefined) { return '–'; }
+      if (hasLabels && Math.round(v) === v && labels[v] !== undefined) { return labels[v] + ' (' + v + ')'; }
+      if (s.unit_label) {
+        if (s.unit === 'per_second') { return num(v, 3) + ' ' + s.unit_label + '/s'; }
+        if (s.unit === 'count') { return num(v, 3) + ' ' + s.unit_label; }
+      }
+      return value(s.unit, v, s.key);
+    };
+  }
+
+  window.netmonFormat = { num: num, value: value, bytes: bytes, clock: clock, day: day, dateTime: dateTime, forSeries: forSeries };
 })();

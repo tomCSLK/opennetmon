@@ -401,3 +401,11 @@ a.button.secondary { color: var(--text); }
   h1 { font-size: 1.3rem; }
 }
 .c-down { color: var(--down); } .c-warning { color: var(--warn); }
+
+/* MIB page */
+form.upload, form.search { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+form.search input[type=text] { flex: 1; min-width: 220px; }
+input[type=file] { font: inherit; font-size: .9rem; color: var(--muted); }
+input[type=file]::file-selector-button { margin-right: .7rem; padding: .45rem .8rem; font: inherit; font-weight: 600; cursor: pointer;
+  color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+ul.plain { margin: .3rem 0 0; padding-left: 1.1rem; }

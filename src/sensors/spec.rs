@@ -25,8 +25,13 @@ pub enum SensorSpec {
         oid: Vec<u64>,
         mode: OidMode,
         scale: f64,
+        /// Unit shown with the value, e.g. from the MIB's UNITS clause (`°C`, `KBytes`).
+        unit: Option<String>,
     },
 }
+
+/// Longest accepted unit label of a custom OID sensor.
+pub const MAX_UNIT_CHARS: usize = 24;
 
 /// One channel a sensor produces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,8 +86,13 @@ impl SensorSpec {
             Self::Uptime => "Uptime".to_owned(),
             Self::InterfaceTraffic { if_index } => format!("Interface-Traffic (Index {if_index})"),
             Self::InterfaceStatus { if_index } => format!("Interface-Status (Index {if_index})"),
-            Self::Oid { oid, mode, scale } => format!(
-                "OID {} ({}{})",
+            Self::Oid {
+                oid,
+                mode,
+                scale,
+                unit,
+            } => format!(
+                "OID {} ({}{}{})",
                 format_oid(oid),
                 match mode {
                     OidMode::Gauge => "Wert",
@@ -92,7 +102,9 @@ impl SensorSpec {
                     String::new()
                 } else {
                     format!(", Faktor {scale}")
-                }
+                },
+                unit.as_deref()
+                    .map_or_else(String::new, |u| format!(", Einheit {u}"))
             ),
         }
     }
@@ -136,10 +148,21 @@ impl SensorSpec {
             {
                 Err("Der Interface-Index muss zwischen 1 und 2147483647 liegen.")
             }
-            Self::Oid { oid, scale, .. } => {
+            Self::Oid {
+                oid, scale, unit, ..
+            } => {
                 validate_oid(oid)?;
                 if !scale.is_finite() || *scale == 0.0 {
                     return Err("Der Faktor muss eine Zahl ungleich 0 sein.");
+                }
+                if let Some(u) = unit
+                    && (u.trim().is_empty()
+                        || u.chars().count() > MAX_UNIT_CHARS
+                        || u.chars().any(char::is_control))
+                {
+                    return Err(
+                        "Die Einheit darf höchstens 24 Zeichen lang sein und keine Steuerzeichen enthalten.",
+                    );
                 }
                 Ok(())
             }
@@ -154,7 +177,9 @@ impl SensorSpec {
             Self::Uptime => Box::new(UptimeSensor),
             Self::InterfaceTraffic { if_index } => Box::new(InterfaceTrafficSensor::new(*if_index)),
             Self::InterfaceStatus { if_index } => Box::new(InterfaceStatusSensor::new(*if_index)),
-            Self::Oid { oid, mode, scale } => Box::new(OidSensor::new(oid.clone(), *mode, *scale)),
+            Self::Oid {
+                oid, mode, scale, ..
+            } => Box::new(OidSensor::new(oid.clone(), *mode, *scale)),
         }
     }
 }
@@ -257,7 +282,18 @@ mod tests {
             oid: vec![1, 3, 6, 1],
             mode: OidMode::Gauge,
             scale,
+            unit: None,
         };
+        let with_unit = |unit: &str| SensorSpec::Oid {
+            oid: vec![1, 3, 6, 1],
+            mode: OidMode::Gauge,
+            scale: 1.0,
+            unit: Some(unit.to_owned()),
+        };
+        assert!(with_unit("°C").validate().is_ok());
+        assert!(with_unit("").validate().is_err());
+        assert!(with_unit(&"x".repeat(25)).validate().is_err());
+        assert!(with_unit("a\nb").validate().is_err());
         assert!(oid(0.1).validate().is_ok());
         assert!(oid(0.0).validate().is_err());
         assert!(oid(f64::NAN).validate().is_err());

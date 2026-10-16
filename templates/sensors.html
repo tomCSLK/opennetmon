@@ -1,5 +1,8 @@
 {% extends "app.html" %}
 {% block title %}Sensoren {{ device.name }} – netmon{% endblock %}
+{% block head %}
+  <script src="/static/oid-help.js?v=2" defer></script>
+{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -93,17 +96,22 @@
       </div>
       <div>
         <label for="name">Name</label>
-        <input id="name" name="name" type="text" value="{{ form.name }}" maxlength="64" placeholder="leer: Ping bzw. Uptime">
+        <input id="name" name="name" type="text" value="{{ form.name }}" maxlength="64" placeholder="leer: Ping, Uptime bzw. MIB-Name">
       </div>
     </div>
     <fieldset>
       <legend>Nur für „Eigene OID“</legend>
-      <label for="oid">OID (numerisch, z. B. 1.3.6.1.2.1.1.3.0)</label>
-      <input id="oid" name="oid" type="text" value="{{ form.oid }}" maxlength="600" autocapitalize="off" spellcheck="false">
+      <label for="oid">OID oder MIB-Name</label>
+      <input id="oid" name="oid" type="text" value="{{ form.oid }}" maxlength="600" autocapitalize="off" spellcheck="false"
+        autocomplete="off" list="mib-names" placeholder="z. B. tpSysMonitorCpu5Seconds.1, IF-MIB::ifInErrors.3 oder 1.3.6.1.2.1.1.3.0">
+      <datalist id="mib-names"></datalist>
+      <p class="hint" id="oid-info" aria-live="polite">Namen aus den geladenen MIBs werden beim Tippen vorgeschlagen (<a href="/mibs">MIB-Dateien</a>).
+        Einzelwerte bekommen automatisch „.0“, bei Tabellenspalten den Index anhängen.</p>
       <div class="form-grid">
         <div>
           <label for="mode">Auswertung</label>
           <select id="mode" name="mode">
+            <option value="auto"{% if form.mode == "auto" %} selected{% endif %}>Automatisch (aus der MIB, sonst Wert)</option>
             <option value="gauge"{% if form.mode == "gauge" %} selected{% endif %}>Wert unverändert (Gauge)</option>
             <option value="counter"{% if form.mode == "counter" %} selected{% endif %}>Zähler, Änderung pro Sekunde (Counter)</option>
           </select>
@@ -112,8 +120,12 @@
           <label for="scale">Faktor</label>
           <input id="scale" name="scale" type="text" value="{{ form.scale }}" maxlength="20" inputmode="decimal">
         </div>
+        <div>
+          <label for="unit">Einheit (optional)</label>
+          <input id="unit" name="unit" type="text" value="{{ form.unit }}" maxlength="24" placeholder="leer: aus der MIB">
+        </div>
       </div>
-      <p class="hint">Bei einer eigenen OID ist der Name Pflicht.</p>
+      <p class="hint">Ohne Namen heißt der Sensor wie das MIB-Objekt (z. B. „tpSysMonitorCpu5Seconds.1“).</p>
     </fieldset>
     <button type="submit">Hinzufügen</button>
   </form>

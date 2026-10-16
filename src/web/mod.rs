@@ -6,8 +6,10 @@ pub mod credentials;
 pub mod devices;
 pub mod groups;
 pub mod mail_settings;
+pub mod mibs;
 pub mod overview;
 pub mod sensor_detail;
+pub mod sensor_text;
 pub mod sensors;
 #[cfg(test)]
 pub(crate) mod testutil;
@@ -35,6 +37,8 @@ pub struct AppState {
     pub session_ttl_secs: i64,
     pub login_throttle: Arc<crate::auth::throttle::LoginThrottle>,
     pub client_ip_header: Option<crate::auth::throttle::ClientIpHeader>,
+    /// Bundled plus uploaded MIBs; replaced as a whole after every upload or deletion.
+    mibs: Arc<std::sync::RwLock<Arc<crate::mib::MibIndex>>>,
 }
 
 impl AppState {
@@ -45,9 +49,41 @@ impl AppState {
             cookie_secure: config.cookie_secure,
             login_throttle: Arc::default(),
             client_ip_header: config.client_ip_header,
+            mibs: Arc::new(std::sync::RwLock::new(crate::mib::bundled_index())),
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
                 .unwrap_or(i64::MAX),
         }
+    }
+
+    /// The current MIB index (cheap: shares the index).
+    pub fn mib_index(&self) -> Arc<crate::mib::MibIndex> {
+        match self.mibs.read() {
+            Ok(guard) => Arc::clone(&guard),
+            Err(poisoned) => Arc::clone(&poisoned.into_inner()),
+        }
+    }
+
+    /// Rebuilds the MIB index from the bundled MIBs and all uploaded files.
+    pub async fn reload_mibs(&self) -> crate::error::Result<()> {
+        let contents = storage::mibs::all_contents(&self.pool).await?;
+        let index = tokio::task::spawn_blocking(move || {
+            let sources: Vec<crate::mib::Source<'_>> = contents
+                .iter()
+                .map(|(id, text)| crate::mib::Source {
+                    origin: crate::mib::Origin::Imported(*id),
+                    text,
+                })
+                .collect();
+            crate::mib::MibIndex::build(&sources)
+        })
+        .await
+        .map_err(|e| crate::error::Error::Internal(format!("MIB index task failed: {e}")))?;
+        let index = Arc::new(index);
+        match self.mibs.write() {
+            Ok(mut guard) => *guard = index,
+            Err(poisoned) => *poisoned.into_inner() = index,
+        }
+        Ok(())
     }
 }
 
@@ -97,6 +133,13 @@ pub fn router(state: AppState) -> Router {
             get(mail_settings::show).post(mail_settings::save),
         )
         .route("/settings/mail/test", post(mail_settings::send_test))
+        .route("/mibs", get(mibs::show))
+        .route(
+            "/mibs/upload",
+            post(mibs::upload).layer(axum::extract::DefaultBodyLimit::max(mibs::MAX_UPLOAD_BYTES)),
+        )
+        .route("/mibs/files/{id}/delete", post(mibs::delete))
+        .route("/mibs/search.json", get(mibs::search_json))
         .route("/healthz", get(healthz))
         .route("/static/{*path}", get(assets::serve))
         .layer(security_header(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
@@ -159,6 +202,7 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "sensor_resumed" => Some("Sensor fortgesetzt."),
         "thresholds_saved" => Some("Schwellwerte gespeichert."),
         "mail_saved" => Some("E-Mail-Einstellungen gespeichert."),
+        "mib_deleted" => Some("MIB-Datei gelöscht."),
         _ => None,
     }
 }
@@ -195,6 +239,20 @@ pub fn time_html(ms: i64) -> String {
         "<time class=\"ts\" datetime=\"{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z\">{}</time>",
         format_utc(ms)
     )
+}
+
+/// Like [`time_html`] for an ISO timestamp as SQLite writes it (`2026-10-16T18:30:00.123Z`).
+/// Anything that is not a plain timestamp is reduced to its digits and separators, so the result
+/// is always safe to render with `|safe`.
+pub fn iso_time_html(iso: &str) -> String {
+    let clean: String = iso
+        .chars()
+        .filter(|c| c.is_ascii_digit() || matches!(c, '-' | ':' | 'T' | 'Z' | '.'))
+        .take(32)
+        .collect();
+    let text = clean.replace('T', " ").trim_end_matches('Z').to_owned();
+    let text = text.split('.').next().unwrap_or_default().to_owned();
+    format!("<time class=\"ts\" datetime=\"{clean}\">{text} UTC</time>")
 }
 
 /// Data every logged-in page needs for the header (navigation, user, logout form).
@@ -268,6 +326,15 @@ mod tests {
             "<time class=\"ts\" datetime=\"2026-06-15T19:32:10Z\">2026-06-15 19:32:10 UTC</time>"
         );
         assert!(time_html(0).contains("datetime=\"1970-01-01T00:00:00Z\""));
+    }
+
+    #[test]
+    fn iso_timestamps_are_rendered_safely() {
+        assert_eq!(
+            iso_time_html("2026-10-16T18:30:00.123Z"),
+            "<time class=\"ts\" datetime=\"2026-10-16T18:30:00.123Z\">2026-10-16 18:30:00 UTC</time>"
+        );
+        assert!(!iso_time_html("\"><script>alert(1)</script>").contains("script"));
     }
 
     #[tokio::test]

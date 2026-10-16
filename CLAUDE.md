@@ -41,6 +41,7 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
   auf dem Stack und überläuft in Tokio-Threads mit 2 MB Stack)
 - Ping: `surge-ping` (0.9, ein Socket je Adressfamilie für alle Ziele); bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
+- Uploads: axum-Feature `multipart` (nutzt `multer`) für MIB-Dateien
 - Mail: `lettre` 0.11 (Features `builder`, `smtp-transport`, `tokio1`, `tokio1-rustls-tls`; ohne native-tls/OpenSSL, damit der musl-Build statisch bleibt)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
   `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
@@ -87,6 +88,9 @@ Ein Binary, ein Prozess, Module:
 - `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`, `NETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
 - `snmp` – `SnmpClient` (GET und GETBULK-`walk` mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; `discovery` – Interface-Discovery über IF-MIB-Walks (`merge` ist reine Logik); Poller und Sensoren bauen darauf auf
+- `mib` – MIB-Parser (`mib::lexer`, `mib::parser`, tolerant) und Index (`MibIndex`: Auflösung über Module, Textual Conventions, Tabellen inkl. AUGMENTS,
+  Suche, Name ↔ OID, `oid_target` für das Sensorformular); mitgelieferte Standard-MIBs in `mibs/` (per `rust-embed`), Uploads in `mib_files`;
+  Index im `AppState` (`mib_index()`, `reload_mibs()`), Seite `web::mibs`, Anzeige-Helfer `web::sensor_text` (Namen, Klartext, Einheiten) (`docs/mibs.md`)
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
 - `poller` – Supervisor + eine Aufgabe je Gerät, die Gerät/Sensoren/Profil in jedem Zyklus neu lädt; verteilt Startzeiten über das Intervall
@@ -170,6 +174,7 @@ cargo run -- --config ./dev/config.toml user add <name> --role admin    # auch: 
 cargo run -- --config ./dev/config.toml backup ./dev/data/backup.db      # konsistente Kopie der Datenbank
 cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv --auth md5   # Passwörter nur per Umgebung
 cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
+dev/mib-oracle.sh dev/data/mibs/tplink/*.mib                          # MIB-Auflösung gegen net-snmp (snmptranslate) prüfen
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 

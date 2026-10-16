@@ -14,8 +14,9 @@ use serde::Deserialize;
 use crate::devices::Device;
 use crate::discovery::discover_interfaces;
 use crate::error::{Error, Result};
+use crate::mib::MibIndex;
 use crate::sensors::snmp::OidMode;
-use crate::sensors::spec::{SensorSpec, parse_oid};
+use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpTarget};
 use crate::status::{Status, device_status};
 use crate::storage::sensors::{self as store, SensorRecord};
@@ -49,6 +50,7 @@ struct SensorFormValues {
     oid: String,
     mode: String,
     scale: String,
+    unit: String,
 }
 
 impl Default for SensorFormValues {
@@ -57,8 +59,9 @@ impl Default for SensorFormValues {
             kind: "ping".to_owned(),
             name: String::new(),
             oid: String::new(),
-            mode: "gauge".to_owned(),
+            mode: "auto".to_owned(),
             scale: "1".to_owned(),
+            unit: String::new(),
         }
     }
 }
@@ -109,6 +112,8 @@ pub struct SensorForm {
     mode: String,
     #[serde(default)]
     scale: String,
+    #[serde(default)]
+    unit: String,
 }
 
 impl SensorForm {
@@ -119,21 +124,35 @@ impl SensorForm {
             oid: self.oid.clone(),
             mode: self.mode.clone(),
             scale: self.scale.clone(),
+            unit: self.unit.clone(),
         }
     }
 
-    /// Name and configuration for the chosen sensor type.
-    fn to_spec(&self) -> Result<(String, SensorSpec)> {
+    /// Name and configuration for the chosen sensor type. A custom OID may be given by MIB name;
+    /// mode ("auto"), unit and name then default to what the MIB says.
+    fn to_spec(&self, mibs: &MibIndex) -> Result<(String, SensorSpec)> {
         let invalid = |m: &str| Error::Invalid(m.to_owned());
         let (default_name, spec) = match self.kind.as_str() {
-            "ping" => ("Ping", SensorSpec::Ping),
-            "uptime" => ("Uptime", SensorSpec::Uptime),
+            "ping" => ("Ping".to_owned(), SensorSpec::Ping),
+            "uptime" => ("Uptime".to_owned(), SensorSpec::Uptime),
             "oid" => {
-                let oid = parse_oid(&self.oid).map_err(invalid)?;
+                let target = mibs.oid_target(&self.oid).map_err(Error::Invalid)?;
+                let object = target.object.as_ref();
                 let mode = match self.mode.as_str() {
                     "gauge" => OidMode::Gauge,
                     "counter" => OidMode::Counter,
-                    _ => return Err(invalid("Bitte den Modus (Wert oder Zähler) wählen.")),
+                    "auto" | "" => {
+                        if object.and_then(|o| o.base).is_some_and(|b| b.is_counter()) {
+                            OidMode::Counter
+                        } else {
+                            OidMode::Gauge
+                        }
+                    }
+                    _ => {
+                        return Err(invalid(
+                            "Bitte den Modus (automatisch, Wert oder Zähler) wählen.",
+                        ));
+                    }
                 };
                 let scale = match self.scale.trim() {
                     "" => 1.0,
@@ -142,18 +161,36 @@ impl SensorForm {
                         .parse::<f64>()
                         .map_err(|_| invalid("Der Faktor muss eine Zahl sein."))?,
                 };
-                ("", SensorSpec::Oid { oid, mode, scale })
+                let unit = match self.unit.trim() {
+                    "" => object.and_then(|o| o.units.clone()),
+                    text => Some(text.to_owned()),
+                };
+                let default_name = object
+                    .and_then(|_| mibs.name_of(&target.oid))
+                    .unwrap_or_default();
+                (
+                    default_name,
+                    SensorSpec::Oid {
+                        oid: target.oid,
+                        mode,
+                        scale,
+                        unit,
+                    },
+                )
             }
             _ => return Err(invalid("Bitte einen Sensortyp wählen.")),
         };
         let name = match self.name.trim() {
             "" => default_name,
-            name => name,
+            name => name.to_owned(),
         };
         if name.is_empty() {
-            return Err(invalid("Bitte einen Namen angeben."));
+            return Err(invalid(
+                "Bitte einen Namen angeben (die OID ist in keiner geladenen MIB bekannt).",
+            ));
         }
-        Ok((name.to_owned(), spec))
+        let name: String = name.chars().take(crate::devices::MAX_NAME_LEN).collect();
+        Ok((name, spec))
     }
 }
 
@@ -171,6 +208,7 @@ async fn render_sensors(
     error: Option<String>,
     form: SensorFormValues,
 ) -> Result<String> {
+    let mibs = state.mib_index();
     let records = store::list_sensors(&state.pool, device.id).await?;
     let states = status_store::list_states(&state.pool).await?;
     let overall = device_status(
@@ -190,7 +228,7 @@ async fn render_sensors(
             SensorRowView {
                 id: r.id,
                 name: r.name.clone(),
-                description: r.spec.describe(),
+                description: crate::web::sensor_text::describe(&r.spec, &mibs),
                 status_label: status.label(),
                 status_class: status.as_str(),
                 message: state.map(|s| s.message.clone()).unwrap_or_default(),
@@ -241,7 +279,7 @@ pub async fn create(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let device = load_device(&state, id).await?;
-    let outcome = match form.to_spec() {
+    let outcome = match form.to_spec(&state.mib_index()) {
         Ok((name, spec)) => store::create_sensor(&state.pool, id, &name, &spec).await,
         Err(e) => Err(e),
     };
@@ -662,10 +700,17 @@ mod tests {
         let path = format!("/devices/{device}/sensors");
         for (body, expected) in [
             (
-                "kind=oid&name=X&oid=sysUpTime.0&mode=gauge&scale=1",
+                "kind=oid&name=X&oid=1.3.x&mode=gauge&scale=1",
                 "OID ist ungültig",
             ),
-            ("kind=oid&name=&oid=1.3.6.1&mode=gauge&scale=1", "Namen"),
+            (
+                "kind=oid&name=&oid=1.3.6.1.4.1.99999.1&mode=gauge&scale=1",
+                "Namen",
+            ),
+            (
+                "kind=oid&name=X&oid=nichtVorhanden.0&mode=gauge&scale=1",
+                "in keiner geladenen MIB",
+            ),
             ("kind=oid&name=X&oid=1.3.6.1&mode=gauge&scale=0", "Faktor"),
             ("kind=oid&name=X&oid=1.3.6.1&mode=gauge&scale=abc", "Faktor"),
             ("kind=oid&name=X&oid=1.3.6.1&mode=wrong&scale=1", "Modus"),

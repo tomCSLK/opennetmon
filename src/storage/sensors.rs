@@ -44,6 +44,7 @@ struct SensorRow {
     oid: Option<String>,
     oid_mode: Option<String>,
     scale: Option<f64>,
+    unit_label: Option<String>,
     enabled: i64,
 }
 
@@ -86,13 +87,13 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
                 _ => return Err(corrupt("oid_mode")),
             },
             scale: r.scale.ok_or_else(|| corrupt("scale"))?,
+            unit: r.unit_label.clone(),
         },
         _ => return Err(corrupt("kind")),
     })
 }
 
-const SENSOR_SELECT: &str =
-    "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, enabled FROM sensors";
+const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, enabled FROM sensors";
 
 async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorRecord>> {
     let channels = sqlx::query_as::<_, ChannelRow>(
@@ -177,11 +178,16 @@ pub async fn create_sensor(
 ) -> Result<i64> {
     let name = crate::devices::validate_name(name).map_err(|m| Error::Invalid(m.to_owned()))?;
     spec.validate().map_err(|m| Error::Invalid(m.to_owned()))?;
-    let (if_index, oid, oid_mode, scale) = match spec {
+    let (if_index, oid, oid_mode, scale, unit_label) = match spec {
         SensorSpec::InterfaceTraffic { if_index } | SensorSpec::InterfaceStatus { if_index } => {
-            (Some(i64::from(*if_index)), None, None, None)
+            (Some(i64::from(*if_index)), None, None, None, None)
         }
-        SensorSpec::Oid { oid, mode, scale } => (
+        SensorSpec::Oid {
+            oid,
+            mode,
+            scale,
+            unit,
+        } => (
             None,
             Some(format_oid(oid)),
             Some(match mode {
@@ -189,14 +195,15 @@ pub async fn create_sensor(
                 OidMode::Counter => "counter",
             }),
             Some(*scale),
+            unit.as_deref().map(str::trim),
         ),
-        SensorSpec::Ping | SensorSpec::Uptime => (None, None, None, None),
+        SensorSpec::Ping | SensorSpec::Uptime => (None, None, None, None, None),
     };
 
     let mut tx = pool.begin().await?;
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale) \
-         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale, unit_label) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(device_id)
     .bind(name)
@@ -205,6 +212,7 @@ pub async fn create_sensor(
     .bind(oid)
     .bind(oid_mode)
     .bind(scale)
+    .bind(unit_label)
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| match e.as_database_error() {
@@ -354,6 +362,7 @@ mod tests {
             oid: vec![1, 3, 6, 1, 4, 1, 99, 1, 0],
             mode: OidMode::Counter,
             scale: 0.5,
+            unit: Some("Pakete".to_owned()),
         }
     }
 

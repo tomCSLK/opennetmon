@@ -25,6 +25,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 - **Status:** `In Ordnung`, `Warnung`, `Ausfall`, `Unbekannt`, `Pausiert`. Ein einzelner Messfehler ist nur eine Warnung, erst der zweite in Folge ein Ausfall. Schwellwerte je Kanal (Warnung/Down, über/unter).
 - **Oberfläche:** Seitenleiste, Status-Kacheln und Geräteliste mit Sensor-Statusleiste; helles und dunkles Design (folgt dem System, umschaltbar); auch auf dem Handy bedienbar.
 - **Messwerte-Tabelle:** unter jedem Graphen alle Werte des Zeitraums (neueste oben, bei Traffic mit Volumen) samt Summe, Mittelwert, Minimum und Maximum – wie die Livedaten in PRTG.
+- **MIB-Dateien:** Standard-MIBs eingebaut, Hersteller-MIBs (z. B. TP-Link) per Upload; eigene OID-Sensoren per Name statt Zahlenkette, mit Typ, Einheit und Klartext für Statuswerte aus der MIB.
 - **Graphen:** [uPlot](https://github.com/leeoniya/uPlot), lokal eingebunden (kein CDN), Alle Zeiten (Graphen und Tabellen) in der Zeitzone des Browsers.
 - **Benachrichtigung:** E-Mail bei Ausfall, Warnung und Wiederherstellung; gleichzeitige Wechsel (z. B. ein ausgefallenes Gerät) kommen als eine Mail. SMTP-Server, Anmeldung und Empfänger lassen sich jederzeit in der Oberfläche ändern (Testmail inklusive).
 - **Daten:** SQLite im WAL-Modus; Rohwerte 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt (einstellbar).
@@ -106,6 +107,7 @@ Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb
 | [`docs/poller.md`](docs/poller.md) | Abfrage, Statuslogik, Ereignislog |
 | [`docs/graphen-und-schwellwerte.md`](docs/graphen-und-schwellwerte.md) | Detailseite, Graphen, Schwellwerte, Rollups |
 | [`docs/betrieb.md`](docs/betrieb.md) | Installation, Proxy, Update, Sicherung, Fehlersuche |
+| [`docs/mibs.md`](docs/mibs.md) | MIB-Dateien, eigene OID per Name |
 | [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-Mail-Einstellungen, Regeln, Test-SMTP-Server |
 | [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Entscheidung für Rust (Spike-Ergebnisse) |
 

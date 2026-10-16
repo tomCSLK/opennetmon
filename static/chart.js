@@ -14,7 +14,6 @@
   }
 
   var F = window.netmonFormat;
-  function fmt(unit, v) { return F.value(unit, v); }
   var day = F.day, clock = F.clock;
 
   function xValues(u, splits, axisIdx, foundSpace, foundIncr) {
@@ -57,7 +56,7 @@
           width: 2,
           fill: unit === 'state' ? undefined : palette[i % palette.length] + '1f',
           spanGaps: false,
-          value: function (u, v) { return F.value(unit, v, s.key); },
+          value: (function (f) { return function (u, v) { return f(v); }; })(F.forSeries(s)),
           paths: unit === 'state' ? uPlot.paths.stepped({ align: 1 }) : undefined
         });
         columns.push(s.values);
@@ -69,8 +68,8 @@
         series: series,
         axes: [
           { stroke: fg, grid: { stroke: grid }, ticks: { stroke: grid }, values: xValues },
-          { stroke: fg, grid: { stroke: grid }, ticks: { stroke: grid }, size: 80,
-            values: function (u, vals) { return vals.map(function (v) { return fmt(unit, v); }); } }
+          { stroke: fg, grid: { stroke: grid }, ticks: { stroke: grid }, size: (groups[unit][0].labels || []).length ? 130 : 80,
+            values: (function (f) { return function (u, vals) { return vals.map(f); }; })(F.forSeries(groups[unit][0])) }
         ]
       }, columns, el);
       charts.push({ plot: plot, el: el });

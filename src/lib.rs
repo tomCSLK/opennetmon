@@ -10,6 +10,7 @@ pub mod discovery;
 pub mod error;
 pub mod mail;
 pub mod maintenance;
+pub mod mib;
 pub mod poller;
 pub mod sensors;
 pub mod snmp;

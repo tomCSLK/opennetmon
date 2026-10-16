@@ -13,15 +13,14 @@ use serde::{Deserialize, Serialize};
 use crate::devices::Device;
 use crate::error::{Error, Result};
 use crate::sensors::Unit;
-use crate::sensors::format::{
-    channel_label, format_value, input_unit, parse_threshold, threshold_input,
-};
+use crate::sensors::format::{channel_label, input_unit, parse_threshold, threshold_input};
 use crate::status::{Status, Thresholds};
 use crate::storage::devices;
 use crate::storage::measurements::{Range, chart_data, latest_values};
 use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
 use crate::storage::status as status_store;
 use crate::web::auth::CurrentUser;
+use crate::web::sensor_text::ValueFormat;
 use crate::web::{AppState, Layout, flash_message, time_html};
 
 const EVENT_LIMIT: u32 = 20;
@@ -48,7 +47,7 @@ struct ChannelView {
     latest_at: String,
     /// Threshold inputs: warn above, warn below, down above, down below (in `input_unit`).
     fields: [String; 4],
-    unit_label: &'static str,
+    unit_label: String,
     has_thresholds: bool,
 }
 
@@ -126,6 +125,8 @@ async fn render(
         submitted,
     } = view;
     let latest = latest_values(&state.pool, &sensor.channels).await?;
+    let mibs = state.mib_index();
+    let value_format = ValueFormat::for_sensor(&sensor.spec, &mibs);
     let channels = sensor
         .channels
         .iter()
@@ -143,12 +144,16 @@ async fn render(
                 label: channel_label(&c.key).to_owned(),
                 latest: latest
                     .get(&c.id)
-                    .map_or_else(|| "–".to_owned(), |(_, v)| format_value(c.unit, *v)),
+                    .map_or_else(|| "–".to_owned(), |(_, v)| value_format.format(c.unit, *v)),
                 latest_at: latest
                     .get(&c.id)
                     .map_or_else(String::new, |(ts, _)| time_html(*ts)),
                 fields,
-                unit_label: input_unit(c.unit),
+                unit_label: match (&value_format.unit_label, c.unit) {
+                    (Some(label), Unit::PerSecond) => format!("{label}/s"),
+                    (Some(label), Unit::Count) => label.clone(),
+                    _ => input_unit(c.unit).to_owned(),
+                },
                 has_thresholds: c.unit != Unit::State,
             }
         })
@@ -173,7 +178,7 @@ async fn render(
         .collect();
     let page = DetailTemplate {
         layout: user.layout(),
-        description: sensor.spec.describe(),
+        description: crate::web::sensor_text::describe(&sensor.spec, &mibs),
         status_label: status.label(),
         status_class: status.as_str(),
         message: state_row
@@ -228,6 +233,10 @@ pub async fn detail(
 struct SeriesJson {
     key: String,
     label: String,
+    /// Unit shown after the value (custom OID sensors), e.g. `°C`.
+    unit_label: Option<String>,
+    /// Enumeration labels from the MIB as `[value, "label"]` pairs.
+    labels: Vec<(i64, String)>,
     unit: &'static str,
     values: Vec<Option<f64>>,
 }
@@ -252,6 +261,7 @@ pub async fn data(
 ) -> Result<Json<ChartJson>> {
     let (sensor, device) = load(&state, id).await?;
     let range = query.range();
+    let value_format = ValueFormat::for_sensor(&sensor.spec, &state.mib_index());
     let chart = chart_data(&state.pool, &sensor.channels, range, now_ms()).await?;
     Ok(Json(ChartJson {
         range: range.as_str(),
@@ -263,6 +273,8 @@ pub async fn data(
             .into_iter()
             .map(|s| SeriesJson {
                 label: channel_label(&s.key).to_owned(),
+                unit_label: value_format.unit_label.clone(),
+                labels: value_format.labels.clone(),
                 unit: s.unit.as_str(),
                 key: s.key,
                 values: s.values,
