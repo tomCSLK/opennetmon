@@ -1,20 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Anmelden – netmon{% endblock %}
 {% block body %}
-<main>
-  <div class="card narrow">
-    <h1>Anmelden</h1>
-    {% if let Some(message) = error %}
-    <p class="error" role="alert">{{ message }}</p>
-    {% endif %}
-    <form method="post" action="/login" class="stack">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label for="username">Benutzername</label>
-      <input id="username" name="username" type="text" autocomplete="username" required autofocus maxlength="64">
-      <label for="password">Passwort</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024">
-      <button type="submit">Anmelden</button>
-    </form>
+<main class="auth">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 12 7 12 10 5 14 19 17 12 21 12"/></svg></span>
+      netmon
+    </div>
+    <div class="card">
+      <h1>Anmelden</h1>
+      <p class="muted">Netzwerk-Monitoring</p>
+      {% if let Some(message) = error %}
+      <p class="error" role="alert">{{ message }}</p>
+      {% endif %}
+      <form method="post" action="/login" class="stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="username">Benutzername</label>
+        <input id="username" name="username" type="text" autocomplete="username" required autofocus maxlength="64">
+        <label for="password">Passwort</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024">
+        <button type="submit">Anmelden</button>
+      </form>
+    </div>
   </div>
 </main>
 {% endblock %}

@@ -10,13 +10,34 @@ Die Sensorliste eines Geräts (`/devices/<id>/sensors`) verlinkt jeden Sensor do
 
 - **uPlot 1.6.32** (MIT) liegt unverändert unter `static/vendor/uplot/` (mit Lizenz, Quelle und Prüfsumme in der dortigen `README.md`) und wird mit dem Binary
   ausgeliefert – kein CDN, kein npm. Eigener Code: `static/chart.js` (kein Inline-Skript, die CSP bleibt `default-src 'self'`).
-- Daten kommen als JSON von `/sensors/<id>/data?range=…`: `{"range","ts":[Sekunden…],"series":[{"key","label","unit","values":[…|null]}]}`.
+- Daten kommen als JSON von `/sensors/<id>/data?range=…`: `{"range","step_secs","interval_secs","ts":[Sekunden…],"series":[{"key","label","unit","values":[…|null]}]}`.
   Alle Kanäle teilen die Zeitachse; fehlt ein Wert, ist er `null` (Lücke im Graph, keine Linie).
 - Je Einheit ein Diagramm (Eingehend und Ausgehend teilen sich eines). Anzeige in der **Zeitzone des Browsers** (`static/chart.js`), 24-Stunden-Uhr, deutsche Zahlen und Einheiten
   (bit/s, kbit/s, Mbit/s, Gbit/s). Der Graph lädt alle 30 s nach.
 - Herkunft der Punkte: 1 h und 24 h Rohwerte, 7 d Mittelwerte in 10-Minuten-Blöcken, 30 d Stundenwerte aus `samples_1h` (solange noch keine Rollups
   existieren, Stundenmittel direkt aus den Rohdaten). Höchstens 20 000 Punkte je Kanal.
-- Statische Dateien haben `Cache-Control: max-age=3600`; nach einem Update kann der Browser bis zu eine Stunde das alte `chart.js` zeigen (Strg+F5).
+- Statische Dateien haben `Cache-Control: no-cache` und ein ETag (Inhalts-Hash): Der Browser fragt bei jedem Laden kurz nach und bekommt `304 Nicht geändert`,
+  solange sich nichts geändert hat. Nach einem Update gelten neue Dateien daher sofort. (Das `?v=2` an den Adressen umgeht einmalig die alten Ein-Stunden-Caches.)
+
+## Tabelle „Messwerte“
+
+Unter dem Graphen steht – wie die „Livedaten“-Tabelle von PRTG – eine Zeile je Messwert, **neueste oben**, für den gewählten Zeitraum
+(1 Std. und 24 Std.: jede Abfrage; 7 Tage: 10-Minuten-Mittel, Spalte „Zeitraum ab“; 30 Tage: Stundenmittel).
+
+- Traffic-Kanäle haben je Richtung zwei Spalten: **Volumen** (Datenmenge im Abschnitt, dezimal: 1 MB = 1 000 000 Byte) und **Geschwindigkeit**.
+  Das Volumen ist Rate × Dauer; bei Rohwerten ist die Dauer der Abstand zur vorigen Abfrage, höchstens ein Abfrageintervall
+  (nach einem Neustart oder einer verlorenen Abfrage würde ein längerer Abstand das Volumen sonst aufblähen), bei Mitteln die Blocklänge. Es ist damit eine Näherung;
+  PRTG rechnet mit den Zählerständen selbst.
+- Darüber stehen **Summe** (nur Volumina), **Mittelwert**, **Minimum** und **Maximum**, jeweils „aus N Werten“. Statuskanäle zeigen den Namen (`up`, `down` …).
+- Angezeigt werden die neuesten **50** Zeilen; über „Zeilen“ lassen sich **100** oder **500** wählen (der Browser merkt sich die Wahl).
+  Summe, Mittelwert, Minimum und Maximum gelten immer für den ganzen Zeitraum. Die Tabelle aktualisiert sich mit dem Graphen alle 30 s (`static/samples.js`, gemeinsame Formatierung in `static/format.js`).
+- Noch nicht wie bei PRTG: Spalten für Ausfallzeit und Abdeckung (fehlgeschlagene Abfragen werden nicht als Zeilen gespeichert; Lücken sieht man im Graphen).
+
+## Zeitangaben in Tabellen
+
+Der Server schreibt jeden Zeitpunkt als `<time class="ts" datetime="2026-10-15T19:32:10Z">2026-10-15 19:32:10 UTC</time>` (`web::time_html`). `static/time.js` (auf jeder Seite geladen)
+ersetzt den Text im Browser durch die lokale Zeit im Format `15.10.2026 21:32:10` und legt die UTC-Angabe als Tooltip ab. Ohne JavaScript bleibt die UTC-Angabe stehen.
+Betroffen: letzte Abfrage und Meldungen der Sensoren, Statuswechsel und Sendeversuche. **E-Mails** nennen die Zeit weiterhin ausdrücklich in UTC.
 
 ## Schwellwerte
 

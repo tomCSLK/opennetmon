@@ -1,11 +1,17 @@
 {% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
 {% block title %}{{ heading }} – netmon{% endblock %}
 {% block content %}
-<div class="card">
-  <h1>{{ heading }}</h1>
-  {% if let Some(message) = error %}
-  <p class="error" role="alert">{{ message }}</p>
-  {% endif %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><span>{{ heading }}</span></div>
+    <h1>{{ heading }}</h1>
+  </div>
+</div>
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+<section class="card">
   <form method="post" action="{{ action }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <label for="name">Name</label>
@@ -17,15 +23,19 @@
       <option value="{{ option.id }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
       {% endfor %}
     </select>
-    <button type="submit">Speichern</button>
+    <div class="form-actions">
+      <button type="submit">Speichern</button>
+      <a class="button secondary" href="/">Abbrechen</a>
+    </div>
   </form>
   {% if let Some(delete_action) = delete_action %}
   <form method="post" action="{{ delete_action }}" class="delete">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <p class="muted">Löschen ist nur möglich, wenn die Gruppe weder Untergruppen noch Geräte enthält.</p>
+    <h3>Gruppe löschen</h3>
+    <p class="muted small">Löschen ist nur möglich, wenn die Gruppe weder Untergruppen noch Geräte enthält.</p>
     <label class="inline"><input type="checkbox" name="confirm" value="yes" required> Ja, diese Gruppe löschen</label>
     <button type="submit" class="danger">Gruppe löschen</button>
   </form>
   {% endif %}
-</div>
+</section>
 {% endblock %}

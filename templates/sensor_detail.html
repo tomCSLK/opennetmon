@@ -1,89 +1,117 @@
 {% extends "app.html" %}
 {% block title %}{{ sensor.name }} – netmon{% endblock %}
 {% block head %}
-  <link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css">
-  <script src="/static/vendor/uplot/uPlot.iife.min.js" defer></script>
-  <script src="/static/chart.js" defer></script>
+  <link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css?v=2">
+  <script src="/static/vendor/uplot/uPlot.iife.min.js?v=2" defer></script>
+  <script src="/static/format.js?v=2" defer></script>
+  <script src="/static/chart.js?v=2" defer></script>
+  <script src="/static/samples.js?v=2" defer></script>
 {% endblock %}
 {% block content %}
-<div class="card">
-  <div class="head">
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ sensor.name }}</span></div>
     <h1>{{ sensor.name }}</h1>
-    <div class="actions">
-      <a class="button secondary" href="/devices/{{ device.id }}/sensors">Sensoren von {{ device.name }}</a>
-    </div>
+    <p class="subtitle status-line">
+      <span class="badge status-{{ status_class }}">{{ status_label }}</span>
+      <span>{{ description }}</span>
+      {% if !message.is_empty() %}<span>· {{ message }}</span>{% endif %}
+      {% if !last_poll.is_empty() %}<span>· letzte Abfrage {{ last_poll|safe }}</span>{% endif %}
+    </p>
   </div>
-  <p class="muted">{{ description }} · {{ device.name }} ({{ device.host }}) · Status:
-    <span class="badge status-{{ status_class }}">{{ status_label }}</span>
-    {% if !message.is_empty() %} · {{ message }}{% endif %}
-    {% if !last_poll.is_empty() %} · letzte Abfrage {{ last_poll|safe }}{% endif %}</p>
-  {% if let Some(message) = flash %}
-  <p class="flash" role="status">{{ message }}</p>
-  {% endif %}
-  {% if let Some(message) = error %}
-  <p class="error" role="alert">{{ message }}</p>
-  {% endif %}
-
   <nav class="ranges" aria-label="Zeitraum">
     {% for r in ranges %}
-    <a class="button{% if !r.current %} secondary{% endif %}" href="/sensors/{{ sensor.id }}?range={{ r.value }}"{% if r.current %} aria-current="page"{% endif %}>{{ r.label }}</a>
+    <a href="/sensors/{{ sensor.id }}?range={{ r.value }}"{% if r.current %} aria-current="page"{% endif %}>{{ r.label }}</a>
     {% endfor %}
   </nav>
-  <div id="charts" data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="Noch keine Messwerte im gewählten Zeitraum."></div>
-  <noscript><p class="muted">Für den Graphen wird JavaScript benötigt.</p></noscript>
-
-  <table>
-    <thead><tr><th>Kanal</th><th>Letzter Wert</th><th>Gemessen</th></tr></thead>
-    <tbody>
-    {% for c in channels %}
-      <tr><td>{{ c.label }}</td><td>{{ c.latest }}</td><td>{% if c.latest_at.is_empty() %}–{% else %}{{ c.latest_at|safe }}{% endif %}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
 </div>
 
-<div class="card">
-  <h2>Schwellwerte</h2>
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="values" aria-label="Letzte Werte">
+  {% for c in channels %}
+  <div class="value-tile">
+    <div class="label">{{ c.label }}</div>
+    <div class="value">{{ c.latest }}</div>
+    <div class="when">{% if c.latest_at.is_empty() %}noch kein Messwert{% else %}{{ c.latest_at|safe }}{% endif %}</div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <div id="charts" data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="Noch keine Messwerte im gewählten Zeitraum."></div>
+  <noscript><p class="muted">Für den Graphen wird JavaScript benötigt.</p></noscript>
+</section>
+
+<section class="card flush">
+  <div class="card-head">
+    <h2>Messwerte</h2>
+    <div class="actions">
+      <span class="muted small" id="samples-info"></span>
+      <label class="rows-select" for="samples-limit">Zeilen
+        <select id="samples-limit">
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="500">500</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div id="samples" class="table-wrap" data-empty="Noch keine Messwerte im gewählten Zeitraum." aria-live="polite"></div>
+  <noscript><p class="empty small">Für die Tabelle wird JavaScript benötigt.</p></noscript>
+</section>
+
+<details class="card panel"{% if error.is_some() %} open{% endif %}>
+  <summary><h2>Schwellwerte</h2></summary>
   {% if layout.is_admin %}
-  <p class="muted">Ein Wert löst aus, wenn er die Grenze <em>überschreitet</em> (oben) oder <em>unterschreitet</em> (unten). „Down“ gilt sofort,
-    „Warnung“ ebenfalls. Leere Felder bedeuten: keine Grenze.</p>
+  <p class="muted small">Ein Wert löst aus, wenn er die Grenze <em>überschreitet</em> (oben) oder <em>unterschreitet</em> (unten). „Down“ und „Warnung“ gelten sofort.
+    Leere Felder bedeuten: keine Grenze.</p>
   <form method="post" action="/sensors/{{ sensor.id }}/thresholds" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     {% for c in channels %}
     {% if c.has_thresholds %}
     <fieldset>
       <legend>{{ c.label }}{% if !c.unit_label.is_empty() %} (in {{ c.unit_label }}){% endif %}</legend>
-      <label for="wa_{{ c.id }}">Warnung ab (über)</label>
-      <input id="wa_{{ c.id }}" name="wa_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[0] }}" maxlength="24">
-      <label for="wb_{{ c.id }}">Warnung ab (unter)</label>
-      <input id="wb_{{ c.id }}" name="wb_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[1] }}" maxlength="24">
-      <label for="da_{{ c.id }}">Down ab (über)</label>
-      <input id="da_{{ c.id }}" name="da_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[2] }}" maxlength="24">
-      <label for="db_{{ c.id }}">Down ab (unter)</label>
-      <input id="db_{{ c.id }}" name="db_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[3] }}" maxlength="24">
+      <div class="threshold-grid">
+        <div><label for="wa_{{ c.id }}">Warnung über</label>
+          <input id="wa_{{ c.id }}" name="wa_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[0] }}" maxlength="24"></div>
+        <div><label for="wb_{{ c.id }}">Warnung unter</label>
+          <input id="wb_{{ c.id }}" name="wb_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[1] }}" maxlength="24"></div>
+        <div><label for="da_{{ c.id }}">Down über</label>
+          <input id="da_{{ c.id }}" name="da_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[2] }}" maxlength="24"></div>
+        <div><label for="db_{{ c.id }}">Down unter</label>
+          <input id="db_{{ c.id }}" name="db_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[3] }}" maxlength="24"></div>
+      </div>
     </fieldset>
     {% endif %}
     {% endfor %}
-    <button type="submit">Speichern</button>
+    <button type="submit">Schwellwerte speichern</button>
   </form>
   {% else %}
   <p class="muted">Die Schwellwerte können nur Administratoren ändern.</p>
   {% endif %}
-</div>
+</details>
 
-<div class="card">
-  <h2>Letzte Statuswechsel</h2>
+<section class="card flush">
+  <div class="card-head"><h2>Letzte Statuswechsel</h2></div>
   {% if events.is_empty() %}
-  <p class="muted">Noch keine Ereignisse.</p>
+  <p class="empty small">Noch keine Ereignisse.</p>
   {% else %}
+  <div class="table-wrap">
   <table>
     <thead><tr><th>Zeitpunkt</th><th>Wechsel</th><th>Meldung</th></tr></thead>
     <tbody>
     {% for e in events %}
-      <tr><td>{{ e.at|safe }}</td><td>{{ e.change }}</td><td>{{ e.message }}</td></tr>
+      <tr><td class="num">{{ e.at|safe }}</td><td>{{ e.change }}</td><td class="wrap muted">{{ e.message }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endif %}
-</div>
+</section>
 {% endblock %}

@@ -235,6 +235,10 @@ struct SeriesJson {
 #[derive(Serialize)]
 pub struct ChartJson {
     range: &'static str,
+    /// Seconds covered by one point when points are averages (7 and 30 days); `None` for raw samples.
+    step_secs: Option<i64>,
+    /// Polling interval of the device, to estimate the time a raw sample covers.
+    interval_secs: u32,
     ts: Vec<i64>,
     series: Vec<SeriesJson>,
 }
@@ -246,13 +250,13 @@ pub async fn data(
     Path(id): Path<i64>,
     Query(query): Query<RangeQuery>,
 ) -> Result<Json<ChartJson>> {
-    let sensor = store::get_sensor(&state.pool, id)
-        .await?
-        .ok_or(Error::NotFound)?;
+    let (sensor, device) = load(&state, id).await?;
     let range = query.range();
     let chart = chart_data(&state.pool, &sensor.channels, range, now_ms()).await?;
     Ok(Json(ChartJson {
         range: range.as_str(),
+        step_secs: range.step_secs(),
+        interval_secs: device.polling.interval_secs,
         ts: chart.ts,
         series: chart
             .series
@@ -419,6 +423,10 @@ mod tests {
             "/static/vendor/uplot/uPlot.iife.min.js",
             "/static/chart.js",
             "/static/time.js",
+            "/static/samples.js",
+            "id=\"samples\"",
+            "id=\"samples-limit\"",
+            "<option value=\"500\">500</option>",
             "<time class=\"ts\" datetime=\"",
         ] {
             assert!(
@@ -477,6 +485,16 @@ mod tests {
             body.contains("12500000.0") && body.contains("3000.0"),
             "{body}"
         );
+        assert!(
+            body.contains("\"step_secs\":null") && body.contains("\"interval_secs\":60"),
+            "{body}"
+        );
+        let week = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/data?range=7d"), Some(&viewer)),
+        )
+        .await;
+        assert!(week.body.contains("\"step_secs\":600"), "{}", week.body);
 
         assert_eq!(
             send(&h.app, get(&format!("/sensors/{sensor}/data"), None))
@@ -659,6 +677,8 @@ mod tests {
             ("/static/vendor/uplot/uPlot.min.css", "css"),
             ("/static/chart.js", "javascript"),
             ("/static/time.js", "javascript"),
+            ("/static/format.js", "javascript"),
+            ("/static/samples.js", "javascript"),
             ("/static/vendor/uplot/LICENSE", ""),
         ] {
             let reply = send(&h.app, get(path, None)).await;

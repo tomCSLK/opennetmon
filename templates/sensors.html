@@ -1,93 +1,122 @@
 {% extends "app.html" %}
 {% block title %}Sensoren {{ device.name }} – netmon{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="head">
-    <h1>Sensoren: {{ device.name }}</h1>
-    <div class="actions">
-      {% if layout.is_admin %}
-      <form method="post" action="/devices/{{ device.id }}/discover">
-        <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-        <button type="submit">Interfaces suchen</button>
-      </form>
-      <a class="button secondary" href="/devices/{{ device.id }}/edit">Gerät bearbeiten</a>
-      {% endif %}
-      <a class="button secondary" href="/">Zur Übersicht</a>
-    </div>
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><span>{{ device.name }}</span></div>
+    <h1>{{ device.name }}</h1>
+    <p class="subtitle status-line">
+      <span class="badge status-{{ device_status_class }}">{{ device_status_label }}</span>
+      <span class="num">{{ device.host }}:{{ device.polling.port }}</span> · <span>alle {{ device.polling.interval_secs }} s</span>
+    </p>
   </div>
-  <p class="muted">{{ device.host }}:{{ device.polling.port }} · Intervall {{ device.polling.interval_secs }} s · Gerätestatus:
-    <span class="badge status-{{ device_status_class }}">{{ device_status_label }}</span></p>
-  {% if let Some(message) = flash %}
-  <p class="flash" role="status">{{ message }}</p>
+  {% if layout.is_admin %}
+  <div class="actions">
+    <a class="button ghost" href="/devices/{{ device.id }}/edit">Gerät bearbeiten</a>
+    <form method="post" action="/devices/{{ device.id }}/test">
+      <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+      <button type="submit" class="secondary">Verbindung testen</button>
+    </form>
+    <form method="post" action="/devices/{{ device.id }}/discover">
+      <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+      <button type="submit">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        Interfaces suchen
+      </button>
+    </form>
+  </div>
   {% endif %}
-  {% if let Some(message) = error %}
-  <p class="error" role="alert">{{ message }}</p>
-  {% endif %}
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="card flush">
+  <div class="card-head"><h2>Sensoren</h2><span class="muted small">{{ rows.len() }}</span></div>
   {% if rows.is_empty() %}
-  <p class="muted">Noch keine Sensoren. {% if layout.is_admin %}Mit „Interfaces suchen“ lassen sich Ports aus dem Gerät übernehmen, darunter lassen sich Ping, Uptime und eigene OIDs anlegen.{% endif %}</p>
+  <div class="empty">
+    <strong>Noch keine Sensoren.</strong>
+    {% if layout.is_admin %}Mit „Interfaces suchen“ lassen sich Ports aus dem Gerät übernehmen, unten lassen sich Ping, Uptime und eigene OIDs anlegen.{% endif %}
+  </div>
   {% else %}
+  <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>Name</th><th>Typ</th><th>Status</th><th>Meldung</th><th>Letzte Abfrage</th>{% if layout.is_admin %}<th></th>{% endif %}</tr>
+      <tr><th>Status</th><th>Sensor</th><th>Meldung</th><th>Letzte Abfrage</th>{% if layout.is_admin %}<th class="right"><span class="muted">Aktionen</span></th>{% endif %}</tr>
     </thead>
     <tbody>
     {% for row in rows %}
       <tr>
-        <td><a href="/sensors/{{ row.id }}">{{ row.name }}</a></td>
-        <td>{{ row.description }}</td>
         <td><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
-        <td>{{ row.message }}</td>
-        <td>{% if row.last_poll.is_empty() %}–{% else %}{{ row.last_poll|safe }}{% endif %}</td>
+        <td><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
+        <td class="wrap muted">{{ row.message }}</td>
+        <td class="num">{% if row.last_poll.is_empty() %}–{% else %}{{ row.last_poll|safe }}{% endif %}</td>
         {% if layout.is_admin %}
-        <td class="row-actions">
-          <form method="post" action="/sensors/{{ row.id }}/toggle">
-            <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-            <button type="submit" class="link small">{% if row.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</button>
-          </form>
-          <form method="post" action="/sensors/{{ row.id }}/delete">
-            <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-            <button type="submit" class="link small">Löschen</button>
-          </form>
+        <td>
+          <div class="row-actions">
+            <form method="post" action="/sensors/{{ row.id }}/toggle">
+              <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+              <button type="submit" class="ghost small">{% if row.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</button>
+            </form>
+            <form method="post" action="/sensors/{{ row.id }}/delete">
+              <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+              <button type="submit" class="ghost small">Löschen</button>
+            </form>
+          </div>
         </td>
         {% endif %}
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endif %}
-</div>
+</section>
 
 {% if layout.is_admin %}
-<div class="card">
+<section class="card">
   <h2>Sensor hinzufügen</h2>
   <form method="post" action="/devices/{{ device.id }}/sensors" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-
-    <label for="kind">Typ</label>
-    <select id="kind" name="kind">
-      <option value="ping"{% if form.kind == "ping" %} selected{% endif %}>Ping (Antwortzeit)</option>
-      <option value="uptime"{% if form.kind == "uptime" %} selected{% endif %}>Uptime (sysUpTime)</option>
-      <option value="oid"{% if form.kind == "oid" %} selected{% endif %}>Eigene OID</option>
-    </select>
-
-    <label for="name">Name (leer: Ping bzw. Uptime; bei eigener OID Pflicht)</label>
-    <input id="name" name="name" type="text" value="{{ form.name }}" maxlength="64">
-
+    <div class="form-grid">
+      <div>
+        <label for="kind">Typ</label>
+        <select id="kind" name="kind">
+          <option value="ping"{% if form.kind == "ping" %} selected{% endif %}>Ping (Antwortzeit)</option>
+          <option value="uptime"{% if form.kind == "uptime" %} selected{% endif %}>Uptime (sysUpTime)</option>
+          <option value="oid"{% if form.kind == "oid" %} selected{% endif %}>Eigene OID</option>
+        </select>
+      </div>
+      <div>
+        <label for="name">Name</label>
+        <input id="name" name="name" type="text" value="{{ form.name }}" maxlength="64" placeholder="leer: Ping bzw. Uptime">
+      </div>
+    </div>
     <fieldset>
       <legend>Nur für „Eigene OID“</legend>
       <label for="oid">OID (numerisch, z. B. 1.3.6.1.2.1.1.3.0)</label>
       <input id="oid" name="oid" type="text" value="{{ form.oid }}" maxlength="600" autocapitalize="off" spellcheck="false">
-      <label for="mode">Auswertung</label>
-      <select id="mode" name="mode">
-        <option value="gauge"{% if form.mode == "gauge" %} selected{% endif %}>Wert unverändert (Gauge)</option>
-        <option value="counter"{% if form.mode == "counter" %} selected{% endif %}>Zähler, Änderung pro Sekunde (Counter)</option>
-      </select>
-      <label for="scale">Faktor</label>
-      <input id="scale" name="scale" type="text" value="{{ form.scale }}" maxlength="20" inputmode="decimal">
+      <div class="form-grid">
+        <div>
+          <label for="mode">Auswertung</label>
+          <select id="mode" name="mode">
+            <option value="gauge"{% if form.mode == "gauge" %} selected{% endif %}>Wert unverändert (Gauge)</option>
+            <option value="counter"{% if form.mode == "counter" %} selected{% endif %}>Zähler, Änderung pro Sekunde (Counter)</option>
+          </select>
+        </div>
+        <div>
+          <label for="scale">Faktor</label>
+          <input id="scale" name="scale" type="text" value="{{ form.scale }}" maxlength="20" inputmode="decimal">
+        </div>
+      </div>
+      <p class="hint">Bei einer eigenen OID ist der Name Pflicht.</p>
     </fieldset>
-
     <button type="submit">Hinzufügen</button>
   </form>
-</div>
+</section>
 {% endif %}
 {% endblock %}

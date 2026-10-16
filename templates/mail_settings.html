@@ -1,23 +1,28 @@
 {% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
 {% block title %}E-Mail-Benachrichtigung – netmon{% endblock %}
 {% block content %}
-<div class="card">
-  <h1>E-Mail-Benachrichtigung</h1>
-  <p class="muted">Bei einem Statuswechsel (Ausfall, Warnung, wieder in Ordnung) schickt netmon eine E-Mail. Wechsel, die kurz nacheinander passieren,
-    werden zu einer Mail zusammengefasst. Änderungen gelten sofort, ein Neustart ist nicht nötig.</p>
-  {% if let Some(message) = flash %}
-  <p class="flash" role="status">{{ message }}</p>
-  {% endif %}
-  {% if let Some(message) = error %}
-  <p class="error" role="alert">{{ message }}</p>
-  {% endif %}
-  {% if let Some(message) = test_ok %}
-  <p class="flash" role="status">{{ message }}</p>
-  {% endif %}
-  {% if let Some(message) = test_error %}
-  <p class="error" role="alert">{{ message }}</p>
-  {% endif %}
+<div class="page-head">
+  <div>
+    <h1>E-Mail-Benachrichtigung</h1>
+    <p class="subtitle">Bei Ausfall, Warnung und Wiederherstellung kommt eine E-Mail. Wechsel, die kurz nacheinander passieren, werden zusammengefasst.
+      Änderungen gelten sofort.</p>
+  </div>
+</div>
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = test_ok %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = test_error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
 
+<section class="card">
   <form method="post" action="/settings/mail" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
 
@@ -28,24 +33,36 @@
       <legend>SMTP-Server</legend>
       <label for="host">Server (Hostname oder IP-Adresse)</label>
       <input id="host" name="host" type="text" value="{{ form.host }}" maxlength="253" autocapitalize="off" spellcheck="false">
-      <label for="security">Verschlüsselung</label>
-      <select id="security" name="security">
-        {% for option in securities %}
-        <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
-        {% endfor %}
-      </select>
-      <label for="port">Port</label>
-      <input id="port" name="port" type="number" min="1" max="65535" value="{{ form.port }}" required>
-      <p class="muted">Üblich: STARTTLS 587, TLS (SMTPS) 465, unverschlüsselt 25 (nur für ein vertrauenswürdiges lokales Relay).</p>
+      <div class="form-grid">
+        <div>
+          <label for="security">Verschlüsselung</label>
+          <select id="security" name="security">
+            {% for option in securities %}
+            <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="port">Port</label>
+          <input id="port" name="port" type="number" min="1" max="65535" value="{{ form.port }}" required>
+        </div>
+      </div>
+      <p class="hint">Üblich: STARTTLS 587, TLS (SMTPS) 465, unverschlüsselt 25 (nur für ein vertrauenswürdiges lokales Relay).</p>
     </fieldset>
 
     <fieldset>
       <legend>Anmeldung (optional)</legend>
-      <label for="username">Benutzername (leer = ohne Anmeldung)</label>
-      <input id="username" name="username" type="text" value="{{ form.username }}" maxlength="256" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <label for="password">Passwort</label>
-      <input id="password" name="password" type="password" autocomplete="new-password" maxlength="256"
-        placeholder="{% if form.password_set %}gesetzt – leer lassen zum Beibehalten{% else %}nicht gesetzt{% endif %}">
+      <div class="form-grid">
+        <div>
+          <label for="username">Benutzername</label>
+          <input id="username" name="username" type="text" value="{{ form.username }}" maxlength="256" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="leer = ohne Anmeldung">
+        </div>
+        <div>
+          <label for="password">Passwort</label>
+          <input id="password" name="password" type="password" autocomplete="new-password" maxlength="256"
+            placeholder="{% if form.password_set %}gesetzt – leer lassen zum Beibehalten{% else %}nicht gesetzt{% endif %}">
+        </div>
+      </div>
     </fieldset>
 
     <fieldset>
@@ -59,29 +76,31 @@
     <button type="submit">Speichern</button>
   </form>
 
-  <form method="post" action="/settings/mail/test" class="delete">
+  <form method="post" action="/settings/mail/test" class="inline-note">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <button type="submit" class="link">Test-E-Mail senden</button>
-    <span class="muted">Verwendet die <em>gespeicherten</em> Einstellungen (erst speichern, dann testen) – auch wenn die Benachrichtigung noch ausgeschaltet ist.</span>
+    <button type="submit" class="secondary">Test-E-Mail senden</button>
+    <span class="muted">Verwendet die <em>gespeicherten</em> Einstellungen (erst speichern, dann testen) – auch wenn die Benachrichtigung noch aus ist.</span>
   </form>
-</div>
+</section>
 
-<div class="card">
-  <h2>Letzte Sendeversuche</h2>
+<section class="card flush">
+  <div class="card-head"><h2>Letzte Sendeversuche</h2></div>
   {% if log.is_empty() %}
-  <p class="muted">Noch keine E-Mails gesendet.</p>
+  <p class="empty small">Noch keine E-Mails gesendet.</p>
   {% else %}
+  <div class="table-wrap">
   <table>
     <thead><tr><th>Zeitpunkt</th><th>Art</th><th>Betreff</th><th>Empfänger</th><th>Ergebnis</th></tr></thead>
     <tbody>
     {% for row in log %}
       <tr>
-        <td>{{ row.at|safe }}</td><td>{{ row.kind }}</td><td>{{ row.subject }}</td><td>{{ row.recipients }}</td>
-        <td>{% if row.ok %}<span class="badge status-up">gesendet</span>{% else %}<span class="badge status-down">Fehler</span> {{ row.error }}{% endif %}</td>
+        <td class="num">{{ row.at|safe }}</td><td>{{ row.kind }}</td><td class="wrap">{{ row.subject }}</td><td class="wrap muted">{{ row.recipients }}</td>
+        <td class="wrap">{% if row.ok %}<span class="badge status-up">gesendet</span>{% else %}<span class="badge status-down">Fehler</span> <span class="muted small">{{ row.error }}</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endif %}
-</div>
+</section>
 {% endblock %}

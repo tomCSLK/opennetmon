@@ -46,6 +46,16 @@ impl Range {
         }
     }
 
+    /// Length of one aggregated point in seconds; `None` for raw samples (1 hour, 24 hours).
+    /// Must match the bucketing in [`points`].
+    pub fn step_secs(self) -> Option<i64> {
+        match self {
+            Self::Hour | Self::Day => None,
+            Self::Week => Some(600),
+            Self::Month => Some(3_600),
+        }
+    }
+
     fn duration_ms(self) -> i64 {
         match self {
             Self::Hour => HOUR_MS,
@@ -205,6 +215,14 @@ mod tests {
             ts_ms,
             value,
         }
+    }
+
+    #[test]
+    fn steps_match_the_point_resolution() {
+        assert_eq!(Range::Hour.step_secs(), None);
+        assert_eq!(Range::Day.step_secs(), None);
+        assert_eq!(Range::Week.step_secs(), Some(600));
+        assert_eq!(Range::Month.step_secs(), Some(3_600));
     }
 
     #[test]

@@ -1,60 +1,100 @@
 {% extends "app.html" %}
 {% block title %}Übersicht – netmon{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="head">
+<div class="page-head">
+  <div>
     <h1>Übersicht</h1>
-    {% if layout.is_admin %}
-    <div class="actions">
-      <a class="button" href="/devices/new">Neues Gerät</a>
-      <a class="button secondary" href="/groups/new">Neue Gruppe</a>
-    </div>
-    {% endif %}
+    <p class="subtitle">{{ device_count }} {% if device_count == 1 %}Gerät{% else %}Geräte{% endif %} · {{ totals.total() }} Sensoren{% if devices_down > 0 %} · <strong class="c-down">{{ devices_down }} {% if devices_down == 1 %}Gerät{% else %}Geräte{% endif %} mit Ausfall</strong>{% endif %}</p>
   </div>
-  {% if let Some(message) = flash %}
-  <p class="flash" role="status">{{ message }}</p>
-  {% endif %}
-  {% if rows.is_empty() %}
-  <p class="muted">Noch keine Geräte angelegt.</p>
-  {% else %}
-  <table>
-    <thead>
-      <tr><th>Name</th><th>Status</th><th>Adresse</th><th>Intervall</th>{% if layout.is_admin %}<th>SNMP-Profil</th>{% endif %}<th></th></tr>
-    </thead>
-    <tbody>
-    {% for row in rows %}
-      {% if let Some(group) = row.group %}
-      <tr class="group indent-{{ row.indent }}">
-        <th colspan="5">{{ group.name }}</th>
-        {% if layout.is_admin %}
-        <td>{% if group.id > 0 %}<a href="/groups/{{ group.id }}/edit">Gruppe bearbeiten</a>{% endif %}</td>
-        {% endif %}
-      </tr>
-      {% endif %}
-      {% if let Some(device) = row.device %}
-      <tr class="indent-{{ row.indent }}">
-        <td><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a></td>
-        <td>{% if row.sensor_count > 0 %}<span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span>{% else %}<span class="muted">keine Sensoren</span>{% endif %}</td>
-        <td>{{ device.host }}:{{ device.polling.port }}</td>
-        <td>{{ device.polling.interval_secs }} s</td>
-        {% if layout.is_admin %}
-        <td>{{ device.profile_name }}</td>
-        {% endif %}
-        <td class="row-actions">
-          <a href="/devices/{{ device.id }}/sensors">Sensoren ({{ row.sensor_count }})</a>
-          {% if layout.is_admin %}
-          <form method="post" action="/devices/{{ device.id }}/test">
-            <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-            <button type="submit" class="link small">Testen</button>
-          </form>
-          <a href="/devices/{{ device.id }}/edit">Bearbeiten</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endif %}
-    {% endfor %}
-    </tbody>
-  </table>
+  {% if layout.is_admin %}
+  <div class="actions">
+    <a class="button secondary" href="/groups/new">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Neue Gruppe
+    </a>
+    <a class="button" href="/devices/new">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Neues Gerät
+    </a>
+  </div>
   {% endif %}
 </div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+
+<section class="tiles" aria-label="Sensorstatus">
+  <div class="tile"><div class="tile-value">{{ totals.total() }}</div><div class="tile-label">Sensoren</div></div>
+  <div class="tile status-up"><div class="tile-value">{{ totals.up }}</div><div class="tile-label">In Ordnung</div></div>
+  <div class="tile status-warning{% if totals.warning > 0 %} active{% endif %}"><div class="tile-value">{{ totals.warning }}</div><div class="tile-label">Warnung</div></div>
+  <div class="tile status-down{% if totals.down > 0 %} active{% endif %}"><div class="tile-value">{{ totals.down }}</div><div class="tile-label">Ausfall</div></div>
+  <div class="tile status-paused"><div class="tile-value">{{ totals.paused + totals.unknown }}</div><div class="tile-label">Pausiert / unbekannt</div></div>
+</section>
+
+{% if sections.is_empty() %}
+<div class="card">
+  <div class="empty">
+    <strong>Noch keine Geräte angelegt.</strong>
+    {% if layout.is_admin %}Lege zuerst ein <a href="/credentials/new">SNMP-Profil</a> an, dann ein <a href="/devices/new">Gerät</a>.{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% for section in sections %}
+<section class="card flush">
+  <div class="group-head indent-{{ section.depth }}">
+    <h2>
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      {% for parent in section.parents %}<span class="group-path">{{ parent }} /</span> {% endfor %}{{ section.name }}
+      <span class="muted small">{{ section.devices.len() }}</span>
+    </h2>
+    {% if layout.is_admin && section.id > 0 %}
+    <a class="button ghost small" href="/groups/{{ section.id }}/edit">Gruppe bearbeiten</a>
+    {% endif %}
+  </div>
+  {% if section.devices.is_empty() %}
+  <p class="empty small">Keine Geräte in dieser Gruppe.</p>
+  {% else %}
+  <ul class="devices">
+    {% for card in section.devices %}
+    <li class="device">
+      <div class="device-main">
+        <span class="dot status-{{ card.status_class }}" title="{{ card.status_label }}"></span>
+        <div class="device-text">
+          <a class="device-name" href="/devices/{{ card.device.id }}/sensors">{{ card.device.name }}</a>
+          <div class="device-meta num">{{ card.device.host }}:{{ card.device.polling.port }} · alle {{ card.device.polling.interval_secs }} s{% if layout.is_admin %} · {{ card.device.profile_name }}{% endif %}</div>
+        </div>
+      </div>
+      <div class="device-health">
+        {% if card.counts.total() > 0 %}
+        <svg class="statusbar" role="img" aria-label="{{ card.status_label }}">
+          {% for seg in card.segments %}<rect class="{{ seg.class }}" x="{{ seg.x }}" width="{{ seg.width }}"></rect>{% endfor %}
+        </svg>
+        <div class="legend">
+          <span class="badge status-{{ card.status_class }}">{{ card.status_label }}</span>
+          <span>{{ card.counts.total() }} {% if card.counts.total() == 1 %}Sensor{% else %}Sensoren{% endif %}</span>
+          {% if card.counts.warning > 0 %}<span class="c-warning">{{ card.counts.warning }} Warnung</span>{% endif %}
+          {% if card.counts.down > 0 %}<span class="c-down">{{ card.counts.down }} Ausfall</span>{% endif %}
+        </div>
+        {% else %}
+        <span class="muted small">keine Sensoren</span>
+        {% endif %}
+      </div>
+      <div class="device-actions">
+        <a class="button secondary small" href="/devices/{{ card.device.id }}/sensors">Sensoren</a>
+        {% if layout.is_admin %}
+        <form method="post" action="/devices/{{ card.device.id }}/test">
+          <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+          <button type="submit" class="ghost small">Testen</button>
+        </form>
+        <a class="button ghost small" href="/devices/{{ card.device.id }}/edit" aria-label="{{ card.device.name }} bearbeiten">Bearbeiten</a>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endfor %}
 {% endblock %}

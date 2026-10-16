@@ -205,6 +205,17 @@ pub struct Layout {
     pub is_admin: bool,
 }
 
+impl Layout {
+    /// First letter of the user name for the avatar.
+    pub fn initial(&self) -> String {
+        self.username
+            .chars()
+            .next()
+            .map(|c| c.to_uppercase().collect())
+            .unwrap_or_default()
+    }
+}
+
 /// Unauthenticated health check; exposes no internal details.
 async fn healthz(State(state): State<AppState>) -> (StatusCode, &'static str) {
     match storage::ping(&state.pool).await {

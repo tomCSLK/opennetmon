@@ -950,7 +950,7 @@ mod tests {
         let device = device_on(&h, 161).await;
         let (admin, _) = login(&h, "anna").await;
         let home = send(&h.app, get("/", Some(&admin))).await;
-        assert!(home.body.contains("keine Sensoren") && home.body.contains("Sensoren (0)"));
+        assert!(home.body.contains("keine Sensoren") && home.body.contains("0 Sensoren"));
 
         let sensor = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
             .await
@@ -975,7 +975,7 @@ mod tests {
         .unwrap();
         let home = send(&h.app, get("/", Some(&admin))).await;
         assert!(home.body.contains("status-down") && home.body.contains("Ausfall"));
-        assert!(home.body.contains("Sensoren (1)"));
+        assert!(home.body.contains("1 Sensor<") && home.body.contains("1 Ausfall"));
         let page = send(
             &h.app,
             get(&format!("/devices/{device}/sensors"), Some(&admin)),
