@@ -250,7 +250,7 @@ mod tests {
                 name: name.to_owned(),
                 host: "192.0.2.1".to_owned(),
                 group_id: group,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling::default(),
             },
         )

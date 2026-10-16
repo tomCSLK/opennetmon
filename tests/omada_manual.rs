@@ -178,7 +178,7 @@ async fn poller_cycle_against_real_devices() {
                 name: name.to_owned(),
                 host: host.to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling::default(),
             },
         )

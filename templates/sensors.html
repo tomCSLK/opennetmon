@@ -10,12 +10,13 @@
     <h1>{{ device.name }}</h1>
     <p class="subtitle status-line">
       <span class="badge status-{{ device_status_class }}">{{ device_status_label }}</span>
-      <span class="num">{{ device.host }}:{{ device.polling.port }}</span> · <span>alle {{ device.polling.interval_secs }} s</span>
+      <span class="num">{{ device.host }}{% if device.has_snmp() %}:{{ device.polling.port }}{% endif %}</span> · <span>alle {{ device.polling.interval_secs }} s</span>{% if !device.has_snmp() %} · <span>kein SNMP, nur Ping</span>{% endif %}
     </p>
   </div>
   {% if layout.is_admin %}
   <div class="actions">
     <a class="button ghost" href="/devices/{{ device.id }}/edit">Gerät bearbeiten</a>
+    {% if device.has_snmp() %}
     <form method="post" action="/devices/{{ device.id }}/test">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
       <button type="submit" class="secondary">Verbindung testen</button>
@@ -31,6 +32,7 @@
         Interfaces suchen
       </button>
     </form>
+    {% endif %}
   </div>
   {% endif %}
 </div>
@@ -50,7 +52,7 @@
   {% if rows.is_empty() %}
   <div class="empty">
     <strong>{% if inactive.is_empty() %}Noch keine Sensoren.{% else %}Keine aktiven Sensoren.{% endif %}</strong>
-    {% if layout.is_admin %}Mit „Interfaces suchen“ lassen sich Ports aus dem Gerät übernehmen, unten lassen sich Ping, Uptime und eigene OIDs anlegen.{% endif %}
+    {% if layout.is_admin %}{% if device.has_snmp() %}Mit „Interfaces suchen“ lassen sich Ports aus dem Gerät übernehmen, unten lassen sich Ping, Uptime und eigene OIDs anlegen.{% else %}Unten lässt sich ein Ping-Sensor anlegen.{% endif %}{% endif %}
   </div>
   {% else %}
   <div class="table-wrap">
@@ -118,7 +120,7 @@
 </details>
 {% endif %}
 
-{% if layout.is_admin %}
+{% if layout.is_admin && device.has_snmp() %}
 <section class="card">
   <div class="split">
     <div>
@@ -141,8 +143,10 @@
         <label for="kind">Typ</label>
         <select id="kind" name="kind">
           <option value="ping"{% if form.kind == "ping" %} selected{% endif %}>Ping (Antwortzeit)</option>
+          {% if device.has_snmp() %}
           <option value="uptime"{% if form.kind == "uptime" %} selected{% endif %}>Uptime (sysUpTime)</option>
           <option value="oid"{% if form.kind == "oid" %} selected{% endif %}>Eigene OID</option>
+          {% endif %}
         </select>
       </div>
       <div>
@@ -150,6 +154,7 @@
         <input id="name" name="name" type="text" value="{{ form.name }}" maxlength="64" placeholder="leer: Ping, Uptime bzw. MIB-Name">
       </div>
     </div>
+    {% if device.has_snmp() %}
     <fieldset>
       <legend>Nur für „Eigene OID“</legend>
       <label for="oid">OID oder MIB-Name</label>
@@ -178,6 +183,9 @@
       </div>
       <p class="hint">Ohne Namen heißt der Sensor wie das MIB-Objekt (z. B. „tpSysMonitorCpu5Seconds.1“).</p>
     </fieldset>
+    {% else %}
+    <p class="hint">Dieses Gerät hat kein SNMP-Profil, daher gibt es nur Ping. Für Uptime, Interfaces und eigene Werte unter „Gerät bearbeiten“ ein SNMP-Profil wählen.</p>
+    {% endif %}
     <button type="submit">Hinzufügen</button>
   </form>
 </section>

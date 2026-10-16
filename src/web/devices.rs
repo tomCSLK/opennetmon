@@ -14,8 +14,9 @@ use crate::devices::{
     DeviceInput, Polling,
 };
 use crate::error::{Error, Result};
+use crate::sensors::spec::SensorSpec;
 use crate::snmp::{self, SnmpTarget, format_uptime};
-use crate::storage::{credentials, devices as store, groups};
+use crate::storage::{credentials, devices as store, groups, sensors};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::{AppState, Layout, SelectOption, group_options};
 
@@ -76,6 +77,8 @@ struct FormTemplate {
     form: FormValues,
     groups: Vec<SelectOption>,
     profiles: Vec<SelectOption>,
+    /// "Kein SNMP – nur Ping" is selected.
+    no_snmp: bool,
     /// Device templates to apply right after creating (empty when editing or without templates).
     templates: Vec<crate::web::templates::TemplateOption>,
 }
@@ -157,11 +160,13 @@ impl DeviceForm {
             "" => None,
             text => Some(text.parse().map_err(|_| invalid("Ungültige Gruppe."))?),
         };
-        let profile_id = self
-            .profile_id
-            .trim()
-            .parse()
-            .map_err(|_| invalid("Bitte ein SNMP-Profil auswählen."))?;
+        let profile_id = match self.profile_id.trim() {
+            "none" => None,
+            text => Some(
+                text.parse()
+                    .map_err(|_| invalid("Bitte ein SNMP-Profil oder „Kein SNMP“ auswählen."))?,
+            ),
+        };
         Ok(DeviceInput {
             name: self.name.clone(),
             host: self.host.clone(),
@@ -205,6 +210,7 @@ async fn render_form(
         Vec::new()
     };
     let page = FormTemplate {
+        no_snmp: selected_profile.is_none(),
         templates,
         layout: user.layout(),
         heading: if existing.is_some() {
@@ -260,7 +266,7 @@ pub async fn edit_form(
             Some(&device),
             values,
             device.group_id,
-            Some(device.profile_id),
+            device.profile_id,
             None,
         )
         .await?,
@@ -295,10 +301,22 @@ async fn save(
     form: &DeviceForm,
 ) -> Result<Response> {
     let outcome = match form.to_input() {
-        Ok(input) => store::save_device(&state.pool, id, input).await,
+        Ok(input) => match snmp_sensors_left(state, id, &input).await {
+            Ok(()) => store::save_device(&state.pool, id, input).await,
+            Err(e) => Err(e),
+        },
         Err(e) => Err(e),
     };
     match outcome {
+        Ok(saved) if id.is_none() && form.profile_id.trim() == "none" => {
+            // A ping-only device gets its only sensor right away.
+            sensors::create_sensor(&state.pool, saved, "Ping", &SensorSpec::Ping).await?;
+            tracing::info!(user = %user.username, device = saved, "ping-only device created");
+            Ok(
+                Redirect::to(&format!("/devices/{saved}/sensors?msg=device_created_ping"))
+                    .into_response(),
+            )
+        }
         Ok(saved) => {
             tracing::info!(user = %user.username, device = saved, "device saved");
             let choice = match form.template.trim() {
@@ -349,6 +367,24 @@ async fn save(
     }
 }
 
+/// A device can only drop its SNMP profile once it has no SNMP sensors left.
+async fn snmp_sensors_left(state: &AppState, id: Option<i64>, input: &DeviceInput) -> Result<()> {
+    let (Some(id), None) = (id, input.profile_id) else {
+        return Ok(());
+    };
+    let left = sensors::list_sensors(&state.pool, id)
+        .await?
+        .iter()
+        .filter(|s| s.spec.uses_snmp())
+        .count();
+    if left > 0 {
+        return Err(Error::Invalid(format!(
+            "Das Gerät hat noch {left} SNMP-Sensor(en). Für „Kein SNMP“ diese zuerst löschen oder ein SNMP-Profil behalten."
+        )));
+    }
+    Ok(())
+}
+
 pub async fn delete(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -379,13 +415,12 @@ pub async fn test_connection(
     let device = store::get_device(&state.pool, id)
         .await?
         .ok_or(Error::NotFound)?;
-    let credentials = credentials::load_credentials(&state.pool, &state.secrets, device.profile_id)
-        .await?
-        .ok_or_else(|| Error::Internal("device refers to a missing profile".to_owned()))?;
-    let profile_summary = credentials::get_profile(&state.pool, device.profile_id)
-        .await?
-        .map(|p| p.summary())
-        .unwrap_or_default();
+    let credentials = crate::web::snmp_credentials(&state, &device).await?;
+    let profile_summary =
+        credentials::get_profile(&state.pool, device.profile_id.unwrap_or_default())
+            .await?
+            .map(|p| p.summary())
+            .unwrap_or_default();
 
     let target = SnmpTarget {
         host: device.host.clone(),
@@ -932,5 +967,137 @@ mod tests {
         .await;
         let home = send(&h.app, get("/", Some(&admin))).await;
         assert!(!home.body.contains("<script>x"));
+    }
+
+    fn ping_only(csrf: &str, name: &str, host: &str) -> String {
+        format!(
+            "csrf_token={csrf}&name={name}&host={host}&group_id=&profile_id=none&port=161\
+             &interval_secs=60&timeout_secs=5&retries=1&template=auto"
+        )
+    }
+
+    #[tokio::test]
+    async fn devices_without_snmp_get_a_ping_sensor_and_no_snmp_actions() {
+        let h = harness(true).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        // Works even before any SNMP profile exists.
+        let page = send(&h.app, get("/devices/new", Some(&admin))).await;
+        assert!(
+            page.body
+                .contains("<option value=\"none\" selected>Kein SNMP – nur Ping</option>")
+        );
+        let reply = send(
+            &h.app,
+            post(
+                "/devices",
+                Some(&admin),
+                &ping_only(&csrf, "Drucker", "10.0.0.9"),
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER, "{}", reply.body);
+        assert_eq!(
+            reply.location(),
+            "/devices/1/sensors?msg=device_created_ping"
+        );
+        let device = store::get_device(&h.state.pool, 1).await.unwrap().unwrap();
+        assert_eq!(
+            (device.profile_id, device.profile_label()),
+            (None, "kein SNMP")
+        );
+        let sensors = sensors::list_sensors(&h.state.pool, 1).await.unwrap();
+        assert_eq!(sensors.len(), 1);
+        assert_eq!(
+            (sensors[0].name.as_str(), &sensors[0].spec),
+            ("Ping", &SensorSpec::Ping)
+        );
+
+        let page = send(&h.app, get(reply.location(), Some(&admin))).await;
+        assert!(
+            page.body.contains("Gerät ohne SNMP angelegt")
+                && page.body.contains("kein SNMP, nur Ping")
+        );
+        for absent in [
+            "/test\"",
+            "/values\"",
+            "/discover\"",
+            "/template/apply",
+            "value=\"uptime\"",
+            "value=\"oid\"",
+        ] {
+            assert!(!page.body.contains(absent), "{absent}");
+        }
+        let home = send(&h.app, get("/", Some(&admin))).await;
+        assert!(home.body.contains("· kein SNMP") && !home.body.contains("/devices/1/test"));
+
+        // SNMP actions are refused with an explanation.
+        for (path, body) in [
+            (
+                "/devices/1/sensors",
+                format!("csrf_token={csrf}&kind=uptime&name="),
+            ),
+            ("/devices/1/test", format!("csrf_token={csrf}")),
+            ("/devices/1/discover", format!("csrf_token={csrf}")),
+            ("/devices/1/values", format!("csrf_token={csrf}")),
+        ] {
+            let reply = send(&h.app, post(path, Some(&admin), &body)).await;
+            assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY, "{path}");
+            assert!(reply.body.contains("SNMP"), "{path}: {}", reply.body);
+        }
+
+        // A profile can be added later; dropping it again needs the SNMP sensors gone.
+        let profile = add_v2c_profile(&h, "Omada", "public").await;
+        let with_profile = ping_only(&csrf, "Drucker", "10.0.0.9")
+            .replace("profile_id=none", &format!("profile_id={profile}"));
+        assert_eq!(
+            send(&h.app, post("/devices/1", Some(&admin), &with_profile))
+                .await
+                .status,
+            StatusCode::SEE_OTHER
+        );
+        sensors::create_sensor(&h.state.pool, 1, "Uptime", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        let refused = send(
+            &h.app,
+            post(
+                "/devices/1",
+                Some(&admin),
+                &ping_only(&csrf, "Drucker", "10.0.0.9"),
+            ),
+        )
+        .await;
+        assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(refused.body.contains("noch 1 SNMP-Sensor"));
+        let uptime = sensors::list_sensors(&h.state.pool, 1)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|s| s.name == "Uptime")
+            .unwrap();
+        sensors::delete_sensor(&h.state.pool, uptime.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            send(
+                &h.app,
+                post(
+                    "/devices/1",
+                    Some(&admin),
+                    &ping_only(&csrf, "Drucker", "10.0.0.9")
+                )
+            )
+            .await
+            .status,
+            StatusCode::SEE_OTHER
+        );
+        assert_eq!(
+            store::get_device(&h.state.pool, 1)
+                .await
+                .unwrap()
+                .unwrap()
+                .profile_id,
+            None
+        );
     }
 }

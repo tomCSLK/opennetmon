@@ -105,6 +105,7 @@ Ein Binary, ein Prozess, Module:
   Auswahl „automatisch erkennen“ beim Anlegen eines Geräts (`docs/geraetevorlagen.md`)
 - `value_discovery` – Tabellen/Gruppen walken und Sensorvorschläge bilden (Namen, Faktor, Einheit); Seite `web::sensor_values`, neue Sensoren standardmäßig **inaktiv** (`enabled = false`, Status „Inaktiv“), Sammelaktionen `web::sensors::bulk`
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
+- Geräte ohne SNMP: `Device.profile_id` ist `Option` (`None` = „Kein SNMP – nur Ping“, `has_snmp()`, `profile_label()`); interaktive SNMP-Aktionen holen die Zugangsdaten über `web::snmp_credentials` (Fehlermeldung für Ping-Geräte). Die Spalte wurde nachträglich nullbar: `storage::migrate` baut `devices` einmalig mit abgeschalteten Fremdschlüsseln neu auf (`allow_devices_without_profile`), weil das in einer sqlx-Migration (immer Transaktion) nicht geht
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
 - `poller` – Supervisor + eine Aufgabe je Gerät, die Gerät/Sensoren/Profil in jedem Zyklus neu lädt; verteilt Startzeiten über das Intervall
   (kein Burst zur vollen Minute); globale Nebenläufigkeit per `Semaphore` (`poll_concurrency`, `poller_enabled`); Timeout und Retries pro Gerät;
@@ -116,7 +117,7 @@ Ein Binary, ein Prozess, Module:
 - `mail` – SMTP-Einstellungen, Validierung, Versand mit `lettre` (rustls, kein OpenSSL); `storage::mail` – Einstellungen (Passwort verschlüsselt, Kontext `smtp.password`) und Sendelog `notifications`; Seite `web::mail_settings`
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
-  (`web::overview`), Gruppen-, Geräte- und Profilseiten (`web::groups`, `web::devices`, `web::credentials`), Sensorseiten mit Discovery (`web::sensors`), Detailseite mit JSON-Endpoint für uPlot, Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`) und Schwellwertformular (`web::sensor_detail`)
+  (`web::overview`: eine Karte je oberster Gruppe, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, aufklappbar, Zustand in `localStorage` über `static/app.js`), Gruppen-, Geräte- und Profilseiten (`web::groups`, `web::devices`, `web::credentials`), Sensorseiten mit Discovery (`web::sensors`), Detailseite mit JSON-Endpoint für uPlot, Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`) und Schwellwertformular (`web::sensor_detail`)
 
 ### Messdaten
 
@@ -201,7 +202,7 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - Ist der Server vom Internet getrennt? (relevant für Updates und E-Mail-Versand)
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller auf ein längeres
   Passwort ändern und lokal in `~/.config/netmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
-- ER605 (kein SNMP): nur per Ping überwachen oder später über die Omada-API?
+- ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - uPlot 1.6.32 ist eingebunden (`static/vendor/uplot/`); htmx ist noch nicht eingebunden (die Oberfläche ist sonst rein serverseitig gerendert) – dafür braucht es dein Okay zum Herunterladen
 

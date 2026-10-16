@@ -552,7 +552,7 @@ mod tests {
                 name: "Switch".to_owned(),
                 host: "192.0.2.1".to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling::default(),
             },
         )
@@ -831,7 +831,7 @@ mod tests {
                 name: "AP".to_owned(),
                 host: "192.0.2.2".to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling::default(),
             },
         )
@@ -975,7 +975,7 @@ mod tests {
                 name: "Switch Q".to_owned(),
                 host: "192.0.2.9".to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling::default(),
             },
         )

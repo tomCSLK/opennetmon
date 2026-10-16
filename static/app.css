@@ -241,7 +241,7 @@ svg.statusbar .seg-paused { fill: var(--paused); opacity: .55; }
 .group-head.indent-2, .group-head.indent-3, .group-head.indent-4, .group-head.indent-5,
 .group-head.indent-6, .group-head.indent-7, .group-head.indent-8 { padding-left: 2rem; }
 .devices { list-style: none; margin: 0; padding: 0; }
-.device { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.3fr) auto; gap: 1.25rem; align-items: center;
+.device { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.3fr) 15.5rem; gap: 1.25rem; align-items: center;
   padding: .85rem 1.35rem; border-bottom: 1px solid var(--border); }
 .devices .device:last-child { border-bottom: 0; }
 .device:hover { background: var(--surface-hover); }
@@ -438,3 +438,23 @@ form.inline-form input[type=text] { flex: 1; min-width: 14rem; max-width: 32rem;
 .split h2 { margin-bottom: .2rem; }
 .split p { margin: 0; }
 .choices label.inline { margin: .35rem 0; font-weight: 400; }
+
+/* Overview: a card per top-level group, subgroups nested inside (collapsible, see app.js) */
+details.group-card > summary, details.subgroup > summary { cursor: pointer; list-style: none; }
+details.group-card > summary::-webkit-details-marker, details.subgroup > summary::-webkit-details-marker { display: none; }
+details.group-card > summary h2::before, details.subgroup > summary h3::before {
+  content: "▾"; display: inline-block; width: 1em; color: var(--muted); transition: transform .15s; }
+details.group-card:not([open]) > summary h2::before, details.subgroup:not([open]) > summary h3::before { transform: rotate(-90deg); }
+details.group-card:not([open]) > summary.group-head { border-bottom: 0; }
+.group-info { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; justify-content: flex-end; }
+.group-count { color: var(--muted); font-size: .84rem; }
+svg.statusbar.group-bar { height: 4px; border-radius: 0; }
+details.subgroup { margin-left: 1.35rem; border-left: 2px solid var(--border-strong); }
+details.subgroup details.subgroup { margin-left: 1rem; }
+.subgroup-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: .65rem 1.35rem .65rem 1rem; border-bottom: 1px solid var(--border); }
+.subgroup-head h3 { margin: 0; font-size: .9rem; display: flex; align-items: center; gap: .45rem; }
+.subgroup-head h3 svg.icon { color: var(--muted); }
+details.subgroup .device { padding-left: 1rem; }
+.subgroup-empty { margin: 0; padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
+.group-card .devices > details.subgroup:last-child, .group-card .devices > .device:last-child { border-bottom: 0; }

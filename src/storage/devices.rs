@@ -9,7 +9,7 @@ use crate::storage::{OrderScope, write_positions};
 
 const SELECT: &str = "SELECT d.id, d.name, d.host, d.port, d.group_id, d.profile_id, p.name AS profile_name, \
                       d.interval_secs, d.timeout_secs, d.retries, d.position \
-                      FROM devices d JOIN credential_profiles p ON p.id = d.profile_id";
+                      FROM devices d LEFT JOIN credential_profiles p ON p.id = d.profile_id";
 
 #[derive(FromRow)]
 struct Row {
@@ -18,8 +18,8 @@ struct Row {
     host: String,
     port: i64,
     group_id: Option<i64>,
-    profile_id: i64,
-    profile_name: String,
+    profile_id: Option<i64>,
+    profile_name: Option<String>,
     interval_secs: i64,
     timeout_secs: i64,
     retries: i64,
@@ -167,7 +167,7 @@ mod tests {
             name: name.to_owned(),
             host: host.to_owned(),
             group_id: group,
-            profile_id: profile,
+            profile_id: Some(profile),
             polling: Polling::default(),
         }
     }
@@ -190,7 +190,7 @@ mod tests {
             ("Switch Keller", "192.168.178.251", Some(group))
         );
         assert_eq!(
-            (d.profile_name.as_str(), d.polling),
+            (d.profile_name.as_deref().unwrap_or_default(), d.polling),
             ("Omada", Polling::default())
         );
 

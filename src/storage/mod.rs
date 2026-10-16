@@ -38,10 +38,85 @@ pub async fn connect(path: &Path) -> Result<SqlitePool> {
     Ok(pool)
 }
 
-/// Applies all pending migrations from `migrations/` (embedded at compile time).
+/// Applies all pending migrations from `migrations/` (embedded at compile time) and the schema
+/// changes that cannot run inside a migration transaction.
 pub async fn migrate(pool: &SqlitePool) -> Result<()> {
     sqlx::migrate!("./migrations").run(pool).await?;
+    allow_devices_without_profile(pool).await?;
     Ok(())
+}
+
+/// Migration 0004 made `devices.profile_id` NOT NULL; ping-only devices need NULL ("kein SNMP").
+/// SQLite drops the constraint only by rebuilding the table, which needs foreign keys switched off
+/// (otherwise dropping the old table would cascade to all sensors) – impossible inside sqlx's
+/// migration transaction. So it runs here, once: afterwards the column allows NULL and this is a no-op.
+async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
+    let not_null: i64 = sqlx::query_scalar(
+        "SELECT \"notnull\" FROM pragma_table_info('devices') WHERE name = 'profile_id'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if not_null == 0 {
+        return Ok(());
+    }
+    const COLUMNS: &str = "id, name, host, port, group_id, profile_id, interval_secs, timeout_secs, \
+                           retries, created_at, updated_at, position, template_id";
+    let mut conn = pool.acquire().await?;
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut *conn)
+        .await?;
+    let rebuilt = async {
+        let mut tx = sqlx::Connection::begin(&mut *conn).await?;
+        sqlx::query(
+            "CREATE TABLE devices_new (
+                id            INTEGER PRIMARY KEY,
+                name          TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                host          TEXT NOT NULL,
+                port          INTEGER NOT NULL DEFAULT 161 CHECK (port BETWEEN 1 AND 65535),
+                group_id      INTEGER REFERENCES groups (id) ON DELETE RESTRICT,
+                -- NULL = no SNMP (ping only)
+                profile_id    INTEGER REFERENCES credential_profiles (id) ON DELETE RESTRICT,
+                interval_secs INTEGER NOT NULL DEFAULT 60 CHECK (interval_secs BETWEEN 10 AND 3600),
+                timeout_secs  INTEGER NOT NULL DEFAULT 5 CHECK (timeout_secs BETWEEN 1 AND 60),
+                retries       INTEGER NOT NULL DEFAULT 1 CHECK (retries BETWEEN 0 AND 5),
+                created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                position      INTEGER CHECK (position IS NULL OR position > 0),
+                template_id   INTEGER REFERENCES device_templates (id) ON DELETE SET NULL
+            ) STRICT",
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(&format!(
+            "INSERT INTO devices_new ({COLUMNS}) SELECT {COLUMNS} FROM devices"
+        ))
+        .execute(&mut *tx)
+        .await?;
+        for statement in [
+            "DROP TABLE devices",
+            "ALTER TABLE devices_new RENAME TO devices",
+            "CREATE INDEX devices_group_id ON devices (group_id)",
+            "CREATE INDEX devices_profile_id ON devices (profile_id)",
+        ] {
+            sqlx::query(statement).execute(&mut *tx).await?;
+        }
+        let broken = sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&mut *tx)
+            .await?;
+        if !broken.is_empty() {
+            return Err(crate::error::Error::Internal(format!(
+                "rebuilding devices would break {} foreign key(s); nothing changed",
+                broken.len()
+            )));
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+    .await;
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut *conn)
+        .await?;
+    rebuilt
 }
 
 /// Writes a consistent copy of the database to `target` (SQLite `VACUUM INTO`); safe while the server runs.
@@ -217,5 +292,79 @@ mod tests {
             .unwrap();
         assert!(created.ends_with('Z'));
         ping(&pool).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_devices_table_is_rebuilt_once_without_losing_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = connect(&dir.path().join("old.db")).await.unwrap();
+        // The state before the rebuild: all migrations, profile still mandatory.
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        for statement in [
+            "INSERT INTO credential_profiles (name, version, community_enc) VALUES ('p', 'v2c', x'01')",
+            "INSERT INTO groups (name) VALUES ('Keller')",
+            "INSERT INTO devices (name, host, group_id, profile_id, position) VALUES ('sw', '192.0.2.1', 1, 1, 3)",
+            "INSERT INTO sensors (device_id, name, kind) VALUES (1, 'Ping', 'ping')",
+            "INSERT INTO channels (sensor_id, key, unit) VALUES (1, 'rtt', 'ms')",
+            "INSERT INTO samples (channel_id, ts, value) VALUES (1, 1000, 2.5)",
+        ] {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+        assert!(
+            sqlx::query(
+                "INSERT INTO devices (name, host, profile_id) VALUES ('x', '192.0.2.2', NULL)"
+            )
+            .execute(&pool)
+            .await
+            .is_err()
+        );
+
+        migrate(&pool).await.unwrap();
+        migrate(&pool).await.unwrap(); // a second start changes nothing
+        let count = |table: &'static str| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM {table}"))
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+            }
+        };
+        assert_eq!((count("sensors").await, count("samples").await), (1, 1));
+        let kept: (String, Option<i64>, Option<i64>) =
+            sqlx::query_as("SELECT name, group_id, position FROM devices WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(kept, ("sw".to_owned(), Some(1), Some(3)));
+        sqlx::query(
+            "INSERT INTO devices (name, host, profile_id) VALUES ('Drucker', '192.0.2.2', NULL)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Foreign keys still work in both directions.
+        assert!(
+            sqlx::query("DELETE FROM credential_profiles WHERE id = 1")
+                .execute(&pool)
+                .await
+                .is_err()
+        );
+        assert!(
+            sqlx::query("DELETE FROM groups WHERE id = 1")
+                .execute(&pool)
+                .await
+                .is_err()
+        );
+        sqlx::query("DELETE FROM devices WHERE id = 1")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            (count("sensors").await, count("samples").await),
+            (0, 0),
+            "cascade"
+        );
     }
 }

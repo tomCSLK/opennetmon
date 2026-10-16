@@ -20,7 +20,7 @@ use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpTarget};
 use crate::status::{Status, device_status};
 use crate::storage::sensors::{self as store, SensorRecord};
-use crate::storage::{credentials, devices, status as status_store};
+use crate::storage::{devices, status as status_store};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::overview::FlashQuery;
 use crate::web::{AppState, Layout, flash_message, time_html};
@@ -295,6 +295,9 @@ pub async fn create(
     let device = load_device(&state, id).await?;
     let mibs = state.mib_index();
     let outcome = match form.to_spec(&mibs) {
+        Ok((_, spec)) if spec.uses_snmp() && !device.has_snmp() => Err(Error::Invalid(
+            "Dieses Gerät hat kein SNMP-Profil; ohne SNMP gibt es nur Ping.".to_owned(),
+        )),
         Ok((name, spec)) => match store::create_sensor(&state.pool, id, &name, &spec).await {
             Ok(sensor) => {
                 crate::web::sensor_text::rate_new_sensor(&state.pool, sensor, &spec, &mibs)
@@ -329,9 +332,7 @@ pub async fn discover(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let device = load_device(&state, id).await?;
-    let creds = credentials::load_credentials(&state.pool, &state.secrets, device.profile_id)
-        .await?
-        .ok_or_else(|| Error::Internal("device refers to a missing profile".to_owned()))?;
+    let creds = crate::web::snmp_credentials(&state, &device).await?;
     let target = SnmpTarget {
         host: device.host.clone(),
         port: device.polling.port,
@@ -614,7 +615,7 @@ mod tests {
                 name: "Switch".to_owned(),
                 host: "127.0.0.1".to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling {
                     port,
                     interval_secs: 60,
@@ -1118,7 +1119,7 @@ mod tests {
                 name: "Anderes".to_owned(),
                 host: "127.0.0.2".to_owned(),
                 group_id: None,
-                profile_id: add_v2c_profile(&h, "Zweit", "public").await,
+                profile_id: Some(add_v2c_profile(&h, "Zweit", "public").await),
                 polling: Polling {
                     port: 161,
                     interval_secs: 60,

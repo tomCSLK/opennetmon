@@ -7,18 +7,18 @@
     <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><span>{{ heading }}</span></div>
     <h1>{{ heading }}</h1>
   </div>
-  {% if let Some(test_action) = test_action %}
+  {% if let Some(test_action) = test_action %}{% if !no_snmp %}
   <form method="post" action="{{ test_action }}">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <button type="submit" class="secondary">Verbindung testen</button>
   </form>
-  {% endif %}
+  {% endif %}{% endif %}
 </div>
 {% if let Some(message) = error %}
 <p class="error" role="alert">{{ message }}</p>
 {% endif %}
 {% if profiles.is_empty() %}
-<p class="error" role="alert">Es gibt noch kein SNMP-Profil.&nbsp;<a href="/credentials/new">Zuerst ein Profil anlegen.</a></p>
+<p class="notice" role="status">Es gibt noch kein SNMP-Profil – Geräte lassen sich nur per Ping überwachen.&nbsp;<a href="/credentials/new">SNMP-Profil anlegen</a></p>
 {% endif %}
 <section class="card">
   <form method="post" action="{{ action }}" class="stack">
@@ -47,7 +47,9 @@
           {% for option in profiles %}
           <option value="{{ option.id }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
+          <option value="none"{% if no_snmp %} selected{% endif %}>Kein SNMP – nur Ping</option>
         </select>
+        <p class="hint">„Kein SNMP“ für Geräte ohne SNMP (z. B. Router, Drucker, Kameras): Beim Anlegen kommt gleich ein Ping-Sensor dazu.</p>
       </div>
     </div>
 
@@ -83,7 +85,7 @@
         <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>
         {% endfor %}
       </select>
-      <p class="hint">Legt die Sensoren der Vorlage gleich mit an. „Automatisch“ wählt die Vorlage, deren Gerätekennung zum Gerät passt.</p>
+      <p class="hint">Legt die Sensoren der Vorlage gleich mit an. „Automatisch“ wählt die Vorlage, deren Gerätekennung zum Gerät passt. Gilt nur mit SNMP-Profil.</p>
     </fieldset>
     {% endif %}
 

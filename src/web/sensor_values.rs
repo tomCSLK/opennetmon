@@ -18,8 +18,8 @@ use crate::mib::{self, MibIndex, ObjectKind};
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::{SensorSpec, parse_oid};
 use crate::snmp::{SnmpClient, SnmpTarget};
+use crate::storage::devices;
 use crate::storage::sensors as store;
-use crate::storage::{credentials, devices};
 use crate::value_discovery::{self, Group, Target};
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout};
@@ -177,9 +177,7 @@ pub async fn discover(
             }
         }
     };
-    let creds = credentials::load_credentials(&state.pool, &state.secrets, device.profile_id)
-        .await?
-        .ok_or_else(|| Error::Internal("device refers to a missing profile".to_owned()))?;
+    let creds = crate::web::snmp_credentials(&state, &device).await?;
     let target = SnmpTarget {
         host: device.host.clone(),
         port: device.polling.port,
@@ -333,7 +331,7 @@ mod tests {
                 name: "Server".to_owned(),
                 host: "127.0.0.1".to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling {
                     port,
                     interval_secs: 60,

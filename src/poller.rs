@@ -35,6 +35,8 @@ use crate::storage::status::{StatusChange, record_poll};
 use crate::storage::{credentials, devices};
 
 /// How often the supervisor looks for new devices.
+/// Message for SNMP sensors of a ping-only device.
+const NO_SNMP: &str = "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping).";
 const RESCAN_INTERVAL: Duration = Duration::from_secs(15);
 /// The first poll of a device is delayed by at most this much, however long its interval is.
 const MAX_START_OFFSET: Duration = Duration::from_secs(30);
@@ -334,11 +336,18 @@ pub async fn poll_device_once(
     let mut snmp_failure: Option<String> = None;
     let mut client: Option<SnmpClient> = None;
     if records.iter().any(|r| r.spec.uses_snmp()) {
-        match credentials::load_credentials(pool, secrets, device.profile_id).await {
+        let loaded = match device.profile_id {
+            Some(profile) => credentials::load_credentials(pool, secrets, profile).await,
+            None => Ok(None),
+        };
+        match loaded {
             Ok(Some(creds)) => match SnmpClient::connect(&target, &creds).await {
                 Ok(c) => client = Some(c),
                 Err(e) => snmp_failure = Some(e.user_message()),
             },
+            Ok(None) if device.profile_id.is_none() => {
+                snmp_failure = Some(NO_SNMP.to_owned());
+            }
             Ok(None) => {
                 snmp_failure = Some("Das SNMP-Profil des Geräts existiert nicht mehr.".to_owned())
             }
@@ -480,7 +489,7 @@ mod tests {
                 name: "dev".to_owned(),
                 host: "127.0.0.1".to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling {
                     port: agent.port,
                     interval_secs: 10,
@@ -627,6 +636,26 @@ mod tests {
         env.agent.set(&oid, FakeValue::Integer(1));
         env.poll(&mut state).await;
         assert_eq!(env.state_of(sensor).await, Status::Up);
+    }
+
+    #[tokio::test]
+    async fn snmp_sensors_of_a_device_without_snmp_report_why() {
+        let env = env().await;
+        sqlx::query("UPDATE devices SET profile_id = NULL WHERE id = ?")
+            .bind(env.device)
+            .execute(&env.pool)
+            .await
+            .unwrap();
+        let sensor = create_sensor(&env.pool, env.device, "Uptime", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        let mut state = SensorSet::default();
+        env.poll(&mut state).await;
+        let stored = get_state(&env.pool, sensor).await.unwrap().unwrap();
+        assert_eq!(
+            (stored.status, stored.message.as_str()),
+            (Status::Warning, NO_SNMP)
+        );
     }
 
     #[tokio::test]

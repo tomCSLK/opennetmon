@@ -2,8 +2,12 @@
 
 ## Übersicht (Startseite)
 
-Die Startseite zeigt alle Gruppen als Baum (Untergruppen eingerückt) mit den zugehörigen Geräten, in der Reihenfolge unten.
-Geräte ohne Gruppe stehen zuerst unter „Ohne Gruppe". Leser sehen Name, Adresse und Intervall;
+Die Startseite zeigt je **oberster Gruppe eine Karte**. Im Kopf stehen die Zahl aller Geräte der Gruppe samt Untergruppen, der schlechteste
+Status, Ausfälle und Warnungen sowie eine gemeinsame Statusleiste. In der Karte folgen zuerst die eigenen Geräte der Gruppe, dann die
+**Untergruppen eingerückt mit Führungslinie**, jede mit eigener Zusammenfassung, beliebig tief. „Keine Geräte in dieser Gruppe“ erscheint nur bei
+wirklich leeren Gruppen. Gruppen und Untergruppen lassen sich **auf- und zuklappen**; der Zustand wird im Browser gemerkt (`localStorage`,
+ohne Speicher sind alle offen). Reihenfolge wie unten beschrieben.
+Geräte ohne Gruppe stehen zuerst unter „Ohne Gruppe" (ohne Gruppen: „Alle Geräte“). Leser sehen Name, Adresse und Intervall;
 Administratoren sehen zusätzlich das SNMP-Profil sowie die Aktionen „Testen" und „Bearbeiten".
 Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden nur auf feste Texte abgebildet.
 
@@ -35,7 +39,7 @@ Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden
 | Name | 1–64 Zeichen, eindeutig (Groß-/Kleinschreibung egal) |
 | Adresse | IPv4/IPv6 oder Hostname nach RFC 1123 (wird kleingeschrieben); `0.0.0.0`, `::`, Multicast und Broadcast sind nicht erlaubt; `localhost` ist erlaubt |
 | Gruppe | optional |
-| SNMP-Profil | Pflicht; ein von Geräten verwendetes Profil lässt sich nicht löschen (Meldung statt Fehler) |
+| SNMP-Profil | ein Profil oder **„Kein SNMP – nur Ping“**; ein von Geräten verwendetes Profil lässt sich nicht löschen (Meldung statt Fehler) |
 | UDP-Port | 1–65535, Standard 161 |
 | Intervall | 10–3600 s, Standard 60 s |
 | Timeout je Versuch | 1–60 s, Standard 5 s |
@@ -43,6 +47,22 @@ Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden
 
 Zusätzlich muss **Timeout × (Wiederholungen + 1) ≤ Intervall** gelten, damit sich Abfragen eines Geräts nie überlappen.
 Alle Prüfungen laufen serverseitig; bei einem Fehler bleiben die eingegebenen Werte im Formular erhalten (Passwörter gibt es hier nicht).
+
+## Geräte ohne SNMP (nur Ping)
+
+Für Geräte, die kein SNMP sprechen (z. B. der ER605, Drucker, Kameras), im Feld SNMP-Profil **„Kein SNMP – nur Ping“** wählen. Das geht auch,
+bevor es überhaupt ein SNMP-Profil gibt.
+
+- Beim Anlegen kommt gleich ein aktiver Sensor **„Ping“** dazu; die Seite springt auf die Sensorseite des Geräts. Eine gewählte Gerätevorlage gilt dann nicht.
+- Auf der Sensorseite fehlen „Verbindung testen“, „Werte suchen“, „Interfaces suchen“ und der Bereich Gerätevorlage; „Sensor hinzufügen“ bietet nur Ping.
+  Die Übersicht zeigt „kein SNMP“ statt des Profils und keinen Knopf „Testen“. Die SNMP-Aktionen werden auch serverseitig mit einer Erklärung abgelehnt.
+- Später lässt sich unter „Gerät bearbeiten“ ein SNMP-Profil wählen. Zurück zu „Kein SNMP“ geht nur, wenn das Gerät keine SNMP-Sensoren mehr hat.
+- Technik: `devices.profile_id` ist `NULL`. Der Poller baut für Geräte ohne SNMP-Sensoren keine SNMP-Sitzung auf; hätte ein solches Gerät doch einen
+  SNMP-Sensor, meldet dieser „Für dieses Gerät ist kein SNMP eingerichtet (nur Ping).“
+- Die Spalte war bis Version 0011 Pflicht. SQLite lässt das nur durch einen Neuaufbau der Tabelle ändern, der abgeschaltete Fremdschlüssel braucht
+  (sonst würde das Löschen der alten Tabelle alle Sensoren mitnehmen) – das geht nicht in einer sqlx-Migration. Deshalb erledigt
+  `storage::migrate` das einmalig beim Start (`allow_devices_without_profile`: neue Tabelle, Daten kopieren, Indizes, `PRAGMA foreign_key_check`,
+  erst dann `COMMIT`); danach ist es ein No-op. Vorher eine Sicherung mit `netmon backup` machen.
 
 ## Verbindungstest
 

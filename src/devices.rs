@@ -111,7 +111,8 @@ pub struct DeviceInput {
     pub name: String,
     pub host: String,
     pub group_id: Option<i64>,
-    pub profile_id: i64,
+    /// SNMP credentials; `None` = no SNMP, the device is only pinged.
+    pub profile_id: Option<i64>,
     pub polling: Polling,
 }
 
@@ -131,9 +132,21 @@ pub struct Device {
     pub name: String,
     pub host: String,
     pub group_id: Option<i64>,
-    pub profile_id: i64,
-    pub profile_name: String,
+    /// SNMP credentials; `None` = no SNMP, the device is only pinged.
+    pub profile_id: Option<i64>,
+    pub profile_name: Option<String>,
     pub polling: Polling,
+}
+
+impl Device {
+    pub fn has_snmp(&self) -> bool {
+        self.profile_id.is_some()
+    }
+
+    /// Name of the SNMP profile for the UI ("kein SNMP" for ping-only devices).
+    pub fn profile_label(&self) -> &str {
+        self.profile_name.as_deref().unwrap_or("kein SNMP")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -289,7 +302,7 @@ mod tests {
             name: "  Switch Keller ".to_owned(),
             host: "SW-Keller.LAN".to_owned(),
             group_id: None,
-            profile_id: 1,
+            profile_id: Some(1),
             polling: Polling::default(),
         };
         let input = input.validated().unwrap();

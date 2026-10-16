@@ -49,6 +49,25 @@
   }
   if (best) { best.setAttribute('aria-current', 'page'); }
 
+  // Overview: folded groups are remembered per browser (only a convenience; without storage all stay open).
+  var FOLDED = 'netmon-folded-groups';
+  function foldedGroups() {
+    try { return JSON.parse(localStorage.getItem(FOLDED) || '[]'); } catch (e) { return []; }
+  }
+  var groups = document.querySelectorAll('details[data-group]');
+  var folded = foldedGroups();
+  for (var g = 0; g < groups.length; g++) {
+    (function (details) {
+      var id = details.getAttribute('data-group');
+      if (folded.indexOf(id) >= 0) { details.open = false; }
+      details.addEventListener('toggle', function () {
+        var list = foldedGroups().filter(function (x) { return x !== id; });
+        if (!details.open) { list.push(id); }
+        try { localStorage.setItem(FOLDED, JSON.stringify(list)); } catch (e) { /* not remembered */ }
+      });
+    })(groups[g]);
+  }
+
   var menu = document.querySelector('.menu-toggle');
   if (menu) {
     menu.addEventListener('click', function () {

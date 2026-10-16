@@ -237,7 +237,11 @@ mod tests {
                 .unwrap_or_else(|| panic!("{needle} missing"))
         };
         assert!(pos("Anderes") < pos("Zuhause") && pos("Zuhause") < pos("Keller"));
-        assert!(home.body.contains("indent-1"));
+        // Keller is nested inside the Zuhause card, not a card of its own.
+        let zuhause = pos("data-group=\"1\"");
+        let keller = pos("<details class=\"subgroup\" data-group=\"2\"");
+        assert!(zuhause < keller);
+        assert!(home.body.contains("Keine Geräte in dieser Gruppe."));
         assert!(home.body.contains("/groups/1/edit"));
 
         let new_page = send(&h.app, get("/groups/new", Some(&admin))).await;

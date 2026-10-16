@@ -193,6 +193,25 @@ pub struct SelectOption {
     pub selected: bool,
 }
 
+/// The SNMP credentials of a device for an interactive action; a user-facing error for ping-only
+/// devices.
+pub(crate) async fn snmp_credentials(
+    state: &AppState,
+    device: &crate::devices::Device,
+) -> crate::error::Result<crate::credentials::Credentials> {
+    let profile = device.profile_id.ok_or_else(|| {
+        crate::error::Error::Invalid(
+            "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping). Ein SNMP-Profil lässt sich unter „Gerät bearbeiten“ wählen."
+                .to_owned(),
+        )
+    })?;
+    crate::storage::credentials::load_credentials(&state.pool, &state.secrets, profile)
+        .await?
+        .ok_or_else(|| {
+            crate::error::Error::Internal("device refers to a missing profile".to_owned())
+        })
+}
+
 /// Group options in tree order, indented by depth. `exclude` hides groups (e.g. a group and its subtree).
 pub fn group_options(
     groups: &[crate::devices::Group],
@@ -221,6 +240,7 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "group_updated" => Some("Gruppe gespeichert."),
         "group_deleted" => Some("Gruppe gelöscht."),
         "device_created" => Some("Gerät angelegt."),
+        "device_created_ping" => Some("Gerät ohne SNMP angelegt; der Ping-Sensor ist aktiv."),
         "device_updated" => Some("Gerät gespeichert."),
         "device_deleted" => Some("Gerät gelöscht."),
         "sensor_created" => Some("Sensor angelegt."),

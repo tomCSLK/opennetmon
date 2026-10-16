@@ -17,7 +17,7 @@ use crate::error::{Error, Result};
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpError, SnmpTarget};
 use crate::storage::templates::{self as store, TemplateRecord};
-use crate::storage::{credentials, devices, sensors};
+use crate::storage::{devices, sensors};
 use crate::templates::{
     self as tpl, ApplyError, BasicKind, BuildOptions, PortChoice, PortRule, PortSelection,
 };
@@ -35,9 +35,7 @@ async fn connect(
     state: &AppState,
     device: &Device,
 ) -> Result<std::result::Result<SnmpClient, SnmpError>> {
-    let creds = credentials::load_credentials(&state.pool, &state.secrets, device.profile_id)
-        .await?
-        .ok_or_else(|| Error::Internal("device refers to a missing profile".to_owned()))?;
+    let creds = crate::web::snmp_credentials(state, device).await?;
     let target = SnmpTarget {
         host: device.host.clone(),
         port: device.polling.port,
@@ -820,7 +818,7 @@ mod tests {
                 name: name.to_owned(),
                 host: "127.0.0.1".to_owned(),
                 group_id: None,
-                profile_id: profile,
+                profile_id: Some(profile),
                 polling: Polling {
                     port,
                     interval_secs: 60,
