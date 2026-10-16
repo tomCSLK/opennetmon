@@ -323,6 +323,11 @@ mod tests {
             ["Traffic Port 2", "Ping", "Uptime"]
         );
         assert_eq!(sensor_names(&h, other).await, ["Ping"]);
+        let home = send(&h.app, get("/", Some(&admin))).await;
+        assert!(
+            !home.body.contains("Gruppen anordnen"),
+            "no groups, no button"
+        );
         let list = send(
             &h.app,
             get(&format!("/devices/{dev}/sensors"), Some(&admin)),
@@ -401,6 +406,10 @@ mod tests {
         let home = send(&h.app, get(reply.location(), Some(&admin))).await;
         assert!(home.body.find("Keller").unwrap() < home.body.find("Haus").unwrap());
         assert!(home.body.contains("Reihenfolge gespeichert."));
+        assert!(
+            home.body
+                .contains("href=\"/groups/0/order\">Gruppen anordnen</a>")
+        );
 
         let page = send(&h.app, get(&format!("/groups/{haus}/order"), Some(&admin))).await;
         assert!(page.body.contains("Reihenfolge in „Haus“") && !page.body.contains("Untergruppen"));

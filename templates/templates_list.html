@@ -1,0 +1,49 @@
+{% extends "app.html" %}
+{% block title %}Gerätevorlagen – netmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Gerätevorlagen</h1>
+    <p class="subtitle">Sensoren eines fertig eingerichteten Geräts auf weitere Geräte übertragen</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+
+<section class="card flush">
+  {% if rows.is_empty() %}
+  <div class="empty">
+    <strong>Noch keine Vorlagen.</strong>
+    Richte ein Gerät fertig ein und wähle auf seiner Sensorseite unter „Gerätevorlage“ den Knopf „Als Vorlage speichern“.
+  </div>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Vorlage</th><th>Inhalt</th><th>Gerätekennung</th><th class="right">Geräte</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td><a href="/templates/{{ row.id }}"><strong>{{ row.name }}</strong></a>{% if !row.source.is_empty() %}<span class="sub">aus {{ row.source }}</span>{% endif %}</td>
+        <td class="wrap">{{ row.summary }}</td>
+        <td class="num small">{% if row.object_id.is_empty() %}<span class="muted">– (nur von Hand)</span>{% else %}{{ row.object_id }}{% endif %}</td>
+        <td class="num right">{{ row.devices }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>So funktionieren Vorlagen</h2>
+  <ul class="plain">
+    <li>„Als Vorlage speichern“ auf der Sensorseite eines Geräts übernimmt Ping, Uptime, Interface-Sensoren und eigene Werte
+      (z. B. PoE, CPU) samt Namen, Zustand (aktiv/inaktiv), Faktor, Einheit und Schwellwerten.</li>
+    <li>Beim Anlegen eines Geräts oder später mit „Vorlage anwenden“ werden nur fehlende Sensoren angelegt; Werte, die das Gerät nicht liefert, werden übersprungen.</li>
+    <li>Die Gerätekennung (sysObjectID) bestimmt, welche Vorlage automatisch vorgeschlagen wird.</li>
+  </ul>
+</section>
+{% endblock %}

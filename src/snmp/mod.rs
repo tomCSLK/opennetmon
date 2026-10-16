@@ -13,6 +13,8 @@ use crate::credentials::{AuthProtocol, Credentials, PrivProtocol};
 
 pub const SYS_DESCR: &[u64] = &[1, 3, 6, 1, 2, 1, 1, 1, 0];
 pub const SYS_UPTIME: &[u64] = &[1, 3, 6, 1, 2, 1, 1, 3, 0];
+/// The vendor's identification of the device model (an OID below the vendor's enterprise number).
+pub const SYS_OBJECT_ID: &[u64] = &[1, 3, 6, 1, 2, 1, 1, 2, 0];
 
 #[derive(Debug, Clone)]
 pub struct SnmpTarget {
@@ -76,6 +78,8 @@ pub enum SnmpValue {
     Counter64(u64),
     Gauge32(u32),
     Timeticks(u32),
+    /// An OBJECT IDENTIFIER value in dotted form, e.g. `sysObjectID`.
+    ObjectId(String),
     Other(String),
     NoSuchObject,
     NoSuchInstance,
@@ -94,6 +98,7 @@ impl From<&Value<'_>> for SnmpValue {
             Value::NoSuchObject => Self::NoSuchObject,
             Value::NoSuchInstance => Self::NoSuchInstance,
             Value::EndOfMibView => Self::EndOfMibView,
+            Value::ObjectIdentifier(oid) => Self::ObjectId(oid.to_id_string()),
             other => Self::Other(format!("{other:?}")),
         }
     }

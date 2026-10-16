@@ -20,6 +20,7 @@ pub enum FakeValue {
     Gauge32(u32),
     Timeticks(u32),
     Counter64(u64),
+    ObjectId(Vec<u64>),
 }
 
 type Table = Arc<Mutex<BTreeMap<Vec<u64>, FakeValue>>>;
@@ -125,6 +126,7 @@ fn encode_value(value: &FakeValue) -> Vec<u8> {
         FakeValue::Gauge32(n) => tlv(0x42, &unsigned(u64::from(*n))),
         FakeValue::Timeticks(n) => tlv(0x43, &unsigned(u64::from(*n))),
         FakeValue::Counter64(n) => tlv(0x46, &unsigned(*n)),
+        FakeValue::ObjectId(oid) => tlv(0x06, &encode_oid(oid)),
     }
 }
 

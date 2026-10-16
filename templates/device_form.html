@@ -74,6 +74,19 @@
       <p class="hint">Timeout × (Wiederholungen + 1) darf das Intervall nicht überschreiten.</p>
     </fieldset>
 
+    {% if !templates.is_empty() %}
+    <fieldset>
+      <legend>Gerätevorlage</legend>
+      <label for="template">Nach dem Anlegen</label>
+      <select id="template" name="template">
+        {% for o in templates %}
+        <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>
+        {% endfor %}
+      </select>
+      <p class="hint">Legt die Sensoren der Vorlage gleich mit an. „Automatisch“ wählt die Vorlage, deren Gerätekennung zum Gerät passt.</p>
+    </fieldset>
+    {% endif %}
+
     <div class="form-actions">
       <button type="submit">Speichern</button>
       <a class="button secondary" href="/">Abbrechen</a>

@@ -1,0 +1,61 @@
+{% extends "app.html" %}
+{% block title %}{{ template.name }} – netmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/templates">Gerätevorlagen</a><span>›</span><span>{{ template.name }}</span></div>
+    <h1>{{ template.name }}</h1>
+    <p class="subtitle">{{ template.body.summary() }}{% if !template.source.is_empty() %} · erstellt aus {{ template.source }}{% endif %}</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="card flush">
+  <div class="card-head"><h2>Inhalt</h2><span class="muted small">{{ items.len() }} Einträge</span></div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Sensor</th><th>Regel</th><th>Zustand</th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr><td><strong>{{ item.name }}</strong></td><td class="wrap muted">{{ item.detail }}</td><td>{{ item.state }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="hint panel-hint panel-actions">Den Inhalt änderst du, indem du ein Gerät passend einrichtest und daraus eine neue Vorlage speicherst.</p>
+</section>
+
+<section class="card">
+  <h2>Name und Erkennung</h2>
+  <form method="post" action="/templates/{{ template.id }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <div class="form-grid">
+      <div>
+        <label for="name">Name</label>
+        <input id="name" name="name" type="text" value="{{ name }}" maxlength="64" required>
+      </div>
+      <div>
+        <label for="object_id">Gerätekennung (sysObjectID)</label>
+        <input id="object_id" name="object_id" type="text" value="{{ object_id }}" maxlength="300" autocapitalize="off" spellcheck="false" placeholder="leer: nur von Hand wählbar">
+      </div>
+    </div>
+    <p class="hint">Geräte mit genau dieser Kennung bekommen die Vorlage beim Anlegen („automatisch erkennen“) und unter „Vorlage anwenden“ vorgeschlagen.</p>
+    <div class="form-actions"><button type="submit">Speichern</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Löschen</h2>
+  <p class="muted">Geräte, die mit dieser Vorlage eingerichtet wurden, behalten ihre Sensoren.</p>
+  <form method="post" action="/templates/{{ template.id }}/delete">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <button type="submit" class="ghost">Vorlage löschen</button>
+  </form>
+</section>
+{% endblock %}

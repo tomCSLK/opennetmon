@@ -8,7 +8,7 @@
   </div>
   {% if layout.is_admin %}
   <div class="actions">
-    <a class="button ghost" href="/groups/0/order">Reihenfolge ändern</a>
+    {% if top_groups > 1 %}<a class="button ghost" href="/groups/0/order">Gruppen anordnen</a>{% endif %}
     <a class="button secondary" href="/groups/new">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
       Neue Gruppe

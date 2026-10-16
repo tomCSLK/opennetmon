@@ -80,6 +80,8 @@ struct SensorsTemplate {
     flash: Option<&'static str>,
     error: Option<String>,
     form: SensorFormValues,
+    /// The device template this device was set up with.
+    template_name: Option<String>,
 }
 
 struct DiscoverRowView {
@@ -240,7 +242,15 @@ async fn render_sensors(
             }
         })
         .partition(|row| row.enabled);
+    let template_name =
+        match crate::storage::templates::template_of_device(&state.pool, device.id).await? {
+            Some(id) => crate::storage::templates::get_template(&state.pool, id)
+                .await?
+                .map(|t| t.name),
+            None => None,
+        };
     let page = SensorsTemplate {
+        template_name,
         layout: user.layout(),
         device,
         device_status_label: overall.label(),

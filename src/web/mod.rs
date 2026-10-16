@@ -13,6 +13,7 @@ pub mod sensor_detail;
 pub mod sensor_text;
 pub mod sensor_values;
 pub mod sensors;
+pub mod templates;
 #[cfg(test)]
 pub(crate) mod testutil;
 
@@ -139,6 +140,18 @@ pub fn router(state: AppState) -> Router {
             "/sensors/{id}/thresholds",
             post(sensor_detail::save_thresholds),
         )
+        .route("/devices/{id}/template/new", get(templates::new_form))
+        .route("/devices/{id}/template", post(templates::create))
+        .route(
+            "/devices/{id}/template/apply",
+            get(templates::apply_form).post(templates::apply),
+        )
+        .route("/templates", get(templates::list))
+        .route(
+            "/templates/{id}",
+            get(templates::detail).post(templates::update),
+        )
+        .route("/templates/{id}/delete", post(templates::delete))
         .route("/sensors/{id}/rename", post(sensor_detail::rename))
         .route("/sensors/{id}/toggle", post(sensors::toggle))
         .route("/sensors/{id}/delete", post(sensors::delete))
@@ -224,6 +237,11 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "thresholds_saved" => Some("Schwellwerte gespeichert."),
         "sensor_renamed" => Some("Sensor umbenannt."),
         "order_saved" => Some("Reihenfolge gespeichert."),
+        "template_created" => Some(
+            "Vorlage gespeichert. Sie lässt sich beim Anlegen eines Geräts oder mit „Vorlage anwenden“ nutzen.",
+        ),
+        "template_saved" => Some("Vorlage gespeichert."),
+        "template_deleted" => Some("Vorlage gelöscht."),
         "order_reset" => Some("Reihenfolge zurückgesetzt: wieder automatisch sortiert."),
         "mail_saved" => Some("E-Mail-Einstellungen gespeichert."),
         "mib_deleted" => Some("MIB-Datei gelöscht."),

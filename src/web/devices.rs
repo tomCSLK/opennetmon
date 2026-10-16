@@ -32,6 +32,8 @@ struct FormValues {
     interval_secs: String,
     timeout_secs: String,
     retries: String,
+    /// Template choice when creating: empty, `auto` or a template id.
+    template: String,
 }
 
 impl Default for FormValues {
@@ -43,6 +45,7 @@ impl Default for FormValues {
             interval_secs: DEFAULT_INTERVAL_SECS.to_string(),
             timeout_secs: DEFAULT_TIMEOUT_SECS.to_string(),
             retries: DEFAULT_RETRIES.to_string(),
+            template: "auto".to_owned(),
         }
     }
 }
@@ -56,6 +59,7 @@ impl FormValues {
             interval_secs: d.polling.interval_secs.to_string(),
             timeout_secs: d.polling.timeout_secs.to_string(),
             retries: d.polling.retries.to_string(),
+            template: String::new(),
         }
     }
 }
@@ -72,6 +76,8 @@ struct FormTemplate {
     form: FormValues,
     groups: Vec<SelectOption>,
     profiles: Vec<SelectOption>,
+    /// Device templates to apply right after creating (empty when editing or without templates).
+    templates: Vec<crate::web::templates::TemplateOption>,
 }
 
 pub struct ProbeView {
@@ -104,6 +110,8 @@ pub struct DeviceForm {
     interval_secs: String,
     timeout_secs: String,
     retries: String,
+    #[serde(default)]
+    template: String,
 }
 
 #[derive(Deserialize)]
@@ -132,6 +140,7 @@ impl DeviceForm {
             interval_secs: self.interval_secs.clone(),
             timeout_secs: self.timeout_secs.clone(),
             retries: self.retries.clone(),
+            template: self.template.clone(),
         }
     }
 
@@ -190,7 +199,13 @@ async fn render_form(
     error: Option<String>,
 ) -> Result<String> {
     let all_groups = groups::list_groups(&state.pool).await?;
+    let templates = if existing.is_none() {
+        crate::web::templates::device_form_options(state, &form.template).await?
+    } else {
+        Vec::new()
+    };
     let page = FormTemplate {
+        templates,
         layout: user.layout(),
         heading: if existing.is_some() {
             "Gerät bearbeiten"
@@ -286,6 +301,22 @@ async fn save(
     match outcome {
         Ok(saved) => {
             tracing::info!(user = %user.username, device = saved, "device saved");
+            let choice = match form.template.trim() {
+                _ if id.is_some() => None,
+                "" => None,
+                "auto" => Some(crate::web::templates::Choice::Detect),
+                text => text.parse().ok().map(crate::web::templates::Choice::Id),
+            };
+            if let Some(choice) = choice {
+                let device = store::get_device(&state.pool, saved)
+                    .await?
+                    .ok_or(Error::NotFound)?;
+                let heading = format!("Gerät „{}“ angelegt", device.name);
+                let html =
+                    crate::web::templates::apply_and_render(state, user, device, choice, heading)
+                        .await?;
+                return Ok(Html(html).into_response());
+            }
             let msg = if id.is_some() {
                 "device_updated"
             } else {

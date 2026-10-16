@@ -8,6 +8,7 @@ pub mod measurements;
 pub mod mibs;
 pub mod sensors;
 pub mod status;
+pub mod templates;
 pub mod users;
 
 use std::path::Path;

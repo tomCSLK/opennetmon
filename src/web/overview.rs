@@ -115,6 +115,8 @@ struct HomeTemplate {
     totals: Counts,
     device_count: usize,
     devices_down: usize,
+    /// Groups at the top level; their order is only worth a button when there are several.
+    top_groups: usize,
     flash: Option<&'static str>,
 }
 
@@ -226,6 +228,7 @@ pub async fn home(
         totals,
         device_count: devices.len(),
         devices_down,
+        top_groups: groups.iter().filter(|g| g.parent_id.is_none()).count(),
         flash: flash_message(query.msg.as_deref()),
     };
     Ok(Html(page.render()?))

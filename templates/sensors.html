@@ -120,6 +120,19 @@
 
 {% if layout.is_admin %}
 <section class="card">
+  <div class="split">
+    <div>
+      <h2>Gerätevorlage</h2>
+      <p class="muted small">{% if let Some(name) = template_name %}Eingerichtet mit „{{ name }}“. {% endif %}Eine Vorlage legt fehlende Sensoren an; aus diesem Gerät lässt sich auch eine neue Vorlage speichern.</p>
+    </div>
+    <div class="actions">
+      <a class="button secondary" href="/devices/{{ device.id }}/template/apply">Vorlage anwenden</a>
+      <a class="button ghost" href="/devices/{{ device.id }}/template/new">Als Vorlage speichern</a>
+    </div>
+  </div>
+</section>
+
+<section class="card">
   <h2>Sensor hinzufügen</h2>
   <form method="post" action="/devices/{{ device.id }}/sensors" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">

@@ -17,5 +17,6 @@ pub mod sensors;
 pub mod snmp;
 pub mod status;
 pub mod storage;
+pub mod templates;
 pub mod value_discovery;
 pub mod web;

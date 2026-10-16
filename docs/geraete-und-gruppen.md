@@ -10,8 +10,9 @@ Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden
 ## Reihenfolge (nur Administratoren)
 
 - **Automatisch** (Standard): nach Namen, Groß-/Kleinschreibung egal, Zahlen der Größe nach („Switch 2“ vor „Switch 10“).
-- **Von Hand**: „Reihenfolge ändern“ oben auf der Übersicht ordnet die obersten Gruppen und die Geräte ohne Gruppe (`/groups/0/order`),
-  „Reihenfolge“ an einer Gruppe deren Untergruppen und Geräte (`/groups/<id>/order`). Zeilen am Griff ziehen, mit ↑/↓ verschieben oder
+- **Von Hand**: „Reihenfolge“ an einer Gruppe ordnet deren Untergruppen und Geräte (`/groups/<id>/order`), am Bereich „Ohne Gruppe“
+  bzw. „Alle Geräte“ die Geräte ohne Gruppe und die obersten Gruppen (`/groups/0/order`). Dieselbe Seite öffnet „Gruppen anordnen“ oben auf der
+  Übersicht; der Knopf erscheint nur bei mindestens zwei obersten Gruppen. Zeilen am Griff ziehen, mit ↑/↓ verschieben oder
   eine Position eintragen und speichern. Ohne JavaScript bleiben die Positionsfelder.
 - Von Hand geordnete Einträge stehen vorn, neue und nicht geordnete dahinter in automatischer Reihenfolge.
   „Automatisch sortieren“ verwirft die Handordnung der Ebene.

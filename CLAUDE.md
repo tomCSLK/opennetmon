@@ -42,6 +42,7 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - Ping: `surge-ping` (0.9, ein Socket je Adressfamilie für alle Ziele); bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
 - Uploads: axum-Feature `multipart` (nutzt `multer`) für MIB-Dateien
+- `serde_json` für die Regeln der Gerätevorlagen (war über axum schon im Build)
 - Mail: `lettre` 0.11 (Features `builder`, `smtp-transport`, `tokio1`, `tokio1-rustls-tls`; ohne native-tls/OpenSSL, damit der musl-Build statisch bleibt)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
   `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
@@ -96,6 +97,10 @@ Ein Binary, ein Prozess, Module:
   Spalte `position` in `groups`/`devices`/`sensors` (`NULL` = automatisch, beim Verschieben in eine andere Gruppe zurückgesetzt), Schreiben über
   `storage::write_positions`; Seiten `web::order` (`/groups/<id>/order`, 0 = oberste Ebene; `/devices/<id>/sensors/order`) mit `static/order.js`;
   Sensoren automatisch nach Typ, dann Name; Umbenennen von Sensoren auf der Detailseite (`sensor_detail::rename`)
+- `templates` – Gerätevorlagen: `Body` (Regeln als JSON in `device_templates`, Migration `0011`), `build` aus den Sensoren eines Geräts,
+  `plan` (reine Logik: nur Fehlendes, Übersprungenes mit Grund), `apply` (Interfaces lesen, OIDs per GET prüfen, Sensoren mit Schwellwerten anlegen),
+  `detect` über `sysObjectID`; `storage::templates`, `devices.template_id`; Seiten `web::templates` (`/templates`, `/devices/<id>/template/new|apply`),
+  Auswahl „automatisch erkennen“ beim Anlegen eines Geräts (`docs/geraetevorlagen.md`)
 - `value_discovery` – Tabellen/Gruppen walken und Sensorvorschläge bilden (Namen, Faktor, Einheit); Seite `web::sensor_values`, neue Sensoren standardmäßig **inaktiv** (`enabled = false`, Status „Inaktiv“), Sammelaktionen `web::sensors::bulk`
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention

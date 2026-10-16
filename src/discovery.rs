@@ -38,9 +38,14 @@ impl DiscoveredInterface {
         self.oper_status == Some(1)
     }
 
+    /// A physical or Wi-Fi port (not a VLAN interface, loopback, tunnel, …).
+    pub fn is_port(&self) -> bool {
+        self.if_type.is_some_and(|t| MONITORED_TYPES.contains(&t))
+    }
+
     /// Whether the interface is a good default choice (an up port of a physical or Wi-Fi type).
     pub fn suggested(&self) -> bool {
-        self.is_up() && self.if_type.is_some_and(|t| MONITORED_TYPES.contains(&t))
+        self.is_up() && self.is_port()
     }
 
     pub fn oper_status_label(&self) -> &'static str {

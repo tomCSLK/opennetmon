@@ -1,0 +1,38 @@
+{% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
+{% block title %}Vorlage anwenden – netmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>Vorlage anwenden</span></div>
+    <h1>Vorlage anwenden</h1>
+    <p class="subtitle">{{ device.name }} · <span class="num">{{ device.host }}</span>{% if let Some(oid) = object_id %} · Kennung <span class="num">{{ oid }}</span>{% endif %}</p>
+  </div>
+</div>
+
+{% if let Some(message) = notice %}
+<p class="notice" role="status">Die Gerätekennung konnte nicht gelesen werden: {{ message }}</p>
+{% endif %}
+
+<section class="card">
+  {% if options.is_empty() %}
+  <div class="empty"><strong>Noch keine Vorlagen.</strong> Speichere zuerst ein fertig eingerichtetes Gerät als Vorlage.</div>
+  {% else %}
+  <form method="post" action="/devices/{{ device.id }}/template/apply" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label for="template_id">Vorlage</label>
+    <select id="template_id" name="template_id">
+      {% for o in options %}
+      <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>
+      {% endfor %}
+    </select>
+    {% if let Some(name) = detected %}<p class="hint">Passend zur Gerätekennung: <strong>{{ name }}</strong>.</p>{% endif %}
+    <p class="hint">Angelegt werden nur Sensoren, die noch fehlen. Vorhandene Sensoren bleiben unverändert, nichts wird gelöscht.</p>
+    <div class="form-actions">
+      <button type="submit">Anwenden</button>
+      <a class="button secondary" href="/devices/{{ device.id }}/sensors">Abbrechen</a>
+    </div>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}
