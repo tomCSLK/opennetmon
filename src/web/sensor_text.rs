@@ -7,6 +7,50 @@ use crate::sensors::format::format_value;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
 
+/// Suggested ratings for the status values of a new sensor, from the names of its MIB enumeration
+/// (see [`crate::status::suggest_status`]). Empty when the values have no names or all would be
+/// fine anyway, so plain numbers and harmless states stay unrated.
+pub fn suggested_states(spec: &SensorSpec, index: &MibIndex) -> Vec<crate::status::ValueState> {
+    if !matches!(spec, SensorSpec::Oid { .. }) {
+        return Vec::new(); // the interface status sensor has its own default rule
+    }
+    let states: Vec<crate::status::ValueState> = ValueFormat::for_sensor(spec, index)
+        .labels
+        .into_iter()
+        .map(|(value, label)| crate::status::ValueState {
+            status: crate::status::suggest_status(&label),
+            value,
+            label,
+        })
+        .collect();
+    if states.iter().all(|s| s.status == crate::status::Status::Up) {
+        return Vec::new();
+    }
+    states
+}
+
+/// Stores the suggested ratings for a freshly created sensor (see [`suggested_states`]).
+pub async fn rate_new_sensor(
+    pool: &sqlx::SqlitePool,
+    sensor_id: i64,
+    spec: &SensorSpec,
+    index: &MibIndex,
+) -> crate::error::Result<()> {
+    let states = suggested_states(spec, index);
+    if states.is_empty() {
+        return Ok(());
+    }
+    let channel = crate::storage::sensors::get_sensor(pool, sensor_id)
+        .await?
+        .and_then(|s| s.channels.first().map(|c| c.id));
+    match channel {
+        Some(channel) => {
+            crate::storage::sensors::set_value_states(pool, sensor_id, channel, &states).await
+        }
+        None => Ok(()),
+    }
+}
+
 fn swap(enums: &[(String, i64)]) -> Vec<(i64, String)> {
     enums.iter().map(|(name, n)| (*n, name.clone())).collect()
 }

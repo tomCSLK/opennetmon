@@ -79,10 +79,53 @@
 </details>
 {% endif %}
 
+{% if let Some(st) = states %}
+<details class="card panel"{% if !st.stored && !st.interface %} open{% endif %}>
+  <summary><h2>Statuswerte{% if st.stored %} <span class="badge">bewertet</span>{% endif %}</h2></summary>
+  {% if st.stored %}
+  <p class="muted small">Jeder Wert bestimmt den Sensorstatus. Werte, die hier nicht stehen, gelten als Warnung.</p>
+  {% else if st.interface %}
+  <p class="muted small">Standard: nur <em>up</em> ist in Ordnung, alles andere ist ein Ausfall. Hier lässt sich das je Wert anpassen, z. B. <em>down</em> nur als Warnung.</p>
+  {% else %}
+  <p class="muted small"><strong>Noch nicht bewertet</strong> – der Wert ändert den Sensorstatus nicht. Unten steht ein Vorschlag aus den Namen der Werte; erst „Speichern“ schaltet die Bewertung ein.</p>
+  {% endif %}
+  {% if layout.is_admin %}
+  <form method="post" action="/sensors/{{ sensor.id }}/states" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Wert</th><th>Bewertung</th></tr></thead>
+      <tbody>
+      {% for row in st.rows %}
+        <tr>
+          <td><strong>{{ row.label }}</strong> <span class="muted">({{ row.value }})</span></td>
+          <td>
+            <select name="st_{{ row.value }}" aria-label="Bewertung für {{ row.label }}" class="compact">
+              <option value="up"{% if row.status == "up" %} selected{% endif %}>In Ordnung</option>
+              <option value="warning"{% if row.status == "warning" %} selected{% endif %}>Warnung</option>
+              <option value="down"{% if row.status == "down" %} selected{% endif %}>Ausfall</option>
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="form-actions">
+      <button type="submit" name="action" value="save">Speichern</button>
+      {% if st.stored %}<button type="submit" name="action" value="reset" class="ghost">{% if st.interface %}Standard wiederherstellen{% else %}Bewertung ausschalten{% endif %}</button>{% endif %}
+    </div>
+  </form>
+  {% else %}
+  <ul class="plain">{% for row in st.rows %}<li>{{ row.label }} ({{ row.value }}): {% if row.status == "up" %}In Ordnung{% else if row.status == "warning" %}Warnung{% else %}Ausfall{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+</details>
+{% endif %}
+
 <details class="card panel"{% if error.is_some() && !rename_failed %} open{% endif %}>
   <summary><h2>Schwellwerte</h2></summary>
   {% if layout.is_admin %}
-  <p class="muted small">Ein Wert löst aus, wenn er die Grenze <em>überschreitet</em> (oben) oder <em>unterschreitet</em> (unten). „Down“ und „Warnung“ gelten sofort.
+  <p class="muted small">Ein Wert löst aus, wenn er die Grenze <em>überschreitet</em> (oben) oder <em>unterschreitet</em> (unten). „Ausfall“ und „Warnung“ gelten sofort.
     Leere Felder bedeuten: keine Grenze.</p>
   <form method="post" action="/sensors/{{ sensor.id }}/thresholds" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
@@ -95,9 +138,9 @@
           <input id="wa_{{ c.id }}" name="wa_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[0] }}" maxlength="24"></div>
         <div><label for="wb_{{ c.id }}">Warnung unter</label>
           <input id="wb_{{ c.id }}" name="wb_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[1] }}" maxlength="24"></div>
-        <div><label for="da_{{ c.id }}">Down über</label>
+        <div><label for="da_{{ c.id }}">Ausfall über</label>
           <input id="da_{{ c.id }}" name="da_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[2] }}" maxlength="24"></div>
-        <div><label for="db_{{ c.id }}">Down unter</label>
+        <div><label for="db_{{ c.id }}">Ausfall unter</label>
           <input id="db_{{ c.id }}" name="db_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[3] }}" maxlength="24"></div>
       </div>
     </fieldset>

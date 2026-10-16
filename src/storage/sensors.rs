@@ -7,7 +7,7 @@ use crate::ordering::{natural_cmp, position_cmp};
 use crate::sensors::Unit;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
-use crate::status::Thresholds;
+use crate::status::{Status, Thresholds, ValueState};
 use crate::storage::{OrderScope, write_positions};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,6 +16,8 @@ pub struct ChannelRecord {
     pub key: String,
     pub unit: Unit,
     pub thresholds: Thresholds,
+    /// Ratings of status values (empty = not rated).
+    pub states: Vec<ValueState>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -127,6 +129,20 @@ async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorR
     )
     .fetch_all(pool)
     .await?;
+    let mut states: std::collections::HashMap<i64, Vec<ValueState>> =
+        std::collections::HashMap::new();
+    for (channel_id, value, label, status) in sqlx::query_as::<_, (i64, i64, String, String)>(
+        "SELECT channel_id, value, label, status FROM value_states ORDER BY channel_id, value",
+    )
+    .fetch_all(pool)
+    .await?
+    {
+        states.entry(channel_id).or_default().push(ValueState {
+            value,
+            label,
+            status: Status::parse(&status).ok_or_else(|| corrupt("value state"))?,
+        });
+    }
     rows.into_iter()
         .map(|r| {
             let channels = channels
@@ -143,6 +159,7 @@ async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorR
                             down_above: c.down_above,
                             down_below: c.down_below,
                         },
+                        states: states.get(&c.id).cloned().unwrap_or_default(),
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -325,6 +342,57 @@ pub async fn set_thresholds(
         if done.rows_affected() == 0 {
             return Err(Error::NotFound);
         }
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Longest accepted name of a status value.
+pub const MAX_STATE_LABEL_CHARS: usize = 64;
+
+/// Replaces the ratings of status values of one channel of `sensor_id`; an empty list removes them.
+pub async fn set_value_states(
+    pool: &SqlitePool,
+    sensor_id: i64,
+    channel_id: i64,
+    states: &[ValueState],
+) -> Result<()> {
+    for s in states {
+        if !matches!(s.status, Status::Up | Status::Warning | Status::Down) {
+            return Err(Error::Invalid("Ungültige Bewertung.".to_owned()));
+        }
+        if s.label.chars().count() > MAX_STATE_LABEL_CHARS || s.label.chars().any(char::is_control)
+        {
+            return Err(Error::Invalid(
+                "Ungültiger Name eines Statuswerts.".to_owned(),
+            ));
+        }
+    }
+    let mut tx = pool.begin().await?;
+    let owned: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM channels WHERE id = ? AND sensor_id = ?")
+            .bind(channel_id)
+            .bind(sensor_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    if owned.is_none() {
+        return Err(Error::NotFound);
+    }
+    sqlx::query("DELETE FROM value_states WHERE channel_id = ?")
+        .bind(channel_id)
+        .execute(&mut *tx)
+        .await?;
+    for s in states {
+        sqlx::query(
+            "INSERT INTO value_states (channel_id, value, label, status) VALUES (?, ?, ?, ?) \
+             ON CONFLICT (channel_id, value) DO UPDATE SET label = excluded.label, status = excluded.status",
+        )
+        .bind(channel_id)
+        .bind(s.value)
+        .bind(&s.label)
+        .bind(s.status.as_str())
+        .execute(&mut *tx)
+        .await?;
     }
     tx.commit().await?;
     Ok(())
@@ -817,5 +885,49 @@ mod tests {
             rename_sensor(&pool, 999, "C").await,
             Err(Error::NotFound)
         ));
+    }
+
+    #[tokio::test]
+    async fn value_states_are_stored_per_channel_and_scoped_to_the_sensor() {
+        let (_dir, pool, device) = setup().await;
+        let a = create_sensor(&pool, device, "A", &oid_spec())
+            .await
+            .unwrap();
+        let b = create_sensor(&pool, device, "B", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        let channel = get_sensor(&pool, a).await.unwrap().unwrap().channels[0].id;
+        let state = |value, label: &str, status| ValueState {
+            value,
+            label: label.to_owned(),
+            status,
+        };
+        let states = [state(1, "ok", Status::Up), state(3, "failed", Status::Down)];
+        set_value_states(&pool, a, channel, &states).await.unwrap();
+        assert_eq!(
+            get_sensor(&pool, a).await.unwrap().unwrap().channels[0].states,
+            states
+        );
+        assert!(matches!(
+            set_value_states(&pool, b, channel, &states).await,
+            Err(Error::NotFound)
+        ));
+        assert!(matches!(
+            set_value_states(&pool, a, channel, &[state(1, "x", Status::Paused)]).await,
+            Err(Error::Invalid(_))
+        ));
+        set_value_states(&pool, a, channel, &[]).await.unwrap();
+        assert!(
+            get_sensor(&pool, a).await.unwrap().unwrap().channels[0]
+                .states
+                .is_empty()
+        );
+        set_value_states(&pool, a, channel, &states).await.unwrap();
+        delete_sensor(&pool, a).await.unwrap();
+        let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM value_states")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(left, 0, "ratings go with the sensor");
     }
 }

@@ -28,7 +28,7 @@ use crate::sensors::ping::PingClients;
 use crate::sensors::spec::SensorSpec;
 use crate::sensors::{PollContext, Sensor, SensorError};
 use crate::snmp::{SnmpClient, SnmpError, SnmpTarget};
-use crate::status::{Assessment, assess};
+use crate::status::{Assessment, ChannelRules, assess_with};
 use crate::storage::devices::get_device;
 use crate::storage::sensors::{Sample, SensorRecord, list_sensors};
 use crate::storage::status::{StatusChange, record_poll};
@@ -394,15 +394,18 @@ pub async fn poll_device_once(
                     .collect(),
                 Err(_) => Vec::new(),
             };
-            let limits = |key: &str| {
+            let rules = |key: &str| {
                 record
                     .channels
                     .iter()
                     .find(|c| c.key == key)
-                    .map(|c| c.thresholds)
+                    .map(|c| ChannelRules {
+                        thresholds: c.thresholds,
+                        states: c.states.clone(),
+                    })
                     .unwrap_or_default()
             };
-            (assess(spec, &result, &limits), samples)
+            (assess_with(spec, &result, &rules), samples)
         };
         let (assessment, samples) = assessment_and_values;
         if let Some(change) = record_poll(pool, record.id, started, &samples, &assessment).await? {
@@ -627,6 +630,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rated_status_values_set_the_state_from_the_next_cycle() {
+        let env = env().await;
+        let oid = vec![1, 3, 6, 1, 4, 1, 11863, 6, 56, 1, 1, 2, 1, 11, 1];
+        let sensor = create_sensor(
+            &env.pool,
+            env.device,
+            "PoE-Status Port 1",
+            &SensorSpec::Oid {
+                oid: oid.clone(),
+                mode: OidMode::Gauge,
+                scale: 1.0,
+                unit: None,
+            },
+        )
+        .await
+        .unwrap();
+        env.agent.set(&oid, FakeValue::Integer(3));
+        let mut state = SensorSet::default();
+        env.poll(&mut state).await;
+        assert_eq!(
+            env.state_of(sensor).await,
+            Status::Up,
+            "unrated: just a number"
+        );
+
+        let channel = crate::storage::sensors::get_sensor(&env.pool, sensor)
+            .await
+            .unwrap()
+            .unwrap()
+            .channels[0]
+            .id;
+        let rate = |value, label: &str, status| crate::status::ValueState {
+            value,
+            label: label.to_owned(),
+            status,
+        };
+        crate::storage::sensors::set_value_states(
+            &env.pool,
+            sensor,
+            channel,
+            &[rate(2, "on", Status::Up), rate(3, "overload", Status::Down)],
+        )
+        .await
+        .unwrap();
+        env.poll(&mut state).await;
+        let stored = get_state(&env.pool, sensor).await.unwrap().unwrap();
+        assert_eq!(
+            (stored.status, stored.message.as_str()),
+            (Status::Down, "overload (3) gilt als Ausfall")
+        );
+        env.agent.set(&oid, FakeValue::Integer(2));
+        env.poll(&mut state).await;
+        let stored = get_state(&env.pool, sensor).await.unwrap().unwrap();
+        assert_eq!(
+            (stored.status, stored.message.as_str()),
+            (Status::Up, "on (2)")
+        );
+    }
+
+    #[tokio::test]
     async fn counter_baselines_survive_cycles_and_rates_appear_from_the_second() {
         let env = env().await;
         let oid = vec![1, 3, 6, 1, 4, 1, 99, 1, 0];
@@ -710,7 +773,7 @@ mod tests {
         assert!(
             events
                 .iter()
-                .any(|e| e.to == Status::Down && e.message.contains("Down-Grenze 300")),
+                .any(|e| e.to == Status::Down && e.message.contains("Ausfallgrenze 300")),
             "{events:?}"
         );
     }

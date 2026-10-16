@@ -121,12 +121,12 @@ impl Thresholds {
         if let (Some(w), Some(d)) = (self.warn_above, self.down_above)
             && d < w
         {
-            return Err("Die obere Down-Grenze darf nicht unter der oberen Warngrenze liegen.");
+            return Err("Die obere Ausfallgrenze darf nicht unter der oberen Warngrenze liegen.");
         }
         if let (Some(w), Some(d)) = (self.warn_below, self.down_below)
             && d > w
         {
-            return Err("Die untere Down-Grenze darf nicht über der unteren Warngrenze liegen.");
+            return Err("Die untere Ausfallgrenze darf nicht über der unteren Warngrenze liegen.");
         }
         let upper = self.warn_above.or(self.down_above);
         let lower = self.warn_below.or(self.down_below);
@@ -201,58 +201,168 @@ fn oper_status_name(code: i64) -> &'static str {
     }
 }
 
+/// How one value of an enumeration is rated, e.g. PoE status `overload(3)` → [`Status::Down`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValueState {
+    pub value: i64,
+    /// Name of the value from the MIB (kept for messages, the poller has no MIB index).
+    pub label: String,
+    /// `Up`, `Warning` or `Down`.
+    pub status: Status,
+}
+
+/// What decides the state of one channel.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ChannelRules {
+    pub thresholds: Thresholds,
+    /// Ratings of status values; empty = status values are not rated.
+    pub states: Vec<ValueState>,
+}
+
+/// Words in the name of an enumeration value that mean a failure or a warning, checked as parts
+/// of the lowercased name without `-`/`_` (`hardware-fault` → `hardwarefault`).
+const DOWN_WORDS: &[&str] = &[
+    "fail",
+    "fault",
+    "critical",
+    "error",
+    "nonoperational",
+    "alarm",
+    "broken",
+    "overload",
+    "short",
+    "overtemp",
+    "overheat",
+    "notpresent",
+    "lowerlayerdown",
+    "dead",
+    "lost",
+];
+const WARNING_WORDS: &[&str] = &[
+    "warn",
+    "degrad",
+    "minor",
+    "unavailable",
+    "testing",
+    "nonstandard",
+    "voltagehigh",
+    "voltagelow",
+    "highvoltage",
+    "lowvoltage",
+];
+
+/// A first guess for the rating of an enumeration value from its name: clear failure words are
+/// `Down`, clear warning words `Warning`, everything else (`ok`, `on`, `off`, `enabled`, …) `Up`.
+/// Negations like `noError` stay `Up`.
+pub fn suggest_status(label: &str) -> Status {
+    let name: String = label
+        .chars()
+        .filter(|c| !matches!(c, '-' | '_' | ' '))
+        .flat_map(char::to_lowercase)
+        .collect();
+    let negated = |word: &str| name.starts_with("no") && name[2..].starts_with(word);
+    let hit = |words: &[&str]| words.iter().any(|w| name.contains(w) && !negated(w));
+    if name == "down" || name == "bad" || name == "major" || hit(DOWN_WORDS) {
+        Status::Down
+    } else if name == "unknown" || hit(WARNING_WORDS) {
+        Status::Warning
+    } else {
+        Status::Up
+    }
+}
+
 /// Judges a poll result. `limits` gives the thresholds of a channel by key.
 pub fn assess(
     spec: &SensorSpec,
     result: &Result<Measurement, SensorError>,
     limits: &dyn Fn(&str) -> Thresholds,
 ) -> Assessment {
+    assess_with(spec, result, &|key| ChannelRules {
+        thresholds: limits(key),
+        states: Vec::new(),
+    })
+}
+
+/// Judges a poll result with thresholds and ratings of status values per channel. The worst
+/// finding wins; without a rating, an interface status other than up is a failure.
+pub fn assess_with(
+    spec: &SensorSpec,
+    result: &Result<Measurement, SensorError>,
+    rules: &dyn Fn(&str) -> ChannelRules,
+) -> Assessment {
     let measurement = match result {
         Ok(m) => m,
         Err(e) => return Assessment::Failed(truncate(e.user_message())),
     };
-    if let SensorSpec::InterfaceStatus { .. } = spec {
-        let value = measurement.channels.iter().find_map(|c| c.value);
-        return match value {
-            Some(1.0) => Assessment::Healthy("Interface ist up".to_owned()),
-            Some(v) => Assessment::Unhealthy(format!(
-                "Interface ist nicht up (ifOperStatus = {})",
-                oper_status_name(v as i64)
-            )),
-            None => Assessment::Failed("Kein Statuswert erhalten".to_owned()),
-        };
+    let interface_status = matches!(spec, SensorSpec::InterfaceStatus { .. });
+    if interface_status && measurement.channels.iter().all(|c| c.value.is_none()) {
+        return Assessment::Failed("Kein Statuswert erhalten".to_owned());
     }
-    let mut worst: Option<(Breach, String)> = None;
+    // (severity: 1 = warning, 2 = down, message); the first finding of the worst severity wins.
+    let mut worst: Option<(u8, String)> = None;
+    let mut consider = |level: u8, message: String| {
+        if worst.as_ref().is_none_or(|(l, _)| level > *l) {
+            worst = Some((level, message));
+        }
+    };
+    let mut fine: Vec<String> = Vec::new();
     for reading in &measurement.channels {
         let Some(value) = reading.value else { continue };
-        let Some(breach) = limits(&reading.key).breach(value) else {
-            continue;
-        };
-        if worst
-            .as_ref()
-            .is_none_or(|(w, _)| breach.is_down() && !w.is_down())
-        {
+        let rules = rules(&reading.key);
+        if !rules.states.is_empty() {
+            match rules.states.iter().find(|s| s.value as f64 == value) {
+                Some(s) => {
+                    let shown = format!("{} ({})", s.label, s.value);
+                    match s.status {
+                        Status::Down => consider(2, format!("{shown} gilt als Ausfall")),
+                        Status::Warning => consider(1, format!("{shown} gilt als Warnung")),
+                        _ => fine.push(shown),
+                    }
+                }
+                None => consider(
+                    1,
+                    format!(
+                        "Unbekannter Statuswert {}",
+                        format_value(reading.unit, value)
+                    ),
+                ),
+            }
+        } else if interface_status {
+            if value == 1.0 {
+                fine.push("Interface ist up".to_owned());
+            } else {
+                consider(
+                    2,
+                    format!(
+                        "Interface ist nicht up (ifOperStatus = {})",
+                        oper_status_name(value as i64)
+                    ),
+                );
+            }
+        }
+        if let Some(breach) = rules.thresholds.breach(value) {
             let (side, kind, limit) = match breach {
                 Breach::WarnAbove(l) => ("über", "Warngrenze", l),
                 Breach::WarnBelow(l) => ("unter", "Warngrenze", l),
-                Breach::DownAbove(l) => ("über", "Down-Grenze", l),
-                Breach::DownBelow(l) => ("unter", "Down-Grenze", l),
+                Breach::DownAbove(l) => ("über", "Ausfallgrenze", l),
+                Breach::DownBelow(l) => ("unter", "Ausfallgrenze", l),
             };
-            worst = Some((
-                breach,
+            consider(
+                if breach.is_down() { 2 } else { 1 },
                 format!(
                     "{}: {} liegt {side} der {kind} {}",
                     channel_label(&reading.key),
                     format_value(reading.unit, value),
                     format_value(reading.unit, limit),
                 ),
-            ));
+            );
         }
     }
     match worst {
-        Some((breach, message)) if breach.is_down() => Assessment::Unhealthy(message),
-        Some((_, message)) => Assessment::Degraded(message),
-        None => Assessment::Healthy("OK".to_owned()),
+        Some((2, message)) => Assessment::Unhealthy(truncate(message)),
+        Some((_, message)) => Assessment::Degraded(truncate(message)),
+        None if fine.is_empty() => Assessment::Healthy("OK".to_owned()),
+        None => Assessment::Healthy(truncate(fine.join(", "))),
     }
 }
 
@@ -508,7 +618,7 @@ mod tests {
         );
         let down = assess(&spec, &rtt(250.0), &rtt_limits);
         assert!(
-            matches!(&down, Assessment::Unhealthy(m) if m.contains("Down-Grenze 200 ms")),
+            matches!(&down, Assessment::Unhealthy(m) if m.contains("Ausfallgrenze 200 ms")),
             "{down:?}"
         );
     }
@@ -606,5 +716,134 @@ mod tests {
             assert_eq!(Status::parse(s.as_str()), Some(s));
         }
         assert_eq!(Status::parse("broken"), None);
+    }
+
+    #[test]
+    fn names_of_status_values_suggest_a_rating() {
+        let poe = [
+            ("off", Status::Up),
+            ("turning-on", Status::Up),
+            ("on", Status::Up),
+            ("overload", Status::Down),
+            ("short", Status::Down),
+            ("nonstandard-pd", Status::Warning),
+            ("voltage-high", Status::Warning),
+            ("voltage-low", Status::Warning),
+            ("hardware-fault", Status::Down),
+            ("overtemperature", Status::Down),
+        ];
+        let others = [
+            ("up", Status::Up),
+            ("down", Status::Down),
+            ("testing", Status::Warning),
+            ("unknown", Status::Warning),
+            ("dormant", Status::Up),
+            ("notPresent", Status::Down),
+            ("lowerLayerDown", Status::Down),
+            ("ok", Status::Up),
+            ("unavailable", Status::Warning),
+            ("nonoperational", Status::Down),
+            ("noError", Status::Up),
+            ("no-fault", Status::Up),
+            ("enable", Status::Up),
+            ("disable", Status::Up),
+            ("criticalAlarm", Status::Down),
+            ("Lüfter-Fehler", Status::Up),
+        ];
+        for (label, expected) in poe.into_iter().chain(others) {
+            assert_eq!(suggest_status(label), expected, "{label}");
+        }
+    }
+
+    fn gauge(value: f64) -> Result<Measurement, SensorError> {
+        Ok(Measurement {
+            channels: vec![ChannelReading {
+                key: "value".to_owned(),
+                unit: Unit::Count,
+                value: Some(value),
+            }],
+        })
+    }
+
+    fn poe_rules(_: &str) -> ChannelRules {
+        let state = |value, label: &str, status| ValueState {
+            value,
+            label: label.to_owned(),
+            status,
+        };
+        ChannelRules {
+            thresholds: Thresholds::default(),
+            states: vec![
+                state(0, "off", Status::Up),
+                state(2, "on", Status::Up),
+                state(3, "overload", Status::Down),
+                state(7, "voltage-low", Status::Warning),
+            ],
+        }
+    }
+
+    #[test]
+    fn rated_status_values_decide_the_state() {
+        let spec = SensorSpec::Oid {
+            oid: vec![1, 3, 6, 1, 4, 1, 9, 0],
+            mode: crate::sensors::snmp::OidMode::Gauge,
+            scale: 1.0,
+            unit: None,
+        };
+        assert_eq!(
+            assess_with(&spec, &gauge(2.0), &poe_rules),
+            Assessment::Healthy("on (2)".to_owned())
+        );
+        assert_eq!(
+            assess_with(&spec, &gauge(3.0), &poe_rules),
+            Assessment::Unhealthy("overload (3) gilt als Ausfall".to_owned())
+        );
+        assert_eq!(
+            assess_with(&spec, &gauge(7.0), &poe_rules),
+            Assessment::Degraded("voltage-low (7) gilt als Warnung".to_owned())
+        );
+        assert!(matches!(
+            assess_with(&spec, &gauge(42.0), &poe_rules),
+            Assessment::Degraded(m) if m.starts_with("Unbekannter Statuswert 42")
+        ));
+        // Without ratings a status value is just a number.
+        assert_eq!(
+            assess(&spec, &gauge(3.0), &none),
+            Assessment::Healthy("OK".to_owned())
+        );
+    }
+
+    #[test]
+    fn rated_interface_status_replaces_the_built_in_rule() {
+        let spec = SensorSpec::InterfaceStatus { if_index: 1 };
+        let mild = |_: &str| ChannelRules {
+            thresholds: Thresholds::default(),
+            states: vec![
+                ValueState {
+                    value: 1,
+                    label: "up".to_owned(),
+                    status: Status::Up,
+                },
+                ValueState {
+                    value: 2,
+                    label: "down".to_owned(),
+                    status: Status::Warning,
+                },
+            ],
+        };
+        assert_eq!(
+            assess_with(&spec, &status_reading(Some(2.0)), &mild),
+            Assessment::Degraded("down (2) gilt als Warnung".to_owned())
+        );
+        assert!(matches!(
+            assess_with(&spec, &status_reading(Some(2.0)), &|_| {
+                ChannelRules::default()
+            }),
+            Assessment::Unhealthy(_)
+        ));
+        assert!(matches!(
+            assess_with(&spec, &status_reading(None), &mild),
+            Assessment::Failed(_)
+        ));
     }
 }

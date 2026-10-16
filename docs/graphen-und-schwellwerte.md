@@ -41,15 +41,37 @@ Betroffen: letzte Abfrage und Meldungen der Sensoren, Statuswechsel und Sendever
 
 ## Schwellwerte
 
-Je Kanal (nicht bei Statuskanälen) vier optionale Grenzen: **Warnung über / unter** und **Down über / unter**. Eingabe in der Anzeigeeinheit
+Je Kanal (nicht bei Statuskanälen) vier optionale Grenzen: **Warnung über / unter** und **Ausfall über / unter**. Eingabe in der Anzeigeeinheit
 (Verkehr in Mbit/s, Dezimalkomma erlaubt), gespeichert in der Basiseinheit (`channels.warn_above` usw., Migration `0007`).
 
-- Ein Wert löst aus, wenn er die Grenze **strikt über- bzw. unterschreitet**; Down hat Vorrang vor Warnung.
-- Warnung → Sensorstatus `Warning`, Down-Grenze → `Down`, jeweils **sofort ohne Entprellung** (anders als Messfehler, siehe `docs/poller.md`);
-  die Meldung nennt Kanal, Wert und Grenze („Eingehend: 90 Mbit/s liegt über der Down-Grenze 80 Mbit/s“).
-- Prüfung: Down-Grenzen dürfen nicht milder als Warngrenzen sein, die obere Grenze nicht unter der unteren liegen, alles endlich. Fehler erscheinen auf der
+- Ein Wert löst aus, wenn er die Grenze **strikt über- bzw. unterschreitet**; Ausfall hat Vorrang vor Warnung.
+- Warnung → Sensorstatus `Warning`, Ausfallgrenze → `Down`, jeweils **sofort ohne Entprellung** (anders als Messfehler, siehe `docs/poller.md`);
+  die Meldung nennt Kanal, Wert und Grenze („Eingehend: 90 Mbit/s liegt über der Ausfallgrenze 80 Mbit/s“).
+- Prüfung: Ausfallgrenzen dürfen nicht milder als Warngrenzen sein, die obere Grenze nicht unter der unteren liegen, alles endlich. Fehler erscheinen auf der
   Seite, die Eingaben bleiben stehen. Nur Administratoren können speichern (CSRF-geschützt).
 - Wirksam ab dem nächsten Zyklus (der Poller liest die Grenzen jedes Mal neu).
+
+## Statuswerte bewerten
+
+Sensoren mit benannten Statuswerten – eigene OID-Sensoren, deren MIB-Objekt eine Aufzählung hat (z. B. `tpPoePowerStatus`: off, on,
+overload, short, hardware-fault …, `entPhySensorOperStatus`, `ifOperStatus`), und der Interface-Status-Sensor – haben auf der Detailseite
+den Bereich **„Statuswerte“**: je Wert **In Ordnung**, **Warnung** oder **Ausfall** (gespeichert in `value_states`, Migration `0012`).
+
+- **Bewertet:** Der gemessene Wert bestimmt den Status sofort (wie Schwellwerte, ohne Entprellung); die Meldung nennt den Wert beim Namen
+  („overload (3) gilt als Ausfall“, im Normalfall „on (2)“). Ein Wert, der nicht in der Liste steht, ist eine Warnung („Unbekannter Statuswert 42“).
+  Schwellwerte gelten zusätzlich; der schlechtere Befund gewinnt.
+- **Vorschlag beim Anlegen:** Neue eigene OID-Sensoren (Formular, „Werte suchen“) bekommen die Bewertung aus den Namen der Werte, wenn darunter
+  klare Fehler- oder Warnwörter sind: `fail`, `fault`, `critical`, `error`, `overload`, `short`, `overtemp`, `nonoperational`, `notPresent`,
+  `lowerLayerDown`, `down` … → Ausfall; `warn`, `degraded`, `unavailable`, `testing`, `nonstandard`, `voltage-high/-low`, `unknown` → Warnung;
+  alles andere (`ok`, `on`, `off`, `enabled`, `disable` …) → In Ordnung. Verneinungen wie `noError` bleiben in Ordnung. Sind alle Werte harmlos,
+  bleibt der Sensor unbewertet.
+- **Bestehende Sensoren** bleiben unbewertet (der Wert ändert den Status nicht), bis die Bewertung gespeichert wird; das Formular zeigt dafür den Vorschlag.
+  „Bewertung ausschalten“ entfernt sie wieder.
+- **Interface-Status:** ohne eigene Bewertung gilt wie bisher „nur up ist in Ordnung, alles andere Ausfall“; mit Bewertung z. B. „down“ nur als Warnung.
+  „Standard wiederherstellen“ kehrt zur eingebauten Regel zurück.
+- Gerätevorlagen übernehmen die Bewertungen (`docs/geraetevorlagen.md`). Leser sehen die Bewertung, nur Administratoren ändern sie.
+- Gemessen am SG2008P: „PoE-Status Port 1“ (`tpPoePowerStatus.1`) bekam beim Anlegen overload/short/hardware-fault/overtemperature = Ausfall,
+  nonstandard-pd/voltage-high/voltage-low = Warnung; Port 1 meldet „on (2)“, Port 2 „off (0)“, beide In Ordnung.
 
 ## Rollups und Aufbewahrung (`src/maintenance.rs`)
 

@@ -75,8 +75,8 @@ Auf der Sensorseite eines Geräts öffnet **Werte suchen** eine Liste aller Mess
 - Sensorliste und Detailseite nennen OID-Sensoren mit Namen und Modul („tpSysMonitorCpu5Seconds.1 (TPLINK-SYSMONITOR-MIB) · Wert, Einheit %“).
 - **Statuswerte im Klartext**: Hat das Objekt eine Aufzählung (z. B. `ifOperStatus`: 1 = up, 2 = down …), zeigen Kachel, Graph-Achse und Tabelle
   „down (2)“. Das gilt auch für den eingebauten Interface-Status-Sensor.
-- Noch nicht: Ein eigener OID-Sensor bewertet Aufzählungswerte nicht selbst (ein `ifOperStatus` von „down (2)“ ist „In Ordnung“, solange kein
-  Schwellwert greift). Abhilfe vorerst über Schwellwerte, z. B. „Down über 1“ für ifOperStatus; besser ist der Interface-Status-Sensor.
+- **Statuswerte bewerten:** Je Wert einer Aufzählung lässt sich festlegen, ob er In Ordnung, eine Warnung oder ein Ausfall ist; neue Sensoren bekommen
+  einen Vorschlag aus den Namen der Werte (`docs/graphen-und-schwellwerte.md`, Abschnitt „Statuswerte bewerten“).
 
 ## Technik
 

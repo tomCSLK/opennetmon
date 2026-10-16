@@ -123,10 +123,13 @@ fn state_label(enabled: bool) -> &'static str {
 }
 
 fn limits_note(limits: &[tpl::Limits]) -> &'static str {
-    if limits.is_empty() {
-        ""
-    } else {
-        " · mit Schwellwerten"
+    let states = limits.iter().any(|l| !l.states.is_empty());
+    let thresholds = limits.iter().any(|l| !l.thresholds().is_empty());
+    match (thresholds, states) {
+        (true, true) => " · mit Schwellwerten und Statusbewertung",
+        (true, false) => " · mit Schwellwerten",
+        (false, true) => " · mit Statusbewertung",
+        (false, false) => "",
     }
 }
 

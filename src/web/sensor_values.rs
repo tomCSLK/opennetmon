@@ -301,7 +301,8 @@ pub async fn create(
             .await;
             n += 1;
         }
-        result?;
+        crate::web::sensor_text::rate_new_sensor(&state.pool, result?, &p.spec, &state.mib_index())
+            .await?;
         created += 1;
     }
     tracing::info!(user = %user.username, device = id, created, activate, "sensors created from value discovery");

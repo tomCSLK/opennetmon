@@ -14,7 +14,8 @@ use crate::devices::Device;
 use crate::error::{Error, Result};
 use crate::sensors::Unit;
 use crate::sensors::format::{channel_label, input_unit, parse_threshold, threshold_input};
-use crate::status::{Status, Thresholds};
+use crate::sensors::spec::SensorSpec;
+use crate::status::{Status, Thresholds, ValueState};
 use crate::storage::devices;
 use crate::storage::measurements::{Range, chart_data, latest_values};
 use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
@@ -51,6 +52,21 @@ struct ChannelView {
     has_thresholds: bool,
 }
 
+struct StateRow {
+    value: i64,
+    label: String,
+    /// `up`, `warning` or `down`.
+    status: &'static str,
+}
+
+/// The rating form for sensors whose values have names (MIB enumeration).
+struct StatesView {
+    rows: Vec<StateRow>,
+    /// Ratings are stored; otherwise the rows show a suggestion (or the interface default).
+    stored: bool,
+    interface: bool,
+}
+
 struct RangeLink {
     value: &'static str,
     label: &'static str,
@@ -83,6 +99,7 @@ struct DetailTemplate {
     /// Name field of the rename form (the rejected input after an error).
     new_name: String,
     rename_failed: bool,
+    states: Option<StatesView>,
 }
 
 fn now_ms() -> i64 {
@@ -133,6 +150,7 @@ async fn render(
     let latest = latest_values(&state.pool, &sensor.channels).await?;
     let mibs = state.mib_index();
     let value_format = ValueFormat::for_sensor(&sensor.spec, &mibs);
+    let states = states_view(&sensor, &value_format);
     let channels = sensor
         .channels
         .iter()
@@ -206,11 +224,71 @@ async fn render(
         flash,
         error,
         rename_failed: rejected_name.is_some(),
+        states,
         new_name: rejected_name.unwrap_or_else(|| sensor.name.clone()),
         sensor,
         device,
     };
     Ok(page.render()?)
+}
+
+/// The channel whose values can be rated: the single channel of an OID value with named values or
+/// of an interface status sensor.
+fn rated_channel(sensor: &SensorRecord) -> Option<&ChannelRecord> {
+    match sensor.spec {
+        SensorSpec::InterfaceStatus { .. } => sensor.channels.first(),
+        SensorSpec::Oid { .. } => sensor.channels.first().filter(|c| c.unit == Unit::Count),
+        _ => None,
+    }
+}
+
+/// Named values: the MIB enumeration plus stored ratings of values the MIB does not (or no longer) list.
+fn named_values(channel: &ChannelRecord, format: &ValueFormat) -> Vec<(i64, String)> {
+    let mut values = format.labels.clone();
+    for s in &channel.states {
+        if !values.iter().any(|(v, _)| *v == s.value) {
+            values.push((s.value, s.label.clone()));
+        }
+    }
+    values.sort_by_key(|(v, _)| *v);
+    values
+}
+
+fn states_view(sensor: &SensorRecord, format: &ValueFormat) -> Option<StatesView> {
+    let channel = rated_channel(sensor)?;
+    let values = named_values(channel, format);
+    if values.is_empty() {
+        return None;
+    }
+    let interface = matches!(sensor.spec, SensorSpec::InterfaceStatus { .. });
+    let stored = !channel.states.is_empty();
+    let rows = values
+        .into_iter()
+        .map(|(value, label)| {
+            let status = match channel.states.iter().find(|s| s.value == value) {
+                Some(s) => s.status,
+                None if stored => Status::Warning, // unrated value of a rated channel
+                None if interface => {
+                    if value == 1 {
+                        Status::Up
+                    } else {
+                        Status::Down
+                    }
+                }
+                None => crate::status::suggest_status(&label),
+            };
+            StateRow {
+                value,
+                label,
+                status: status.as_str(),
+            }
+        })
+        .collect();
+    Some(StatesView {
+        rows,
+        stored,
+        interface,
+    })
 }
 
 pub async fn detail(
@@ -355,6 +433,60 @@ pub async fn save_thresholds(
         }
         Err(e) => Err(e),
     }
+}
+
+/// Saves (`action=save`, fields `st_<value>` = `up`/`warning`/`down`) or removes (`action=reset`)
+/// the ratings of the sensor's status values.
+pub async fn save_states(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Result<Response> {
+    user.require_admin()?;
+    user.verify_csrf(form.get("csrf_token").map_or("", String::as_str))?;
+    let (sensor, _) = load(&state, id).await?;
+    let format = ValueFormat::for_sensor(&sensor.spec, &state.mib_index());
+    let channel = rated_channel(&sensor).ok_or_else(|| {
+        Error::Invalid("Dieser Sensor hat keine benannten Statuswerte.".to_owned())
+    })?;
+    let states = match form.get("action").map(String::as_str) {
+        Some("reset") => Vec::new(),
+        Some("save") => named_values(channel, &format)
+            .into_iter()
+            .map(|(value, label)| {
+                let status = match form.get(&format!("st_{value}")).map(String::as_str) {
+                    Some("up") => Status::Up,
+                    Some("warning") => Status::Warning,
+                    Some("down") => Status::Down,
+                    _ => {
+                        return Err(Error::Invalid(format!(
+                            "{label}: Bitte eine Bewertung wählen."
+                        )));
+                    }
+                };
+                Ok(ValueState {
+                    value,
+                    label,
+                    status,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?,
+        _ => return Err(Error::Invalid("Unbekannte Aktion.".to_owned())),
+    };
+    if states.is_empty() && form.get("action").map(String::as_str) == Some("save") {
+        return Err(Error::Invalid(
+            "Dieser Sensor hat keine benannten Statuswerte.".to_owned(),
+        ));
+    }
+    store::set_value_states(&state.pool, id, channel.id, &states).await?;
+    tracing::info!(user = %user.username, sensor = id, rated = states.len(), "status value ratings saved");
+    let msg = if states.is_empty() {
+        "states_reset"
+    } else {
+        "states_saved"
+    };
+    Ok(Redirect::to(&format!("/sensors/{id}?msg={msg}")).into_response())
 }
 
 #[derive(Deserialize)]
@@ -631,7 +763,7 @@ mod tests {
         let path = format!("/sensors/{sensor}/thresholds");
         for (fields, expected) in [
             ("wa_{0}=abc".to_owned(), "Zahl"),
-            ("wa_{0}=90&da_{0}=50".to_owned(), "Down-Grenze"),
+            ("wa_{0}=90&da_{0}=50".to_owned(), "Ausfallgrenze"),
             ("wa_{0}=10&wb_{0}=20".to_owned(), "unteren Grenze"),
         ] {
             let body = format!(
@@ -832,5 +964,169 @@ mod tests {
                 .name,
             "Uplink Keller"
         );
+    }
+
+    async fn device(h: &Harness) -> i64 {
+        let profile = add_v2c_profile(h, "Q", "public").await;
+        save_device(
+            &h.state.pool,
+            None,
+            DeviceInput {
+                name: "Switch Q".to_owned(),
+                host: "192.0.2.9".to_owned(),
+                group_id: None,
+                profile_id: profile,
+                polling: Polling::default(),
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    const IF_OPER_1: &str = "1.3.6.1.2.1.2.2.1.8.1";
+
+    #[tokio::test]
+    async fn named_status_values_are_suggested_rated_and_reset() {
+        let h = harness(true).await;
+        let dev = device(&h).await;
+        let spec = SensorSpec::Oid {
+            oid: crate::sensors::spec::parse_oid(IF_OPER_1).unwrap(),
+            mode: crate::sensors::snmp::OidMode::Gauge,
+            scale: 1.0,
+            unit: None,
+        };
+        let sensor = create_sensor(&h.state.pool, dev, "Port 1 roh", &spec)
+            .await
+            .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        for needle in [
+            "Noch nicht bewertet",
+            "<select name=\"st_1\"",
+            "<option value=\"down\" selected>Ausfall</option>",
+            "<option value=\"warning\" selected>Warnung</option>",
+            "lowerLayerDown",
+        ] {
+            assert!(page.body.contains(needle), "{needle}: {}", page.body);
+        }
+
+        let path = format!("/sensors/{sensor}/states");
+        let mut form = format!("csrf_token={csrf}&action=save");
+        for value in 1..=7 {
+            let rating = match value {
+                1 | 5 => "up",
+                2 => "warning",
+                _ => "down",
+            };
+            form.push_str(&format!("&st_{value}={rating}"));
+        }
+        let reply = send(&h.app, post(&path, Some(&admin), &form)).await;
+        assert_eq!(
+            reply.location(),
+            format!("/sensors/{sensor}?msg=states_saved")
+        );
+        let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
+        let states = &stored.channels[0].states;
+        assert_eq!(states.len(), 7);
+        assert_eq!(
+            (states[1].label.as_str(), states[1].status),
+            ("down", Status::Warning)
+        );
+        let page = send(&h.app, get(reply.location(), Some(&admin))).await;
+        assert!(
+            page.body.contains("bewertet</span>") && page.body.contains("Bewertung ausschalten")
+        );
+
+        let incomplete = send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!("csrf_token={csrf}&action=save&st_1=up"),
+            ),
+        )
+        .await;
+        assert_eq!(incomplete.status, StatusCode::UNPROCESSABLE_ENTITY);
+
+        let (viewer, vcsrf) = login(&h, "bert").await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&viewer))).await;
+        assert!(page.body.contains("down (2): Warnung") && !page.body.contains("/states"));
+        assert_eq!(
+            send(
+                &h.app,
+                post(
+                    &path,
+                    Some(&viewer),
+                    &format!("csrf_token={vcsrf}&action=reset")
+                )
+            )
+            .await
+            .status,
+            StatusCode::FORBIDDEN
+        );
+
+        let reply = send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!("csrf_token={csrf}&action=reset"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/sensors/{sensor}?msg=states_reset")
+        );
+        let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
+        assert!(stored.channels[0].states.is_empty());
+
+        // Sensors without named values have no ratings.
+        let ping = create_sensor(&h.state.pool, dev, "Ping", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let page = send(&h.app, get(&format!("/sensors/{ping}"), Some(&admin))).await;
+        assert!(!page.body.contains("Statuswerte"));
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/sensors/{ping}/states"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&action=reset"),
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn the_interface_status_default_can_be_softened() {
+        let h = harness(true).await;
+        let dev = device(&h).await;
+        let sensor = create_sensor(
+            &h.state.pool,
+            dev,
+            "Status Port 1",
+            &SensorSpec::InterfaceStatus { if_index: 1 },
+        )
+        .await
+        .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        assert!(
+            page.body
+                .contains("Standard: nur <em>up</em> ist in Ordnung")
+        );
+        assert!(page.body.contains("<select name=\"st_2\" aria-label=\"Bewertung für down\" class=\"compact\">\n              <option value=\"up\">In Ordnung</option>\n              <option value=\"warning\">Warnung</option>\n              <option value=\"down\" selected>"));
+        let form = format!(
+            "csrf_token={csrf}&action=save&st_1=up&st_2=warning&st_3=down&st_4=down&st_5=down&st_6=down&st_7=down"
+        );
+        send(
+            &h.app,
+            post(&format!("/sensors/{sensor}/states"), Some(&admin), &form),
+        )
+        .await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        assert!(page.body.contains("Standard wiederherstellen"));
     }
 }

@@ -153,6 +153,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/templates/{id}/delete", post(templates::delete))
         .route("/sensors/{id}/rename", post(sensor_detail::rename))
+        .route("/sensors/{id}/states", post(sensor_detail::save_states))
         .route("/sensors/{id}/toggle", post(sensors::toggle))
         .route("/sensors/{id}/delete", post(sensors::delete))
         .route(
@@ -236,6 +237,10 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "sensors_deleted" => Some("Sensoren gelöscht."),
         "thresholds_saved" => Some("Schwellwerte gespeichert."),
         "sensor_renamed" => Some("Sensor umbenannt."),
+        "states_saved" => {
+            Some("Bewertung der Statuswerte gespeichert. Sie gilt ab der nächsten Abfrage.")
+        }
+        "states_reset" => Some("Bewertung der Statuswerte entfernt."),
         "order_saved" => Some("Reihenfolge gespeichert."),
         "template_created" => Some(
             "Vorlage gespeichert. Sie lässt sich beim Anlegen eines Geräts oder mit „Vorlage anwenden“ nutzen.",

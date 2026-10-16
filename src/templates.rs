@@ -16,7 +16,7 @@ use crate::error::Error;
 use crate::sensors::snmp::{OidMode, numeric};
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
 use crate::snmp::{SYS_OBJECT_ID, SnmpClient, SnmpError, SnmpValue};
-use crate::status::Thresholds;
+use crate::status::{Status, Thresholds, ValueState};
 use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
 
 /// Upper bound of rules in one template.
@@ -37,6 +37,28 @@ pub struct Limits {
     pub down_above: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub down_below: Option<f64>,
+    /// Ratings of status values (`up`, `warning`, `down`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub states: Vec<StateRule>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StateRule {
+    pub value: i64,
+    pub label: String,
+    pub status: String,
+}
+
+impl StateRule {
+    fn state(&self) -> Option<ValueState> {
+        let status = Status::parse(&self.status)
+            .filter(|s| matches!(s, Status::Up | Status::Warning | Status::Down))?;
+        Some(ValueState {
+            value: self.value,
+            label: self.label.clone(),
+            status,
+        })
+    }
 }
 
 impl Limits {
@@ -48,19 +70,32 @@ impl Limits {
             down_below: self.down_below,
         }
     }
+
+    pub fn value_states(&self) -> Vec<ValueState> {
+        self.states.iter().filter_map(StateRule::state).collect()
+    }
 }
 
 /// The thresholds of the channels that have any.
 fn limits_of(channels: &[ChannelRecord]) -> Vec<Limits> {
     channels
         .iter()
-        .filter(|c| c.thresholds != Thresholds::default())
+        .filter(|c| c.thresholds != Thresholds::default() || !c.states.is_empty())
         .map(|c| Limits {
             key: c.key.clone(),
             warn_above: c.thresholds.warn_above,
             warn_below: c.thresholds.warn_below,
             down_above: c.thresholds.down_above,
             down_below: c.thresholds.down_below,
+            states: c
+                .states
+                .iter()
+                .map(|s| StateRule {
+                    value: s.value,
+                    label: s.label.clone(),
+                    status: s.status.as_str().to_owned(),
+                })
+                .collect(),
         })
         .collect()
 }
@@ -180,6 +215,11 @@ fn check_limits(name: &str, limits: &[Limits]) -> Result<(), String> {
     limits.iter().try_for_each(|l| {
         if l.key.is_empty() || l.key.len() > 32 {
             return Err(format!("„{name}“: ungültiger Kanal."));
+        }
+        if l.value_states().len() != l.states.len()
+            || l.states.iter().any(|s| s.label.chars().count() > 64)
+        {
+            return Err(format!("„{name}“: ungültige Statusbewertung."));
         }
         l.thresholds()
             .validate()
@@ -750,6 +790,13 @@ pub async fn apply(
                 .filter_map(|l| by_key.get(l.key.as_str()).map(|id| (*id, l.thresholds())))
                 .collect();
             store::set_thresholds(pool, id, &limits).await?;
+            for l in &new.limits {
+                if let Some(channel) = by_key.get(l.key.as_str())
+                    && !l.states.is_empty()
+                {
+                    store::set_value_states(pool, id, *channel, &l.value_states()).await?;
+                }
+            }
         }
         created.push(new.name);
     }
@@ -778,6 +825,7 @@ mod tests {
                 key: c.key.to_owned(),
                 unit: c.unit,
                 thresholds: Thresholds::default(),
+                states: Vec::new(),
             })
             .collect();
         SensorRecord {
@@ -905,6 +953,30 @@ mod tests {
             body,
             "JSON round trip"
         );
+
+        // Ratings of status values travel with the template.
+        let (mut sensors, interfaces) = source();
+        sensors[5].channels[0].states = vec![ValueState {
+            value: 3,
+            label: "overload".to_owned(),
+            status: Status::Down,
+        }];
+        let body = build(
+            &sensors,
+            Some(&interfaces),
+            &options(PortChoice::Skip, PortChoice::Skip),
+        )
+        .unwrap();
+        assert_eq!(body.oids[0].limits[0].states[0].status, "down");
+        assert_eq!(Body::from_json(&body.to_json().unwrap()).unwrap(), body);
+        let answering: HashSet<Vec<u64>> = [POE_1.to_vec()].into();
+        let planned = plan(&body, &facts(&[], None, &answering));
+        let poe = planned
+            .create
+            .iter()
+            .find(|n| n.name == "PoE-Leistung Port 1")
+            .unwrap();
+        assert_eq!(poe.limits[0].value_states()[0].status, Status::Down);
     }
 
     #[test]

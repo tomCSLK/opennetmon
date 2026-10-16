@@ -293,8 +293,16 @@ pub async fn create(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let device = load_device(&state, id).await?;
-    let outcome = match form.to_spec(&state.mib_index()) {
-        Ok((name, spec)) => store::create_sensor(&state.pool, id, &name, &spec).await,
+    let mibs = state.mib_index();
+    let outcome = match form.to_spec(&mibs) {
+        Ok((name, spec)) => match store::create_sensor(&state.pool, id, &name, &spec).await {
+            Ok(sensor) => {
+                crate::web::sensor_text::rate_new_sensor(&state.pool, sensor, &spec, &mibs)
+                    .await
+                    .map(|()| sensor)
+            }
+            Err(e) => Err(e),
+        },
         Err(e) => Err(e),
     };
     match outcome {
@@ -1249,6 +1257,43 @@ mod tests {
             .await
             .status,
             StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn new_sensors_with_named_failure_values_get_suggested_ratings() {
+        let h = harness(true).await;
+        let device = device_on(&h, 161).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let path = format!("/devices/{device}/sensors");
+        for (name, oid) in [
+            ("Port 1", "IF-MIB%3A%3AifOperStatus.1"),
+            ("Laufzeit", "sysUpTime"),
+        ] {
+            let reply = send(
+                &h.app,
+                post(
+                    &path,
+                    Some(&admin),
+                    &format!(
+                        "csrf_token={csrf}&kind=oid&name={name}&oid={oid}&mode=auto&scale=1&unit="
+                    ),
+                ),
+            )
+            .await;
+            assert_eq!(reply.status, StatusCode::SEE_OTHER, "{}", reply.body);
+        }
+        let sensors = store::list_sensors(&h.state.pool, device).await.unwrap();
+        let port = sensors.iter().find(|s| s.name == "Port 1").unwrap();
+        let states = &port.channels[0].states;
+        let rating = |label: &str| states.iter().find(|s| s.label == label).map(|s| s.status);
+        assert_eq!(rating("up"), Some(crate::status::Status::Up));
+        assert_eq!(rating("down"), Some(crate::status::Status::Down));
+        assert_eq!(rating("testing"), Some(crate::status::Status::Warning));
+        let uptime = sensors.iter().find(|s| s.name == "Laufzeit").unwrap();
+        assert!(
+            uptime.channels[0].states.is_empty(),
+            "plain numbers stay unrated"
         );
     }
 }
