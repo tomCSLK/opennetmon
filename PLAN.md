@@ -1,7 +1,7 @@
-# Plan: `netmon` – SNMP-Monitor für Linux (Arbeitstitel „PRTG-Nachbau")
+# Plan: netmon – SNMP-Monitor für Linux
 
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
-> „PRTG" ist eine Marke von Paessler und nur ein interner Arbeitstitel.
+> Der Name ist **netmon** (festgelegt am 2026-10-16, mit Logo). „PRTG" ist eine Marke von Paessler; netmon ist nur vom Bedienkonzept inspiriert.
 > **Status (2026-10-16): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 sind Login,
 > SNMP-Credential-Profile, Gruppen, Geräte und der Verbindungstest umgesetzt. **MVP-Schritt 1 ist damit komplett.**
 > Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); **der Poller mit Statuslogik und Ereignislog läuft ebenfalls** (`docs/poller.md`). **MVP 3 (Sensor-Oberfläche und Interface-Discovery) ist ebenfalls umgesetzt.** **MVP 4 ist umgesetzt** (Schwellwerte, Detailseite mit uPlot-Graph 1h/24h/7d/30d, Rollups und Retention; `docs/graphen-und-schwellwerte.md`). **MVP 6 (E-Mail-Benachrichtigung, einstellbar in der Oberfläche, getestet gegen Test-SMTP-Server) ist umgesetzt** (`docs/benachrichtigung.md`). **Die Begrenzung der Anmeldeversuche, die Anzeige aller Zeiten in der Browser-Zeitzone das neue Oberflächendesign (Seitenleiste, Kacheln, hell/dunkel) und die Messwerte-Tabelle wie die PRTG-Livedaten sind umgesetzt. **MIB-Import Schritt 1** (Parser, Standard-MIBs, Upload, OID per Name mit Typ/Einheit/Klartext; `docs/mibs.md`) ist umgesetzt; **Schritt 2** (Werte suchen: bekannte und frei wählbare Tabellen walken, z. B. PoE je Port, CPU, Speicher, Temperaturen, Lüfter; neue Sensoren standardmäßig inaktiv, Aktivieren einzeln oder gesammelt; getestet am SG2008P) ist umgesetzt; **Schritt 3 (Gerätevorlagen) ist umgesetzt:** Vorlage aus einem fertig eingerichteten Gerät speichern, beim Anlegen eines Geräts automatisch per `sysObjectID` oder später per Knopf anwenden, nur Fehlendes anlegen (`docs/geraetevorlagen.md`, getestet SG2008 → SG2008). **Die Statusbewertung von Aufzählungswerten ist umgesetzt** (je Wert In Ordnung/Warnung/Ausfall, Vorschlag aus den Namen beim Anlegen, auch für den Interface-Status; `docs/graphen-und-schwellwerte.md`, getestet am SG2008P).** **Umbenennen von Sensoren (Detailseite) und die Reihenfolge (automatisch natürlich sortiert, Sensoren nach Typ; von Hand per Ziehen, ↑/↓ oder Position für Gruppen, Geräte und Sensoren) sind umgesetzt** (`docs/geraete-und-gruppen.md`, `docs/sensoren.md`). **Der Betrieb ist vorbereitet** (systemd-Unit, Installer, Backup, Proxy-Beispiele; `docs/betrieb.md`). Als Nächstes: Installation auf dem echten Server, echter Mailserver des Nutzers, htmx und Feinschliff.**
@@ -150,9 +150,8 @@ Begrenzung der Anmeldeversuche: umgesetzt (`auth::throttle`, `docs/benutzer-und-
 
 ## Offene Punkte (vom Nutzer zu klären)
 
-- Endgültiger Projektname
 - Ist der Server vom Internet getrennt? (Updates, E-Mail-Versand)
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller ändern und lokal nachtragen
 - ER605 (kein SNMP): nur per Ping überwachen oder später über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- htmx und uPlot sind noch nicht eingebunden; die Skripte müssten aus dem Netz geladen und lokal vendort werden (dein Okay nötig)
+- uPlot ist eingebunden; htmx ist noch nicht eingebunden (dafür braucht es dein Okay zum Herunterladen)

@@ -1,7 +1,9 @@
-# CLAUDE.md – PRTG Clone für Linux (Arbeitstitel)
+# CLAUDE.md – netmon
 
-> Hinweis: „PRTG" ist eine Marke von Paessler. Der Titel ist nur ein interner Arbeitstitel.
-> Crate-, Binary- und Paketname: `netmon` (Platzhalter, später umbenennbar).
+> Name: **netmon** („Network Monitoring“), festgelegt am 2026-10-16; Crate, Binary, Paket und GitHub-Repo (`tomCSLK/netmon`) heißen so.
+> Logo: Original außerhalb des Repos (`~/Bilder/netmon_Logo_v1.jpeg`), daraus `static/logo-mark.png` (Seitenleiste, Touch-Icon),
+> `static/favicon-32.png`/`-64.png`, `static/logo-wide.jpg` (Anmeldeseite) und `docs/assets/netmon-logo.jpg` (README).
+> „PRTG" ist eine Marke von Paessler; netmon ist nur vom Bedienkonzept inspiriert und steht in keiner Verbindung zu Paessler.
 
 ## Ziel
 
@@ -196,7 +198,6 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 
 ## Offene Punkte (vom Nutzer zu klären)
 
-- Endgültiger Projektname
 - Ist der Server vom Internet getrennt? (relevant für Updates und E-Mail-Versand)
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller auf ein längeres
   Passwort ändern und lokal in `~/.config/netmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
@@ -204,4 +205,4 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - uPlot 1.6.32 ist eingebunden (`static/vendor/uplot/`); htmx ist noch nicht eingebunden (die Oberfläche ist sonst rein serverseitig gerendert) – dafür braucht es dein Okay zum Herunterladen
 
-Geklärt: Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.
+Geklärt: Name netmon (mit Logo), Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

@@ -1,9 +1,11 @@
 # netmon
 
+<p align="center"><img src="docs/assets/netmon-logo.jpg" alt="netmon – Network Monitoring" width="600"></p>
+
 Agentloses Netzwerk-Monitoring per SNMP mit Weboberfläche, inspiriert vom Bedienkonzept von PRTG.
 Ein einzelnes, statisch gelinktes Binary (Rust) mit SQLite – gedacht für den Betrieb auf einem Ubuntu Server ohne GUI, Bedienung im Browser.
 
-> „netmon“ ist ein Arbeitstitel. „PRTG“ ist eine Marke von Paessler; dieses Projekt steht in keiner Verbindung zu Paessler.
+> „PRTG“ ist eine Marke von Paessler; netmon steht in keiner Verbindung zu Paessler.
 > Zielumgebung ist ein privates Netz mit TP-Link Omada (Switches und Access Points per SNMPv3); es funktioniert mit jedem Gerät, das SNMP v2c oder v3 spricht.
 
 ## Status

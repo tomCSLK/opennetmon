@@ -2,7 +2,7 @@
 name = "netmon"
 version = "0.1.0"
 edition = "2024"
-description = "Agentless SNMP network monitor (working title)"
+description = "netmon – agentless SNMP network monitoring with a web interface"
 publish = false
 
 [dependencies]

@@ -142,10 +142,8 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 .brand { display: flex; align-items: center; gap: .6rem; padding: .25rem .5rem; color: #fff; font-weight: 700;
   font-size: 1.05rem; letter-spacing: .01em; }
 .brand:hover { color: #fff; text-decoration: none; }
-.brand-mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
-  background: linear-gradient(135deg, #3b82f6, #22c55e); color: #fff; }
-.brand-mark svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4;
-  stroke-linecap: round; stroke-linejoin: round; }
+.brand-mark { width: 36px; height: 36px; border-radius: 9px; display: block; flex: none;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / .08); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-label { margin: .25rem .6rem .35rem; font-size: .72rem; font-weight: 600; letter-spacing: .08em;
   text-transform: uppercase; color: var(--sidebar-muted); }
@@ -364,8 +362,8 @@ label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font
 .auth { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem;
   background: radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 45%), var(--bg); }
 .auth-card { width: 100%; max-width: 400px; }
-.auth-brand { display: flex; align-items: center; justify-content: center; gap: .6rem; margin-bottom: 1.25rem;
-  font-weight: 700; font-size: 1.25rem; }
+.auth-logo { display: block; width: 100%; height: auto; margin-bottom: 1.25rem; border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); }
 .auth .card { padding: 1.75rem; box-shadow: var(--shadow-lg); }
 .auth h1 { font-size: 1.25rem; margin-bottom: .2rem; }
 .auth form.stack > button[type=submit] { align-self: stretch; }
