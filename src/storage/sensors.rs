@@ -176,6 +176,17 @@ pub async fn create_sensor(
     name: &str,
     spec: &SensorSpec,
 ) -> Result<i64> {
+    create_sensor_with_state(pool, device_id, name, spec, true).await
+}
+
+/// Like [`create_sensor`], but the sensor may start inactive (not polled until activated).
+pub async fn create_sensor_with_state(
+    pool: &SqlitePool,
+    device_id: i64,
+    name: &str,
+    spec: &SensorSpec,
+    enabled: bool,
+) -> Result<i64> {
     let name = crate::devices::validate_name(name).map_err(|m| Error::Invalid(m.to_owned()))?;
     spec.validate().map_err(|m| Error::Invalid(m.to_owned()))?;
     let (if_index, oid, oid_mode, scale, unit_label) = match spec {
@@ -202,8 +213,8 @@ pub async fn create_sensor(
 
     let mut tx = pool.begin().await?;
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale, unit_label) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, enabled) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(device_id)
     .bind(name)
@@ -213,6 +224,7 @@ pub async fn create_sensor(
     .bind(oid_mode)
     .bind(scale)
     .bind(unit_label)
+    .bind(i64::from(enabled))
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| match e.as_database_error() {
@@ -277,6 +289,45 @@ pub async fn set_enabled(pool: &SqlitePool, id: i64, enabled: bool) -> Result<()
         return Err(Error::NotFound);
     }
     Ok(())
+}
+
+/// Activates or deactivates several sensors of one device; ids of other devices are ignored.
+/// Returns how many sensors were changed.
+pub async fn set_enabled_many(
+    pool: &SqlitePool,
+    device_id: i64,
+    ids: &[i64],
+    enabled: bool,
+) -> Result<u64> {
+    let mut tx = pool.begin().await?;
+    let mut changed = 0;
+    for id in ids {
+        changed += sqlx::query("UPDATE sensors SET enabled = ? WHERE id = ? AND device_id = ?")
+            .bind(i64::from(enabled))
+            .bind(id)
+            .bind(device_id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+    }
+    tx.commit().await?;
+    Ok(changed)
+}
+
+/// Deletes several sensors of one device (with channels and samples); other devices' ids are ignored.
+pub async fn delete_many(pool: &SqlitePool, device_id: i64, ids: &[i64]) -> Result<u64> {
+    let mut tx = pool.begin().await?;
+    let mut deleted = 0;
+    for id in ids {
+        deleted += sqlx::query("DELETE FROM sensors WHERE id = ? AND device_id = ?")
+            .bind(id)
+            .bind(device_id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+    }
+    tx.commit().await?;
+    Ok(deleted)
 }
 
 /// Deletes the sensor together with its channels and samples.
@@ -483,6 +534,46 @@ mod tests {
                 .thresholds
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn sensors_can_start_inactive_and_be_switched_in_bulk_per_device() {
+        let (_dir, pool, device) = setup().await;
+        let other: i64 = sqlx::query_scalar(
+            "INSERT INTO devices (name, host, profile_id) VALUES ('ap', '192.0.2.2', 1) RETURNING id",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let a = create_sensor_with_state(&pool, device, "A", &SensorSpec::Ping, false)
+            .await
+            .unwrap();
+        let b = create_sensor_with_state(&pool, device, "B", &SensorSpec::Uptime, false)
+            .await
+            .unwrap();
+        let foreign = create_sensor_with_state(&pool, other, "C", &SensorSpec::Ping, false)
+            .await
+            .unwrap();
+        assert!(
+            list_enabled_sensors(&pool).await.unwrap().is_empty(),
+            "inactive sensors are not polled"
+        );
+
+        assert_eq!(
+            set_enabled_many(&pool, device, &[a, b, foreign], true)
+                .await
+                .unwrap(),
+            2
+        );
+        assert_eq!(list_enabled_sensors(&pool).await.unwrap().len(), 2);
+        assert!(
+            !get_sensor(&pool, foreign).await.unwrap().unwrap().enabled,
+            "other devices are untouched"
+        );
+
+        assert_eq!(delete_many(&pool, device, &[a, foreign]).await.unwrap(), 1);
+        assert!(get_sensor(&pool, a).await.unwrap().is_none());
+        assert!(get_sensor(&pool, foreign).await.unwrap().is_some());
     }
 
     #[tokio::test]

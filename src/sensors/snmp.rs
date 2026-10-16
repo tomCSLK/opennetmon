@@ -29,7 +29,7 @@ fn reading(key: &str, unit: Unit, value: Option<f64>) -> ChannelReading {
 }
 
 /// A numeric value of any numeric SNMP type; `None` for text and "no such object".
-fn numeric(value: &SnmpValue) -> Option<f64> {
+pub(crate) fn numeric(value: &SnmpValue) -> Option<f64> {
     match value {
         SnmpValue::Integer(n) => Some(*n as f64),
         SnmpValue::Counter32(n) | SnmpValue::Gauge32(n) | SnmpValue::Timeticks(n) => {

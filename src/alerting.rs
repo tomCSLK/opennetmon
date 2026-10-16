@@ -50,7 +50,7 @@ fn word(change: &StatusChange) -> &'static str {
         Status::Warning => "Warnung",
         Status::Up => "Wieder in Ordnung",
         Status::Unknown => "Unbekannt",
-        Status::Paused => "Pausiert",
+        Status::Paused => "Inaktiv",
     }
 }
 

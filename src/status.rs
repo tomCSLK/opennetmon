@@ -40,7 +40,7 @@ impl Status {
             Self::Warning => "Warnung",
             Self::Down => "Ausfall",
             Self::Unknown => "Unbekannt",
-            Self::Paused => "Pausiert",
+            Self::Paused => "Inaktiv",
         }
     }
 

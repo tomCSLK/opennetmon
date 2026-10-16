@@ -20,6 +20,10 @@
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
       <button type="submit" class="secondary">Verbindung testen</button>
     </form>
+    <form method="post" action="/devices/{{ device.id }}/values">
+      <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+      <button type="submit" class="secondary">Werte suchen</button>
+    </form>
     <form method="post" action="/devices/{{ device.id }}/discover">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
       <button type="submit">
@@ -39,10 +43,10 @@
 {% endif %}
 
 <section class="card flush">
-  <div class="card-head"><h2>Sensoren</h2><span class="muted small">{{ rows.len() }}</span></div>
+  <div class="card-head"><h2>Sensoren</h2><span class="muted small">{{ rows.len() }} aktiv{% if !inactive.is_empty() %} · {{ inactive.len() }} inaktiv{% endif %}</span></div>
   {% if rows.is_empty() %}
   <div class="empty">
-    <strong>Noch keine Sensoren.</strong>
+    <strong>{% if inactive.is_empty() %}Noch keine Sensoren.{% else %}Keine aktiven Sensoren.{% endif %}</strong>
     {% if layout.is_admin %}Mit „Interfaces suchen“ lassen sich Ports aus dem Gerät übernehmen, unten lassen sich Ping, Uptime und eigene OIDs anlegen.{% endif %}
   </div>
   {% else %}
@@ -63,7 +67,7 @@
           <div class="row-actions">
             <form method="post" action="/sensors/{{ row.id }}/toggle">
               <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-              <button type="submit" class="ghost small">{% if row.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</button>
+              <button type="submit" class="ghost small">Deaktivieren</button>
             </form>
             <form method="post" action="/sensors/{{ row.id }}/delete">
               <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
@@ -79,6 +83,37 @@
   </div>
   {% endif %}
 </section>
+
+{% if !inactive.is_empty() %}
+<details class="card flush panel"{% if rows.is_empty() %} open{% endif %}>
+  <summary class="card-head"><h2>Inaktive Sensoren ({{ inactive.len() }})</h2></summary>
+  <p class="hint panel-hint">Werden nicht abgefragt und lösen keine Benachrichtigung aus, bis sie aktiviert sind.</p>
+  <form method="post" action="/devices/{{ device.id }}/sensors/bulk">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <div class="table-wrap">
+    <table>
+      <thead><tr>{% if layout.is_admin %}<th></th>{% endif %}<th>Sensor</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for row in inactive %}
+        <tr>
+          {% if layout.is_admin %}<td><input type="checkbox" name="s_{{ row.id }}" value="on" aria-label="{{ row.name }} auswählen"></td>{% endif %}
+          <td><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
+          <td><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if layout.is_admin %}
+    <div class="form-actions panel-actions">
+      <button type="submit" name="action" value="activate">Ausgewählte aktivieren</button>
+      <button type="submit" name="action" value="activate_all" class="secondary">Alle aktivieren</button>
+      <button type="submit" name="action" value="delete" class="ghost">Ausgewählte löschen</button>
+    </div>
+    {% endif %}
+  </form>
+</details>
+{% endif %}
 
 {% if layout.is_admin %}
 <section class="card">

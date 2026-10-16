@@ -29,7 +29,7 @@
   <div class="tile status-up"><div class="tile-value">{{ totals.up }}</div><div class="tile-label">In Ordnung</div></div>
   <div class="tile status-warning{% if totals.warning > 0 %} active{% endif %}"><div class="tile-value">{{ totals.warning }}</div><div class="tile-label">Warnung</div></div>
   <div class="tile status-down{% if totals.down > 0 %} active{% endif %}"><div class="tile-value">{{ totals.down }}</div><div class="tile-label">Ausfall</div></div>
-  <div class="tile status-paused"><div class="tile-value">{{ totals.paused + totals.unknown }}</div><div class="tile-label">Pausiert / unbekannt</div></div>
+  <div class="tile status-paused"><div class="tile-value">{{ totals.paused + totals.unknown }}</div><div class="tile-label">Inaktiv / unbekannt</div></div>
 </section>
 
 {% if sections.is_empty() %}
@@ -67,16 +67,19 @@
         </div>
       </div>
       <div class="device-health">
-        {% if card.counts.total() > 0 %}
+        {% if card.counts.active() > 0 %}
         <svg class="statusbar" role="img" aria-label="{{ card.status_label }}">
           {% for seg in card.segments %}<rect class="{{ seg.class }}" x="{{ seg.x }}" width="{{ seg.width }}"></rect>{% endfor %}
         </svg>
         <div class="legend">
           <span class="badge status-{{ card.status_class }}">{{ card.status_label }}</span>
-          <span>{{ card.counts.total() }} {% if card.counts.total() == 1 %}Sensor{% else %}Sensoren{% endif %}</span>
+          <span>{{ card.counts.active() }} {% if card.counts.active() == 1 %}Sensor{% else %}Sensoren{% endif %}</span>
+          {% if card.counts.paused > 0 %}<span>{{ card.counts.paused }} inaktiv</span>{% endif %}
           {% if card.counts.warning > 0 %}<span class="c-warning">{{ card.counts.warning }} Warnung</span>{% endif %}
           {% if card.counts.down > 0 %}<span class="c-down">{{ card.counts.down }} Ausfall</span>{% endif %}
         </div>
+        {% else if card.counts.paused > 0 %}
+        <span class="muted small">nur inaktive Sensoren ({{ card.counts.paused }})</span>
         {% else %}
         <span class="muted small">keine Sensoren</span>
         {% endif %}

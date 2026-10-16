@@ -73,7 +73,10 @@ struct SensorsTemplate {
     device: Device,
     device_status_label: &'static str,
     device_status_class: &'static str,
+    /// Active sensors (polled).
     rows: Vec<SensorRowView>,
+    /// Inactive sensors (not polled until activated).
+    inactive: Vec<SensorRowView>,
     flash: Option<&'static str>,
     error: Option<String>,
     form: SensorFormValues,
@@ -216,7 +219,7 @@ async fn render_sensors(
             .iter()
             .map(|r| (r.enabled, states.get(&r.id).map(|s| s.status))),
     );
-    let rows = records
+    let (rows, inactive): (Vec<SensorRowView>, Vec<SensorRowView>) = records
         .iter()
         .map(|r| {
             let state = states.get(&r.id);
@@ -236,13 +239,14 @@ async fn render_sensors(
                 enabled: r.enabled,
             }
         })
-        .collect();
+        .partition(|row| row.enabled);
     let page = SensorsTemplate {
         layout: user.layout(),
         device,
         device_status_label: overall.label(),
         device_status_class: overall.as_str(),
         rows,
+        inactive,
         flash,
         error,
         form,
@@ -479,6 +483,58 @@ async fn find_sensor(state: &AppState, id: i64) -> Result<SensorRecord> {
     store::get_sensor(&state.pool, id)
         .await?
         .ok_or(Error::NotFound)
+}
+
+/// Activates, deactivates or deletes the ticked sensors of a device (fields `s_<id>=on`).
+pub async fn bulk(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Form(fields): Form<HashMap<String, String>>,
+) -> Result<Response> {
+    user.require_admin()?;
+    user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
+    load_device(&state, id).await?;
+    let ids: Vec<i64> = fields
+        .iter()
+        .filter(|(k, v)| k.starts_with("s_") && v.as_str() == "on")
+        .filter_map(|(k, _)| k[2..].parse().ok())
+        .take(MAX_FORM_FIELDS)
+        .collect();
+    let action = fields.get("action").map_or("", String::as_str);
+    let all_inactive = action == "activate_all";
+    let ids = if all_inactive {
+        store::list_sensors(&state.pool, id)
+            .await?
+            .into_iter()
+            .filter(|s| !s.enabled)
+            .map(|s| s.id)
+            .collect()
+    } else {
+        ids
+    };
+    if ids.is_empty() {
+        return Err(Error::Invalid(
+            "Bitte mindestens einen Sensor auswählen.".to_owned(),
+        ));
+    }
+    let (changed, msg) = match action {
+        "activate" | "activate_all" => (
+            store::set_enabled_many(&state.pool, id, &ids, true).await?,
+            "sensors_activated",
+        ),
+        "deactivate" => (
+            store::set_enabled_many(&state.pool, id, &ids, false).await?,
+            "sensors_deactivated",
+        ),
+        "delete" => (
+            store::delete_many(&state.pool, id, &ids).await?,
+            "sensors_deleted",
+        ),
+        _ => return Err(Error::Invalid("Unbekannte Aktion.".to_owned())),
+    };
+    tracing::info!(user = %user.username, device = id, action, changed, "bulk sensor change");
+    Ok(Redirect::to(&format!("/devices/{id}/sensors?msg={msg}")).into_response())
 }
 
 pub async fn toggle(
@@ -959,7 +1015,7 @@ mod tests {
             get(&format!("/devices/{device}/sensors"), Some(&admin)),
         )
         .await;
-        assert!(page.body.contains("Pausiert") && page.body.contains("Fortsetzen"));
+        assert!(page.body.contains("Inaktiv") && page.body.contains("Inaktive Sensoren (1)"));
         let reply = send(
             &h.app,
             post(
@@ -1027,5 +1083,158 @@ mod tests {
         )
         .await;
         assert!(page.body.contains("weg") && page.body.contains("1970-01-01 00:00:02 UTC"));
+    }
+
+    #[tokio::test]
+    async fn bulk_actions_change_only_the_chosen_sensors_of_this_device() {
+        let h = harness(true).await;
+        let device = device_on(&h, 161).await;
+        let other = save_device(
+            &h.state.pool,
+            None,
+            DeviceInput {
+                name: "Anderes".to_owned(),
+                host: "127.0.0.2".to_owned(),
+                group_id: None,
+                profile_id: add_v2c_profile(&h, "Zweit", "public").await,
+                polling: Polling {
+                    port: 161,
+                    interval_secs: 60,
+                    timeout_secs: 2,
+                    retries: 0,
+                },
+            },
+        )
+        .await
+        .unwrap();
+        let mut ids = Vec::new();
+        for (dev, name) in [(device, "A"), (device, "B"), (device, "C"), (other, "X")] {
+            ids.push(
+                store::create_sensor_with_state(
+                    &h.state.pool,
+                    dev,
+                    name,
+                    &SensorSpec::Uptime,
+                    false,
+                )
+                .await
+                .unwrap(),
+            );
+        }
+        let (admin, csrf) = login(&h, "anna").await;
+        let path = format!("/devices/{device}/sensors/bulk");
+        let enabled = |names: &'static [&'static str]| {
+            let pool = h.state.pool.clone();
+            async move {
+                let mut on: Vec<String> = Vec::new();
+                for dev in [device, other] {
+                    for s in store::list_sensors(&pool, dev).await.unwrap() {
+                        if s.enabled {
+                            on.push(s.name);
+                        }
+                    }
+                }
+                on.sort();
+                assert_eq!(on, names);
+            }
+        };
+
+        let page = send(
+            &h.app,
+            get(&format!("/devices/{device}/sensors"), Some(&admin)),
+        )
+        .await;
+        assert!(page.body.contains("Inaktive Sensoren (3)"));
+
+        // The sensor of the other device is ignored even when named.
+        let reply = send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!(
+                    "csrf_token={csrf}&action=activate&s_{}=on&s_{}=on",
+                    ids[0], ids[3]
+                ),
+            ),
+        )
+        .await;
+        assert!(reply.location().ends_with("msg=sensors_activated"));
+        enabled(&["A"]).await;
+
+        send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!("csrf_token={csrf}&action=activate_all"),
+            ),
+        )
+        .await;
+        enabled(&["A", "B", "C"]).await;
+
+        send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!("csrf_token={csrf}&action=deactivate&s_{}=on", ids[1]),
+            ),
+        )
+        .await;
+        enabled(&["A", "C"]).await;
+
+        let reply = send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!(
+                    "csrf_token={csrf}&action=delete&s_{}=on&s_{}=on",
+                    ids[1], ids[3]
+                ),
+            ),
+        )
+        .await;
+        assert!(reply.location().ends_with("msg=sensors_deleted"));
+        assert_eq!(
+            store::list_sensors(&h.state.pool, device)
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            store::list_sensors(&h.state.pool, other)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+
+        for body in [
+            format!("csrf_token={csrf}&action=activate"),
+            format!("csrf_token={csrf}&action=explode&s_{}=on", ids[0]),
+        ] {
+            assert_eq!(
+                send(&h.app, post(&path, Some(&admin), &body)).await.status,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "{body}"
+            );
+        }
+        let (viewer, vcsrf) = login(&h, "bert").await;
+        assert_eq!(
+            send(
+                &h.app,
+                post(
+                    &path,
+                    Some(&viewer),
+                    &format!("csrf_token={vcsrf}&action=activate_all")
+                )
+            )
+            .await
+            .status,
+            StatusCode::FORBIDDEN
+        );
     }
 }

@@ -10,6 +10,7 @@ pub mod mibs;
 pub mod overview;
 pub mod sensor_detail;
 pub mod sensor_text;
+pub mod sensor_values;
 pub mod sensors;
 #[cfg(test)]
 pub(crate) mod testutil;
@@ -116,6 +117,9 @@ pub fn router(state: AppState) -> Router {
             get(sensors::list).post(sensors::create),
         )
         .route("/devices/{id}/discover", post(sensors::discover))
+        .route("/devices/{id}/values", post(sensor_values::discover))
+        .route("/devices/{id}/values/create", post(sensor_values::create))
+        .route("/devices/{id}/sensors/bulk", post(sensors::bulk))
         .route(
             "/devices/{id}/sensors/interfaces",
             post(sensors::create_interfaces),
@@ -198,8 +202,15 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "sensor_created" => Some("Sensor angelegt."),
         "sensors_added" => Some("Sensoren angelegt."),
         "sensor_deleted" => Some("Sensor gelöscht."),
-        "sensor_paused" => Some("Sensor pausiert."),
-        "sensor_resumed" => Some("Sensor fortgesetzt."),
+        "sensor_paused" => Some("Sensor deaktiviert."),
+        "sensor_resumed" => Some("Sensor aktiviert."),
+        "values_added_inactive" => Some(
+            "Sensoren angelegt – sie sind noch inaktiv, unten unter „Inaktive Sensoren“ aktivieren.",
+        ),
+        "values_added_active" => Some("Sensoren angelegt und aktiviert."),
+        "sensors_activated" => Some("Sensoren aktiviert."),
+        "sensors_deactivated" => Some("Sensoren deaktiviert."),
+        "sensors_deleted" => Some("Sensoren gelöscht."),
         "thresholds_saved" => Some("Schwellwerte gespeichert."),
         "mail_saved" => Some("E-Mail-Einstellungen gespeichert."),
         "mib_deleted" => Some("MIB-Datei gelöscht."),

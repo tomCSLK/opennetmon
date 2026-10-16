@@ -42,6 +42,34 @@ Im Formular „Sensor hinzufügen“ (Typ „Eigene OID“; beim Tippen ins OID-
 - **Name**: leer = Objektname mit Index (z. B. „tpSysMonitorCpu5Seconds.1“).
 - Klare Fehlermeldungen für Tabellen/Zeilen/Knoten („kein abfragbarer Wert“), Spalten ohne Index, nicht lesbare Objekte und unbekannte Namen.
 
+## Werte suchen: Tabellen als Sensoren übernehmen (`/devices/<id>/values`, nur Administratoren)
+
+Auf der Sensorseite eines Geräts öffnet **Werte suchen** eine Liste aller Messwerte, die das Gerät in bekannten Tabellen liefert:
+
+| Tabelle | Inhalt | vorausgewählt |
+|---|---|---|
+| `tpPoePortConfigTable` (TP-Link) | je Port PoE-Leistung (W), Status, Strom (mA), Spannung (V), Klasse | Leistung, Status |
+| `tpPoeGlobal` (TP-Link) | PoE-Verbrauch gesamt, Reserve, Budget (W) | Verbrauch |
+| `tpSysMonitorCpuTable`, `tpSysMonitorMemoryTable` (TP-Link) | CPU (5 s, 1 min, 5 min) und Speicher in % | CPU 1 min, Speicher |
+| `hrProcessorTable`, `hrStorageTable` (HOST-RESOURCES-MIB) | CPU-Last je Kern; Belegung und Größe je Speicher (MB) | Last, Belegt |
+| `entPhySensorTable` (ENTITY-SENSOR-MIB) | Temperaturen, Lüfter, Spannungen, Ströme mit Namen aus `entPhysicalName` | Messwert |
+
+- Tabellen, deren MIB nicht geladen ist oder die das Gerät nicht beantwortet, fehlen einfach (die TP-Link-Einträge brauchen die hochgeladenen TP-Link-MIBs).
+- **Andere Tabelle oder Gruppe**: Name oben eingeben (z. B. `tpPoePortConfigTable`, `IF-MIB::ifXTable` oder eine Gruppe mit Einzelwerten).
+  Dann werden alle Zahlenspalten gelesen; vorausgewählt sind nur reine Messwerte (nur lesbar), keine Einstellungen.
+- **Namen** der Zeilen: Ports über `ifName`/`ifDescr`, Hardware über `entPhysicalName`, sonst eine Textspalte der Tabelle (…Name, …Descr, …Label), sonst „Index N“.
+  Jeder Name ist vor dem Anlegen änderbar.
+- **Einheit und Faktor**: aus `UNITS`, sonst aus der Beschreibung (TP-Link schreibt z. B. „in 0.1W“ → Faktor 0,1, Einheit W), bei Hardware-Sensoren aus
+  Typ, Skala und Genauigkeit der ENTITY-SENSOR-MIB. Zähler werden als Rate angelegt.
+- **Neue Sensoren sind inaktiv**: Sie werden nicht abgefragt und lösen keine Benachrichtigung aus, bis ein Administrator sie aktiviert.
+  Wer sie gleich abfragen will, setzt das Häkchen „Sofort aktivieren“. Bereits überwachte OIDs sind als „vorhanden“ gesperrt; gleiche Namen werden durchnummeriert.
+- **Aktivieren**: Auf der Sensorseite stehen inaktive Sensoren in einem eigenen, aufklappbaren Bereich „Inaktive Sensoren (n)“ mit
+  „Ausgewählte aktivieren“, „Alle aktivieren“ und „Ausgewählte löschen“ (`POST /devices/<id>/sensors/bulk`). Aktive Sensoren lassen sich einzeln wieder deaktivieren.
+  Inaktive Sensoren zählen nicht in der Statusleiste der Übersicht.
+- Grenzen: Timeout höchstens 10 s, eine Wiederholung; höchstens 3000 Zeilen je Spalte und 500 Werte je Suche.
+- Gemessen am SG2008P (.252): 4 PoE-Ports (Port 1: 6,3 W, 119 mA, 52,9 V, Klasse 4), Gesamtverbrauch 6,5 W bei 62 W Budget, CPU 5 %, Speicher 53 %.
+  Die SG2008 liefern CPU und Speicher, aber weder HOST-RESOURCES- noch ENTITY-Tabellen.
+
 ## Anzeige
 
 - Sensorliste und Detailseite nennen OID-Sensoren mit Namen und Modul („tpSysMonitorCpu5Seconds.1 (TPLINK-SYSMONITOR-MIB) · Wert, Einheit %“).
@@ -61,5 +89,8 @@ Im Formular „Sensor hinzufügen“ (Typ „Eigene OID“; beim Tippen ins OID-
 - Gegenprobe mit net-snmp: `dev/mib-oracle.sh dev/data/mibs/tplink/*.mib` vergleicht alle aufgelösten OIDs mit `snmptranslate`.
   Ergebnis mit den Standard- und TP-Link-MIBs: 2963 gemeinsame Namen, **0 Abweichungen**; netmon kennt 230 Objekte mehr, weil net-snmp zwei
   fehlerhafte TP-Link-Dateien abweist.
+- `src/mib/catalog.rs`: bekannte Tabellen mit Spalten, Namen, Faktoren und Einheiten; Einheiten aus Beschreibungen (`unit_from_description`).
+  `src/value_discovery.rs`: Walk je Spalte, Zeilennamen, Vorschläge; `src/web/sensor_values.rs`: Suchseite und Anlegen.
+  Ein Walk, der auf eine nicht steigende OID trifft (fehlerhafte Agenten), endet dort, statt die ganze Suche abzubrechen.
 - Tests: Lexer/Parser (auch abgeschnittene und kaputte Eingaben), alle mitgelieferten MIBs fehlerfrei, bekannte OIDs/Typen/Aufzählungen, Namensauflösung,
   Upload als Multipart, Ersetzen, Löschen, Rechte, Sensoren per Name; die TP-Link-Dateien werden mitgetestet, wenn sie lokal unter `dev/data/mibs/tplink` liegen.

@@ -48,9 +48,15 @@ impl Counts {
         self.paused += other.paused;
     }
 
-    /// Segments of the stacked status bar, worst first; `x`/`width` in percent.
+    /// Active sensors (inactive ones are not polled).
+    pub fn active(&self) -> usize {
+        self.total() - self.paused
+    }
+
+    /// Segments of the stacked status bar, worst first; `x`/`width` in percent. Inactive sensors
+    /// are left out, so prepared but unused sensors do not grey out a healthy device.
     fn segments(&self) -> Vec<Segment> {
-        let total = self.total();
+        let total = self.active();
         if total == 0 {
             return Vec::new();
         }
@@ -60,7 +66,6 @@ impl Counts {
             (self.warning, "seg-warning"),
             (self.unknown, "seg-unknown"),
             (self.up, "seg-up"),
-            (self.paused, "seg-paused"),
         ]
         .into_iter()
         .filter(|(n, _)| *n > 0)
@@ -233,20 +238,32 @@ mod tests {
     #[test]
     fn segments_are_worst_first_and_add_up_to_the_whole_bar() {
         let counts = Counts {
-            up: 6,
+            up: 8,
             warning: 1,
             down: 1,
             unknown: 0,
-            paused: 2,
+            paused: 5,
         };
         let segments = counts.segments();
         let classes: Vec<_> = segments.iter().map(|s| s.class).collect();
-        assert_eq!(classes, ["seg-down", "seg-warning", "seg-up", "seg-paused"]);
+        assert_eq!(
+            classes,
+            ["seg-down", "seg-warning", "seg-up"],
+            "inactive sensors are not in the bar"
+        );
         assert_eq!(segments[0].x, "0.000%");
         assert_eq!(segments[0].width, "10.000%");
         assert_eq!(segments[2].x, "20.000%");
-        assert_eq!(segments[3].x, "80.000%");
-        assert_eq!(counts.total(), 10);
+        assert_eq!(segments[2].width, "80.000%");
+        assert_eq!((counts.total(), counts.active()), (15, 10));
+        assert!(
+            Counts {
+                paused: 3,
+                ..Counts::default()
+            }
+            .segments()
+            .is_empty()
+        );
         assert!(Counts::default().segments().is_empty());
     }
 

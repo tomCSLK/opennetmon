@@ -3,6 +3,7 @@
 //! search. The index is rebuilt in memory whenever the set of modules changes; nothing here talks
 //! to devices.
 
+pub mod catalog;
 pub mod lexer;
 pub mod parser;
 
@@ -590,6 +591,16 @@ impl MibIndex {
 
     pub fn is_empty(&self) -> bool {
         self.objects.is_empty()
+    }
+
+    /// All objects strictly below `prefix`, in OID order.
+    pub fn under(&self, prefix: &[u64]) -> Vec<&MibObject> {
+        self.by_oid
+            .range(prefix.to_vec()..)
+            .skip_while(|(oid, _)| oid.as_slice() == prefix)
+            .take_while(|(oid, _)| oid.starts_with(prefix))
+            .map(|(_, &i)| &self.objects[i])
+            .collect()
     }
 
     pub fn get_oid(&self, oid: &[u64]) -> Option<&MibObject> {

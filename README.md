@@ -12,7 +12,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 
 | | |
 |---|---|
-| Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
+| Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, MIB-Import mit „Werte suchen“ (Tabellen als zunächst inaktive Sensoren), Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
 | Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
 | Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
 
@@ -20,9 +20,9 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 
 - **Geräte und Gruppen:** hierarchische Gruppen, Geräte mit eigenem Intervall, Timeout und Wiederholungen; Verbindungstest per Klick.
 - **SNMP:** nur lesend. SNMPv2c sowie SNMPv3 (MD5, SHA-1/2; DES, AES) mit wiederverwendbaren Profilen. 64-Bit-Zähler (`ifXTable`) mit automatischem Fallback auf 32 Bit (`ifTable`).
-- **Sensoren:** Ping, Uptime, Interface-Traffic, Interface-Status, benutzerdefinierte OID (Wert oder Zähler, mit Faktor). Interfaces werden per Walk gefunden und per Häkchen übernommen.
+- **Sensoren:** Ping, Uptime, Interface-Traffic, Interface-Status, benutzerdefinierte OID (Wert oder Zähler, mit Faktor). Interfaces werden per Walk gefunden und per Häkchen übernommen; weitere Werte (PoE je Port, CPU, Speicher, Temperaturen, Lüfter …) findet „Werte suchen“ in den MIB-Tabellen und legt sie **inaktiv** an, bis ein Administrator sie aktiviert.
 - **Zähler richtig gerechnet:** Überlauf und Gerätereboot werden erkannt; dann gibt es **keinen** Messwert statt eines Ausreißers.
-- **Status:** `In Ordnung`, `Warnung`, `Ausfall`, `Unbekannt`, `Pausiert`. Ein einzelner Messfehler ist nur eine Warnung, erst der zweite in Folge ein Ausfall. Schwellwerte je Kanal (Warnung/Down, über/unter).
+- **Status:** `In Ordnung`, `Warnung`, `Ausfall`, `Unbekannt`, `Inaktiv`. Ein einzelner Messfehler ist nur eine Warnung, erst der zweite in Folge ein Ausfall. Schwellwerte je Kanal (Warnung/Down, über/unter).
 - **Oberfläche:** Seitenleiste, Status-Kacheln und Geräteliste mit Sensor-Statusleiste; helles und dunkles Design (folgt dem System, umschaltbar); auch auf dem Handy bedienbar.
 - **Messwerte-Tabelle:** unter jedem Graphen alle Werte des Zeitraums (neueste oben, bei Traffic mit Volumen) samt Summe, Mittelwert, Minimum und Maximum – wie die Livedaten in PRTG.
 - **MIB-Dateien:** Standard-MIBs eingebaut, Hersteller-MIBs (z. B. TP-Link) per Upload; eigene OID-Sensoren per Name statt Zahlenkette, mit Typ, Einheit und Klartext für Statuswerte aus der MIB.
@@ -107,7 +107,7 @@ Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb
 | [`docs/poller.md`](docs/poller.md) | Abfrage, Statuslogik, Ereignislog |
 | [`docs/graphen-und-schwellwerte.md`](docs/graphen-und-schwellwerte.md) | Detailseite, Graphen, Schwellwerte, Rollups |
 | [`docs/betrieb.md`](docs/betrieb.md) | Installation, Proxy, Update, Sicherung, Fehlersuche |
-| [`docs/mibs.md`](docs/mibs.md) | MIB-Dateien, eigene OID per Name |
+| [`docs/mibs.md`](docs/mibs.md) | MIB-Dateien, eigene OID per Name, Werte suchen |
 | [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-Mail-Einstellungen, Regeln, Test-SMTP-Server |
 | [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Entscheidung für Rust (Spike-Ergebnisse) |
 

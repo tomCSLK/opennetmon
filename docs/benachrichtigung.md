@@ -30,7 +30,7 @@ Die Tabelle „Letzte Sendeversuche“ listet die letzten 20 Versuche (Alarm ode
 | `Ausfall` → `In Ordnung` | ja („Wieder in Ordnung“) |
 | `Warnung` → `In Ordnung` | ja, wenn „Auch bei Warnungen“ an ist |
 | erster Wert `In Ordnung` (Sensor neu, Server gestartet) | nein |
-| → `Unbekannt` / `Pausiert` | nein |
+| → `Unbekannt` / `Inaktiv` | nein |
 
 Messfehler sind zunächst nur eine Warnung und erst der zweite in Folge ein Ausfall (siehe `docs/poller.md`); Schwellwertverletzungen wirken sofort.
 

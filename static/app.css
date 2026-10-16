@@ -409,3 +409,9 @@ input[type=file] { font: inherit; font-size: .9rem; color: var(--muted); }
 input[type=file]::file-selector-button { margin-right: .7rem; padding: .45rem .8rem; font: inherit; font-weight: 600; cursor: pointer;
   color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
 ul.plain { margin: .3rem 0 0; padding-left: 1.1rem; }
+input.compact { padding: .35rem .5rem; font-size: .88rem; min-width: 14rem; }
+
+details.panel > summary.card-head { border-bottom: 0; }
+details.panel[open] > summary.card-head { border-bottom: 1px solid var(--border); }
+.panel-hint { padding: .7rem 1.35rem 0; margin: 0; }
+.panel-actions { padding: 0 1.35rem 1.1rem; margin-top: 1rem; }

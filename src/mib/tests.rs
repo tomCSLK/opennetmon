@@ -203,6 +203,24 @@ fn oids_are_described_by_their_most_specific_object() {
 }
 
 #[test]
+fn objects_below_an_oid_are_listed_in_order() {
+    let index = bundled();
+    let entry = object(&index, "ifEntry").oid.clone();
+    let names: Vec<&str> = index
+        .under(&entry)
+        .iter()
+        .map(|o| o.name.as_str())
+        .collect();
+    assert_eq!(names.first(), Some(&"ifIndex"));
+    assert!(names.contains(&"ifOperStatus") && names.contains(&"ifOutQLen"));
+    assert!(
+        !names.contains(&"ifEntry"),
+        "the prefix itself is not included"
+    );
+    assert!(index.under(&[1, 3, 6, 1, 2, 1, 2, 2, 1, 999]).is_empty());
+}
+
+#[test]
 fn search_finds_pollable_objects_first() {
     let index = bundled();
     let hits = index.search("hrProcessor", 10);
@@ -260,6 +278,26 @@ fn sensor_targets_from_names_and_numbers() {
     assert!(index.oid_target("ifIndex.1").is_ok());
     assert!(index.oid_target("").unwrap_err().contains("Bitte"));
     assert!(index.oid_target("1.3.x").is_err());
+}
+
+#[test]
+fn standard_catalog_entries_resolve_with_the_bundled_mibs() {
+    let index = bundled();
+    for entry in catalog::CATALOG
+        .iter()
+        .filter(|e| !e.module.starts_with("TPLINK"))
+    {
+        assert!(
+            !index.by_name(entry.object, Some(entry.module)).is_empty(),
+            "{}",
+            entry.object
+        );
+        for c in entry.columns {
+            let o = index.by_name(c.object, Some(entry.module));
+            assert!(!o.is_empty(), "{}", c.object);
+            assert!(o[0].is_pollable(), "{} must be a readable number", c.object);
+        }
+    }
 }
 
 const VENDOR: &str = r#"
@@ -342,6 +380,20 @@ fn tplink_mibs_resolve_when_available() {
         .resolve_input("tpSysMonitorMemoryUtilization.1")
         .unwrap();
     assert_eq!(dotted(&oid), "1.3.6.1.4.1.11863.6.4.1.2.1.1.2.1");
+    for entry in catalog::CATALOG
+        .iter()
+        .filter(|e| e.module.starts_with("TPLINK"))
+    {
+        assert!(
+            !index.by_name(entry.object, Some(entry.module)).is_empty(),
+            "{}",
+            entry.object
+        );
+        for c in entry.columns {
+            let o = index.by_name(c.object, Some(entry.module));
+            assert!(!o.is_empty() && o[0].is_pollable(), "{}", c.object);
+        }
+    }
     let problems: Vec<String> = index
         .reports()
         .iter()

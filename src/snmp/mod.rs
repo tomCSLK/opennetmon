@@ -211,7 +211,8 @@ impl SnmpClient {
 
 impl SnmpClient {
     /// Walks everything below `root` with GETBULK (rows in OID order). More than `max_rows` rows is an
-    /// error rather than a silently truncated result.
+    /// error rather than a silently truncated result; an agent that answers with a non-increasing OID
+    /// ends the walk with the rows read so far.
     pub async fn walk(
         &mut self,
         root: &[u64],
@@ -253,7 +254,10 @@ impl SnmpClient {
                 }
                 let parts = parse_id_string(&oid.to_id_string())?;
                 if rows.last().is_some_and(|(last, _)| *last >= parts) {
-                    return Err(SnmpError::Protocol("OIDs are not increasing".to_owned()));
+                    // Some agents (e.g. TP-Link firmware) go backwards near the end of a subtree.
+                    // Keep what was read instead of discarding the whole walk.
+                    tracing::debug!(oid = %oid.to_id_string(), "agent returned a non-increasing OID; walk ended early");
+                    break 'requests;
                 }
                 if rows.len() >= max_rows {
                     return Err(SnmpError::Protocol(format!("more than {max_rows} rows")));
