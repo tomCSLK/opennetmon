@@ -4,9 +4,11 @@ use sqlx::{FromRow, SqlitePool};
 
 use crate::devices::{Device, DeviceInput, Polling};
 use crate::error::{Error, Result};
+use crate::ordering::{natural_cmp, position_cmp};
+use crate::storage::{OrderScope, write_positions};
 
 const SELECT: &str = "SELECT d.id, d.name, d.host, d.port, d.group_id, d.profile_id, p.name AS profile_name, \
-                      d.interval_secs, d.timeout_secs, d.retries \
+                      d.interval_secs, d.timeout_secs, d.retries, d.position \
                       FROM devices d JOIN credential_profiles p ON p.id = d.profile_id";
 
 #[derive(FromRow)]
@@ -21,6 +23,7 @@ struct Row {
     interval_secs: i64,
     timeout_secs: i64,
     retries: i64,
+    position: Option<i64>,
 }
 
 fn narrow<T: TryFrom<i64>>(value: i64, what: &str) -> Result<T> {
@@ -48,13 +51,19 @@ impl TryFrom<Row> for Device {
     }
 }
 
+/// All devices in display order: manual position, then natural name order (devices of one group
+/// compare correctly).
 pub async fn list_devices(pool: &SqlitePool) -> Result<Vec<Device>> {
-    sqlx::query_as::<_, Row>(&format!("{SELECT} ORDER BY d.name"))
-        .fetch_all(pool)
-        .await?
-        .into_iter()
-        .map(Device::try_from)
-        .collect()
+    let mut rows = sqlx::query_as::<_, Row>(SELECT).fetch_all(pool).await?;
+    rows.sort_by(|a, b| {
+        position_cmp(a.position, b.position).then_with(|| natural_cmp(&a.name, &b.name))
+    });
+    rows.into_iter().map(Device::try_from).collect()
+}
+
+/// Stores the manual order of the devices in `group` (`None` = without group); empty = automatic.
+pub async fn set_positions(pool: &SqlitePool, group: Option<i64>, ids: &[i64]) -> Result<()> {
+    write_positions(pool, OrderScope::Devices(group), ids).await
 }
 
 pub async fn get_device(pool: &SqlitePool, id: i64) -> Result<Option<Device>> {
@@ -92,8 +101,10 @@ pub async fn save_device(pool: &SqlitePool, id: Option<i64>, input: DeviceInput)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         }
         Some(_) => {
-            "UPDATE devices SET name = ?, host = ?, port = ?, group_id = ?, profile_id = ?, interval_secs = ?, \
-             timeout_secs = ?, retries = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+            // A device moved to another group loses its manual place there (the CASE sees the old row).
+            "UPDATE devices SET position = CASE WHEN group_id IS ?4 THEN position ELSE NULL END, \
+             name = ?1, host = ?2, port = ?3, group_id = ?4, profile_id = ?5, interval_secs = ?6, \
+             timeout_secs = ?7, retries = ?8, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?9"
         }
     };
     let query = sqlx::query(sql)
@@ -265,5 +276,94 @@ mod tests {
         delete_device(&pool, id).await.unwrap();
         groups::delete_group(&pool, group).await.unwrap();
         assert!(credentials::delete_profile(&pool, profile).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn devices_and_groups_keep_a_manual_order_until_they_move() {
+        let (pool, profile, _dir) = setup().await;
+        let haus = groups::create_group(&pool, "Haus", None).await.unwrap();
+        let keller = groups::create_group(&pool, "Keller", None).await.unwrap();
+        let mut ids = Vec::new();
+        for name in ["Switch 10", "switch 2", "AP"] {
+            ids.push(
+                save_device(&pool, None, input(name, "192.0.2.1", Some(haus), profile))
+                    .await
+                    .unwrap(),
+            );
+        }
+        let names = || async {
+            list_devices(&pool)
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|d| d.group_id == Some(haus))
+                .map(|d| d.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names().await, ["AP", "switch 2", "Switch 10"]);
+        set_positions(&pool, Some(haus), &[ids[0], ids[2]])
+            .await
+            .unwrap();
+        assert_eq!(names().await, ["Switch 10", "AP", "switch 2"]);
+
+        // Saving without moving keeps the place, moving to another group drops it.
+        save_device(
+            &pool,
+            Some(ids[0]),
+            input("Switch 10", "192.0.2.9", Some(haus), profile),
+        )
+        .await
+        .unwrap();
+        assert_eq!(names().await[0], "Switch 10");
+        save_device(
+            &pool,
+            Some(ids[0]),
+            input("Switch 10", "192.0.2.9", Some(keller), profile),
+        )
+        .await
+        .unwrap();
+        save_device(
+            &pool,
+            Some(ids[0]),
+            input("Switch 10", "192.0.2.9", Some(haus), profile),
+        )
+        .await
+        .unwrap();
+        assert_eq!(names().await, ["AP", "switch 2", "Switch 10"]);
+
+        // Groups: same rules per parent.
+        let top = || async {
+            groups::list_groups(&pool)
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|g| g.parent_id.is_none())
+                .map(|g| g.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(top().await, ["Haus", "Keller"]);
+        groups::set_positions(&pool, None, &[keller, haus])
+            .await
+            .unwrap();
+        assert_eq!(top().await, ["Keller", "Haus"]);
+        groups::update_group(&pool, keller, "Keller", Some(haus))
+            .await
+            .unwrap();
+        groups::update_group(&pool, keller, "Keller", None)
+            .await
+            .unwrap();
+        groups::set_positions(&pool, None, &[haus]).await.unwrap();
+        assert_eq!(top().await, ["Haus", "Keller"]);
+        groups::set_positions(&pool, None, &[keller, haus])
+            .await
+            .unwrap();
+        groups::update_group(&pool, keller, "Kellerraum", None)
+            .await
+            .unwrap();
+        assert_eq!(
+            top().await,
+            ["Kellerraum", "Haus"],
+            "renaming keeps the place"
+        );
     }
 }

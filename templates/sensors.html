@@ -43,7 +43,10 @@
 {% endif %}
 
 <section class="card flush">
-  <div class="card-head"><h2>Sensoren</h2><span class="muted small">{{ rows.len() }} aktiv{% if !inactive.is_empty() %} · {{ inactive.len() }} inaktiv{% endif %}</span></div>
+  <div class="card-head"><h2>Sensoren</h2>
+    <div class="actions"><span class="muted small">{{ rows.len() }} aktiv{% if !inactive.is_empty() %} · {{ inactive.len() }} inaktiv{% endif %}</span>
+      {% if layout.is_admin && rows.len() + inactive.len() > 1 %}<a class="button ghost small" href="/devices/{{ device.id }}/sensors/order">Reihenfolge ändern</a>{% endif %}</div>
+  </div>
   {% if rows.is_empty() %}
   <div class="empty">
     <strong>{% if inactive.is_empty() %}Noch keine Sensoren.{% else %}Keine aktiven Sensoren.{% endif %}</strong>

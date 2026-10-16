@@ -3,7 +3,7 @@
 ## Detailseite (`/sensors/<id>`, alle angemeldeten Benutzer)
 
 Kopf mit Typ, Gerät, Status, Meldung und letzter Abfrage; Zeitraum-Schalter **1 Stunde / 24 Stunden / 7 Tage / 30 Tage** (`?range=1h|24h|7d|30d`,
-ungültige Werte ergeben 24 Stunden); Graph; Tabelle mit dem letzten Wert je Kanal; Schwellwerte; die letzten 20 Statuswechsel dieses Sensors.
+ungültige Werte ergeben 24 Stunden); Graph; Tabelle mit dem letzten Wert je Kanal; Name (Umbenennen, nur Administratoren); Schwellwerte; die letzten 20 Statuswechsel dieses Sensors.
 Die Sensorliste eines Geräts (`/devices/<id>/sensors`) verlinkt jeden Sensor dorthin.
 
 ## Graph (uPlot)

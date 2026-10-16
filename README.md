@@ -12,7 +12,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 
 | | |
 |---|---|
-| Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, MIB-Import mit „Werte suchen“ (Tabellen als zunächst inaktive Sensoren), Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
+| Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Umbenennen von Sensoren, eigene Reihenfolge von Gruppen, Geräten und Sensoren (Ziehen oder ↑/↓), MIB-Import mit „Werte suchen“ (Tabellen als zunächst inaktive Sensoren), Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
 | Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
 | Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
 
@@ -23,7 +23,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 - **Sensoren:** Ping, Uptime, Interface-Traffic, Interface-Status, benutzerdefinierte OID (Wert oder Zähler, mit Faktor). Interfaces werden per Walk gefunden und per Häkchen übernommen; weitere Werte (PoE je Port, CPU, Speicher, Temperaturen, Lüfter …) findet „Werte suchen“ in den MIB-Tabellen und legt sie **inaktiv** an, bis ein Administrator sie aktiviert.
 - **Zähler richtig gerechnet:** Überlauf und Gerätereboot werden erkannt; dann gibt es **keinen** Messwert statt eines Ausreißers.
 - **Status:** `In Ordnung`, `Warnung`, `Ausfall`, `Unbekannt`, `Inaktiv`. Ein einzelner Messfehler ist nur eine Warnung, erst der zweite in Folge ein Ausfall. Schwellwerte je Kanal (Warnung/Down, über/unter).
-- **Oberfläche:** Seitenleiste, Status-Kacheln und Geräteliste mit Sensor-Statusleiste; helles und dunkles Design (folgt dem System, umschaltbar); auch auf dem Handy bedienbar.
+- **Oberfläche:** Seitenleiste, Status-Kacheln und Geräteliste mit Sensor-Statusleiste; Reihenfolge automatisch (Port 2 vor Port 10, Sensoren nach Typ) oder von Hand per Ziehen; helles und dunkles Design (folgt dem System, umschaltbar); auch auf dem Handy bedienbar.
 - **Messwerte-Tabelle:** unter jedem Graphen alle Werte des Zeitraums (neueste oben, bei Traffic mit Volumen) samt Summe, Mittelwert, Minimum und Maximum – wie die Livedaten in PRTG.
 - **MIB-Dateien:** Standard-MIBs eingebaut, Hersteller-MIBs (z. B. TP-Link) per Upload; eigene OID-Sensoren per Name statt Zahlenkette, mit Typ, Einheit und Klartext für Statuswerte aus der MIB.
 - **Graphen:** [uPlot](https://github.com/leeoniya/uPlot), lokal eingebunden (kein CDN), Alle Zeiten (Graphen und Tabellen) in der Zeitzone des Browsers.

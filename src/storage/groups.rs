@@ -6,12 +6,15 @@ use crate::devices::{
     Group, MAX_GROUP_DEPTH, depth_of, subtree_height, subtree_ids, validate_name,
 };
 use crate::error::{Error, Result};
+use crate::ordering::{natural_cmp, position_cmp};
+use crate::storage::{OrderScope, write_positions};
 
 #[derive(FromRow)]
 struct Row {
     id: i64,
     name: String,
     parent_id: Option<i64>,
+    position: Option<i64>,
 }
 
 impl From<Row> for Group {
@@ -24,20 +27,20 @@ impl From<Row> for Group {
     }
 }
 
+/// All groups in display order: manual position, then natural name order (siblings compare correctly).
 pub async fn list_groups(pool: &SqlitePool) -> Result<Vec<Group>> {
-    Ok(
-        sqlx::query_as::<_, Row>("SELECT id, name, parent_id FROM groups ORDER BY name")
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .map(Group::from)
-            .collect(),
-    )
+    let mut rows = sqlx::query_as::<_, Row>("SELECT id, name, parent_id, position FROM groups")
+        .fetch_all(pool)
+        .await?;
+    rows.sort_by(|a, b| {
+        position_cmp(a.position, b.position).then_with(|| natural_cmp(&a.name, &b.name))
+    });
+    Ok(rows.into_iter().map(Group::from).collect())
 }
 
 pub async fn get_group(pool: &SqlitePool, id: i64) -> Result<Option<Group>> {
     Ok(
-        sqlx::query_as::<_, Row>("SELECT id, name, parent_id FROM groups WHERE id = ?")
+        sqlx::query_as::<_, Row>("SELECT id, name, parent_id, position FROM groups WHERE id = ?")
             .bind(id)
             .fetch_optional(pool)
             .await?
@@ -84,6 +87,11 @@ pub async fn create_group(pool: &SqlitePool, name: &str, parent_id: Option<i64>)
     }
 }
 
+/// Stores the manual order of the subgroups of `parent` (`None` = top level); empty = automatic.
+pub async fn set_positions(pool: &SqlitePool, parent: Option<i64>, ids: &[i64]) -> Result<()> {
+    write_positions(pool, OrderScope::Groups(parent), ids).await
+}
+
 /// Renames and/or moves a group. A group cannot be moved below itself or one of its descendants.
 pub async fn update_group(
     pool: &SqlitePool,
@@ -111,12 +119,16 @@ pub async fn update_group(
             "Die Gruppen sind höchstens 8 Ebenen tief verschachtelbar.",
         ));
     }
-    let result = sqlx::query("UPDATE groups SET name = ?, parent_id = ? WHERE id = ?")
-        .bind(name)
-        .bind(parent_id)
-        .bind(id)
-        .execute(pool)
-        .await;
+    // A group moved to another parent loses its manual place (it was relative to the old siblings).
+    let result = sqlx::query(
+        "UPDATE groups SET name = ?1, parent_id = ?2, \
+         position = CASE WHEN parent_id IS ?2 THEN position ELSE NULL END WHERE id = ?3",
+    )
+    .bind(name)
+    .bind(parent_id)
+    .bind(id)
+    .execute(pool)
+    .await;
     match result {
         Ok(_) => Ok(()),
         Err(e)

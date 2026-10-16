@@ -3,10 +3,12 @@
 use sqlx::{FromRow, SqlitePool};
 
 use crate::error::{Error, Result};
+use crate::ordering::{natural_cmp, position_cmp};
 use crate::sensors::Unit;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
 use crate::status::Thresholds;
+use crate::storage::{OrderScope, write_positions};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChannelRecord {
@@ -46,6 +48,7 @@ struct SensorRow {
     scale: Option<f64>,
     unit_label: Option<String>,
     enabled: i64,
+    position: Option<i64>,
 }
 
 #[derive(FromRow)]
@@ -93,7 +96,29 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
     })
 }
 
-const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, enabled FROM sensors";
+const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, enabled, position FROM sensors";
+
+/// Automatic order of sensor kinds: reachability first, then ports, then everything else.
+fn kind_rank(kind: &str) -> u8 {
+    match kind {
+        "ping" => 0,
+        "uptime" => 1,
+        "if_traffic" => 2,
+        "if_status" => 3,
+        _ => 4,
+    }
+}
+
+/// Display order within a device: manual position, then kind, then natural name order.
+fn sort_rows(rows: &mut [SensorRow]) {
+    rows.sort_by(|a, b| {
+        a.device_id
+            .cmp(&b.device_id)
+            .then_with(|| position_cmp(a.position, b.position))
+            .then_with(|| kind_rank(&a.kind).cmp(&kind_rank(&b.kind)))
+            .then_with(|| natural_cmp(&a.name, &b.name))
+    });
+}
 
 async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorRecord>> {
     let channels = sqlx::query_as::<_, ChannelRow>(
@@ -133,21 +158,49 @@ async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorR
         .collect()
 }
 
+/// The sensors of a device in display order.
 pub async fn list_sensors(pool: &SqlitePool, device_id: i64) -> Result<Vec<SensorRecord>> {
-    let rows = sqlx::query_as::<_, SensorRow>(&format!(
-        "{SENSOR_SELECT} WHERE device_id = ? ORDER BY name"
-    ))
-    .bind(device_id)
-    .fetch_all(pool)
-    .await?;
+    let mut rows = sqlx::query_as::<_, SensorRow>(&format!("{SENSOR_SELECT} WHERE device_id = ?"))
+        .bind(device_id)
+        .fetch_all(pool)
+        .await?;
+    sort_rows(&mut rows);
     assemble(pool, rows).await
 }
 
-/// All sensors of all devices (enabled or not), for overviews.
+/// Stores the manual order of a device's sensors; empty = automatic.
+pub async fn set_positions(pool: &SqlitePool, device_id: i64, ids: &[i64]) -> Result<()> {
+    write_positions(pool, OrderScope::Sensors(device_id), ids).await
+}
+
+/// Gives a sensor a new name (unique per device); history, thresholds and status stay.
+pub async fn rename_sensor(pool: &SqlitePool, id: i64, name: &str) -> Result<()> {
+    let name = crate::devices::validate_name(name).map_err(|m| Error::Invalid(m.to_owned()))?;
+    let done = sqlx::query("UPDATE sensors SET name = ? WHERE id = ?")
+        .bind(name)
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(|e| match e.as_database_error() {
+            Some(d) if d.is_unique_violation() => name_taken(),
+            _ => e.into(),
+        })?;
+    if done.rows_affected() == 0 {
+        return Err(Error::NotFound);
+    }
+    Ok(())
+}
+
+fn name_taken() -> Error {
+    Error::Conflict("Ein Sensor mit diesem Namen existiert an diesem Gerät bereits.".to_owned())
+}
+
+/// All sensors of all devices (enabled or not), for overviews; by device, then display order.
 pub async fn list_all_sensors(pool: &SqlitePool) -> Result<Vec<SensorRecord>> {
-    let rows = sqlx::query_as::<_, SensorRow>(&format!("{SENSOR_SELECT} ORDER BY device_id, name"))
+    let mut rows = sqlx::query_as::<_, SensorRow>(SENSOR_SELECT)
         .fetch_all(pool)
         .await?;
+    sort_rows(&mut rows);
     assemble(pool, rows).await
 }
 
@@ -228,9 +281,7 @@ pub async fn create_sensor_with_state(
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| match e.as_database_error() {
-        Some(d) if d.is_unique_violation() => Error::Conflict(
-            "Ein Sensor mit diesem Namen existiert an diesem Gerät bereits.".to_owned(),
-        ),
+        Some(d) if d.is_unique_violation() => name_taken(),
         Some(d) if d.is_foreign_key_violation() => {
             Error::Invalid("Das gewählte Gerät existiert nicht.".to_owned())
         }
@@ -387,6 +438,7 @@ pub async fn samples_since(
 mod tests {
     use super::*;
     use crate::storage::{connect, migrate};
+    use std::collections::HashMap;
 
     /// A migrated database with one device (and the profile it needs).
     async fn setup() -> (tempfile::TempDir, SqlitePool, i64) {
@@ -662,5 +714,108 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(left, 0);
+    }
+
+    #[tokio::test]
+    async fn automatic_order_is_by_kind_then_natural_name_and_manual_order_wins() {
+        let (_dir, pool, device) = setup().await;
+        let mut ids = HashMap::new();
+        for (name, spec) in [
+            (
+                "Traffic Port 10",
+                SensorSpec::InterfaceTraffic { if_index: 10 },
+            ),
+            ("CPU", oid_spec()),
+            ("Status Port 2", SensorSpec::InterfaceStatus { if_index: 2 }),
+            (
+                "traffic Port 2",
+                SensorSpec::InterfaceTraffic { if_index: 2 },
+            ),
+            ("Uptime", SensorSpec::Uptime),
+            ("Zz Ping", SensorSpec::Ping),
+        ] {
+            ids.insert(
+                name,
+                create_sensor(&pool, device, name, &spec).await.unwrap(),
+            );
+        }
+        let names = || async {
+            list_sensors(&pool, device)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|s| s.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names().await,
+            [
+                "Zz Ping",
+                "Uptime",
+                "traffic Port 2",
+                "Traffic Port 10",
+                "Status Port 2",
+                "CPU"
+            ]
+        );
+
+        // Manually placed sensors come first; the rest keeps the automatic order behind them.
+        set_positions(&pool, device, &[ids["CPU"], ids["Traffic Port 10"], 9999])
+            .await
+            .unwrap();
+        assert_eq!(
+            names().await,
+            [
+                "CPU",
+                "Traffic Port 10",
+                "Zz Ping",
+                "Uptime",
+                "traffic Port 2",
+                "Status Port 2"
+            ]
+        );
+        let all: Vec<String> = list_all_sensors(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        assert_eq!(all, names().await);
+
+        set_positions(&pool, device, &[]).await.unwrap();
+        assert_eq!(names().await[0], "Zz Ping", "reset to automatic");
+    }
+
+    #[tokio::test]
+    async fn renaming_keeps_the_sensor_and_checks_the_name() {
+        let (_dir, pool, device) = setup().await;
+        let a = create_sensor(&pool, device, "A", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        create_sensor(&pool, device, "B", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        rename_sensor(&pool, a, "  Erreichbarkeit  ").await.unwrap();
+        let sensor = get_sensor(&pool, a).await.unwrap().unwrap();
+        assert_eq!(
+            (sensor.name.as_str(), sensor.channels.len()),
+            ("Erreichbarkeit", 1)
+        );
+        assert!(matches!(
+            rename_sensor(&pool, a, "B").await,
+            Err(Error::Conflict(_))
+        ));
+        assert!(matches!(
+            rename_sensor(&pool, a, "").await,
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            rename_sensor(&pool, a, &"x".repeat(65)).await,
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            rename_sensor(&pool, 999, "C").await,
+            Err(Error::NotFound)
+        ));
     }
 }

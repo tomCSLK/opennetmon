@@ -79,6 +79,55 @@ pub async fn backup_to(pool: &SqlitePool, target: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Where manual positions live: table and the column that scopes them (siblings share its value).
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum OrderScope {
+    /// Groups below a parent (`None` = top level).
+    Groups(Option<i64>),
+    /// Devices in a group (`None` = without group).
+    Devices(Option<i64>),
+    /// Sensors of a device.
+    Sensors(i64),
+}
+
+impl OrderScope {
+    fn sql(self) -> (&'static str, &'static str, Option<i64>) {
+        match self {
+            Self::Groups(parent) => ("groups", "parent_id", parent),
+            Self::Devices(group) => ("devices", "group_id", group),
+            Self::Sensors(device) => ("sensors", "device_id", Some(device)),
+        }
+    }
+}
+
+/// Stores `ids` as the manual order (1, 2, …) of their scope; every other item of the scope goes back
+/// to automatic order. An empty list resets the whole scope. Ids outside the scope are ignored.
+pub(crate) async fn write_positions(
+    pool: &SqlitePool,
+    scope: OrderScope,
+    ids: &[i64],
+) -> Result<()> {
+    let (table, column, value) = scope.sql();
+    let mut tx = pool.begin().await?;
+    sqlx::query(&format!(
+        "UPDATE {table} SET position = NULL WHERE {column} IS ?"
+    ))
+    .bind(value)
+    .execute(&mut *tx)
+    .await?;
+    let update = format!("UPDATE {table} SET position = ? WHERE id = ? AND {column} IS ?");
+    for (i, id) in ids.iter().enumerate() {
+        sqlx::query(&update)
+            .bind(i64::try_from(i).unwrap_or(i64::MAX - 1) + 1)
+            .bind(id)
+            .bind(value)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Cheap liveness check for the health endpoint.
 pub async fn ping(pool: &SqlitePool) -> Result<()> {
     sqlx::query("SELECT 1").execute(pool).await?;

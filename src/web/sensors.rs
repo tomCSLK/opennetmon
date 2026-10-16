@@ -733,7 +733,11 @@ mod tests {
         }
         let stored = store::list_sensors(&h.state.pool, device).await.unwrap();
         let names: Vec<_> = stored.iter().map(|s| s.name.as_str()).collect();
-        assert_eq!(names, ["Laufzeit", "Ping", "Temperatur"]);
+        assert_eq!(
+            names,
+            ["Ping", "Laufzeit", "Temperatur"],
+            "ping, uptime, then own values"
+        );
         assert!(matches!(
             &stored[2].spec,
             SensorSpec::Oid { scale, .. } if (*scale - 0.1).abs() < 1e-12

@@ -150,13 +150,11 @@ pub struct GroupNode {
     pub depth: usize,
 }
 
-/// Orders groups depth-first (siblings by name, case-insensitive). Orphans and cycles cannot occur
+/// Orders groups depth-first; siblings keep the order of `groups` (display order from storage). Orphans and cycles cannot occur
 /// (foreign key plus move checks); anything unreachable is simply left out.
 pub fn flatten_groups(groups: &[Group]) -> Vec<GroupNode> {
     fn walk(groups: &[Group], parent: Option<i64>, depth: usize, out: &mut Vec<GroupNode>) {
-        let mut children: Vec<&Group> = groups.iter().filter(|g| g.parent_id == parent).collect();
-        children.sort_by_key(|g| g.name.to_lowercase());
-        for group in children {
+        for group in groups.iter().filter(|g| g.parent_id == parent) {
             out.push(GroupNode {
                 group: group.clone(),
                 depth,
@@ -312,12 +310,13 @@ mod tests {
     }
 
     #[test]
-    fn groups_are_flattened_depth_first_by_name() {
+    fn groups_are_flattened_depth_first_in_the_given_order() {
+        // As `storage::groups::list_groups` returns them: siblings already in display order.
         let groups = vec![
+            g(4, "Anderes", None),
             g(1, "Zuhause", None),
             g(2, "büro", Some(1)),
             g(3, "Keller", Some(1)),
-            g(4, "Anderes", None),
             g(5, "Rack", Some(3)),
         ];
         let names: Vec<(String, usize)> = flatten_groups(&groups)

@@ -80,6 +80,9 @@ struct DetailTemplate {
     events: Vec<EventView>,
     flash: Option<&'static str>,
     error: Option<String>,
+    /// Name field of the rename form (the rejected input after an error).
+    new_name: String,
+    rename_failed: bool,
 }
 
 fn now_ms() -> i64 {
@@ -109,6 +112,8 @@ struct View<'a> {
     error: Option<String>,
     /// Rejected threshold input to echo back (by field name).
     submitted: Option<&'a HashMap<String, String>>,
+    /// Rejected new name to echo back.
+    rejected_name: Option<String>,
 }
 
 async fn render(
@@ -123,6 +128,7 @@ async fn render(
         flash,
         error,
         submitted,
+        rejected_name,
     } = view;
     let latest = latest_values(&state.pool, &sensor.channels).await?;
     let mibs = state.mib_index();
@@ -199,6 +205,8 @@ async fn render(
         events,
         flash,
         error,
+        rename_failed: rejected_name.is_some(),
+        new_name: rejected_name.unwrap_or_else(|| sensor.name.clone()),
         sensor,
         device,
     };
@@ -223,6 +231,7 @@ pub async fn detail(
                 flash: flash_message(query.msg.as_deref()),
                 error: None,
                 submitted: None,
+                rejected_name: None,
             },
         )
         .await?,
@@ -338,6 +347,48 @@ pub async fn save_thresholds(
                     flash: None,
                     error: Some(message),
                     submitted: Some(&form),
+                    rejected_name: None,
+                },
+            )
+            .await?;
+            Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RenameForm {
+    csrf_token: String,
+    name: String,
+}
+
+pub async fn rename(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Form(form): Form<RenameForm>,
+) -> Result<Response> {
+    user.require_admin()?;
+    user.verify_csrf(&form.csrf_token)?;
+    let (sensor, device) = load(&state, id).await?;
+    match store::rename_sensor(&state.pool, id, &form.name).await {
+        Ok(()) => {
+            tracing::info!(user = %user.username, sensor = id, "sensor renamed");
+            Ok(Redirect::to(&format!("/sensors/{id}?msg=sensor_renamed")).into_response())
+        }
+        Err(Error::Invalid(message) | Error::Conflict(message)) => {
+            let html = render(
+                &state,
+                &user,
+                sensor,
+                device,
+                View {
+                    range: Range::Day,
+                    flash: None,
+                    error: Some(message),
+                    submitted: None,
+                    rejected_name: Some(form.name),
                 },
             )
             .await?;
@@ -704,5 +755,82 @@ mod tests {
             );
             assert!(!reply.body.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn admins_rename_sensors_and_errors_are_shown_on_the_page() {
+        let h = harness(true).await;
+        let (sensor, _) = traffic_sensor(&h).await;
+        let device = get_sensor(&h.state.pool, sensor)
+            .await
+            .unwrap()
+            .unwrap()
+            .device_id;
+        create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        assert!(
+            page.body.contains("action=\"/sensors/1/rename\"")
+                && page.body.contains("value=\"Traffic Port 1\"")
+        );
+
+        let path = format!("/sensors/{sensor}/rename");
+        let reply = send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!("csrf_token={csrf}&name=Uplink+Keller"),
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        assert!(reply.location().ends_with("msg=sensor_renamed"));
+        let renamed = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
+        assert_eq!(
+            (renamed.name.as_str(), renamed.channels.len()),
+            ("Uplink Keller", 2)
+        );
+
+        let page = send(
+            &h.app,
+            post(&path, Some(&admin), &format!("csrf_token={csrf}&name=Ping")),
+        )
+        .await;
+        assert_eq!(page.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(page.body.contains("existiert an diesem Gerät bereits"));
+        assert!(
+            page.body.contains("value=\"Ping\""),
+            "the rejected input is kept"
+        );
+        let page = send(
+            &h.app,
+            post(&path, Some(&admin), &format!("csrf_token={csrf}&name=+")),
+        )
+        .await;
+        assert_eq!(page.status, StatusCode::UNPROCESSABLE_ENTITY);
+
+        let (viewer, vcsrf) = login(&h, "bert").await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&viewer))).await;
+        assert!(!page.body.contains("/rename"));
+        assert_eq!(
+            send(
+                &h.app,
+                post(&path, Some(&viewer), &format!("csrf_token={vcsrf}&name=X"))
+            )
+            .await
+            .status,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            get_sensor(&h.state.pool, sensor)
+                .await
+                .unwrap()
+                .unwrap()
+                .name,
+            "Uplink Keller"
+        );
     }
 }

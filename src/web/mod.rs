@@ -7,6 +7,7 @@ pub mod devices;
 pub mod groups;
 pub mod mail_settings;
 pub mod mibs;
+pub mod order;
 pub mod overview;
 pub mod sensor_detail;
 pub mod sensor_text;
@@ -106,6 +107,10 @@ pub fn router(state: AppState) -> Router {
         .route("/groups/{id}/edit", get(groups::edit_form))
         .route("/groups/{id}", post(groups::update))
         .route("/groups/{id}/delete", post(groups::delete))
+        .route(
+            "/groups/{id}/order",
+            get(order::group_page).post(order::save_group),
+        )
         .route("/devices/new", get(devices::new_form))
         .route("/devices", post(devices::create))
         .route("/devices/{id}/edit", get(devices::edit_form))
@@ -121,6 +126,10 @@ pub fn router(state: AppState) -> Router {
         .route("/devices/{id}/values/create", post(sensor_values::create))
         .route("/devices/{id}/sensors/bulk", post(sensors::bulk))
         .route(
+            "/devices/{id}/sensors/order",
+            get(order::sensor_page).post(order::save_sensors),
+        )
+        .route(
             "/devices/{id}/sensors/interfaces",
             post(sensors::create_interfaces),
         )
@@ -130,6 +139,7 @@ pub fn router(state: AppState) -> Router {
             "/sensors/{id}/thresholds",
             post(sensor_detail::save_thresholds),
         )
+        .route("/sensors/{id}/rename", post(sensor_detail::rename))
         .route("/sensors/{id}/toggle", post(sensors::toggle))
         .route("/sensors/{id}/delete", post(sensors::delete))
         .route(
@@ -212,6 +222,9 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
         "sensors_deactivated" => Some("Sensoren deaktiviert."),
         "sensors_deleted" => Some("Sensoren gelöscht."),
         "thresholds_saved" => Some("Schwellwerte gespeichert."),
+        "sensor_renamed" => Some("Sensor umbenannt."),
+        "order_saved" => Some("Reihenfolge gespeichert."),
+        "order_reset" => Some("Reihenfolge zurückgesetzt: wieder automatisch sortiert."),
         "mail_saved" => Some("E-Mail-Einstellungen gespeichert."),
         "mib_deleted" => Some("MIB-Datei gelöscht."),
         _ => None,

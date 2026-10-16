@@ -2,10 +2,23 @@
 
 ## Übersicht (Startseite)
 
-Die Startseite zeigt alle Gruppen als Baum (Untergruppen eingerückt, alphabetisch) mit den zugehörigen Geräten.
+Die Startseite zeigt alle Gruppen als Baum (Untergruppen eingerückt) mit den zugehörigen Geräten, in der Reihenfolge unten.
 Geräte ohne Gruppe stehen zuerst unter „Ohne Gruppe". Leser sehen Name, Adresse und Intervall;
 Administratoren sehen zusätzlich das SNMP-Profil sowie die Aktionen „Testen" und „Bearbeiten".
 Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden nur auf feste Texte abgebildet.
+
+## Reihenfolge (nur Administratoren)
+
+- **Automatisch** (Standard): nach Namen, Groß-/Kleinschreibung egal, Zahlen der Größe nach („Switch 2“ vor „Switch 10“).
+- **Von Hand**: „Reihenfolge ändern“ oben auf der Übersicht ordnet die obersten Gruppen und die Geräte ohne Gruppe (`/groups/0/order`),
+  „Reihenfolge“ an einer Gruppe deren Untergruppen und Geräte (`/groups/<id>/order`). Zeilen am Griff ziehen, mit ↑/↓ verschieben oder
+  eine Position eintragen und speichern. Ohne JavaScript bleiben die Positionsfelder.
+- Von Hand geordnete Einträge stehen vorn, neue und nicht geordnete dahinter in automatischer Reihenfolge.
+  „Automatisch sortieren“ verwirft die Handordnung der Ebene.
+- Wird ein Gerät in eine andere Gruppe (oder eine Gruppe unter eine andere Gruppe) verschoben, verliert es seinen Platz und wird dort automatisch einsortiert.
+  Umbenennen ändert den Platz nicht.
+- Die Reihenfolge gilt für alle Benutzer. Technik: Spalte `position` in `groups`, `devices`, `sensors` (Migration `0010`, `NULL` = automatisch),
+  Sortierung in `src/ordering.rs`, Seiten in `src/web/order.rs`, Skript `static/order.js`.
 
 ## Gruppen (nur Administratoren)
 

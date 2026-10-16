@@ -11,6 +11,7 @@ pub mod error;
 pub mod mail;
 pub mod maintenance;
 pub mod mib;
+pub mod ordering;
 pub mod poller;
 pub mod sensors;
 pub mod snmp;

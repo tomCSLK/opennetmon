@@ -66,7 +66,20 @@
   <noscript><p class="empty small">Für die Tabelle wird JavaScript benötigt.</p></noscript>
 </section>
 
-<details class="card panel"{% if error.is_some() %} open{% endif %}>
+{% if layout.is_admin %}
+<details class="card panel"{% if rename_failed %} open{% endif %}>
+  <summary><h2>Name</h2></summary>
+  <form method="post" action="/sensors/{{ sensor.id }}/rename" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label for="new-name" class="visually-hidden">Neuer Name</label>
+    <input id="new-name" name="name" type="text" value="{{ new_name }}" maxlength="64" required>
+    <button type="submit">Umbenennen</button>
+  </form>
+  <p class="hint">Höchstens 64 Zeichen, je Gerät eindeutig. Messwerte, Graph, Schwellwerte und Status bleiben erhalten.</p>
+</details>
+{% endif %}
+
+<details class="card panel"{% if error.is_some() && !rename_failed %} open{% endif %}>
   <summary><h2>Schwellwerte</h2></summary>
   {% if layout.is_admin %}
   <p class="muted small">Ein Wert löst aus, wenn er die Grenze <em>überschreitet</em> (oben) oder <em>unterschreitet</em> (unten). „Down“ und „Warnung“ gelten sofort.

@@ -55,6 +55,11 @@ Manuell gegen die echte Hardware: `cargo test --test omada_manual sensors_work -
 - **Sensorseite** (`/devices/<id>/sensors`, alle angemeldeten Benutzer): Tabelle mit Name, Typ, Status, letzter Meldung und letzter Abfrage (UTC).
   Administratoren sehen zusätzlich „Deaktivieren“, „Löschen“, „Interfaces suchen“, „Werte suchen“ (`docs/mibs.md`) und das Formular „Sensor hinzufügen“ (Ping, Uptime, eigene OID mit
   Modus Wert/Zähler und Faktor; Dezimalkomma wird akzeptiert). Fehler erscheinen auf derselben Seite, Eingaben bleiben erhalten.
+- **Reihenfolge**: automatisch nach Typ (Ping, Uptime, Traffic, Interface-Status, dann eigene Werte), innerhalb eines Typs nach Namen
+  mit Zahlen der Größe nach (Port 2 vor Port 10). „Reihenfolge ändern“ (`/devices/<id>/sensors/order`, nur Administratoren) ordnet von Hand
+  per Ziehen, ↑/↓ oder Positionsnummer; Regeln wie bei Geräten (`docs/geraete-und-gruppen.md`).
+- **Umbenennen** auf der Detailseite (Bereich „Name“, nur Administratoren, `POST /sensors/<id>/rename`): höchstens 64 Zeichen, je Gerät eindeutig;
+  Messwerte, Graph, Schwellwerte, Status und Ereignisse bleiben erhalten.
 - **Interface-Discovery** (`POST /devices/<id>/discover`, nur Administratoren, CSRF): `SnmpClient::walk` (GETBULK) liest `ifDescr`, `ifType`, `ifSpeed`,
   `ifOperStatus`, `ifName`, `ifHighSpeed` und `ifAlias` (`src/discovery.rs`) und führt sie je `ifIndex` zusammen. Name = `ifName`, sonst `ifDescr`
   (Access Points haben keine `ifXTable`), sonst „Interface N“. Die Seite zeigt je Interface zwei Häkchen (Traffic, Status). **Vorausgewählt** ist Traffic bei
