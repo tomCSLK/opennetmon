@@ -1,5 +1,6 @@
 //! Web layer: axum router, shared state and handlers.
 
+mod account;
 mod assets;
 pub mod auth;
 pub mod credentials;
@@ -16,6 +17,7 @@ pub mod sensors;
 pub mod templates;
 #[cfg(test)]
 pub(crate) mod testutil;
+pub mod users;
 
 use axum::Router;
 use std::sync::Arc;
@@ -146,6 +148,13 @@ pub fn router(state: AppState) -> Router {
             "/devices/{id}/template/apply",
             get(templates::apply_form).post(templates::apply),
         )
+        .route("/account", get(account::show))
+        .route("/account/password", post(account::change_password))
+        .route("/users", get(users::list).post(users::create))
+        .route("/users/{id}", get(users::edit))
+        .route("/users/{id}/role", post(users::set_role))
+        .route("/users/{id}/password", post(users::set_password))
+        .route("/users/{id}/delete", post(users::delete))
         .route("/templates", get(templates::list))
         .route(
             "/templates/{id}",
@@ -266,6 +275,13 @@ pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
             "Vorlage gespeichert. Sie lässt sich beim Anlegen eines Geräts oder mit „Vorlage anwenden“ nutzen.",
         ),
         "template_saved" => Some("Vorlage gespeichert."),
+        "user_created" => Some("Benutzer angelegt."),
+        "account_password_saved" => {
+            Some("Passwort geändert. Deine anderen Sitzungen wurden abgemeldet.")
+        }
+        "user_role_saved" => Some("Rolle gespeichert."),
+        "user_password_saved" => Some("Passwort gesetzt."),
+        "user_deleted" => Some("Benutzer gelöscht."),
         "template_deleted" => Some("Vorlage gelöscht."),
         "order_reset" => Some("Reihenfolge zurückgesetzt: wieder automatisch sortiert."),
         "mail_saved" => Some("E-Mail-Einstellungen gespeichert."),

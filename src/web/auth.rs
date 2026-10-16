@@ -272,7 +272,7 @@ pub async fn logout(
 }
 
 /// Reads one cookie from the `Cookie` request header(s).
-fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
+pub(crate) fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get_all(header::COOKIE)
         .iter()

@@ -4,10 +4,31 @@
 
 | Rolle | Rechte |
 |---|---|
-| Administrator (`admin`) | alles, inklusive Verwaltung (folgt mit den nächsten MVP-Schritten) |
+| Administrator (`admin`) | alles, inklusive Benutzerverwaltung |
 | Leser (`viewer`) | nur ansehen |
 
 Handler, die nur Administratoren erlauben sollen, rufen `CurrentUser::require_admin()` auf.
+
+## Benutzer verwalten (Oberfläche, `/users`, nur Administratoren)
+
+Unter **Einstellungen → Benutzer**:
+
+- **Liste** mit Rolle, Anlagezeitpunkt und Zahl der offenen Sitzungen; das eigene Konto ist mit „(du)“ markiert.
+- **Neuer Benutzer:** Benutzername, Rolle (Leser oder Administrator), Passwort zweimal. Bei Fehlern bleiben Name und Rolle stehen, Passwörter nie.
+- **Je Benutzer** (`/users/<id>`):
+  - **Rolle ändern** – gilt sofort, auch in offenen Sitzungen. Der **letzte Administrator** kann nicht zum Leser werden (in derselben
+    SQL-Anweisung geprüft, damit zwei gleichzeitige Änderungen nicht beide Administratoren entfernen). Wer sich selbst zum Leser macht, landet auf der Übersicht.
+  - **Passwort setzen** – beendet alle Sitzungen des Benutzers; beim eigenen Konto bleibt die aktuelle Sitzung angemeldet.
+  - **Löschen** – mit Bestätigungshaken, meldet alle Sitzungen ab; nie das eigene Konto und nie den letzten Administrator.
+- Aktionen werden protokolliert (wer, was, welcher Benutzer), Passwörter nie.
+
+## Mein Konto (`/account`, alle Benutzer)
+
+Erreichbar über Name und Rolle unten in der Seitenleiste. Zeigt Benutzername und Rolle und ändert das **eigene Passwort**:
+
+- Nötig sind das bisherige Passwort und das neue zweimal (10 bis 128 Zeichen, anders als das bisherige).
+- Falsche bisherige Passwörter zählen wie fehlgeschlagene Anmeldungen für den Benutzernamen (`auth::throttle`); ab 5 Fehlversuchen wird gebremst.
+- Danach werden alle anderen Sitzungen des Benutzers abgemeldet, die aktuelle bleibt angemeldet.
 
 ## Benutzer anlegen (Kommandozeile)
 

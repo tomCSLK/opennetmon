@@ -1,0 +1,39 @@
+{% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
+{% block title %}Mein Konto – netmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Mein Konto</h1>
+    <p class="subtitle">{{ layout.username }} · {{ role_label }}</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="card">
+  <h2>Passwort ändern</h2>
+  <form method="post" action="/account/password" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label for="current">Bisheriges Passwort</label>
+    <input id="current" name="current" type="password" required maxlength="128" autocomplete="current-password">
+    <div class="form-grid">
+      <div>
+        <label for="password">Neues Passwort</label>
+        <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+      </div>
+      <div>
+        <label for="password_repeat">Neues Passwort wiederholen</label>
+        <input id="password_repeat" name="password_repeat" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+      </div>
+    </div>
+    <p class="hint">10 bis 128 Zeichen. Deine anderen Sitzungen (z. B. auf dem Handy) werden abgemeldet, diese bleibt angemeldet.</p>
+    <div class="form-actions"><button type="submit">Passwort ändern</button></div>
+  </form>
+</section>
+{% endblock %}

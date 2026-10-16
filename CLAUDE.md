@@ -80,7 +80,7 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
 3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden – **umgesetzt** (`docs/sensoren.md`);
    darüber hinaus MIB-Import und „Werte suchen“ (PoE, CPU, Speicher, Hardware-Sensoren; neue Sensoren inaktiv) – **umgesetzt** (`docs/mibs.md`)
 4. Schwellwerte je Kanal → Statusberechnung; Statusübersicht und Detailseite mit Graph (1h/24h/7d/30d) – **umgesetzt** (`docs/graphen-und-schwellwerte.md`)
-5. Login (lokale Benutzer), Rolle Admin/Leser – **umgesetzt** (Anlegen per CLI, siehe `docs/benutzer-und-login.md`)
+5. Login (lokale Benutzer), Rolle Admin/Leser – **umgesetzt** (erster Admin per CLI, danach Benutzerverwaltung in der Oberfläche `web::users`, siehe `docs/benutzer-und-login.md`)
 6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – **umgesetzt**, Einstellungen in der Oberfläche (`docs/benachrichtigung.md`)
 
 **Nicht im MVP:** SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET,
@@ -117,7 +117,7 @@ Ein Binary, ein Prozess, Module:
 - `mail` – SMTP-Einstellungen, Validierung, Versand mit `lettre` (rustls, kein OpenSSL); `storage::mail` – Einstellungen (Passwort verschlüsselt, Kontext `smtp.password`) und Sendelog `notifications`; Seite `web::mail_settings`
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
-  (`web::overview`: eine Karte je oberster Gruppe, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, aufklappbar, Zustand in `localStorage` über `static/app.js`), Gruppen-, Geräte- und Profilseiten (`web::groups`, `web::devices`, `web::credentials`), Sensorseiten mit Discovery (`web::sensors`), Detailseite mit JSON-Endpoint für uPlot, Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`) und Schwellwertformular (`web::sensor_detail`)
+  (`web::overview`: eine Karte je oberster Gruppe, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, aufklappbar, Zustand in `localStorage` über `static/app.js`), Gruppen-, Geräte-, Profil- und Benutzerseiten (`web::groups`, `web::devices`, `web::credentials`, `web::users`: letzter Admin geschützt, eigenes Konto nicht löschbar, Passwortwechsel beendet die übrigen Sitzungen; `web::account` „Mein Konto“ für alle: eigenes Passwort mit dem bisherigen, Fehlversuche über `login_throttle`), Sensorseiten mit Discovery (`web::sensors`), Detailseite mit JSON-Endpoint für uPlot, Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`) und Schwellwertformular (`web::sensor_detail`)
 
 ### Messdaten
 

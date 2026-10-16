@@ -1,0 +1,63 @@
+{% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
+{% block title %}{{ user.username }} – netmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/users">Benutzer</a><span>›</span><span>{{ user.username }}</span></div>
+    <h1>{{ user.username }}{% if is_me %} <span class="muted small">(du)</span>{% endif %}</h1>
+    <p class="subtitle">{{ role_label }}</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="card">
+  <h2>Rolle</h2>
+  <form method="post" action="/users/{{ user.id }}/role" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label for="role" class="visually-hidden">Rolle</label>
+    <select id="role" name="role">
+      <option value="viewer"{% if !user.role.is_admin() %} selected{% endif %}>Leser – nur ansehen</option>
+      <option value="admin"{% if user.role.is_admin() %} selected{% endif %}>Administrator – alles ändern</option>
+    </select>
+    <button type="submit">Speichern</button>
+  </form>
+  <p class="hint">Gilt sofort, auch in offenen Sitzungen. Der letzte Administrator bleibt Administrator.</p>
+</section>
+
+<section class="card">
+  <h2>Passwort setzen</h2>
+  <form method="post" action="/users/{{ user.id }}/password" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <div class="form-grid">
+      <div>
+        <label for="password">Neues Passwort</label>
+        <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+      </div>
+      <div>
+        <label for="password_repeat">Wiederholen</label>
+        <input id="password_repeat" name="password_repeat" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+      </div>
+    </div>
+    <p class="hint">{% if is_me %}Deine anderen Sitzungen werden beendet, diese bleibt angemeldet.{% else %}Alle Sitzungen von {{ user.username }} werden beendet.{% endif %}</p>
+    <div class="form-actions"><button type="submit">Passwort setzen</button></div>
+  </form>
+</section>
+
+{% if !is_me %}
+<section class="card">
+  <h2>Löschen</h2>
+  <form method="post" action="/users/{{ user.id }}/delete" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label class="inline"><input type="checkbox" name="confirm" value="yes"> {{ user.username }} wirklich löschen (meldet alle Sitzungen ab)</label>
+    <div class="form-actions"><button type="submit" class="ghost">Benutzer löschen</button></div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

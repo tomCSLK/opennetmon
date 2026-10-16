@@ -1,0 +1,67 @@
+{% extends "app.html" %}
+{% block title %}Benutzer – netmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Benutzer</h1>
+    <p class="subtitle">Administratoren dürfen alles ändern, Leser nur ansehen.</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="card flush">
+  <div class="card-head"><h2>Benutzer</h2><span class="muted small">{{ rows.len() }}</span></div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Benutzername</th><th>Rolle</th><th>Angelegt</th><th class="right">Sitzungen</th><th></th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td><a href="/users/{{ row.info.id }}"><strong>{{ row.info.username }}</strong></a>{% if row.is_me %} <span class="muted small">(du)</span>{% endif %}</td>
+        <td>{{ row.role_label }}</td>
+        <td class="num">{{ row.created|safe }}</td>
+        <td class="num right">{{ row.info.sessions }}</td>
+        <td class="right"><a class="button ghost small" href="/users/{{ row.info.id }}">Bearbeiten</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Neuer Benutzer</h2>
+  <form method="post" action="/users" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <div class="form-grid">
+      <div>
+        <label for="username">Benutzername</label>
+        <input id="username" name="username" type="text" value="{{ username }}" required minlength="3" maxlength="32" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="role">Rolle</label>
+        <select id="role" name="role">
+          <option value="viewer"{% if role == "viewer" %} selected{% endif %}>Leser – nur ansehen</option>
+          <option value="admin"{% if role == "admin" %} selected{% endif %}>Administrator – alles ändern</option>
+        </select>
+      </div>
+      <div>
+        <label for="password">Passwort</label>
+        <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+      </div>
+      <div>
+        <label for="password_repeat">Passwort wiederholen</label>
+        <input id="password_repeat" name="password_repeat" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+      </div>
+    </div>
+    <p class="hint">Benutzername 3 bis 32 Zeichen (Buchstaben, Ziffern, . _ -), Passwort 10 bis 128 Zeichen. Das Passwort gibst du der Person auf einem sicheren Weg weiter.</p>
+    <div class="form-actions"><button type="submit">Benutzer anlegen</button></div>
+  </form>
+</section>
+{% endblock %}

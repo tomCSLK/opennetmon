@@ -458,3 +458,6 @@ details.subgroup details.subgroup { margin-left: 1rem; }
 details.subgroup .device { padding-left: 1rem; }
 .subgroup-empty { margin: 0; padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
 .group-card .devices > details.subgroup:last-child, .group-card .devices > .device:last-child { border-bottom: 0; }
+
+a.user { border-radius: var(--radius-sm); padding: .35rem .4rem; text-decoration: none; }
+a.user:hover, a.user[aria-current="page"] { background: var(--sidebar-active); text-decoration: none; }
