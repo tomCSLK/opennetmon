@@ -121,6 +121,14 @@ opennetmon/
 6. **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph (1h/24h/7d/30d), Rollups und Retention – **umgesetzt** (`docs/graphen-und-schwellwerte.md`).
 7. **Betrieb:** musl-Release-Build (zuletzt nach den Geräten geprüft: statisch gelinkt, 9,3 MB), `deploy/opennetmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
 8. **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel – **umgesetzt** (`docs/benachrichtigung.md`).
+9. **Als Nächstes: Mehrsprachigkeit** (vor dem Öffentlichmachen des Repos; jede neue Funktion vergrößert den Umbau):
+   - Alle festen Texte (24 Templates, etwa 300 deutsche Texte in rund 40 Rust-Dateien: Meldungen, Fehler, Statusnamen, Mails) in Kataloge je Sprache,
+     eingebettet ins Binary; Deutsch bleibt Ausgangssprache, Englisch als erste weitere Sprache. Ein Test stellt sicher, dass kein Schlüssel fehlt.
+   - Sprache **je Benutzer** (Spalte in `users`): Auswahl beim Anlegen und unter „Mein Konto“, vorbelegt aus `Accept-Language`, sonst Deutsch;
+     die Anmeldeseite folgt dem Browser.
+   - Benachrichtigungs-Mails: **eine** Sprache für alle Empfänger, einstellbar auf der Seite „E-Mail“.
+   - Technik vor dem Umsetzen entscheiden: Fluent (`fluent`/`fluent-templates`, neue Abhängigkeit, Okay des Nutzers nötig) oder eigene schlanke Lösung.
+   - Nicht übersetzt: gespeicherte Namen (Sensoren, Gruppen, Geräte) und die Projektdoku in `docs/` (bleibt Deutsch); README bekommt eine englische Kurzfassung.
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**

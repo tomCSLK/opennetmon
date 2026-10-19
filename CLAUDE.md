@@ -167,7 +167,7 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 ## Konventionen
 
 - Code, Bezeichner, Commit-Messages und Code-Kommentare: Englisch
-- UI-Texte und Projektdokumentation (`docs/`): Deutsch
+- UI-Texte und Projektdokumentation (`docs/`): Deutsch (Mehrsprachigkeit mit Englisch und Sprache je Benutzer ist als nächster Schritt geplant, siehe `PLAN.md`)
 - Kein `unwrap()`/`expect()` außerhalb von Tests und Startcode; Fehler über eigenen Error-Typ mit `IntoResponse`
 - Kleine, thematisch abgeschlossene Commits; nach jedem MVP-Schritt lauffähiger Stand
 - Neue Sensortypen nur über den `Sensor`-Trait, keine Sonderfälle im Poller

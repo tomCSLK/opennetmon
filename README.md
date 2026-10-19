@@ -8,6 +8,9 @@ Ein einzelnes, statisch gelinktes Binary (Rust) mit SQLite – gedacht für den 
 > „PRTG“ ist eine Marke von Paessler; opennetmon steht in keiner Verbindung zu Paessler.
 > Zielumgebung ist ein privates Netz mit TP-Link Omada (Switches und Access Points per SNMPv3); es funktioniert mit jedem Gerät, das SNMP v2c oder v3 spricht.
 
+> **Sprache / Language:** opennetmon wird derzeit auf Deutsch entwickelt; Oberfläche und Dokumentation sind deutsch. Weitere Sprachen (zuerst Englisch) sind geplant.
+> *opennetmon is currently developed in German; the user interface and documentation are in German. More languages, starting with English, are planned.*
+
 ## Status
 
 Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN.md`](PLAN.md).
@@ -15,7 +18,7 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 | | |
 |---|---|
 | Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Umbenennen von Sensoren, eigene Reihenfolge von Gruppen, Geräten und Sensoren (Ziehen oder ↑/↓), Benutzerverwaltung in der Oberfläche, Geräte ohne SNMP (nur Ping), Bewertung von Statuswerten, Gerätevorlagen (aus einem Gerät erzeugt, beim Anlegen automatisch per Gerätekennung angewendet), MIB-Import mit „Werte suchen“ (Tabellen als zunächst inaktive Sensoren), Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
-| Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
+| Offen | Mehrsprachigkeit (Englisch, Sprache je Benutzer), Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
 | Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
 
 ## Funktionen
