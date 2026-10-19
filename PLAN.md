@@ -25,6 +25,7 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 | DB | SQLite über `sqlx`, WAL, Migrations in `migrations/` |
 | Auth | Lokale Benutzer, Rollen Admin/Leser, argon2, serverseitige Sitzungen, CSRF – umgesetzt |
 | Secrets | SNMP-Passwörter mit XChaCha20-Poly1305 verschlüsselt, Schlüsseldatei 0600 (`opennetmon key generate`) – umgesetzt |
+| Lizenz | **AGPL-3.0-or-later**, Copyright Thomas Cieslik; Quellcode-Link in der Oberfläche (Abschnitt 13), Fremdlizenzen in `THIRD-PARTY-LICENSES.txt` (`dev/third-party-licenses.py`) |
 | Betrieb | Statisches musl-Binary, systemd-Unit, Reverse Proxy (Caddy/nginx) für TLS, Standard-Bind `127.0.0.1:8080` |
 
 ## PRTG-Funktionsprinzip, das nachgebaut wird
@@ -155,3 +156,4 @@ Begrenzung der Anmeldeversuche: umgesetzt (`auth::throttle`, `docs/benutzer-und-
 - ER605: läuft als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - uPlot ist eingebunden; htmx ist noch nicht eingebunden (dafür braucht es dein Okay zum Herunterladen)
+- Repo öffentlich machen (Historie am 2026-10-19 geprüft: keine Secrets); Regel für fremde Beiträge (CLA/DCO) festlegen

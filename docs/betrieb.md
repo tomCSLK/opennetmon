@@ -16,7 +16,7 @@ Auf dem Entwicklungsrechner das statische Binary bauen (keine glibc-Abhängigkei
 ```bash
 rustup target add x86_64-unknown-linux-musl
 cargo build --release --target x86_64-unknown-linux-musl
-scp -r target/x86_64-unknown-linux-musl/release/opennetmon deploy user@server:/tmp/opennetmon-install/
+scp -r target/x86_64-unknown-linux-musl/release/opennetmon deploy LICENSE THIRD-PARTY-LICENSES.txt user@server:/tmp/opennetmon-install/
 ```
 
 Auf dem Server:
@@ -32,6 +32,7 @@ Der Installer ist wiederholbar und tut Folgendes:
 |---|---|
 | Benutzer | Systembenutzer `opennetmon` (ohne Login, ohne Home) |
 | Binary | `/usr/local/bin/opennetmon`; die vorherige Version bleibt als `opennetmon.previous` |
+| Lizenzen | `/usr/local/share/doc/opennetmon/` (`LICENSE`, `THIRD-PARTY-LICENSES.txt`) |
 | Konfiguration | `/etc/opennetmon/config.toml` (aus `deploy/config.example.toml`, **nie überschrieben**), Verzeichnis `root:opennetmon 0750` |
 | Schlüssel | `/etc/opennetmon/secret.key` (neu erzeugt, Modus 0600, Besitzer `opennetmon`; **nie überschrieben**) |
 | Dienst | `/etc/systemd/system/opennetmon.service`, aktiviert; Daten unter `/var/lib/opennetmon` (legt systemd an) |
@@ -155,6 +156,7 @@ SNMPv3, Ping inkl. Namensauflösung, Discovery und Poller laufen ohne Blockade d
 ```bash
 sudo systemctl disable --now opennetmon opennetmon-backup.timer
 sudo rm /etc/systemd/system/opennetmon.service /etc/systemd/system/opennetmon-backup.* /usr/local/bin/opennetmon* /usr/local/sbin/opennetmon-backup /etc/sysctl.d/99-opennetmon-ping.conf
+sudo rm -r /usr/local/share/doc/opennetmon
 sudo systemctl daemon-reload
 # Daten und Schlüssel bleiben bewusst erhalten; zum endgültigen Löschen:
 # sudo rm -r /var/lib/opennetmon /etc/opennetmon /var/backups/opennetmon && sudo userdel opennetmon

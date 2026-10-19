@@ -4,6 +4,8 @@
 > Logo: Original außerhalb des Repos (`~/Bilder/opennetmon_Logo_v1.jpeg`), daraus `static/logo-mark.png` (Seitenleiste, Touch-Icon),
 > `static/favicon-32.png`/`-64.png`, `static/logo-wide.jpg` (Anmeldeseite) und `docs/assets/opennetmon-logo.jpg` (README).
 > „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert und steht in keiner Verbindung zu Paessler.
+> Umbenannt, weil „netmon“ markenrechtlich geschützt ist; für „opennetmon“ hat der Nutzer keine Registereinträge gefunden.
+> Lizenz: **AGPL-3.0-or-later**, Copyright Thomas Cieslik (`LICENSE`, `Cargo.toml` `license`/`repository`/`authors`, README-Abschnitt „Lizenz“).
 
 ## Ziel
 
@@ -55,7 +57,9 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - `rust-embed` braucht das Feature `mime-guess`; `sqlx` das Feature `macros` für `migrate!` (keine Compile-Time-Queries)
 - `snmp2` hat keinen eingebauten Timeout: jede Anfrage selbst mit `tokio::time::timeout` begrenzen
 
-Neue Abhängigkeiten nur mit kurzer Begründung im Commit; keine unmaintained Crates.
+Neue Abhängigkeiten nur mit kurzer Begründung im Commit; keine unmaintained Crates; Lizenz muss mit AGPL-3.0 verträglich sein
+(MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0 u. Ä.; nicht GPL-2.0-only, nicht proprietär). Nach jeder Änderung an `Cargo.lock`
+`python3 -I dev/third-party-licenses.py` laufen lassen und `THIRD-PARTY-LICENSES.txt` mitcommitten.
 
 ## Stack (Python-Fallback, nicht gewählt)
 
@@ -167,6 +171,8 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 - Kein `unwrap()`/`expect()` außerhalb von Tests und Startcode; Fehler über eigenen Error-Typ mit `IntoResponse`
 - Kleine, thematisch abgeschlossene Commits; nach jedem MVP-Schritt lauffähiger Stand
 - Neue Sensortypen nur über den `Sensor`-Trait, keine Sonderfälle im Poller
+- AGPL Abschnitt 13: Seitenleiste (`templates/app.html`) und Anmeldeseite verlinken den Quellcode (`web::SOURCE_URL` = `repository` aus `Cargo.toml`)
+  mit Version (`web::VERSION`); diese Links nicht entfernen. Der Installer legt `LICENSE` und `THIRD-PARTY-LICENSES.txt` nach `/usr/local/share/doc/opennetmon/`
 
 ## Tests
 
@@ -189,6 +195,7 @@ cargo run -- --config ./dev/config.toml backup ./dev/data/backup.db      # konsi
 cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv --auth md5   # Passwörter nur per Umgebung
 cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
 dev/mib-oracle.sh dev/data/mibs/tplink/*.mib                          # MIB-Auflösung gegen net-snmp (snmptranslate) prüfen
+python3 -I dev/third-party-licenses.py                                 # THIRD-PARTY-LICENSES.txt neu erzeugen (--check: nur prüfen)
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
@@ -206,4 +213,7 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - uPlot 1.6.32 ist eingebunden (`static/vendor/uplot/`); htmx ist noch nicht eingebunden (die Oberfläche ist sonst rein serverseitig gerendert) – dafür braucht es dein Okay zum Herunterladen
 
-Geklärt: Name opennetmon (mit Logo), Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.
+- GitHub-Repo `tomCSLK/opennetmon` ist noch privat; vor dem Öffentlichmachen ist die Historie geprüft (2026-10-19: keine Secrets). Für fremde Beiträge
+  ggf. eine Beitragsvereinbarung (CLA/DCO) festlegen, damit eine spätere Doppellizenzierung möglich bleibt
+
+Geklärt: Name opennetmon (mit Logo), Lizenz AGPL-3.0-or-later, Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

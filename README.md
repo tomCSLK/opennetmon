@@ -120,4 +120,16 @@ Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb
 
 ## Lizenz
 
-Noch nicht festgelegt. Enthaltene Fremdsoftware: uPlot (MIT, `static/vendor/uplot/LICENSE`); Rust-Abhängigkeiten siehe `Cargo.toml`.
+Copyright © 2026 Thomas Cieslik
+
+opennetmon ist freie Software unter der **GNU Affero General Public License, Version 3 oder (nach Wahl) jeder späteren Version**
+(`AGPL-3.0-or-later`, vollständiger und allein maßgeblicher Text in [`LICENSE`](LICENSE)). Es darf genutzt, verändert und weitergegeben
+werden, auch kommerziell – **ohne jede Gewährleistung**.
+
+Wer eine **veränderte** Fassung anderen über das Netz anbietet, muss ihnen deren Quellcode anbieten (Abschnitt 13). Die Oberfläche
+verlinkt dafür in der Seitenleiste und auf der Anmeldeseite auf `repository` aus `Cargo.toml` – bei einer eigenen Fassung dort die
+Adresse des eigenen Quellcodes eintragen.
+
+Fremdsoftware im Binary (Rust-Crates, uPlot unter MIT, Standard-MIBs aus IETF-RFCs) mit allen Lizenztexten:
+[`THIRD-PARTY-LICENSES.txt`](THIRD-PARTY-LICENSES.txt), erzeugt mit `python3 -I dev/third-party-licenses.py` (nach Änderungen an
+`Cargo.lock` neu erzeugen; `--check` prüft, ob die Datei aktuell ist).

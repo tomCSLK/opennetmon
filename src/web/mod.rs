@@ -338,6 +338,11 @@ pub fn iso_time_html(iso: &str) -> String {
     format!("<time class=\"ts\" datetime=\"{clean}\">{text} UTC</time>")
 }
 
+/// Where this program's source code is offered to its users (AGPL-3.0, section 13); `repository` in Cargo.toml.
+pub const SOURCE_URL: &str = env!("CARGO_PKG_REPOSITORY");
+/// Program version shown next to the source link.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Data every logged-in page needs for the header (navigation, user, logout form).
 pub struct Layout {
     pub username: String,

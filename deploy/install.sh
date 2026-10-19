@@ -32,6 +32,7 @@ CONF_DIR="$DESTDIR/etc/opennetmon"
 UNIT_DIR="$DESTDIR/etc/systemd/system"
 SYSCTL_DIR="$DESTDIR/etc/sysctl.d"
 SBIN_DIR="$DESTDIR/usr/local/sbin"
+DOC_DIR="$DESTDIR/usr/local/share/doc/opennetmon"
 BACKUP_DIR="$DESTDIR/var/backups/opennetmon"
 CONFIG="$CONF_DIR/config.toml"
 KEY="$CONF_DIR/secret.key"
@@ -67,6 +68,9 @@ install -d -m 0755 "$BIN_DIR"
 [ -e "$BIN_DIR/opennetmon" ] && cp -p "$BIN_DIR/opennetmon" "$BIN_DIR/opennetmon.previous"
 install -m 0755 "$BINARY" "$BIN_DIR/opennetmon.new"
 mv -f "$BIN_DIR/opennetmon.new" "$BIN_DIR/opennetmon"
+# License of opennetmon and of everything compiled into it.
+install -d -m 0755 "$DOC_DIR"
+install -m 0644 LICENSE THIRD-PARTY-LICENSES.txt "$DOC_DIR/"
 
 # 3. Configuration directory, config (kept if present) and encryption key (kept if present).
 install -d -m 0750 "$CONF_DIR"

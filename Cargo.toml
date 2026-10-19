@@ -3,6 +3,9 @@ name = "opennetmon"
 version = "0.1.0"
 edition = "2024"
 description = "opennetmon – agentless SNMP network monitoring with a web interface"
+authors = ["Thomas Cieslik"]
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/tomCSLK/opennetmon"
 publish = false
 
 [dependencies]

@@ -410,6 +410,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn source_code_is_offered_before_and_after_login() {
+        let h = harness(true).await;
+        let link = "href=\"https://github.com/tomCSLK/opennetmon\"";
+        let reply = send(&h.app, get("/login", None)).await;
+        assert!(
+            reply.body.contains(link),
+            "login page lacks the source link"
+        );
+        let (session, _) = login(&h, "bert").await;
+        let reply = send(&h.app, get("/", Some(&session))).await;
+        assert!(reply.body.contains(link), "sidebar lacks the source link");
+        assert!(reply.body.contains("AGPL-3.0"));
+    }
+
+    #[tokio::test]
     async fn expired_session_is_rejected() {
         let h = harness(true).await;
         let (session, _) = login(&h, "anna").await;
