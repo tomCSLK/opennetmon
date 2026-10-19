@@ -49,3 +49,23 @@ mail-log-recipients = Recipients
 mail-log-result = Result
 mail-sent = sent
 mail-failed = failed
+
+# Notification mails (in the language chosen on the e-mail page)
+mail-language = Language of the e-mails
+mail-language-hint = Applies to all recipients and to the test e-mail.
+alert-subject-down = Down
+alert-subject-warning = Warning
+alert-subject-up = OK again
+alert-subject-unknown = Unknown
+alert-subject-paused = Inactive
+alert-subject-many =
+    { $count } status changes: { $parts }
+alert-count-down = { $count } down
+alert-count-warning =
+    { $count ->
+        [one] { $count } warning
+       *[other] { $count } warnings
+    }
+alert-count-up = { $count } OK again
+alert-first-poll = first poll
+mail-language-missing = Please choose the language of the e-mails.

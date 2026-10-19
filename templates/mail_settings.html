@@ -70,6 +70,13 @@
       <input id="from_address" name="from_address" type="text" value="{{ form.from_address }}" maxlength="256" autocapitalize="off" spellcheck="false" placeholder="opennetmon@example.org">
       <label for="recipients">{{ t.get("mail-recipients") }}</label>
       <textarea id="recipients" name="recipients" rows="4" maxlength="5000" spellcheck="false">{{ form.recipients }}</textarea>
+      <label for="language">{{ t.get("mail-language") }}</label>
+      <select id="language" name="language">
+        {% for option in languages %}
+        <option value="{{ option.code }}"{% if option.selected %} selected{% endif %}>{{ option.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="hint">{{ t.get("mail-language-hint") }}</p>
     </fieldset>
 
     <button type="submit">{{ t.get("save") }}</button>

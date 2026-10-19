@@ -31,6 +31,7 @@ struct FormValues {
     from_address: String,
     recipients: String,
     notify_warnings: bool,
+    language: Lang,
 }
 
 impl From<MailView> for FormValues {
@@ -45,6 +46,7 @@ impl From<MailView> for FormValues {
             from_address: v.from_address,
             recipients: v.recipients,
             notify_warnings: v.notify_warnings,
+            language: v.language,
         }
     }
 }
@@ -52,6 +54,12 @@ impl From<MailView> for FormValues {
 struct SecurityOption {
     value: &'static str,
     label: String,
+    selected: bool,
+}
+
+struct LanguageOption {
+    code: &'static str,
+    name: &'static str,
     selected: bool,
 }
 
@@ -78,6 +86,7 @@ struct PageTemplate {
     layout: Layout,
     form: FormValues,
     securities: Vec<SecurityOption>,
+    languages: Vec<LanguageOption>,
     log: Vec<LogRow>,
     flash: Option<String>,
     error: Option<String>,
@@ -103,6 +112,8 @@ pub struct MailForm {
     #[serde(default)]
     recipients: String,
     notify_warnings: Option<String>,
+    #[serde(default)]
+    language: String,
 }
 
 fn now_ms() -> i64 {
@@ -124,6 +135,7 @@ impl MailForm {
             from_address: self.from_address.clone(),
             recipients: self.recipients.clone(),
             notify_warnings: self.notify_warnings.is_some(),
+            language: Lang::parse(&self.language).unwrap_or(Lang::De),
         }
     }
 
@@ -135,6 +147,8 @@ impl MailForm {
             .map_err(|_| Msg::new("mail-port-invalid"))?;
         let security =
             Security::parse(&self.security).ok_or_else(|| Msg::new("mail-security-missing"))?;
+        let language =
+            Lang::parse(&self.language).ok_or_else(|| Msg::new("mail-language-missing"))?;
         Ok(MailInput {
             enabled: self.enabled.is_some(),
             host: self.host.clone(),
@@ -145,6 +159,7 @@ impl MailForm {
             from_address: self.from_address.clone(),
             recipients: self.recipients.clone(),
             notify_warnings: self.notify_warnings.is_some(),
+            language,
         })
     }
 }
@@ -181,6 +196,14 @@ async fn render(
             selected: s == form.security,
         })
         .collect();
+    let languages = Lang::ALL
+        .into_iter()
+        .map(|l| LanguageOption {
+            code: l.code(),
+            name: l.native_name(),
+            selected: l == form.language,
+        })
+        .collect();
     let (test_ok, test_error) = match extras.test {
         Some(TestOutcome::Sent(m)) => (Some(m), None),
         Some(TestOutcome::Failed(m)) => (None, Some(m)),
@@ -191,6 +214,7 @@ async fn render(
         t: user.lang,
         form,
         securities,
+        languages,
         log,
         flash: extras.flash,
         error: extras.error,
@@ -263,8 +287,7 @@ pub async fn send_test(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let config = store::load_config(&state.pool, &state.secrets).await?;
-    // Mail texts stay German until the mail language can be chosen (PLAN phase 9, step 3).
-    let mail_lang = Lang::De;
+    let mail_lang = config.language;
     let subject = format!("[opennetmon] {}", mail_lang.get("mail-test-subject"));
     let body = format!("{}\n", mail_lang.get("mail-test-body"));
     let outcome = mail::send(&config, &subject, &body).await;
@@ -312,7 +335,7 @@ mod tests {
     fn form(csrf: &str, port: u16, extra: &str) -> String {
         format!(
             "csrf_token={csrf}&enabled=on&notify_warnings=on&host=127.0.0.1&port={port}&security=none\
-             &username=&password=&from_address=opennetmon%40example.org&recipients=admin%40example.org%0Aops%40example.org{extra}"
+             &username=&password=&from_address=opennetmon%40example.org&recipients=admin%40example.org%0Aops%40example.org&language=de{extra}"
         )
     }
 
@@ -462,7 +485,7 @@ mod tests {
         let (admin, csrf) = login(&h, "anna").await;
         let body = "csrf_token=".to_owned()
             + &csrf
-            + "&host=mail.example.org&port=587&security=starttls&username=&password=&from_address=&recipients=";
+            + "&host=mail.example.org&port=587&security=starttls&username=&password=&from_address=&recipients=&language=de";
         let reply = send(&h.app, post("/settings/mail", Some(&admin), &body)).await;
         assert_eq!(reply.status, StatusCode::SEE_OTHER);
         assert_eq!(
@@ -505,6 +528,48 @@ mod tests {
                 .contains("Subject: [opennetmon] Test-E-Mail")
         );
         assert!(page.body.contains("gesendet</span>") && page.body.contains("Test"));
+    }
+
+    #[tokio::test]
+    async fn the_mail_language_is_chosen_independently_of_the_page() {
+        let smtp = TestSmtp::spawn(Behavior::default()).await;
+        let h = harness(true).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let body = form(&csrf, smtp.port, "").replace("language=de", "language=en");
+        let saved = send(&h.app, post("/settings/mail", Some(&admin), &body)).await;
+        assert_eq!(saved.status, StatusCode::SEE_OTHER);
+        let page = send(&h.app, get("/settings/mail", Some(&admin))).await;
+        assert!(
+            page.body
+                .contains(r#"<option value="en" selected>English</option>"#)
+        );
+
+        let page = send(
+            &h.app,
+            post(
+                "/settings/mail/test",
+                Some(&admin),
+                &format!("csrf_token={csrf}"),
+            ),
+        )
+        .await;
+        // The page stays German, the mail is English.
+        assert!(page.body.contains("Test-E-Mail an admin@example.org"));
+        let data = &smtp.received()[0].data;
+        assert!(
+            data.contains("Subject: [opennetmon] Test e-mail")
+                && data.contains("This is a test e-mail"),
+            "{data}"
+        );
+
+        let missing = form(&csrf, smtp.port, "").replace("&language=de", "");
+        let refused = send(&h.app, post("/settings/mail", Some(&admin), &missing)).await;
+        assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(
+            refused
+                .body
+                .contains("Bitte die Sprache der E-Mails wählen.")
+        );
     }
 
     #[tokio::test]
@@ -570,7 +635,7 @@ mod tests {
             assert!(page.body.contains(text), "{text} missing");
         }
         let form = format!(
-            "csrf_token={csrf}&enabled=on&host=mail.example.org&port=587&security=starttls&from_address=nope&recipients=a%40example.org"
+            "csrf_token={csrf}&enabled=on&host=mail.example.org&port=587&security=starttls&from_address=nope&recipients=a%40example.org&language=en"
         );
         let refused = send(&h.app, post("/settings/mail", Some(&admin), &form)).await;
         assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);

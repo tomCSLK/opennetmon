@@ -45,51 +45,55 @@ pub fn is_alertworthy(change: &StatusChange, notify_warnings: bool) -> bool {
     }
 }
 
-fn word(change: &StatusChange) -> &'static str {
+/// The subject word for a single change.
+fn word_id(change: &StatusChange) -> &'static str {
     match change.to {
-        Status::Down => "Ausfall",
-        Status::Warning => "Warnung",
-        Status::Up => "Wieder in Ordnung",
-        Status::Unknown => "Unbekannt",
-        Status::Paused => "Inaktiv",
+        Status::Down => "alert-subject-down",
+        Status::Warning => "alert-subject-warning",
+        Status::Up => "alert-subject-up",
+        Status::Unknown => "alert-subject-unknown",
+        Status::Paused => "alert-subject-paused",
     }
 }
 
-/// Subject and plain-text body for one or more changes.
-pub fn compose(events: &[AlertEvent]) -> (String, String) {
+/// Subject and plain-text body for one or more changes, in the mail language `t`.
+pub fn compose(t: Lang, events: &[AlertEvent]) -> (String, String) {
     let subject = match events {
         [one] => format!(
             "[opennetmon] {}: {} / {}",
-            word(&one.change),
+            t.get(word_id(&one.change)),
             one.device,
             one.sensor
         ),
         many => {
             let count = |status| many.iter().filter(|e| e.change.to == status).count();
             let parts: Vec<String> = [
-                (Status::Down, "Ausfall"),
-                (Status::Warning, "Warnung"),
-                (Status::Up, "wieder in Ordnung"),
+                (Status::Down, "alert-count-down"),
+                (Status::Warning, "alert-count-warning"),
+                (Status::Up, "alert-count-up"),
             ]
             .into_iter()
             .filter(|(s, _)| count(*s) > 0)
-            .map(|(s, label)| format!("{} {label}", count(s)))
+            .map(|(s, id)| t.get1(id, "count", count(s)))
             .collect();
             format!(
-                "[opennetmon] {} Statuswechsel: {}",
-                many.len(),
-                parts.join(", ")
+                "[opennetmon] {}",
+                t.get2(
+                    "alert-subject-many",
+                    "count",
+                    many.len(),
+                    "parts",
+                    parts.join(", ")
+                )
             )
         }
     };
     let mut body = String::new();
     for e in events {
-        // Mails are German until they get their own language setting.
-        let t = Lang::De;
         let from = e
             .change
             .from
-            .map_or_else(|| "erste Abfrage".to_owned(), |s| t.get(s.label_id()));
+            .map_or_else(|| t.get("alert-first-poll"), |s| t.get(s.label_id()));
         body.push_str(&format!(
             "{}  {} / {}\n  {from} -> {}\n  {}\n\n",
             format_utc(e.change.ts_ms),
@@ -138,7 +142,7 @@ pub async fn deliver(
     if events.is_empty() {
         return Ok(Delivery::Filtered);
     }
-    let (subject, body) = compose(&events);
+    let (subject, body) = compose(config.language, &events);
     let outcome = mail::send(&config, &subject, &body).await;
     let error = outcome.as_ref().err().map(mail::MailError::user_message);
     record_notification(
@@ -289,14 +293,19 @@ mod tests {
 
     #[test]
     fn a_single_change_gets_a_specific_subject() {
-        let (subject, body) =
-            compose(&[event("Switch Büro", "Ping", Some(Status::Up), Status::Down)]);
+        let (subject, body) = compose(
+            Lang::De,
+            &[event("Switch Büro", "Ping", Some(Status::Up), Status::Down)],
+        );
         assert_eq!(subject, "[opennetmon] Ausfall: Switch Büro / Ping");
         assert!(body.contains("Switch Büro / Ping") && body.contains("In Ordnung -> Ausfall"));
         assert!(body.contains("Meldung") && body.contains("1970-01-01 00:00:01 UTC"));
-        let (subject, _) = compose(&[event("AP", "Uptime", Some(Status::Down), Status::Up)]);
+        let (subject, _) = compose(
+            Lang::De,
+            &[event("AP", "Uptime", Some(Status::Down), Status::Up)],
+        );
         assert_eq!(subject, "[opennetmon] Wieder in Ordnung: AP / Uptime");
-        let (_, body) = compose(&[event("AP", "Uptime", None, Status::Down)]);
+        let (_, body) = compose(Lang::De, &[event("AP", "Uptime", None, Status::Down)]);
         assert!(body.contains("erste Abfrage -> Ausfall"));
     }
 
@@ -307,7 +316,7 @@ mod tests {
             event("Switch", "Uptime", Some(Status::Up), Status::Down),
             event("Switch", "Port 1", Some(Status::Up), Status::Warning),
         ];
-        let (subject, body) = compose(&events);
+        let (subject, body) = compose(Lang::De, &events);
         assert_eq!(
             subject,
             "[opennetmon] 3 Statuswechsel: 2 Ausfall, 1 Warnung"
@@ -315,11 +324,46 @@ mod tests {
         assert_eq!(body.matches("Switch / ").count(), 3);
     }
 
+    #[test]
+    fn mails_are_written_in_the_chosen_language() {
+        let (subject, body) = compose(
+            Lang::En,
+            &[event("Switch", "Ping", Some(Status::Up), Status::Down)],
+        );
+        assert_eq!(subject, "[opennetmon] Down: Switch / Ping");
+        assert!(body.contains("OK -> Down"), "{body}");
+        let (subject, _) = compose(
+            Lang::En,
+            &[event("AP", "Uptime", Some(Status::Down), Status::Up)],
+        );
+        assert_eq!(subject, "[opennetmon] OK again: AP / Uptime");
+        let (_, body) = compose(Lang::En, &[event("AP", "Uptime", None, Status::Down)]);
+        assert!(body.contains("first poll -> Down"), "{body}");
+
+        let events = [
+            event("Switch", "Ping", Some(Status::Up), Status::Down),
+            event("Switch", "Port 1", Some(Status::Up), Status::Warning),
+            event("Switch", "Port 2", Some(Status::Up), Status::Warning),
+            event("AP", "Ping", Some(Status::Down), Status::Up),
+        ];
+        let (subject, _) = compose(Lang::En, &events);
+        assert_eq!(
+            subject,
+            "[opennetmon] 4 status changes: 1 down, 2 warnings, 1 OK again"
+        );
+        let (subject, _) = compose(Lang::De, &events);
+        assert_eq!(
+            subject,
+            "[opennetmon] 4 Statuswechsel: 1 Ausfall, 2 Warnungen, 1 wieder in Ordnung"
+        );
+    }
+
     /// A migrated database whose mail settings point at the test server.
     async fn setup(
         smtp: &TestSmtp,
         enabled: bool,
         notify_warnings: bool,
+        language: Lang,
     ) -> (tempfile::TempDir, SqlitePool, Arc<SecretBox>) {
         let dir = tempfile::tempdir().unwrap();
         let pool = connect(&dir.path().join("a.db")).await.unwrap();
@@ -335,6 +379,7 @@ mod tests {
             from_address: "opennetmon@example.org".to_owned(),
             recipients: "admin@example.org".to_owned(),
             notify_warnings,
+            language,
         };
         save(&pool, &secrets, &input.check().unwrap())
             .await
@@ -345,7 +390,7 @@ mod tests {
     #[tokio::test]
     async fn deliver_sends_and_logs() {
         let smtp = TestSmtp::spawn(Behavior::default()).await;
-        let (_dir, pool, secrets) = setup(&smtp, true, true).await;
+        let (_dir, pool, secrets) = setup(&smtp, true, true, Lang::De).await;
         let events = vec![
             event("Switch", "Ping", Some(Status::Up), Status::Down),
             event("Switch", "X", None, Status::Up),
@@ -372,16 +417,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_mail_language_comes_from_the_settings() {
+        let smtp = TestSmtp::spawn(Behavior::default()).await;
+        let (_dir, pool, secrets) = setup(&smtp, true, true, Lang::En).await;
+        let events = vec![event("Switch", "Ping", Some(Status::Up), Status::Down)];
+        assert_eq!(
+            deliver(&pool, &secrets, events).await.unwrap(),
+            Delivery::Sent
+        );
+        let data = &smtp.received()[0].data;
+        assert!(
+            data.contains("Subject: [opennetmon] Down: Switch / Ping")
+                && data.contains("OK -> Down"),
+            "{data}"
+        );
+    }
+
+    #[tokio::test]
     async fn disabled_filtered_and_failing_deliveries() {
         let smtp = TestSmtp::spawn(Behavior::default()).await;
         let down = || vec![event("S", "P", Some(Status::Up), Status::Down)];
-        let (_d1, pool, secrets) = setup(&smtp, false, true).await;
+        let (_d1, pool, secrets) = setup(&smtp, false, true, Lang::De).await;
         assert_eq!(
             deliver(&pool, &secrets, down()).await.unwrap(),
             Delivery::Disabled
         );
 
-        let (_d2, pool, secrets) = setup(&smtp, true, false).await;
+        let (_d2, pool, secrets) = setup(&smtp, true, false, Lang::De).await;
         let warn = vec![event("S", "P", Some(Status::Up), Status::Warning)];
         assert_eq!(
             deliver(&pool, &secrets, warn).await.unwrap(),
@@ -396,7 +458,7 @@ mod tests {
             ..Behavior::default()
         })
         .await;
-        let (_d3, pool, secrets) = setup(&broken, true, true).await;
+        let (_d3, pool, secrets) = setup(&broken, true, true, Lang::De).await;
         assert_eq!(
             deliver(&pool, &secrets, down()).await.unwrap(),
             Delivery::Failed
@@ -415,7 +477,7 @@ mod tests {
     #[tokio::test]
     async fn a_burst_becomes_one_mail_and_shutdown_flushes_the_rest() {
         let smtp = TestSmtp::spawn(Behavior::default()).await;
-        let (_dir, pool, secrets) = setup(&smtp, true, true).await;
+        let (_dir, pool, secrets) = setup(&smtp, true, true, Lang::De).await;
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let notifier = Notifier::spawn_with_window(
             pool.clone(),

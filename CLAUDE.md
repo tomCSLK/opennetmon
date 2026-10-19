@@ -124,7 +124,7 @@ Ein Binary, ein Prozess, Module:
 - `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets), `sensors::spec` (`SensorSpec`: Validierung, Kanäle, `build()`, `parse_oid`). `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
 - `maintenance` – Rollups (`samples_1h`, `samples_1d`) und Aufbewahrung (Config `retention_raw_days`, `retention_hourly_days`), vom Poller periodisch gestartet
 - `status` – `Thresholds` (je Kanal warn/down über/unter, strikt, sofort ohne Entprellung), `ValueState`/`ChannelRules` (Bewertung benannter Statuswerte je Kanal, Tabelle `value_states`, Migration `0012`), `suggest_status` (Vorschlag aus dem Namen, beim Anlegen über `web::sensor_text::rate_new_sensor`), `assess_with` (Messergebnis + Grenzen + Bewertungen → `Assessment`; `assess` ohne Bewertungen), `advance` (Zustandsautomat: erster Fehler `Warning`, ab dem zweiten `Down`, Erfolg sofort `Up`), `device_status`; `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignislog (`sensor_status`, `events`) in einer Transaktion
-- `alerting` – `AlertEvent`, `is_alertworthy`, `compose`, `deliver`; `Notifier`-Aufgabe sammelt Wechsel 10 s lang zu einer Mail; vom Poller über eine `mpsc`-Queue gespeist (nie blockierend)
+- `alerting` – `AlertEvent`, `is_alertworthy`, `compose` (in der Mail-Sprache `MailConfig.language`), `deliver`; `Notifier`-Aufgabe sammelt Wechsel 10 s lang zu einer Mail; vom Poller über eine `mpsc`-Queue gespeist (nie blockierend)
 - `mail` – SMTP-Einstellungen, Validierung, Versand mit `lettre` (rustls, kein OpenSSL); `storage::mail` – Einstellungen (Passwort verschlüsselt, Kontext `smtp.password`) und Sendelog `notifications`; Seite `web::mail_settings`
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
@@ -176,7 +176,7 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 - Code, Bezeichner, Commit-Messages und Code-Kommentare: Englisch
 - UI-Texte: über die Fluent-Kataloge in `locales/` (Deutsch ist Ausgangssprache, Englisch muss mitgepflegt werden; keine festen Texte mehr in Templates
   oder Rust-Code – Seiten nutzen `t.get("id")`, Fachlogik liefert `Msg`, JS nutzt `T('key')`). `Msg::Text` nur für fremde Texte (Gerät, SMTP-Server);
-  offen sind noch die Benachrichtigungs-Mails (Stand in `PLAN.md`, Phase 9). Projektdokumentation (`docs/`): Deutsch; `README.md`: Englisch
+  Benachrichtigungs-Mails in der Sprache von `mail_settings.language` (eine für alle Empfänger). Projektdokumentation (`docs/`): Deutsch; `README.md`: Englisch
 - Kein `unwrap()`/`expect()` außerhalb von Tests und Startcode; Fehler über eigenen Error-Typ mit `IntoResponse`
 - Kleine, thematisch abgeschlossene Commits; nach jedem MVP-Schritt lauffähiger Stand
 - Neue Sensortypen nur über den `Sensor`-Trait, keine Sonderfälle im Poller

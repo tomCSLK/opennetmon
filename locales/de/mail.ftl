@@ -29,15 +29,15 @@ mail-title = E-Mail-Benachrichtigung
 mail-subtitle = Bei Ausfall, Warnung und Wiederherstellung kommt eine E-Mail. Wechsel, die kurz nacheinander passieren, werden zusammengefasst. Änderungen gelten sofort.
 mail-enabled = Benachrichtigungen aktiv
 mail-notify-warnings = Auch bei Warnungen benachrichtigen (sonst nur bei Ausfall und Wiederherstellung)
-mail-smtp-server = legend>SMTP-Server</legend
+mail-smtp-server = SMTP-Server
 mail-host = Server (Hostname oder IP-Adresse)
-mail-security = label for="security">Verschlüsselung</label
+mail-security = Verschlüsselung
 mail-port-hint = Üblich: STARTTLS 587, TLS (SMTPS) 465, unverschlüsselt 25 (nur für ein vertrauenswürdiges lokales Relay).
 mail-login = Anmeldung (optional)
 mail-username-placeholder = leer = ohne Anmeldung
 mail-not-set = nicht gesetzt
 mail-from-to = Absender und Empfänger
-mail-from = label for="from_address">Absenderadresse</label
+mail-from = Absenderadresse
 mail-recipients = Empfänger (eine Adresse pro Zeile, höchstens 20)
 mail-send-test = Test-E-Mail senden
 mail-test-hint = Verwendet die gespeicherten Einstellungen (erst speichern, dann testen) – auch wenn die Benachrichtigung noch aus ist.
@@ -49,3 +49,22 @@ mail-log-recipients = Empfänger
 mail-log-result = Ergebnis
 mail-sent = gesendet
 mail-failed = Fehler
+
+# Notification mails (in the language chosen on the e-mail page)
+mail-language = Sprache der E-Mails
+mail-language-hint = Gilt für alle Empfänger und auch für die Test-E-Mail.
+alert-subject-down = Ausfall
+alert-subject-warning = Warnung
+alert-subject-up = Wieder in Ordnung
+alert-subject-unknown = Unbekannt
+alert-subject-paused = Inaktiv
+alert-subject-many = { $count } Statuswechsel: { $parts }
+alert-count-down = { $count } Ausfall
+alert-count-warning =
+    { $count ->
+        [one] { $count } Warnung
+       *[other] { $count } Warnungen
+    }
+alert-count-up = { $count } wieder in Ordnung
+alert-first-poll = erste Abfrage
+mail-language-missing = Bitte die Sprache der E-Mails wählen.

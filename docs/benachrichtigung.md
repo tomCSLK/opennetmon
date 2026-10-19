@@ -13,6 +13,7 @@ Bei einem Statuswechsel eines Sensors schickt opennetmon eine E-Mail. Die Einste
 | Verschlüsselung | STARTTLS, TLS (SMTPS) oder keine (nur für ein vertrauenswürdiges lokales Relay). |
 | Benutzername, Passwort | Optional. Leerer Benutzername = ohne Anmeldung. Das Passwort wird **nie angezeigt**; leer lassen behält das gespeicherte. Gespeichert wird es wie die SNMP-Geheimnisse mit XChaCha20-Poly1305 (Kontext `smtp.password`). |
 | Absender, Empfänger | Eine Absenderadresse; ein bis 20 Empfänger (eine Adresse pro Zeile). Nur reine Adressen, keine Anzeigenamen. |
+| Sprache der E-Mails | Deutsch oder Englisch, **eine Sprache für alle Empfänger** (Alarm- und Test-E-Mails; Spalte `mail_settings.language`, Migration `0014`, Standard Deutsch). Unabhängig von der Sprache, in der die Seite angezeigt wird. |
 
 Bei ausgeschalteter Benachrichtigung dürfen die Einstellungen unvollständig gespeichert werden; eingeschaltet brauchen sie Server, Absender und mindestens einen Empfänger.
 Ungültige Eingaben werden auf der Seite erklärt, die Eingaben bleiben stehen (das Passwort nie).
@@ -40,7 +41,8 @@ Messfehler sind zunächst nur eine Warnung und erst der zweite in Folge ein Ausf
 - Eine eigene Aufgabe sammelt Wechsel, die innerhalb von **10 Sekunden** nach dem ersten eintreffen, zu **einer Mail** („3 Statuswechsel: 2 Ausfall, 1 Warnung“).
   Fällt ein ganzes Gerät aus, kommt so eine Mail statt eine je Sensor. Ein einzelner Wechsel hat einen eigenen Betreff, z. B. `[opennetmon] Ausfall: Switch Büro / Ping`.
 - Die Einstellungen werden für jede Mail frisch gelesen. Beim Beenden des Servers wird eine noch wartende Sammlung noch verschickt.
-- Der Text ist reiner Text (Zeit in UTC, Gerät / Sensor, alt → neu, Meldung). Es gibt **keine automatische Wiederholung** bei Zustellfehlern; der Fehler steht im Log und in der Tabelle.
+- Betreff und Text kommen aus den Katalogen (`alert-…` in `locales/<code>/mail.ftl`) in der eingestellten Sprache, z. B. `[opennetmon] Down: Switch Büro / Ping`
+  bzw. „4 status changes: 1 down, 2 warnings, 1 OK again“. Der Text ist reiner Text (Zeit in UTC, Gerät / Sensor, alt → neu, Meldung). Es gibt **keine automatische Wiederholung** bei Zustellfehlern; der Fehler steht im Log und in der Tabelle.
 
 ## Grenzen
 
@@ -55,4 +57,5 @@ Messfehler sind zunächst nur eine Warnung und erst der zweite in Folge ein Ausf
   In opennetmon: Server `127.0.0.1`, Port `1025`, Verschlüsselung „Keine“, ohne Anmeldung. Nie ins Netz hängen.
 - `src/mail/testsmtp.rs` ist ein kleiner Test-SMTP-Server für die Rust-Tests (optional mit `AUTH PLAIN`, optional mit abgelehnten Empfängern).
 - Getestet: Adress- und Einstellungsvalidierung, Versand mit und ohne Anmeldung, Fehlerfälle, verschlüsselte Ablage des Passworts, Auswahl der meldenswerten Wechsel, Zusammenfassen,
-  Beenden mit wartender Mail, die Kette „Gerät fällt aus → eine Mail“ und die Weboberfläche (Rechte, CSRF, Passwort nie im HTML, Testmail).
+  Beenden mit wartender Mail, die Kette „Gerät fällt aus → eine Mail“, die Mail-Sprache (Betreff, Mehrzahl, Testmail auf Englisch bei deutscher Oberfläche)
+  und die Weboberfläche (Rechte, CSRF, Passwort nie im HTML, Testmail).

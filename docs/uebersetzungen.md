@@ -17,6 +17,8 @@ Die Oberfläche ist mehrsprachig; **Deutsch ist die Ausgangssprache**, dazu komm
 - Messwerte, Einheiten und Schwellwertfelder formatiert `sensors::format` je Sprache (Dezimalkomma bzw. -punkt, „Std.“/„h“).
 - Gespeicherte Meldungen (Sensorzustand, Ereignislog, Sendelog der E-Mails) stehen als kodiertes `Msg` in der Datenbank (`Msg::encode`/`decode`)
   und erscheinen so in der Sprache des Betrachters. Ältere Einträge aus der Zeit vor der Umstellung bleiben deutscher Klartext.
+- Benachrichtigungs-Mails haben **eine** Sprache für alle Empfänger, eingestellt auf der Seite „E-Mail“ (`MailConfig.language`, `alerting::compose(t, …)`);
+  Zeiten in Mails bleiben UTC.
 - Kataloge je Bereich: `common` (Rahmen, Status, gemeinsame Wörter), `users`, `devices` (Gruppen, Geräte, Übersicht), `sensors` (Sensoren,
   Discovery, Detailseite), `values` (Werte suchen, bekannte Tabellen), `mibs`, `templates`, `credentials`, `mail`, `order`, `js`.
 

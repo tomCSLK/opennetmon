@@ -12,7 +12,7 @@ use lettre::{Address, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executo
 
 use crate::credentials::Secret;
 use crate::devices::validate_host;
-use crate::i18n::Msg;
+use crate::i18n::{Lang, Msg};
 
 pub const MAX_RECIPIENTS: usize = 20;
 const MAX_FIELD_CHARS: usize = 256;
@@ -80,6 +80,8 @@ pub struct MailInput {
     /// Addresses separated by newlines, commas or semicolons.
     pub recipients: String,
     pub notify_warnings: bool,
+    /// Language of the mails, the same for all recipients.
+    pub language: Lang,
 }
 
 /// Validated input, ready to store.
@@ -94,6 +96,7 @@ pub struct CheckedMail {
     pub from_address: String,
     pub recipients: Vec<String>,
     pub notify_warnings: bool,
+    pub language: Lang,
 }
 
 /// Splits and validates a recipient list; returns the normalized addresses.
@@ -181,6 +184,7 @@ impl MailInput {
             from_address,
             recipients,
             notify_warnings: self.notify_warnings,
+            language: self.language,
         })
     }
 }
@@ -197,6 +201,7 @@ pub struct MailConfig {
     pub from_address: String,
     pub recipients: Vec<String>,
     pub notify_warnings: bool,
+    pub language: Lang,
 }
 
 impl std::fmt::Debug for MailConfig {
@@ -313,6 +318,7 @@ mod tests {
             from_address: "opennetmon@example.org".to_owned(),
             recipients: "a@example.org".to_owned(),
             notify_warnings: true,
+            language: Lang::De,
         }
     }
 
@@ -327,6 +333,7 @@ mod tests {
             from_address: "opennetmon@example.org".to_owned(),
             recipients: vec!["admin@example.org".to_owned(), "ops@example.org".to_owned()],
             notify_warnings: true,
+            language: Lang::De,
         }
     }
 

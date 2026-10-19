@@ -643,6 +643,22 @@ mod tests {
         assert!(checked > 10, "the scan found almost no script texts");
     }
 
+    /// Catalogs hold plain text; markup belongs in the templates.
+    #[test]
+    fn catalogs_contain_no_markup() {
+        for lang in Lang::ALL {
+            for (file, source) in sources(lang) {
+                for line in source.lines() {
+                    assert!(
+                        !line.contains("</") && !line.contains("=\"") && !line.contains("/>"),
+                        "{}/{file}: {line}",
+                        lang.code()
+                    );
+                }
+            }
+        }
+    }
+
     /// Script texts are plain: the scripts fill in `%1`, `%2` themselves.
     #[test]
     fn script_texts_have_no_variables() {

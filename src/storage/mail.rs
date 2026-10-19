@@ -5,7 +5,7 @@ use sqlx::{FromRow, SqlitePool};
 use crate::credentials::Secret;
 use crate::crypto::SecretBox;
 use crate::error::{Error, Result};
-use crate::i18n::Msg;
+use crate::i18n::{Lang, Msg};
 use crate::mail::{CheckedMail, MailConfig, Security};
 
 const PASSWORD_CONTEXT: &str = "smtp.password";
@@ -24,6 +24,7 @@ pub struct MailView {
     /// One address per line, as the form shows them.
     pub recipients: String,
     pub notify_warnings: bool,
+    pub language: Lang,
 }
 
 #[derive(FromRow)]
@@ -37,12 +38,13 @@ struct Row {
     from_address: String,
     recipients: String,
     notify_warnings: i64,
+    language: String,
 }
 
 async fn fetch(pool: &SqlitePool) -> Result<Row> {
     Ok(sqlx::query_as::<_, Row>(
         "SELECT enabled, host, port, security, username, password_enc, from_address, recipients, \
-         notify_warnings FROM mail_settings WHERE id = 1",
+         notify_warnings, language FROM mail_settings WHERE id = 1",
     )
     .fetch_one(pool)
     .await?)
@@ -51,6 +53,11 @@ async fn fetch(pool: &SqlitePool) -> Result<Row> {
 fn security(row: &Row) -> Result<Security> {
     Security::parse(&row.security)
         .ok_or_else(|| Error::Internal("invalid mail security in database".to_owned()))
+}
+
+/// An unknown code (e.g. a language removed again) falls back to German.
+fn language(row: &Row) -> Lang {
+    Lang::parse(&row.language).unwrap_or(Lang::De)
 }
 
 fn port(row: &Row) -> Result<u16> {
@@ -67,6 +74,7 @@ pub async fn get_view(pool: &SqlitePool) -> Result<MailView> {
         password_set: row.password_enc.is_some(),
         recipients: row.recipients.replace(',', "\n"),
         notify_warnings: row.notify_warnings != 0,
+        language: language(&row),
         host: row.host,
         from_address: row.from_address,
     })
@@ -91,6 +99,7 @@ pub async fn load_config(pool: &SqlitePool, secrets: &SecretBox) -> Result<MailC
             .map(str::to_owned)
             .collect(),
         notify_warnings: row.notify_warnings != 0,
+        language: language(&row),
         username: row.username,
         password,
         host: row.host,
@@ -109,7 +118,7 @@ pub async fn save(pool: &SqlitePool, secrets: &SecretBox, input: &CheckedMail) -
     };
     sqlx::query(
         "UPDATE mail_settings SET enabled = ?, host = ?, port = ?, security = ?, username = ?, \
-         password_enc = ?, from_address = ?, recipients = ?, notify_warnings = ?, \
+         password_enc = ?, from_address = ?, recipients = ?, notify_warnings = ?, language = ?, \
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = 1",
     )
     .bind(i64::from(input.enabled))
@@ -121,6 +130,7 @@ pub async fn save(pool: &SqlitePool, secrets: &SecretBox, input: &CheckedMail) -
     .bind(&input.from_address)
     .bind(input.recipients.join(","))
     .bind(i64::from(input.notify_warnings))
+    .bind(input.language.code())
     .execute(pool)
     .await?;
     Ok(())
@@ -266,6 +276,7 @@ mod tests {
             from_address: "opennetmon@example.org".to_owned(),
             recipients: "a@example.org\nb@example.org".to_owned(),
             notify_warnings: false,
+            language: Lang::En,
         }
         .check()
         .unwrap()
@@ -277,8 +288,13 @@ mod tests {
         let view = get_view(&pool).await.unwrap();
         assert!(!view.enabled && !view.password_set && view.host.is_empty());
         assert_eq!(
-            (view.port, view.security, view.notify_warnings),
-            (587, Security::StartTls, true)
+            (
+                view.port,
+                view.security,
+                view.notify_warnings,
+                view.language
+            ),
+            (587, Security::StartTls, true, Lang::De)
         );
     }
 
@@ -295,6 +311,7 @@ mod tests {
         assert!(view.password_set);
         assert_eq!(view.recipients, "a@example.org\nb@example.org");
         assert!(!view.notify_warnings);
+        assert_eq!(view.language, Lang::En);
 
         let config = load_config(&pool, &secrets).await.unwrap();
         assert_eq!(

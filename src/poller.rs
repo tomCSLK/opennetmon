@@ -823,6 +823,7 @@ mod tests {
             from_address: "opennetmon@example.org".to_owned(),
             recipients: "admin@example.org".to_owned(),
             notify_warnings: true,
+            language: crate::i18n::Lang::De,
         };
         crate::storage::mail::save(&env.pool, &env.secrets, &input.check().unwrap())
             .await
