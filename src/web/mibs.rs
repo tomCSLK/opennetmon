@@ -10,7 +10,7 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::mib::{self, MibObject, Origin};
 use crate::storage::mibs::{self as store, NewMibFile};
 use crate::web::auth::{CsrfForm, CurrentUser};
@@ -24,6 +24,8 @@ const MAX_FILE_NAME_CHARS: usize = 120;
 const SEARCH_LIMIT: usize = 50;
 const SUGGEST_LIMIT: usize = 20;
 const DESCRIPTION_CHARS: usize = 240;
+/// Name of an uploaded file that came without one.
+const UNNAMED: &str = "unnamed.mib";
 
 #[derive(Deserialize)]
 pub struct MibsQuery {
@@ -50,7 +52,7 @@ struct ObjectView {
     name: String,
     module: String,
     oid: String,
-    kind: &'static str,
+    kind: String,
     type_name: String,
     units: String,
     access: String,
@@ -64,6 +66,24 @@ struct UploadResult {
     modules: usize,
     replaced: u64,
     skipped: Vec<String>,
+}
+
+impl UploadResult {
+    /// "2 Dateien mit 3 Modulen übernommen, 1 ältere Fassung ersetzt."
+    fn summary(&self, t: Lang) -> String {
+        let mut text = t.get2(
+            "mibs-uploaded",
+            "files",
+            self.accepted,
+            "modules",
+            self.modules,
+        );
+        if self.replaced > 0 {
+            text.push_str(&t.get1("mibs-replaced", "count", self.replaced));
+        }
+        text.push('.');
+        text
+    }
 }
 
 #[derive(Template)]
@@ -101,16 +121,18 @@ fn suggestion(o: &MibObject) -> String {
     }
 }
 
-fn object_view(o: &MibObject) -> ObjectView {
+fn object_view(t: Lang, o: &MibObject) -> ObjectView {
     ObjectView {
         name: o.name.clone(),
         module: o.module.clone(),
         oid: mib::dotted(&o.oid),
-        kind: o.kind.label(),
+        kind: t.get(o.kind.label_id()),
         type_name: match (&o.type_name, o.base) {
-            (Some(t), Some(b)) if !mib::is_builtin_type(t) => format!("{t} ({})", b.label()),
-            (Some(t), _) => t.clone(),
-            (None, Some(b)) => b.label().to_owned(),
+            (Some(name), Some(b)) if !mib::is_builtin_type(name) => {
+                format!("{name} ({})", b.label(t))
+            }
+            (Some(name), _) => name.clone(),
+            (None, Some(b)) => b.label(t),
             (None, None) => String::new(),
         },
         units: o.units.clone().unwrap_or_default(),
@@ -121,24 +143,16 @@ fn object_view(o: &MibObject) -> ObjectView {
     }
 }
 
-fn module_view(r: &mib::ModuleReport) -> ModuleView {
+fn module_view(t: Lang, r: &mib::ModuleReport) -> ModuleView {
     let mut problems = Vec::new();
     if r.shadowed {
-        problems.push("übersprungen: wird mit opennetmon mitgeliefert".to_owned());
+        problems.push(t.get("mibs-shadowed"));
     }
     if !r.missing_modules.is_empty() {
-        problems.push(format!("fehlt: {}", r.missing_modules.join(", ")));
+        problems.push(t.get1("mibs-missing", "modules", r.missing_modules.join(", ")));
     }
     if !r.unresolved.is_empty() {
-        problems.push(format!(
-            "{} {} nicht auflösbar",
-            r.unresolved.len(),
-            if r.unresolved.len() == 1 {
-                "Definition"
-            } else {
-                "Definitionen"
-            }
-        ));
+        problems.push(t.get1("mibs-unresolved", "count", r.unresolved.len()));
     }
     ModuleView {
         name: r.name.clone(),
@@ -165,10 +179,11 @@ async fn render(
             modules: reports
                 .iter()
                 .filter(|r| r.origin == Origin::Imported(f.id))
-                .map(module_view)
+                .map(|r| module_view(user.lang, r))
                 .collect(),
             id: f.id,
-            size_kb: format!("{:.1} KB", f.size as f64 / 1024.0).replace('.', ","),
+            size_kb: format!("{:.1} KB", f.size as f64 / 1024.0)
+                .replace('.', &user.lang.decimal_separator().to_string()),
             uploaded_at: iso_time_html(&f.uploaded_at),
             file_name: f.file_name,
         })
@@ -176,12 +191,12 @@ async fn render(
     let bundled = reports
         .iter()
         .filter(|r| r.origin == Origin::Bundled)
-        .map(module_view)
+        .map(|r| module_view(user.lang, r))
         .collect();
     let results = index
         .search(query, SEARCH_LIMIT)
         .into_iter()
-        .map(object_view)
+        .map(|o| object_view(user.lang, o))
         .collect();
     let page = PageTemplate {
         layout: user.layout(),
@@ -228,7 +243,7 @@ fn clean_file_name(raw: &str) -> String {
         .take(MAX_FILE_NAME_CHARS)
         .collect();
     if cleaned.trim().is_empty() {
-        "unbenannt.mib".to_owned()
+        UNNAMED.to_owned()
     } else {
         cleaned
     }
@@ -245,22 +260,26 @@ pub async fn upload(
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|e| Error::invalid(format!("Der Upload ist unvollständig oder zu groß: {e}")))?
+        .map_err(|e| Error::invalid(Msg::new("mibs-upload-broken").with("detail", e.to_string())))?
     {
         match field.name() {
             Some("csrf_token") => csrf = Some(field.text().await.unwrap_or_default()),
             Some("files") => {
                 let name = clean_file_name(field.file_name().unwrap_or_default());
                 let data = field.bytes().await.map_err(|e| {
-                    Error::invalid(format!("Die Datei {name} konnte nicht gelesen werden: {e}"))
+                    Error::invalid(
+                        Msg::new("mibs-file-unreadable")
+                            .with("name", name.as_str())
+                            .with("detail", e.to_string()),
+                    )
                 })?;
-                if data.is_empty() && name == "unbenannt.mib" {
+                if data.is_empty() && name == UNNAMED {
                     continue; // the browser sends an empty part when no file was chosen
                 }
                 if uploads.len() >= MAX_FILES {
-                    return Err(Error::invalid(format!(
-                        "Höchstens {MAX_FILES} Dateien auf einmal."
-                    )));
+                    return Err(Error::invalid(
+                        Msg::new("mibs-too-many-files").with("count", MAX_FILES),
+                    ));
                 }
                 uploads.push((name, data.to_vec()));
             }
@@ -278,7 +297,10 @@ pub async fn upload(
     let mut skipped = Vec::new();
     for (name, data) in uploads {
         if data.len() > MAX_FILE_BYTES {
-            skipped.push(format!("{name}: größer als 2 MB"));
+            skipped.push(
+                user.lang
+                    .get1("mibs-skipped-too-large", "name", name.as_str()),
+            );
             continue;
         }
         let text = String::from_utf8_lossy(&data).replace('\0', "");
@@ -287,15 +309,16 @@ pub async fn upload(
             .map(|m| m.name)
             .collect();
         if modules.is_empty() {
-            skipped.push(format!(
-                "{name}: keine MIB-Definition („… DEFINITIONS ::= BEGIN“) gefunden"
-            ));
+            skipped.push(user.lang.get1("mibs-skipped-no-mib", "name", name.as_str()));
             continue;
         }
         if modules.iter().all(|m| bundled.contains(m)) {
-            skipped.push(format!(
-                "{name}: {} wird mit opennetmon mitgeliefert",
-                modules.join(", ")
+            skipped.push(user.lang.get2(
+                "mibs-skipped-bundled",
+                "name",
+                name.as_str(),
+                "modules",
+                modules.join(", "),
             ));
             continue;
         }
@@ -312,7 +335,7 @@ pub async fn upload(
             "",
             None,
             None,
-            Some("Bitte mindestens eine Datei auswählen.".to_owned()),
+            Some(user.lang.get("mibs-select-file")),
         )
         .await?;
         return Ok((axum::http::StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response());
@@ -361,7 +384,7 @@ pub struct Suggestion {
     name: String,
     module: String,
     oid: String,
-    kind: &'static str,
+    kind: String,
     #[serde(rename = "type")]
     type_name: String,
     units: String,
@@ -394,7 +417,7 @@ pub async fn search_json(
             .search(name, SUGGEST_LIMIT)
             .into_iter()
             .map(|o| {
-                let v = object_view(o);
+                let v = object_view(user.lang, o);
                 let index = if o.kind == mib::ObjectKind::Column {
                     o.index.join(", ")
                 } else {
@@ -569,7 +592,7 @@ END
         )
         .await;
         assert!(
-            reply.body.contains("1 ältere Fassung(en) ersetzt"),
+            reply.body.contains("1 ältere Fassung ersetzt"),
             "{}",
             reply.body
         );
@@ -735,5 +758,24 @@ END
         let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
         assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
         assert!(reply.body.contains("in keiner geladenen MIB bekannt"));
+    }
+
+    #[tokio::test]
+    async fn the_page_and_the_suggestions_are_shown_in_english() {
+        let h = harness(true).await;
+        crate::storage::users::set_language(&h.state.pool, 1, Some(crate::i18n::Lang::En))
+            .await
+            .unwrap();
+        let (admin, _) = login(&h, "anna").await;
+        let page = send(&h.app, get("/mibs?q=hrProcessorLoad", Some(&admin))).await;
+        for text in [
+            "<h1>MIB files</h1>",
+            "Table column",
+            "Bundled standard MIBs",
+        ] {
+            assert!(page.body.contains(text), "{text} missing");
+        }
+        let json = send(&h.app, get("/mibs/search.json?q=sysUpTime", Some(&admin))).await;
+        assert!(json.body.contains("\"kind\":\"Scalar\""), "{}", json.body);
     }
 }

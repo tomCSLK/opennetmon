@@ -1,10 +1,11 @@
-//! Known tables and scalar groups with measured values, with German labels, factors and units, plus
+//! Known tables and scalar groups with measured values, with labels (catalog ids), factors and units, plus
 //! a heuristic that reads units like "in 0.1W" from descriptions (many vendor MIBs have no UNITS).
 
 /// One value column (or scalar) of a catalog entry.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColumnSpec {
     pub object: &'static str,
+    /// Catalog id of the label (the sensor name is built in the language of the admin).
     pub label: &'static str,
     pub scale: f64,
     pub unit: Option<&'static str>,
@@ -36,6 +37,7 @@ pub enum RowRule {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CatalogEntry {
     pub key: &'static str,
+    /// Catalog id of the title.
     pub title: &'static str,
     pub module: &'static str,
     /// A table (`…Table`) or an OBJECT IDENTIFIER whose children are scalars.
@@ -64,49 +66,79 @@ const fn col(
 pub const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         key: "tp-poe-ports",
-        title: "PoE je Port (TP-Link)",
+        title: "catalog-tp-poe-ports",
         module: "TPLINK-POWER-OVER-ETHERNET-MIB",
         object: "tpPoePortConfigTable",
         columns: &[
-            col("tpPoePower", "PoE-Leistung", 0.1, Some("W"), true),
-            col("tpPoePowerStatus", "PoE-Status", 1.0, None, true),
-            col("tpPoeCurrent", "PoE-Strom", 1.0, Some("mA"), false),
-            col("tpPoeVoltage", "PoE-Spannung", 0.1, Some("V"), false),
-            col("tpPoeClass", "PoE-Klasse", 1.0, None, false),
+            col("tpPoePower", "catalog-poe-power", 0.1, Some("W"), true),
+            col("tpPoePowerStatus", "catalog-poe-status", 1.0, None, true),
+            col(
+                "tpPoeCurrent",
+                "catalog-poe-current",
+                1.0,
+                Some("mA"),
+                false,
+            ),
+            col("tpPoeVoltage", "catalog-poe-voltage", 0.1, Some("V"), false),
+            col("tpPoeClass", "catalog-poe-class", 1.0, None, false),
         ],
         rows: RowLabel::Pattern("Port {i}"),
         rule: RowRule::Plain,
     },
     CatalogEntry {
         key: "tp-poe-total",
-        title: "PoE gesamt (TP-Link)",
+        title: "catalog-tp-poe-total",
         module: "TPLINK-POWER-OVER-ETHERNET-MIB",
         object: "tpPoeGlobal",
         columns: &[
             col(
                 "tpSystemPowerConsumption",
-                "PoE-Verbrauch gesamt",
+                "catalog-poe-consumption",
                 0.1,
                 Some("W"),
                 true,
             ),
-            col("tpSystemPowerRemain", "PoE-Reserve", 0.1, Some("W"), false),
-            col("tpSystemPowerLimit", "PoE-Budget", 0.1, Some("W"), false),
+            col(
+                "tpSystemPowerRemain",
+                "catalog-poe-remain",
+                0.1,
+                Some("W"),
+                false,
+            ),
+            col(
+                "tpSystemPowerLimit",
+                "catalog-poe-limit",
+                0.1,
+                Some("W"),
+                false,
+            ),
         ],
         rows: RowLabel::Pattern(""),
         rule: RowRule::Plain,
     },
     CatalogEntry {
         key: "tp-cpu",
-        title: "CPU-Auslastung (TP-Link)",
+        title: "catalog-tp-cpu",
         module: "TPLINK-SYSMONITOR-MIB",
         object: "tpSysMonitorCpuTable",
         columns: &[
-            col("tpSysMonitorCpu1Minute", "CPU 1 Min.", 1.0, Some("%"), true),
-            col("tpSysMonitorCpu5Seconds", "CPU 5 s", 1.0, Some("%"), false),
+            col(
+                "tpSysMonitorCpu1Minute",
+                "catalog-cpu-1min",
+                1.0,
+                Some("%"),
+                true,
+            ),
+            col(
+                "tpSysMonitorCpu5Seconds",
+                "catalog-cpu-5s",
+                1.0,
+                Some("%"),
+                false,
+            ),
             col(
                 "tpSysMonitorCpu5Minutes",
-                "CPU 5 Min.",
+                "catalog-cpu-5min",
                 1.0,
                 Some("%"),
                 false,
@@ -117,12 +149,12 @@ pub const CATALOG: &[CatalogEntry] = &[
     },
     CatalogEntry {
         key: "tp-memory",
-        title: "Speicher-Auslastung (TP-Link)",
+        title: "catalog-tp-memory",
         module: "TPLINK-SYSMONITOR-MIB",
         object: "tpSysMonitorMemoryTable",
         columns: &[col(
             "tpSysMonitorMemoryUtilization",
-            "Speicher",
+            "catalog-memory",
             1.0,
             Some("%"),
             true,
@@ -132,33 +164,57 @@ pub const CATALOG: &[CatalogEntry] = &[
     },
     CatalogEntry {
         key: "hr-cpu",
-        title: "CPU-Last (HOST-RESOURCES-MIB)",
+        title: "catalog-hr-cpu",
         module: "HOST-RESOURCES-MIB",
         object: "hrProcessorTable",
-        columns: &[col("hrProcessorLoad", "CPU-Last", 1.0, Some("%"), true)],
+        columns: &[col(
+            "hrProcessorLoad",
+            "catalog-cpu-load",
+            1.0,
+            Some("%"),
+            true,
+        )],
         rows: RowLabel::Pattern("CPU {n}"),
         rule: RowRule::Plain,
     },
     CatalogEntry {
         key: "hr-storage",
-        title: "Speicher und Datenträger (HOST-RESOURCES-MIB)",
+        title: "catalog-hr-storage",
         module: "HOST-RESOURCES-MIB",
         object: "hrStorageTable",
         columns: &[
-            col("hrStorageUsed", "Belegt", 1.0, Some("MB"), true),
-            col("hrStorageSize", "Größe", 1.0, Some("MB"), false),
+            col(
+                "hrStorageUsed",
+                "catalog-storage-used",
+                1.0,
+                Some("MB"),
+                true,
+            ),
+            col(
+                "hrStorageSize",
+                "catalog-storage-size",
+                1.0,
+                Some("MB"),
+                false,
+            ),
         ],
         rows: RowLabel::Column("hrStorageDescr"),
         rule: RowRule::HrStorage,
     },
     CatalogEntry {
         key: "ent-sensors",
-        title: "Hardware-Sensoren: Temperatur, Lüfter, Spannung (ENTITY-SENSOR-MIB)",
+        title: "catalog-ent-sensors",
         module: "ENTITY-SENSOR-MIB",
         object: "entPhySensorTable",
         columns: &[
-            col("entPhySensorValue", "Messwert", 1.0, None, true),
-            col("entPhySensorOperStatus", "Sensorstatus", 1.0, None, false),
+            col("entPhySensorValue", "catalog-sensor-value", 1.0, None, true),
+            col(
+                "entPhySensorOperStatus",
+                "catalog-sensor-status",
+                1.0,
+                None,
+                false,
+            ),
         ],
         rows: RowLabel::Physical,
         rule: RowRule::EntitySensor,

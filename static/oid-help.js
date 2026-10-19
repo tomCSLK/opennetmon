@@ -6,6 +6,7 @@
   var list = document.getElementById('mib-names');
   var info = document.getElementById('oid-info');
   if (!input || !list || !info) { return; }
+  var T = window.opennetmonText;
   var initialInfo = info.innerHTML;
   var timer = null;
   var lastQuery = null;
@@ -29,9 +30,9 @@
     if (!exact) { info.innerHTML = initialInfo; return; }
     info.textContent = exact.name + ' (' + exact.module + ') · ' + exact.kind + (exact.type ? ' · ' + exact.type : '') +
       (exact.units ? ' · ' + exact.units : '') + ' · OID ' + exact.oid +
-      (exact.index ? ' · Index anhängen (' + exact.index + '), z. B. ' + exact.name + '.1' : '') +
+      (exact.index ? ' · ' + T('oid-index', exact.index, exact.name) : '') +
       (exact.description ? ' – ' + exact.description : '') +
-      (exact.pollable ? '' : ' (kein abfragbarer Zahlenwert)');
+      (exact.pollable ? '' : ' (' + T('oid-not-pollable') + ')');
   }
 
   function lookup() {

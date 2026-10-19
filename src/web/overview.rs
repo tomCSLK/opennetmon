@@ -92,7 +92,7 @@ pub struct Segment {
 
 pub struct DeviceCard {
     pub device: Device,
-    pub status_label: &'static str,
+    pub status_label: String,
     pub status_class: &'static str,
     pub counts: Counts,
     pub segments: Vec<Segment>,
@@ -100,7 +100,7 @@ pub struct DeviceCard {
 
 /// The devices without a group (`Ohne Gruppe`, or `Alle Geräte` when there are no groups).
 pub struct Ungrouped {
-    pub name: &'static str,
+    pub name: String,
     pub devices: Vec<DeviceCard>,
 }
 
@@ -122,19 +122,19 @@ pub struct Summary {
     pub devices: usize,
     pub counts: Counts,
     pub segments: Vec<Segment>,
-    pub status_label: &'static str,
+    pub status_label: String,
     pub status_class: &'static str,
 }
 
 impl Summary {
-    fn new(id: i64, name: String, devices: usize, counts: Counts) -> Self {
+    fn new(t: Lang, id: i64, name: String, devices: usize, counts: Counts) -> Self {
         let status = counts.status();
         Self {
             id,
             name,
             devices,
             segments: counts.segments(),
-            status_label: status.map_or("keine Sensoren", Status::label),
+            status_label: t.get(status.map_or("no-sensors", Status::label_id)),
             status_class: status.map_or("unknown", Status::as_str),
             counts,
         }
@@ -194,6 +194,7 @@ fn effective(sensor: &SensorRecord, states: &HashMap<i64, crate::status::SensorS
 /// Appends the rows of `group`'s subtree (its devices, then each subgroup wrapped in Start/End)
 /// and returns the subtree's device count and sensor counts.
 fn subtree(
+    t: Lang,
     group: Option<i64>,
     groups: &[Group],
     cards: &mut HashMap<Option<i64>, Vec<DeviceCard>>,
@@ -215,11 +216,17 @@ fn subtree(
         .filter(|g| g.parent_id == group && Some(g.id) != group)
     {
         let mut inner = Vec::new();
-        let (n, c) = subtree(Some(child.id), groups, cards, depth + 1, &mut inner);
+        let (n, c) = subtree(t, Some(child.id), groups, cards, depth + 1, &mut inner);
         if inner.is_empty() {
             inner.push(Row::Empty);
         }
-        rows.push(Row::Start(Summary::new(child.id, child.name.clone(), n, c)));
+        rows.push(Row::Start(Summary::new(
+            t,
+            child.id,
+            child.name.clone(),
+            n,
+            c,
+        )));
         rows.extend(inner);
         rows.push(Row::End);
         devices += n;
@@ -258,11 +265,11 @@ pub async fn home(
         }
         cards.entry(d.group_id).or_default().push(DeviceCard {
             device: d.clone(),
-            status_label: if own.is_empty() {
-                "keine Sensoren"
+            status_label: user.lang.get(if own.is_empty() {
+                "no-sensors"
             } else {
-                overall.label()
-            },
+                overall.label_id()
+            }),
             status_class: overall.as_str(),
             segments: counts.segments(),
             counts,
@@ -270,11 +277,11 @@ pub async fn home(
     }
 
     let ungrouped = cards.remove(&None).map(|devices| Ungrouped {
-        name: if groups.is_empty() {
-            "Alle Geräte"
+        name: user.lang.get(if groups.is_empty() {
+            "overview-all-devices"
         } else {
-            "Ohne Gruppe"
-        },
+            "overview-ungrouped"
+        }),
         devices,
     });
     let top: Vec<&Group> = groups.iter().filter(|g| g.parent_id.is_none()).collect();
@@ -282,9 +289,9 @@ pub async fn home(
         .iter()
         .map(|g| {
             let mut rows = Vec::new();
-            let (n, counts) = subtree(Some(g.id), &groups, &mut cards, 1, &mut rows);
+            let (n, counts) = subtree(user.lang, Some(g.id), &groups, &mut cards, 1, &mut rows);
             TopGroup {
-                summary: Summary::new(g.id, g.name.clone(), n, counts),
+                summary: Summary::new(user.lang, g.id, g.name.clone(), n, counts),
                 rows,
             }
         })
@@ -359,7 +366,7 @@ mod tests {
                 profile_name: None,
                 polling: crate::devices::Polling::default(),
             },
-            status_label: "",
+            status_label: String::new(),
             status_class: "",
             segments: Vec::new(),
             counts,
@@ -397,7 +404,7 @@ mod tests {
             .or_default()
             .push(card(12, Some(4), down));
         let mut rows = Vec::new();
-        let (n, counts) = subtree(Some(1), &groups, &mut cards, 1, &mut rows);
+        let (n, counts) = subtree(Lang::De, Some(1), &groups, &mut cards, 1, &mut rows);
         assert_eq!((n, counts.status()), (3, Some(Status::Down)));
         let shape: Vec<String> = rows
             .iter()

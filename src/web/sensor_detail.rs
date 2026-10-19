@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::devices::Device;
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::sensors::Unit;
 use crate::sensors::format::{channel_label, input_unit, parse_threshold, threshold_input};
 use crate::sensors::spec::SensorSpec;
@@ -70,7 +70,7 @@ struct StatesView {
 
 struct RangeLink {
     value: &'static str,
-    label: &'static str,
+    label: String,
     current: bool,
 }
 
@@ -89,7 +89,7 @@ struct DetailTemplate {
     sensor: SensorRecord,
     description: String,
     device: Device,
-    status_label: &'static str,
+    status_label: String,
     status_class: &'static str,
     message: String,
     last_poll: String,
@@ -121,8 +121,8 @@ async fn load(state: &AppState, id: i64) -> Result<(SensorRecord, Device)> {
     Ok((sensor, device))
 }
 
-fn fields_of(t: &Thresholds, unit: Unit) -> [String; 4] {
-    [t.warn_above, t.warn_below, t.down_above, t.down_below].map(|v| threshold_input(v, unit))
+fn fields_of(lang: Lang, t: &Thresholds, unit: Unit) -> [String; 4] {
+    [t.warn_above, t.warn_below, t.down_above, t.down_below].map(|v| threshold_input(lang, v, unit))
 }
 
 /// Variable parts of the page.
@@ -164,14 +164,15 @@ async fn render(
                         .cloned()
                         .unwrap_or_default()
                 }),
-                None => fields_of(&c.thresholds, c.unit),
+                None => fields_of(user.lang, &c.thresholds, c.unit),
             };
             ChannelView {
                 id: c.id,
-                label: channel_label(&c.key).to_owned(),
-                latest: latest
-                    .get(&c.id)
-                    .map_or_else(|| "–".to_owned(), |(_, v)| value_format.format(c.unit, *v)),
+                label: user.lang.msg(&channel_label(&c.key)),
+                latest: latest.get(&c.id).map_or_else(
+                    || "–".to_owned(),
+                    |(_, v)| value_format.format(user.lang, c.unit, *v),
+                ),
                 latest_at: latest
                     .get(&c.id)
                     .map_or_else(String::new, |(ts, _)| time_html(*ts)),
@@ -197,21 +198,28 @@ async fn render(
         .map(|e| EventView {
             at: time_html(e.ts_ms),
             change: match e.from {
-                Some(from) => format!("{} → {}", from.label(), e.to.label()),
-                None => format!("erste Abfrage: {}", e.to.label()),
+                Some(from) => format!(
+                    "{} → {}",
+                    user.lang.get(from.label_id()),
+                    user.lang.get(e.to.label_id())
+                ),
+                None => {
+                    user.lang
+                        .get1("event-first-poll", "status", user.lang.get(e.to.label_id()))
+                }
             },
-            message: e.message,
+            message: crate::status::shown(user.lang, &e.message),
         })
         .collect();
     let page = DetailTemplate {
         layout: user.layout(),
         t: user.lang,
-        description: crate::web::sensor_text::describe(&sensor.spec, &mibs),
-        status_label: status.label(),
+        description: crate::web::sensor_text::describe(user.lang, &sensor.spec, &mibs),
+        status_label: user.lang.get(status.label_id()),
         status_class: status.as_str(),
         message: state_row
             .as_ref()
-            .map(|s| s.message.clone())
+            .map(|s| crate::status::shown(user.lang, &s.message))
             .unwrap_or_default(),
         last_poll: state_row.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
         channels,
@@ -219,7 +227,7 @@ async fn render(
             .into_iter()
             .map(|r| RangeLink {
                 value: r.as_str(),
-                label: r.label(),
+                label: user.lang.get(r.label_id()),
                 current: r == range,
             })
             .collect(),
@@ -346,7 +354,7 @@ pub struct ChartJson {
 /// Chart data for uPlot: aligned timestamps (seconds) and one value list per channel.
 pub async fn data(
     State(state): State<AppState>,
-    _user: CurrentUser,
+    user: CurrentUser,
     Path(id): Path<i64>,
     Query(query): Query<RangeQuery>,
 ) -> Result<Json<ChartJson>> {
@@ -363,7 +371,7 @@ pub async fn data(
             .series
             .into_iter()
             .map(|s| SeriesJson {
-                label: channel_label(&s.key).to_owned(),
+                label: user.lang.msg(&channel_label(&s.key)),
                 unit_label: value_format.unit_label.clone(),
                 labels: value_format.labels.clone(),
                 unit: s.unit.as_str(),
@@ -387,7 +395,7 @@ fn parse_limits(
                 let text = form
                     .get(&format!("{prefix}_{}", c.id))
                     .map_or("", String::as_str);
-                parse_threshold(text, c.unit).map_err(|m| Error::invalid(m.to_owned()))
+                parse_threshold(text, c.unit).map_err(Error::invalid)
             };
             let limits = Thresholds {
                 warn_above: field("wa")?,
@@ -395,9 +403,13 @@ fn parse_limits(
                 down_above: field("da")?,
                 down_below: field("db")?,
             };
-            limits
-                .validate()
-                .map_err(|m| Error::invalid(format!("{}: {m}", channel_label(&c.key))))?;
+            limits.validate().map_err(|m| {
+                Error::invalid(
+                    Msg::new("channel-error")
+                        .with("channel", channel_label(&c.key))
+                        .with("message", m),
+                )
+            })?;
             Ok((c.id, limits))
         })
         .collect()
@@ -451,8 +463,7 @@ pub async fn save_states(
     user.verify_csrf(form.get("csrf_token").map_or("", String::as_str))?;
     let (sensor, _) = load(&state, id).await?;
     let format = ValueFormat::for_sensor(&sensor.spec, &state.mib_index());
-    let channel = rated_channel(&sensor)
-        .ok_or_else(|| Error::invalid("Dieser Sensor hat keine benannten Statuswerte."))?;
+    let channel = rated_channel(&sensor).ok_or_else(|| Error::invalid(Msg::new("states-none")))?;
     let states = match form.get("action").map(String::as_str) {
         Some("reset") => Vec::new(),
         Some("save") => named_values(channel, &format)
@@ -463,9 +474,9 @@ pub async fn save_states(
                     Some("warning") => Status::Warning,
                     Some("down") => Status::Down,
                     _ => {
-                        return Err(Error::invalid(format!(
-                            "{label}: Bitte eine Bewertung wählen."
-                        )));
+                        return Err(Error::invalid(
+                            Msg::new("states-choose").with("value", label.as_str()),
+                        ));
                     }
                 };
                 Ok(ValueState {
@@ -475,12 +486,10 @@ pub async fn save_states(
                 })
             })
             .collect::<Result<Vec<_>>>()?,
-        _ => return Err(Error::invalid("Unbekannte Aktion.")),
+        _ => return Err(Error::invalid(Msg::new("unknown-action"))),
     };
     if states.is_empty() && form.get("action").map(String::as_str) == Some("save") {
-        return Err(Error::invalid(
-            "Dieser Sensor hat keine benannten Statuswerte.",
-        ));
+        return Err(Error::invalid(Msg::new("states-none")));
     }
     store::set_value_states(&state.pool, id, channel.id, &states).await?;
     tracing::info!(user = %user.username, sensor = id, rated = states.len(), "status value ratings saved");
@@ -596,7 +605,7 @@ mod tests {
             sensor,
             now - 20_000,
             &[],
-            &Assessment::Healthy("OK".to_owned()),
+            &Assessment::Healthy("OK".into()),
         )
         .await
         .unwrap();
@@ -1116,10 +1125,7 @@ mod tests {
         .unwrap();
         let (admin, csrf) = login(&h, "anna").await;
         let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
-        assert!(
-            page.body
-                .contains("Standard: nur <em>up</em> ist in Ordnung")
-        );
+        assert!(page.body.contains("Standard: nur „up“ ist in Ordnung"));
         assert!(page.body.contains("<select name=\"st_2\" aria-label=\"Bewertung für down\" class=\"compact\">\n              <option value=\"up\">In Ordnung</option>\n              <option value=\"warning\">Warnung</option>\n              <option value=\"down\" selected>"));
         let form = format!(
             "csrf_token={csrf}&action=save&st_1=up&st_2=warning&st_3=down&st_4=down&st_5=down&st_6=down&st_7=down"
@@ -1131,5 +1137,46 @@ mod tests {
         .await;
         let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
         assert!(page.body.contains("Standard wiederherstellen"));
+    }
+
+    #[tokio::test]
+    async fn the_page_and_its_chart_data_are_shown_in_english() {
+        let h = harness(true).await;
+        let (sensor, channels) = traffic_sensor(&h).await;
+        crate::storage::users::set_language(&h.state.pool, 1, Some(Lang::En))
+            .await
+            .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        for text in [
+            "<html lang=\"en\">",
+            "Inbound",
+            "12.5 Mbit/s",
+            "first poll: OK",
+            "Warning above",
+            "Save thresholds",
+            "\"decimal\":\".\"",
+            "\"samples-sum\":\"Sum\"",
+        ] {
+            assert!(page.body.contains(text), "{text} missing");
+        }
+        let data = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/data?range=1h"), Some(&admin)),
+        )
+        .await;
+        assert!(data.body.contains("\"label\":\"Inbound\""), "{}", data.body);
+        let form = format!("csrf_token={csrf}&wa_{}=abc", channels[0]);
+        let refused = send(
+            &h.app,
+            post(
+                &format!("/sensors/{sensor}/thresholds"),
+                Some(&admin),
+                &form,
+            ),
+        )
+        .await;
+        assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(refused.body.contains("A threshold must be a number."));
     }
 }

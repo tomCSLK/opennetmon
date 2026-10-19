@@ -259,9 +259,7 @@ pub(crate) async fn snmp_credentials(
     device: &crate::devices::Device,
 ) -> crate::error::Result<crate::credentials::Credentials> {
     let profile = device.profile_id.ok_or_else(|| {
-        crate::error::Error::invalid(
-            "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping). Ein SNMP-Profil lässt sich unter „Gerät bearbeiten“ wählen.",
-        )
+        crate::error::Error::invalid(crate::i18n::Msg::new("device-without-snmp"))
     })?;
     crate::storage::credentials::load_credentials(&state.pool, &state.secrets, profile)
         .await?

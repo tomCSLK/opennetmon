@@ -10,16 +10,16 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ sensor.name }}</span></div>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ sensor.name }}</span></div>
     <h1>{{ sensor.name }}</h1>
     <p class="subtitle status-line">
       <span class="badge status-{{ status_class }}">{{ status_label }}</span>
       <span>{{ description }}</span>
       {% if !message.is_empty() %}<span>· {{ message }}</span>{% endif %}
-      {% if !last_poll.is_empty() %}<span>· letzte Abfrage {{ last_poll|safe }}</span>{% endif %}
+      {% if !last_poll.is_empty() %}<span>· {{ t.get("detail-last-poll") }} {{ last_poll|safe }}</span>{% endif %}
     </p>
   </div>
-  <nav class="ranges" aria-label="Zeitraum">
+  <nav class="ranges" aria-label="{{ t.get("detail-range") }}">
     {% for r in ranges %}
     <a href="/sensors/{{ sensor.id }}?range={{ r.value }}"{% if r.current %} aria-current="page"{% endif %}>{{ r.label }}</a>
     {% endfor %}
@@ -33,27 +33,27 @@
 <p class="error" role="alert">{{ message }}</p>
 {% endif %}
 
-<section class="values" aria-label="Letzte Werte">
+<section class="values" aria-label="{{ t.get("detail-latest") }}">
   {% for c in channels %}
   <div class="value-tile">
     <div class="label">{{ c.label }}</div>
     <div class="value">{{ c.latest }}</div>
-    <div class="when">{% if c.latest_at.is_empty() %}noch kein Messwert{% else %}{{ c.latest_at|safe }}{% endif %}</div>
+    <div class="when">{% if c.latest_at.is_empty() %}{{ t.get("detail-no-value") }}{% else %}{{ c.latest_at|safe }}{% endif %}</div>
   </div>
   {% endfor %}
 </section>
 
 <section class="card">
-  <div id="charts" data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="Noch keine Messwerte im gewählten Zeitraum."></div>
-  <noscript><p class="muted">Für den Graphen wird JavaScript benötigt.</p></noscript>
+  <div id="charts" data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="{{ t.get("detail-no-samples") }}"></div>
+  <noscript><p class="muted">{{ t.get("detail-chart-needs-js") }}</p></noscript>
 </section>
 
 <section class="card flush">
   <div class="card-head">
-    <h2>Messwerte</h2>
+    <h2>{{ t.get("detail-samples") }}</h2>
     <div class="actions">
       <span class="muted small" id="samples-info"></span>
-      <label class="rows-select" for="samples-limit">Zeilen
+      <label class="rows-select" for="samples-limit">{{ t.get("detail-rows") }}
         <select id="samples-limit">
           <option value="50" selected>50</option>
           <option value="100">100</option>
@@ -62,48 +62,48 @@
       </label>
     </div>
   </div>
-  <div id="samples" class="table-wrap" data-empty="Noch keine Messwerte im gewählten Zeitraum." aria-live="polite"></div>
-  <noscript><p class="empty small">Für die Tabelle wird JavaScript benötigt.</p></noscript>
+  <div id="samples" class="table-wrap" data-empty="{{ t.get("detail-no-samples") }}" aria-live="polite"></div>
+  <noscript><p class="empty small">{{ t.get("detail-table-needs-js") }}</p></noscript>
 </section>
 
 {% if layout.is_admin %}
 <details class="card panel"{% if rename_failed %} open{% endif %}>
-  <summary><h2>Name</h2></summary>
+  <summary><h2>{{ t.get("name") }}</h2></summary>
   <form method="post" action="/sensors/{{ sensor.id }}/rename" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <label for="new-name" class="visually-hidden">Neuer Name</label>
+    <label for="new-name" class="visually-hidden">{{ t.get("detail-new-name") }}</label>
     <input id="new-name" name="name" type="text" value="{{ new_name }}" maxlength="64" required>
-    <button type="submit">Umbenennen</button>
+    <button type="submit">{{ t.get("detail-rename") }}</button>
   </form>
-  <p class="hint">Höchstens 64 Zeichen, je Gerät eindeutig. Messwerte, Graph, Schwellwerte und Status bleiben erhalten.</p>
+  <p class="hint">{{ t.get("detail-rename-hint") }}</p>
 </details>
 {% endif %}
 
 {% if let Some(st) = states %}
 <details class="card panel"{% if !st.stored && !st.interface %} open{% endif %}>
-  <summary><h2>Statuswerte{% if st.stored %} <span class="badge">bewertet</span>{% endif %}</h2></summary>
+  <summary><h2>{{ t.get("detail-states") }}{% if st.stored %} <span class="badge">{{ t.get("detail-states-rated") }}</span>{% endif %}</h2></summary>
   {% if st.stored %}
-  <p class="muted small">Jeder Wert bestimmt den Sensorstatus. Werte, die hier nicht stehen, gelten als Warnung.</p>
+  <p class="muted small">{{ t.get("detail-states-stored") }}</p>
   {% else if st.interface %}
-  <p class="muted small">Standard: nur <em>up</em> ist in Ordnung, alles andere ist ein Ausfall. Hier lässt sich das je Wert anpassen, z. B. <em>down</em> nur als Warnung.</p>
+  <p class="muted small">{{ t.get("detail-states-interface") }}</p>
   {% else %}
-  <p class="muted small"><strong>Noch nicht bewertet</strong> – der Wert ändert den Sensorstatus nicht. Unten steht ein Vorschlag aus den Namen der Werte; erst „Speichern“ schaltet die Bewertung ein.</p>
+  <p class="muted small">{{ t.get("detail-states-unrated") }}</p>
   {% endif %}
   {% if layout.is_admin %}
   <form method="post" action="/sensors/{{ sensor.id }}/states" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Wert</th><th>Bewertung</th></tr></thead>
+      <thead><tr><th>{{ t.get("detail-value") }}</th><th>{{ t.get("detail-rating") }}</th></tr></thead>
       <tbody>
       {% for row in st.rows %}
         <tr>
           <td><strong>{{ row.label }}</strong> <span class="muted">({{ row.value }})</span></td>
           <td>
-            <select name="st_{{ row.value }}" aria-label="Bewertung für {{ row.label }}" class="compact">
-              <option value="up"{% if row.status == "up" %} selected{% endif %}>In Ordnung</option>
-              <option value="warning"{% if row.status == "warning" %} selected{% endif %}>Warnung</option>
-              <option value="down"{% if row.status == "down" %} selected{% endif %}>Ausfall</option>
+            <select name="st_{{ row.value }}" aria-label="{{ t.get1("detail-rating-for", "value", row.label.as_str()) }}" class="compact">
+              <option value="up"{% if row.status == "up" %} selected{% endif %}>{{ t.get("status-up") }}</option>
+              <option value="warning"{% if row.status == "warning" %} selected{% endif %}>{{ t.get("status-warning") }}</option>
+              <option value="down"{% if row.status == "down" %} selected{% endif %}>{{ t.get("status-down") }}</option>
             </select>
           </td>
         </tr>
@@ -112,55 +112,54 @@
     </table>
     </div>
     <div class="form-actions">
-      <button type="submit" name="action" value="save">Speichern</button>
-      {% if st.stored %}<button type="submit" name="action" value="reset" class="ghost">{% if st.interface %}Standard wiederherstellen{% else %}Bewertung ausschalten{% endif %}</button>{% endif %}
+      <button type="submit" name="action" value="save">{{ t.get("save") }}</button>
+      {% if st.stored %}<button type="submit" name="action" value="reset" class="ghost">{% if st.interface %}{{ t.get("detail-states-restore") }}{% else %}{{ t.get("detail-states-off") }}{% endif %}</button>{% endif %}
     </div>
   </form>
   {% else %}
-  <ul class="plain">{% for row in st.rows %}<li>{{ row.label }} ({{ row.value }}): {% if row.status == "up" %}In Ordnung{% else if row.status == "warning" %}Warnung{% else %}Ausfall{% endif %}</li>{% endfor %}</ul>
+  <ul class="plain">{% for row in st.rows %}<li>{{ row.label }} ({{ row.value }}): {% if row.status == "up" %}{{ t.get("status-up") }}{% else if row.status == "warning" %}{{ t.get("status-warning") }}{% else %}{{ t.get("status-down") }}{% endif %}</li>{% endfor %}</ul>
   {% endif %}
 </details>
 {% endif %}
 
 <details class="card panel"{% if error.is_some() && !rename_failed %} open{% endif %}>
-  <summary><h2>Schwellwerte</h2></summary>
+  <summary><h2>{{ t.get("detail-thresholds") }}</h2></summary>
   {% if layout.is_admin %}
-  <p class="muted small">Ein Wert löst aus, wenn er die Grenze <em>überschreitet</em> (oben) oder <em>unterschreitet</em> (unten). „Ausfall“ und „Warnung“ gelten sofort.
-    Leere Felder bedeuten: keine Grenze.</p>
+  <p class="muted small">{{ t.get("detail-thresholds-hint") }}</p>
   <form method="post" action="/sensors/{{ sensor.id }}/thresholds" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     {% for c in channels %}
     {% if c.has_thresholds %}
     <fieldset>
-      <legend>{{ c.label }}{% if !c.unit_label.is_empty() %} (in {{ c.unit_label }}){% endif %}</legend>
+      <legend>{{ c.label }}{% if !c.unit_label.is_empty() %} {{ t.get1("detail-in-unit", "unit", c.unit_label.as_str()) }}{% endif %}</legend>
       <div class="threshold-grid">
-        <div><label for="wa_{{ c.id }}">Warnung über</label>
+        <div><label for="wa_{{ c.id }}">{{ t.get("threshold-warn-above") }}</label>
           <input id="wa_{{ c.id }}" name="wa_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[0] }}" maxlength="24"></div>
-        <div><label for="wb_{{ c.id }}">Warnung unter</label>
+        <div><label for="wb_{{ c.id }}">{{ t.get("threshold-warn-below") }}</label>
           <input id="wb_{{ c.id }}" name="wb_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[1] }}" maxlength="24"></div>
-        <div><label for="da_{{ c.id }}">Ausfall über</label>
+        <div><label for="da_{{ c.id }}">{{ t.get("threshold-down-above") }}</label>
           <input id="da_{{ c.id }}" name="da_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[2] }}" maxlength="24"></div>
-        <div><label for="db_{{ c.id }}">Ausfall unter</label>
+        <div><label for="db_{{ c.id }}">{{ t.get("threshold-down-below") }}</label>
           <input id="db_{{ c.id }}" name="db_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[3] }}" maxlength="24"></div>
       </div>
     </fieldset>
     {% endif %}
     {% endfor %}
-    <button type="submit">Schwellwerte speichern</button>
+    <button type="submit">{{ t.get("detail-thresholds-save") }}</button>
   </form>
   {% else %}
-  <p class="muted">Die Schwellwerte können nur Administratoren ändern.</p>
+  <p class="muted">{{ t.get("detail-thresholds-admins") }}</p>
   {% endif %}
 </details>
 
 <section class="card flush">
-  <div class="card-head"><h2>Letzte Statuswechsel</h2></div>
+  <div class="card-head"><h2>{{ t.get("detail-events") }}</h2></div>
   {% if events.is_empty() %}
-  <p class="empty small">Noch keine Ereignisse.</p>
+  <p class="empty small">{{ t.get("detail-no-events") }}</p>
   {% else %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Zeitpunkt</th><th>Wechsel</th><th>Meldung</th></tr></thead>
+    <thead><tr><th>{{ t.get("detail-when") }}</th><th>{{ t.get("detail-change") }}</th><th>{{ t.get("message") }}</th></tr></thead>
     <tbody>
     {% for e in events %}
       <tr><td class="num">{{ e.at|safe }}</td><td>{{ e.change }}</td><td class="wrap muted">{{ e.message }}</td></tr>

@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use crate::devices::Device;
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::mib::{self, MibIndex, ObjectKind};
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::{SensorSpec, parse_oid};
@@ -81,7 +81,7 @@ async fn load_device(state: &AppState, id: i64) -> Result<Device> {
 fn find_object<'a>(
     index: &'a MibIndex,
     input: &str,
-) -> std::result::Result<&'a mib::MibObject, String> {
+) -> std::result::Result<&'a mib::MibObject, Msg> {
     let input = input.trim();
     let (module, name) = match input.split_once("::") {
         Some((m, n)) => (Some(m.trim()), n.trim()),
@@ -91,17 +91,15 @@ fn find_object<'a>(
     let object = found
         .first()
         .copied()
-        .ok_or_else(|| format!("„{name}“ ist in keiner geladenen MIB bekannt."))?;
+        .ok_or_else(|| Msg::new("mib-name-unknown").with("name", name))?;
     match object.kind {
         ObjectKind::Table | ObjectKind::Node => Ok(object),
         ObjectKind::Row => index
             .get_oid(&object.oid[..object.oid.len() - 1])
-            .ok_or_else(|| "Die Tabelle zu dieser Zeile ist nicht bekannt.".to_owned()),
-        _ => Err(format!(
-            "„{}“ ist ein(e) {} – bitte eine Tabelle oder Gruppe angeben (einzelne Werte über „Sensor hinzufügen“).",
-            object.name,
-            object.kind.label()
-        )),
+            .ok_or_else(|| Msg::new("values-row-without-table")),
+        _ => Err(Msg::new("values-not-a-table")
+            .with("name", object.name.as_str())
+            .with("kind", Msg::new(object.kind.label_id()))),
     }
 }
 
@@ -176,7 +174,7 @@ pub async fn discover(
         match find_object(&index, &object) {
             Ok(o) => vec![Target::Object(o)],
             Err(message) => {
-                let html = page(Vec::new(), Some(message), false).render()?;
+                let html = page(Vec::new(), Some(user.lang.msg(&message)), false).render()?;
                 return Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response());
             }
         }
@@ -190,14 +188,19 @@ pub async fn discover(
     };
     let outcome = async {
         let mut client = SnmpClient::connect(&target, &creds).await?;
-        value_discovery::discover(&mut client, &index, &targets).await
+        value_discovery::discover(user.lang, &mut client, &index, &targets).await
     }
     .await;
     tracing::info!(user = %user.username, device = id, ok = outcome.is_ok(), "value discovery");
     let existing = existing_oids(&store::list_sensors(&state.pool, id).await?);
     let html = match outcome {
         Ok(groups) => page(views(groups, &existing), None, object.is_empty()).render()?,
-        Err(e) => page(Vec::new(), Some(e.user_message()), object.is_empty()).render()?,
+        Err(e) => page(
+            Vec::new(),
+            Some(user.lang.msg(&e.user_message())),
+            object.is_empty(),
+        )
+        .render()?,
     };
     Ok(Html(html).into_response())
 }
@@ -209,7 +212,6 @@ struct Proposal {
 }
 
 fn proposals(fields: &HashMap<String, String>) -> Result<Vec<Proposal>> {
-    let invalid = |m: String| Error::invalid(m);
     let get = |prefix: &str, key: &str| {
         fields
             .get(&format!("{prefix}_{key}"))
@@ -225,17 +227,18 @@ fn proposals(fields: &HashMap<String, String>) -> Result<Vec<Proposal>> {
     keys.into_iter()
         .map(|k| {
             let k = k.to_string();
-            let oid = parse_oid(&get("o", &k)).map_err(|m| invalid(m.to_owned()))?;
+            let oid = parse_oid(&get("o", &k)).map_err(Error::invalid)?;
             let name = get("n", &k);
             if name.is_empty() {
-                return Err(invalid(
-                    "Jeder ausgewählte Wert braucht einen Namen.".to_owned(),
-                ));
+                return Err(Error::invalid(Msg::new("values-name-missing")));
             }
-            let scale = get("f", &k)
-                .replace(',', ".")
-                .parse::<f64>()
-                .map_err(|_| invalid(format!("{name}: Der Faktor muss eine Zahl sein.")))?;
+            let scale = get("f", &k).replace(',', ".").parse::<f64>().map_err(|_| {
+                Error::invalid(
+                    Msg::new("channel-error")
+                        .with("channel", name.as_str())
+                        .with("message", Msg::new("sensors-scale-not-number")),
+                )
+            })?;
             let unit = Some(get("u", &k)).filter(|u| !u.is_empty());
             let mode = match get("m", &k).as_str() {
                 "counter" => OidMode::Counter,
@@ -247,8 +250,13 @@ fn proposals(fields: &HashMap<String, String>) -> Result<Vec<Proposal>> {
                 scale,
                 unit,
             };
-            spec.validate()
-                .map_err(|m| invalid(format!("{name}: {m}")))?;
+            spec.validate().map_err(|m| {
+                Error::invalid(
+                    Msg::new("channel-error")
+                        .with("channel", name.as_str())
+                        .with("message", m),
+                )
+            })?;
             Ok(Proposal { name, spec })
         })
         .collect()
@@ -264,11 +272,11 @@ pub async fn create(
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
     load_device(&state, id).await?;
     if fields.len() > MAX_FIELDS {
-        return Err(Error::invalid("Das Formular ist zu groß."));
+        return Err(Error::invalid(Msg::new("form-too-large")));
     }
     let wanted = proposals(&fields)?;
     if wanted.is_empty() {
-        return Err(Error::invalid("Bitte mindestens einen Wert auswählen."));
+        return Err(Error::invalid(Msg::new("values-select-one")));
     }
     let activate = fields.get("activate").is_some_and(|v| v == "on");
     let mut existing = existing_oids(&store::list_sensors(&state.pool, id).await?);

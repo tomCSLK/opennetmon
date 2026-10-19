@@ -1,4 +1,4 @@
-//! Device templates ("Gerätevorlagen"): made from a configured device, applied to others.
+//! Device templates: made from a configured device, applied to others.
 //!
 //! A template stores rules rather than sensor ids: ping/uptime, interface sensors (the same ports by
 //! name, all up ports or all ports) and custom OID sensors with name, factor, unit, state and
@@ -13,6 +13,7 @@ use sqlx::SqlitePool;
 use crate::devices::MAX_NAME_LEN;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::Error;
+use crate::i18n::{Lang, Msg};
 use crate::sensors::snmp::{OidMode, numeric};
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
 use crate::snmp::{SYS_OBJECT_ID, SnmpClient, SnmpError, SnmpValue};
@@ -177,7 +178,7 @@ pub struct OidItem {
 }
 
 impl OidItem {
-    fn spec(&self) -> Result<SensorSpec, &'static str> {
+    fn spec(&self) -> Result<SensorSpec, Msg> {
         Ok(SensorSpec::Oid {
             oid: parse_oid(&self.oid)?,
             mode: if self.counter {
@@ -205,25 +206,30 @@ pub struct Body {
     pub oids: Vec<OidItem>,
 }
 
-fn check_name(name: &str) -> Result<(), String> {
-    crate::devices::validate_name(name)
-        .map(|_| ())
-        .map_err(|m| format!("„{name}“: {m}"))
+/// `„name“: message`
+fn named(name: &str, message: Msg) -> Msg {
+    Msg::new("template-named-error")
+        .with("name", name)
+        .with("message", message)
 }
 
-fn check_limits(name: &str, limits: &[Limits]) -> Result<(), String> {
+fn check_name(name: &str) -> Result<(), Msg> {
+    crate::devices::validate_name(name)
+        .map(|_| ())
+        .map_err(|m| named(name, m))
+}
+
+fn check_limits(name: &str, limits: &[Limits]) -> Result<(), Msg> {
     limits.iter().try_for_each(|l| {
         if l.key.is_empty() || l.key.len() > 32 {
-            return Err(format!("„{name}“: ungültiger Kanal."));
+            return Err(named(name, Msg::new("template-channel-invalid")));
         }
         if l.value_states().len() != l.states.len()
             || l.states.iter().any(|s| s.label.chars().count() > 64)
         {
-            return Err(format!("„{name}“: ungültige Statusbewertung."));
+            return Err(named(name, Msg::new("template-states-invalid")));
         }
-        l.thresholds()
-            .validate()
-            .map_err(|m| format!("„{name}“: {m}"))
+        l.thresholds().validate().map_err(|m| named(name, m))
     })
 }
 
@@ -239,15 +245,13 @@ impl Body {
         self.traffic.iter().chain(self.status.iter())
     }
 
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), Msg> {
         if self.version != FORMAT_VERSION {
-            return Err(format!("Unbekannte Vorlagenversion {}.", self.version));
+            return Err(Msg::new("template-version-unknown").with("version", self.version));
         }
         let ports: usize = self.rules().map(|r| r.ports.len()).sum();
         if self.basics.len() + ports + self.oids.len() > MAX_ITEMS {
-            return Err(format!(
-                "Eine Vorlage enthält höchstens {MAX_ITEMS} Einträge."
-            ));
+            return Err(Msg::new("template-too-many").with("count", MAX_ITEMS));
         }
         for b in &self.basics {
             check_name(&b.name)?;
@@ -258,15 +262,15 @@ impl Body {
             for p in &rule.ports {
                 check_name(&p.name)?;
                 if p.interface.trim().is_empty() || p.interface.chars().count() > MAX_NAME_LEN {
-                    return Err(format!("„{}“: ungültiger Interface-Name.", p.name));
+                    return Err(named(&p.name, Msg::new("template-interface-invalid")));
                 }
                 check_limits(&p.name, &p.limits)?;
             }
         }
         for o in &self.oids {
             check_name(&o.name)?;
-            let spec = o.spec().map_err(|m| format!("„{}“: {m}", o.name))?;
-            spec.validate().map_err(|m| format!("„{}“: {m}", o.name))?;
+            let spec = o.spec().map_err(|m| named(&o.name, m))?;
+            spec.validate().map_err(|m| named(&o.name, m))?;
             check_limits(&o.name, &o.limits)?;
         }
         Ok(())
@@ -279,12 +283,13 @@ impl Body {
     pub fn from_json(text: &str) -> Result<Self, Error> {
         let body: Self = serde_json::from_str(text)
             .map_err(|e| Error::Internal(format!("stored template is not valid: {e}")))?;
-        body.validate().map_err(Error::Internal)?;
+        body.validate()
+            .map_err(|m| Error::Internal(format!("stored template is not valid: {m}")))?;
         Ok(body)
     }
 
-    /// Short German description, e.g. "Ping, Uptime, Traffic: aktive Ports, 4 eigene Werte".
-    pub fn summary(&self) -> String {
+    /// Short description, e.g. "Ping, Uptime, Traffic: aktive Ports, 4 eigene Werte".
+    pub fn summary(&self, t: Lang) -> String {
         let mut parts: Vec<String> = Vec::new();
         for b in &self.basics {
             let label = match b.kind {
@@ -297,30 +302,25 @@ impl Body {
         }
         for (label, rule) in [("Traffic", &self.traffic), ("Status", &self.status)] {
             if let Some(rule) = rule {
-                parts.push(format!("{label}: {}", selection_label(rule)));
+                parts.push(format!("{label}: {}", selection_label(t, rule)));
             }
         }
-        match self.oids.len() {
-            0 => {}
-            1 => parts.push("1 eigener Wert".to_owned()),
-            n => parts.push(format!("{n} eigene Werte")),
+        if !self.oids.is_empty() {
+            parts.push(t.get1("template-custom-values", "count", self.oids.len()));
         }
         if parts.is_empty() {
-            "leer".to_owned()
+            t.get("template-empty")
         } else {
             parts.join(", ")
         }
     }
 }
 
-pub fn selection_label(rule: &PortRule) -> String {
+pub fn selection_label(t: Lang, rule: &PortRule) -> String {
     match rule.selection {
-        PortSelection::Same => match rule.ports.len() {
-            1 => "1 bestimmter Port".to_owned(),
-            n => format!("{n} bestimmte Ports"),
-        },
-        PortSelection::Up => "aktive Ports".to_owned(),
-        PortSelection::All => "alle Ports".to_owned(),
+        PortSelection::Same => t.get1("template-ports-same", "count", rule.ports.len()),
+        PortSelection::Up => t.get("template-ports-up"),
+        PortSelection::All => t.get("template-ports-all"),
     }
 }
 
@@ -356,7 +356,7 @@ fn port_rule(
     index_of: fn(&SensorSpec) -> Option<u32>,
     choice: PortChoice,
     interfaces: Option<&[DiscoveredInterface]>,
-) -> Result<Option<PortRule>, String> {
+) -> Result<Option<PortRule>, Msg> {
     let selection = match choice {
         PortChoice::Skip => return Ok(None),
         PortChoice::Same => PortSelection::Same,
@@ -370,9 +370,7 @@ fn port_rule(
         .collect();
     let mut ports = Vec::new();
     if selection == PortSelection::Same {
-        let interfaces = interfaces.ok_or(
-            "Die Interfaces des Geräts konnten nicht gelesen werden; „dieselben Ports“ ist deshalb nicht möglich.",
-        )?;
+        let interfaces = interfaces.ok_or(Msg::new("template-interfaces-unread"))?;
         for s in &of_kind {
             let index = index_of(&s.spec);
             if let Some(found) = interfaces.iter().find(|i| Some(i.index) == index) {
@@ -429,7 +427,7 @@ pub fn build(
     sensors: &[SensorRecord],
     interfaces: Option<&[DiscoveredInterface]>,
     options: &BuildOptions,
-) -> Result<Body, String> {
+) -> Result<Body, Msg> {
     let all: Vec<&SensorRecord> = sensors.iter().collect();
     let mut body = Body {
         version: FORMAT_VERSION,
@@ -469,7 +467,7 @@ pub fn build(
         }
     }
     if body.is_empty() {
-        return Err("Die Vorlage wäre leer. Bitte mindestens einen Sensor übernehmen.".to_owned());
+        return Err(Msg::new("template-would-be-empty"));
     }
     body.validate()?;
     Ok(body)
@@ -489,8 +487,8 @@ pub struct Plan {
     pub create: Vec<NewSensor>,
     /// Rules the device already fulfils.
     pub present: usize,
-    /// Why something was left out (German, for the result page).
-    pub skipped: Vec<String>,
+    /// Why something was left out (for the result page).
+    pub skipped: Vec<Msg>,
 }
 
 /// What is known about the target device.
@@ -595,7 +593,7 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
         let what = if traffic { "Traffic" } else { "Status" };
         let Some(interfaces) = facts.interfaces else {
             out.skipped
-                .push(format!("{what}: Die Interfaces wurden nicht gelesen."));
+                .push(Msg::new("template-skipped-unread").with("what", what));
             continue;
         };
         let spec_of = |index| {
@@ -613,10 +611,11 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
                         Some(i) => {
                             wanted.push((i.index, p.name.clone(), p.enabled, p.limits.clone()))
                         }
-                        None => out.skipped.push(format!(
-                            "{}: Das Gerät hat kein Interface „{}“.",
-                            p.name, p.interface
-                        )),
+                        None => out.skipped.push(
+                            Msg::new("template-skipped-interface")
+                                .with("name", p.name.as_str())
+                                .with("interface", p.interface.as_str()),
+                        ),
                     }
                 }
             }
@@ -658,10 +657,11 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
             continue;
         }
         if !facts.answering.contains(oid) {
-            out.skipped.push(format!(
-                "{}: Das Gerät liefert für {} keinen Wert.",
-                o.name, o.oid
-            ));
+            out.skipped.push(
+                Msg::new("template-skipped-oid")
+                    .with("name", o.name.as_str())
+                    .with("oid", o.oid.as_str()),
+            );
             continue;
         }
         oids.insert(oid.clone());
@@ -738,7 +738,7 @@ async fn answering(
 pub struct Outcome {
     pub created: Vec<String>,
     pub present: usize,
-    pub skipped: Vec<String>,
+    pub skipped: Vec<Msg>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -945,7 +945,7 @@ mod tests {
         assert_eq!(body.oids[0].oid, "1.3.6.1.4.1.11863.6.56.1.1.2.1.7.1");
         assert!(!body.oids[0].enabled && !body.oids[0].counter);
         assert_eq!(
-            body.summary(),
+            body.summary(Lang::De),
             "Ping, Uptime, Traffic: 2 bestimmte Ports, Status: aktive Ports, 2 eigene Werte"
         );
         assert_eq!(
@@ -987,10 +987,16 @@ mod tests {
             traffic: PortChoice::Skip,
             status: PortChoice::Skip,
         };
-        assert!(build(&sensors, None, &none).unwrap_err().contains("leer"));
+        assert!(
+            build(&sensors, None, &none)
+                .unwrap_err()
+                .to_string()
+                .contains("leer")
+        );
         assert!(
             build(&sensors, None, &options(PortChoice::Same, PortChoice::Skip))
                 .unwrap_err()
+                .to_string()
                 .contains("nicht gelesen")
         );
         // Up/all ports work without reading the interfaces.
@@ -1052,10 +1058,14 @@ mod tests {
         );
         assert_eq!(plan.present, 1, "ping exists");
         assert_eq!(plan.skipped.len(), 2, "{:?}", plan.skipped);
-        assert!(plan.skipped[0].contains("kein Interface „gigabitEthernet 1/0/2“"));
         assert!(
-            plan.skipped[1].contains("PoE-Leistung Port 2")
-                && plan.skipped[1].contains("keinen Wert")
+            plan.skipped[0]
+                .to_string()
+                .contains("kein Interface „gigabitEthernet 1/0/2“")
+        );
+        assert!(
+            plan.skipped[1].to_string().contains("PoE-Leistung Port 2")
+                && plan.skipped[1].to_string().contains("keinen Wert")
         );
 
         // Applying again changes nothing.
@@ -1100,7 +1110,7 @@ mod tests {
             ]
         );
         let no_interfaces = super::plan(&body, &facts(&[], None, &none));
-        assert!(no_interfaces.skipped[0].starts_with("Traffic:"));
+        assert!(no_interfaces.skipped[0].to_string().starts_with("Traffic:"));
     }
 
     #[test]

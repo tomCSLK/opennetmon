@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use crate::i18n::Lang;
 use crate::mib::catalog::{
     CatalogEntry, RowLabel, RowRule, entity_sensor_unit, unit_from_description,
 };
@@ -46,7 +47,7 @@ pub struct Group {
     /// `MODULE::object`
     pub source: String,
     pub candidates: Vec<Candidate>,
-    /// E.g. "gekürzt auf 500 Werte".
+    /// E.g. "Gekürzt auf 500 Werte.", in the language of the admin.
     pub note: Option<String>,
 }
 
@@ -100,7 +101,7 @@ fn generic_columns<'a>(index: &'a MibIndex, root: &MibObject) -> Vec<Column<'a>>
         .collect()
 }
 
-fn catalog_columns<'a>(index: &'a MibIndex, entry: &CatalogEntry) -> Vec<Column<'a>> {
+fn catalog_columns<'a>(t: Lang, index: &'a MibIndex, entry: &CatalogEntry) -> Vec<Column<'a>> {
     entry
         .columns
         .iter()
@@ -108,7 +109,7 @@ fn catalog_columns<'a>(index: &'a MibIndex, entry: &CatalogEntry) -> Vec<Column<
             let o = *index.by_name(spec.object, Some(entry.module)).first()?;
             Some(Column {
                 object: o,
-                label: spec.label.to_owned(),
+                label: t.get(spec.label),
                 scale: spec.scale,
                 unit: spec.unit.map(str::to_owned),
                 selected: spec.selected,
@@ -117,20 +118,27 @@ fn catalog_columns<'a>(index: &'a MibIndex, entry: &CatalogEntry) -> Vec<Column<
         .collect()
 }
 
-fn format_candidate_value(o: &MibObject, raw: f64, scale: f64, unit: Option<&str>) -> String {
+fn format_candidate_value(
+    t: Lang,
+    o: &MibObject,
+    raw: f64,
+    scale: f64,
+    unit: Option<&str>,
+) -> String {
     if scale == 1.0
         && raw.fract() == 0.0
         && let Some(label) = o.enum_label(raw as i64)
     {
         return format!("{label} ({raw})");
     }
-    let shown = format_value(Unit::Count, raw * scale);
-    match unit {
-        Some(u) if o.base.is_some_and(|b| b.is_counter()) => format!("{shown} {u} (Zählerstand)"),
-        Some(u) => format!("{shown} {u}"),
-        None if o.base.is_some_and(|b| b.is_counter()) => format!("{shown} (Zählerstand)"),
-        None => shown,
+    let mut shown = format_value(t, Unit::Count, raw * scale);
+    if let Some(u) = unit {
+        shown = format!("{shown} {u}");
     }
+    if o.base.is_some_and(|b| b.is_counter()) {
+        shown = format!("{shown} ({})", t.get("values-counter-reading"));
+    }
+    shown
 }
 
 fn sensor_name(column: &str, row: &str) -> String {
@@ -172,7 +180,9 @@ fn dotted(arcs: &[u64]) -> String {
 }
 
 /// Looks at one table or group and proposes sensors.
+#[allow(clippy::too_many_arguments)]
 async fn discover_one(
+    t: Lang,
     client: &mut SnmpClient,
     index: &MibIndex,
     root: &MibObject,
@@ -206,7 +216,7 @@ async fn discover_one(
                 object: c.object.name.clone(),
                 column: c.label.clone(),
                 row: String::new(),
-                value: format_candidate_value(c.object, raw, c.scale, c.unit.as_deref()),
+                value: format_candidate_value(t, c.object, raw, c.scale, c.unit.as_deref()),
                 scale: c.scale,
                 unit: c.unit.clone(),
                 mode: mode_of(c.object),
@@ -336,7 +346,7 @@ async fn discover_one(
                 object: c.object.name.clone(),
                 column: c.label.clone(),
                 row: row_label.clone(),
-                value: format_candidate_value(c.object, raw, scale, unit.as_deref()),
+                value: format_candidate_value(t, c.object, raw, scale, unit.as_deref()),
                 scale,
                 unit,
                 mode: mode_of(c.object),
@@ -352,7 +362,7 @@ async fn discover_one(
         title,
         source,
         candidates,
-        note: truncated.then(|| format!("Gekürzt auf {MAX_CANDIDATES} Werte.")),
+        note: truncated.then(|| t.get1("values-truncated", "count", MAX_CANDIDATES)),
     }))
 }
 
@@ -366,7 +376,9 @@ fn mode_of(o: &MibObject) -> OidMode {
 
 /// Walks every target and returns the groups that have values. A target the device does not
 /// answer (or whose MIB is not loaded) is simply left out; device-level SNMP errors are returned.
+/// Names, titles and values are in language `t`.
 pub async fn discover(
+    t: Lang,
     client: &mut SnmpClient,
     index: &MibIndex,
     targets: &[Target<'_>],
@@ -382,12 +394,13 @@ pub async fn discover(
                 else {
                     continue;
                 };
-                let columns = catalog_columns(index, entry);
+                let columns = catalog_columns(t, index, entry);
                 discover_one(
+                    t,
                     client,
                     index,
                     root,
-                    entry.title.to_owned(),
+                    t.get(entry.title),
                     columns,
                     Some(entry.rows),
                     entry.rule,
@@ -397,6 +410,7 @@ pub async fn discover(
             Target::Object(root) => {
                 let columns = generic_columns(index, root);
                 discover_one(
+                    t,
                     client,
                     index,
                     root,
@@ -502,7 +516,7 @@ END
     async fn a_generic_table_becomes_named_sensors_with_units_from_descriptions() {
         let (_agent, mut client, index) = rig().await;
         let table = index.by_name("testPortTable", None)[0];
-        let groups = discover(&mut client, &index, &[Target::Object(table)])
+        let groups = discover(Lang::De, &mut client, &index, &[Target::Object(table)])
             .await
             .unwrap();
         assert_eq!(groups.len(), 1);
@@ -545,7 +559,7 @@ END
     async fn a_scalar_group_ticks_measurements_but_not_settings() {
         let (_agent, mut client, index) = rig().await;
         let group = index.by_name("testGlobal", None)[0];
-        let groups = discover(&mut client, &index, &[Target::Object(group)])
+        let groups = discover(Lang::De, &mut client, &index, &[Target::Object(group)])
             .await
             .unwrap();
         let c = &groups[0].candidates;
@@ -562,7 +576,7 @@ END
     async fn catalog_entries_without_loaded_mibs_or_data_are_skipped() {
         let (_agent, mut client, index) = rig().await;
         // None of the catalog tables exist on the fake agent; TP-Link MIBs are not loaded here.
-        let groups = discover(&mut client, &index, &catalog_targets())
+        let groups = discover(Lang::De, &mut client, &index, &catalog_targets())
             .await
             .unwrap();
         assert!(groups.is_empty());
@@ -591,7 +605,7 @@ END
         .unwrap();
         let table = index.by_name("testPortTable", None)[0];
         assert!(matches!(
-            discover(&mut client, &index, &[Target::Object(table)]).await,
+            discover(Lang::De, &mut client, &index, &[Target::Object(table)]).await,
             Err(SnmpError::Timeout)
         ));
     }

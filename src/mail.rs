@@ -1,4 +1,4 @@
-//! Outgoing e-mail: settings, validation and the SMTP client. User-facing messages are German.
+//! Outgoing e-mail: settings, validation and the SMTP client. User-facing messages are catalog messages.
 
 #[cfg(test)]
 pub(crate) mod testsmtp;
@@ -12,6 +12,7 @@ use lettre::{Address, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executo
 
 use crate::credentials::Secret;
 use crate::devices::validate_host;
+use crate::i18n::Msg;
 
 pub const MAX_RECIPIENTS: usize = 20;
 const MAX_FIELD_CHARS: usize = 256;
@@ -48,11 +49,11 @@ impl Security {
         })
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label_id(self) -> &'static str {
         match self {
-            Self::None => "Keine Verschlüsselung",
-            Self::StartTls => "STARTTLS",
-            Self::Tls => "TLS (SMTPS)",
+            Self::None => "mail-security-none",
+            Self::StartTls => "mail-security-starttls",
+            Self::Tls => "mail-security-tls",
         }
     }
 
@@ -96,7 +97,7 @@ pub struct CheckedMail {
 }
 
 /// Splits and validates a recipient list; returns the normalized addresses.
-pub fn parse_recipients(text: &str) -> Result<Vec<String>, String> {
+pub fn parse_recipients(text: &str) -> Result<Vec<String>, Msg> {
     let mut out: Vec<String> = Vec::new();
     for part in text.split(['\n', '\r', ',', ';']) {
         let part = part.trim();
@@ -109,27 +110,22 @@ pub fn parse_recipients(text: &str) -> Result<Vec<String>, String> {
         }
     }
     if out.len() > MAX_RECIPIENTS {
-        return Err(format!(
-            "Es sind höchstens {MAX_RECIPIENTS} Empfänger erlaubt."
-        ));
+        return Err(Msg::new("mail-too-many-recipients").with("count", MAX_RECIPIENTS));
     }
     Ok(out)
 }
 
 /// A plain address like `name@example.org` (no display name, no angle brackets).
-pub fn parse_address(text: &str) -> Result<String, String> {
+pub fn parse_address(text: &str) -> Result<String, Msg> {
     let text = text.trim();
     if text.chars().count() > MAX_FIELD_CHARS
         || text.chars().any(|c| c.is_control() || c.is_whitespace())
     {
-        return Err(format!(
-            "„{}“ ist keine gültige E-Mail-Adresse.",
-            shorten(text)
-        ));
+        return Err(Msg::new("mail-address-invalid").with("address", shorten(text)));
     }
     text.parse::<Address>()
         .map(|a| a.to_string())
-        .map_err(|_| format!("„{}“ ist keine gültige E-Mail-Adresse.", shorten(text)))
+        .map_err(|_| Msg::new("mail-address-invalid").with("address", shorten(text)))
 }
 
 fn shorten(text: &str) -> String {
@@ -139,25 +135,25 @@ fn shorten(text: &str) -> String {
 impl MailInput {
     /// Checks the input. With notifications switched on, server, sender and at least one
     /// recipient are required; switched off, anything half-finished may be saved.
-    pub fn check(&self) -> Result<CheckedMail, String> {
+    pub fn check(&self) -> Result<CheckedMail, Msg> {
         let host = self.host.trim();
         let host = if host.is_empty() {
             String::new()
         } else {
-            validate_host(host).map_err(|m| m.to_owned())?
+            validate_host(host)?
         };
         if self.port == 0 {
-            return Err("Der Port muss zwischen 1 und 65535 liegen.".to_owned());
+            return Err(Msg::new("mail-port-invalid"));
         }
         let username = self.username.trim();
         if username.chars().count() > MAX_FIELD_CHARS || username.chars().any(char::is_control) {
-            return Err("Der Benutzername ist ungültig.".to_owned());
+            return Err(Msg::new("mail-username-invalid"));
         }
         if let Some(p) = &self.password
             && (p.expose().chars().count() > MAX_FIELD_CHARS
                 || p.expose().chars().any(char::is_control))
         {
-            return Err("Das Passwort ist ungültig (zu lang oder Steuerzeichen).".to_owned());
+            return Err(Msg::new("mail-password-invalid"));
         }
         let from_address = match self.from_address.trim() {
             "" => String::new(),
@@ -166,13 +162,13 @@ impl MailInput {
         let recipients = parse_recipients(&self.recipients)?;
         if self.enabled {
             if host.is_empty() {
-                return Err("Bitte den SMTP-Server angeben.".to_owned());
+                return Err(Msg::new("mail-host-missing"));
             }
             if from_address.is_empty() {
-                return Err("Bitte eine Absenderadresse angeben.".to_owned());
+                return Err(Msg::new("mail-from-missing"));
             }
             if recipients.is_empty() {
-                return Err("Bitte mindestens einen Empfänger angeben.".to_owned());
+                return Err(Msg::new("mail-recipients-missing"));
             }
         }
         Ok(CheckedMail {
@@ -218,50 +214,51 @@ impl std::fmt::Debug for MailConfig {
 #[derive(Debug, thiserror::Error)]
 pub enum MailError {
     #[error("{0}")]
-    Config(String),
+    Config(Msg),
+    /// Delivery failed; the text comes from the SMTP client (or is a timeout).
     #[error("{0}")]
-    Send(String),
+    Send(Msg),
 }
 
 impl MailError {
-    /// Explanation for the UI (German); contains no secrets.
-    pub fn user_message(&self) -> String {
+    /// Explanation for the UI; contains no secrets.
+    pub fn user_message(&self) -> Msg {
         match self {
             Self::Config(m) => m.clone(),
-            Self::Send(m) => format!("Versand fehlgeschlagen: {m}"),
+            Self::Send(m) => Msg::new("mail-send-failed").with("detail", m.clone()),
         }
     }
 }
 
 fn build_message(config: &MailConfig, subject: &str, body: &str) -> Result<Message, MailError> {
-    let bad = |what: &str| MailError::Config(format!("{what} ist nicht gültig."));
+    let bad = |id: &'static str| MailError::Config(Msg::new(id));
     let from: Mailbox = config
         .from_address
         .parse::<Address>()
         .map(|a| Mailbox::new(Some("opennetmon".to_owned()), a))
-        .map_err(|_| bad("Die Absenderadresse"))?;
+        .map_err(|_| bad("mail-from-invalid"))?;
     let mut builder: MessageBuilder = Message::builder().from(from).subject(subject);
     if config.recipients.is_empty() {
-        return Err(MailError::Config(
-            "Es ist kein Empfänger eingetragen.".to_owned(),
-        ));
+        return Err(MailError::Config(Msg::new("mail-no-recipients")));
     }
     for recipient in &config.recipients {
         let address = recipient
             .parse::<Address>()
-            .map_err(|_| bad("Eine Empfängeradresse"))?;
+            .map_err(|_| bad("mail-recipient-invalid"))?;
         builder = builder.to(Mailbox::new(None, address));
     }
     builder
         .header(ContentType::TEXT_PLAIN)
         .body(body.to_owned())
-        .map_err(|e| MailError::Config(format!("Die Nachricht ist ungültig: {e}")))
+        .map_err(|e| {
+            MailError::Config(Msg::new("mail-message-invalid").with("detail", e.to_string()))
+        })
 }
 
 fn transport(config: &MailConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>, MailError> {
     let host = config.host.as_str();
     let unusable = |e: lettre::transport::smtp::Error| {
-        MailError::Config(format!("Der SMTP-Server ist nicht verwendbar: {e}"))
+        MailError::Config(Msg::new("mail-server-unusable").with("detail", e.to_string()))
     };
     let builder = match config.security {
         Security::None => AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host),
@@ -289,18 +286,14 @@ fn describe(error: impl std::fmt::Display) -> String {
 /// Sends one plain-text mail to all recipients.
 pub async fn send(config: &MailConfig, subject: &str, body: &str) -> Result<(), MailError> {
     if config.host.is_empty() {
-        return Err(MailError::Config(
-            "Es ist kein SMTP-Server eingetragen.".to_owned(),
-        ));
+        return Err(MailError::Config(Msg::new("mail-no-server")));
     }
     let message = build_message(config, subject, body)?;
     let transport = transport(config)?;
     match tokio::time::timeout(SEND_DEADLINE, transport.send(message)).await {
         Ok(Ok(_)) => Ok(()),
-        Ok(Err(e)) => Err(MailError::Send(describe(e))),
-        Err(_) => Err(MailError::Send(
-            "Zeitüberschreitung beim Senden.".to_owned(),
-        )),
+        Ok(Err(e)) => Err(MailError::Send(Msg::Text(describe(e)))),
+        Err(_) => Err(MailError::Send(Msg::new("mail-timeout"))),
     }
 }
 
@@ -376,7 +369,7 @@ mod tests {
                 _ => i.recipients.clear(),
             }
             let err = i.check().unwrap_err();
-            assert!(err.contains(message), "{field}: {err}");
+            assert!(err.to_string().contains(message), "{field}: {err}");
             i.enabled = false;
             assert!(
                 i.check().is_ok(),
@@ -392,12 +385,13 @@ mod tests {
         assert!(i.check().is_err());
         let mut i = input();
         i.port = 0;
-        assert!(i.check().unwrap_err().contains("Port"));
+        assert!(i.check().unwrap_err().to_string().contains("Port"));
         let mut i = input();
         i.from_address = "nope".to_owned();
         assert!(
             i.check()
                 .unwrap_err()
+                .to_string()
                 .contains("keine gültige E-Mail-Adresse")
         );
         let mut i = input();
@@ -481,7 +475,7 @@ mod tests {
         c.password = Some(Secret::new("wrong-pw"));
         let err = send(&c, "s", "b").await.unwrap_err();
         assert!(matches!(err, MailError::Send(_)), "{err:?}");
-        assert!(!err.user_message().contains("wrong-pw"));
+        assert!(!err.user_message().to_string().contains("wrong-pw"));
         assert_eq!(smtp.received().len(), 1);
     }
 
@@ -494,7 +488,9 @@ mod tests {
         .await;
         let err = send(&config(smtp.port), "s", "b").await.unwrap_err();
         assert!(
-            err.user_message().starts_with("Versand fehlgeschlagen"),
+            err.user_message()
+                .to_string()
+                .starts_with("Versand fehlgeschlagen"),
             "{err:?}"
         );
 

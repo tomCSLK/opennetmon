@@ -1,6 +1,8 @@
-//! Device and group domain types and input validation. Messages are user-facing (German).
+//! Device and group domain types and input validation.
 
 use std::net::IpAddr;
+
+use crate::i18n::{Lang, Msg};
 
 pub const MAX_NAME_LEN: usize = 64;
 pub const MAX_HOST_LEN: usize = 253;
@@ -15,31 +17,29 @@ pub const DEFAULT_TIMEOUT_SECS: u32 = 5;
 pub const DEFAULT_RETRIES: u32 = 1;
 
 /// Validates a group or device name (1 to 64 characters, no control characters).
-pub fn validate_name(name: &str) -> Result<&str, &'static str> {
+pub fn validate_name(name: &str) -> Result<&str, Msg> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > MAX_NAME_LEN || name.chars().any(char::is_control)
     {
-        return Err(
-            "Der Name muss 1 bis 64 Zeichen lang sein und darf keine Steuerzeichen enthalten.",
-        );
+        return Err(Msg::new("name-invalid"));
     }
     Ok(name)
 }
 
 /// Validates an IP address or a hostname (RFC 1123) and returns the normalized form.
 /// Hostnames are lowercased; unspecified, multicast and broadcast addresses are rejected.
-pub fn validate_host(host: &str) -> Result<String, &'static str> {
-    const INVALID: &str = "Bitte eine gültige IP-Adresse oder einen Hostnamen angeben.";
+pub fn validate_host(host: &str) -> Result<String, Msg> {
+    let invalid = || Msg::new("host-invalid");
     let host = host.trim();
     if host.is_empty() || host.len() > MAX_HOST_LEN {
-        return Err(INVALID);
+        return Err(invalid());
     }
     if let Ok(ip) = host.parse::<IpAddr>() {
         let bad = ip.is_unspecified()
             || ip.is_multicast()
             || matches!(ip, IpAddr::V4(v4) if v4.is_broadcast());
         return if bad {
-            Err(INVALID)
+            Err(invalid())
         } else {
             Ok(ip.to_string())
         };
@@ -60,7 +60,7 @@ pub fn validate_host(host: &str) -> Result<String, &'static str> {
     if labels.iter().all(|l| label_ok(l)) && !last_numeric {
         Ok(host)
     } else {
-        Err(INVALID)
+        Err(invalid())
     }
 }
 
@@ -85,22 +85,22 @@ impl Default for Polling {
 }
 
 impl Polling {
-    pub fn validate(&self) -> Result<(), &'static str> {
+    pub fn validate(&self) -> Result<(), Msg> {
         if self.port == 0 {
-            return Err("Der Port muss zwischen 1 und 65535 liegen.");
+            return Err(Msg::new("polling-port-invalid"));
         }
         if !(MIN_INTERVAL_SECS..=MAX_INTERVAL_SECS).contains(&self.interval_secs) {
-            return Err("Das Intervall muss zwischen 10 und 3600 Sekunden liegen.");
+            return Err(Msg::new("polling-interval-invalid"));
         }
         if !(1..=MAX_TIMEOUT_SECS).contains(&self.timeout_secs) {
-            return Err("Der Timeout muss zwischen 1 und 60 Sekunden liegen.");
+            return Err(Msg::new("polling-timeout-invalid"));
         }
         if self.retries > MAX_RETRIES {
-            return Err("Die Anzahl der Wiederholungen darf höchstens 5 betragen.");
+            return Err(Msg::new("polling-retries-invalid"));
         }
         // All attempts of one poll must fit into the interval, otherwise polls overlap.
         if self.timeout_secs.saturating_mul(self.retries + 1) > self.interval_secs {
-            return Err("Timeout × (Wiederholungen + 1) darf das Intervall nicht überschreiten.");
+            return Err(Msg::new("polling-attempts-too-long"));
         }
         Ok(())
     }
@@ -117,8 +117,8 @@ pub struct DeviceInput {
 }
 
 impl DeviceInput {
-    /// Returns the input with trimmed name and normalized host, or a German message.
-    pub fn validated(mut self) -> Result<Self, &'static str> {
+    /// Returns the input with trimmed name and normalized host, or a message.
+    pub fn validated(mut self) -> Result<Self, Msg> {
         self.name = validate_name(&self.name)?.to_owned();
         self.host = validate_host(&self.host)?;
         self.polling.validate()?;
@@ -144,8 +144,10 @@ impl Device {
     }
 
     /// Name of the SNMP profile for the UI ("kein SNMP" for ping-only devices).
-    pub fn profile_label(&self) -> &str {
-        self.profile_name.as_deref().unwrap_or("kein SNMP")
+    pub fn profile_label(&self, t: Lang) -> String {
+        self.profile_name
+            .clone()
+            .unwrap_or_else(|| t.get("device-no-snmp"))
     }
 }
 

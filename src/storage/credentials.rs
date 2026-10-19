@@ -9,6 +9,7 @@ use crate::credentials::{
 };
 use crate::crypto::SecretBox;
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 
 const CTX_COMMUNITY: &str = "snmp.community";
 const CTX_AUTH_PASSWORD: &str = "snmp.auth_password";
@@ -78,12 +79,12 @@ fn secret_or_keep(
     submitted: Option<&Secret>,
     stored: Option<&Vec<u8>>,
     context: &str,
-    missing_message: &str,
+    missing_message: &'static str,
 ) -> Result<Vec<u8>> {
     match (submitted, stored) {
         (Some(secret), _) => Ok(secrets.encrypt(secret.expose(), context)?),
         (None, Some(blob)) => Ok(blob.clone()),
-        (None, None) => Err(Error::invalid(missing_message.to_owned())),
+        (None, None) => Err(Error::invalid(Msg::new(missing_message))),
     }
 }
 
@@ -99,7 +100,7 @@ fn resolve(secrets: &SecretBox, input: &ProfileInput, existing: Option<&Row>) ->
                     community.as_ref(),
                     stored,
                     CTX_COMMUNITY,
-                    "Bitte eine Community angeben.",
+                    "profile-community-missing",
                 )?),
                 username: None,
                 level: None,
@@ -123,22 +124,19 @@ fn resolve(secrets: &SecretBox, input: &ProfileInput, existing: Option<&Row>) ->
                 auth_password.as_ref(),
                 old.and_then(|r| r.auth_password_enc.as_ref()),
                 CTX_AUTH_PASSWORD,
-                "Bitte ein Authentifizierungs-Passwort angeben.",
+                "profile-auth-password-missing",
             )?;
             let (priv_protocol, priv_password) = match level {
                 SecurityLevel::AuthNoPriv => (None, None),
                 SecurityLevel::AuthPriv => {
-                    let protocol = priv_protocol.ok_or_else(|| {
-                        Error::invalid(
-                            "Für authPriv ist ein Verschlüsselungsverfahren erforderlich.",
-                        )
-                    })?;
+                    let protocol = priv_protocol
+                        .ok_or_else(|| Error::invalid(Msg::new("profile-priv-protocol-missing")))?;
                     let password = secret_or_keep(
                         secrets,
                         priv_password.as_ref(),
                         old.and_then(|r| r.priv_password_enc.as_ref()),
                         CTX_PRIV_PASSWORD,
-                        "Bitte ein Verschlüsselungs-Passwort angeben.",
+                        "profile-priv-password-missing",
                     )?;
                     (Some(protocol), Some(password))
                 }
@@ -163,7 +161,7 @@ pub async fn save_profile(
     id: Option<i64>,
     input: &ProfileInput,
 ) -> Result<i64> {
-    input.validate().map_err(|m| Error::invalid(m.to_owned()))?;
+    input.validate().map_err(Error::invalid)?;
 
     let existing = match id {
         Some(id) => Some(fetch_row(pool, id).await?.ok_or(Error::NotFound)?),
@@ -209,9 +207,7 @@ pub async fn save_profile(
             if e.as_database_error()
                 .is_some_and(|d| d.is_unique_violation()) =>
         {
-            Err(Error::conflict(
-                "Ein Profil mit diesem Namen existiert bereits.",
-            ))
+            Err(Error::conflict(Msg::new("profile-name-taken")))
         }
         Err(e) => Err(e.into()),
     }
@@ -248,9 +244,7 @@ pub async fn delete_profile(pool: &SqlitePool, id: i64) -> Result<bool> {
         .fetch_one(pool)
         .await?;
     if in_use > 0 {
-        return Err(Error::conflict(
-            "Das Profil wird noch von Geräten verwendet und kann nicht gelöscht werden.",
-        ));
+        return Err(Error::conflict(Msg::new("profile-in-use")));
     }
     let done = sqlx::query("DELETE FROM credential_profiles WHERE id = ?")
         .bind(id)
@@ -294,6 +288,7 @@ pub async fn load_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::Lang;
     use crate::storage;
 
     type SecretColumns = (Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>);
@@ -405,7 +400,7 @@ mod tests {
         .unwrap();
         let view = get_profile(&pool, id).await.unwrap().unwrap();
         assert_eq!(
-            view.summary(),
+            view.summary(Lang::De),
             "SNMPv3 · authNoPriv · MD5 · Benutzer MCS6_SNMP"
         );
         match load_credentials(&pool, &sb, id).await.unwrap().unwrap() {

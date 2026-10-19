@@ -14,6 +14,20 @@ Die Oberfläche ist mehrsprachig; **Deutsch ist die Ausgangssprache**, dazu komm
 - Fehlerseiten ohne Formular (z. B. „Nicht gefunden“) nehmen die Sprache der Anfrage (`i18n::current()`, gesetzt in `web::request_language` und
   nach der Anmeldung im `CurrentUser`-Extractor).
 - Zahlen in deutschen Texten bekommen ein Dezimalkomma (Formatter der deutschen Fluent-Bundles).
+- Messwerte, Einheiten und Schwellwertfelder formatiert `sensors::format` je Sprache (Dezimalkomma bzw. -punkt, „Std.“/„h“).
+- Gespeicherte Meldungen (Sensorzustand, Ereignislog, Sendelog der E-Mails) stehen als kodiertes `Msg` in der Datenbank (`Msg::encode`/`decode`)
+  und erscheinen so in der Sprache des Betrachters. Ältere Einträge aus der Zeit vor der Umstellung bleiben deutscher Klartext.
+- Kataloge je Bereich: `common` (Rahmen, Status, gemeinsame Wörter), `users`, `devices` (Gruppen, Geräte, Übersicht), `sensors` (Sensoren,
+  Discovery, Detailseite), `values` (Werte suchen, bekannte Tabellen), `mibs`, `templates`, `credentials`, `mail`, `order`, `js`.
+
+## Texte in JavaScript
+
+- Die Skripte in `static/` bekommen ihre Texte aus einem JSON-Datenblock im Seitenrahmen
+  (`<script type="application/json" id="i18n">`, erzeugt von `Lang::js_texts()`); die CSP lässt ihn zu, weil er nicht ausgeführt wird.
+- Er enthält alle Nachrichten aus `js.ftl` (IDs `js-…`, im Skript ohne Vorsilbe): `T('samples-sum')` bzw. `window.opennetmonText(…)` aus
+  `static/theme.js`. Platzhalter heißen `%1`, `%2` (`T('samples-from-many', n)`); Fluent-Variablen sind in `js.ftl` nicht erlaubt (Test).
+- Datums- und Zahlenformat kommen ebenfalls aus dem Katalog: `js-decimal` (`,`/`.`), `js-date` (`DD.MM.YYYY`/`MM/DD/YYYY`), `js-day`.
+- Die Tests suchen `T('…')` in `static/*.js`: jede verwendete ID muss existieren, jede `js-`-Nachricht verwendet werden.
 
 ## Regeln
 

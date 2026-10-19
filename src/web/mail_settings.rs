@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::credentials::Secret;
 use crate::error::Result;
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::mail::{self, MailInput, Security};
 use crate::storage::mail::{self as store, Kind, MailView};
 use crate::web::auth::{CsrfForm, CurrentUser};
@@ -51,13 +51,13 @@ impl From<MailView> for FormValues {
 
 struct SecurityOption {
     value: &'static str,
-    label: &'static str,
+    label: String,
     selected: bool,
 }
 
 struct LogRow {
     at: String,
-    kind: &'static str,
+    kind: String,
     subject: String,
     recipients: String,
     ok: bool,
@@ -127,14 +127,14 @@ impl MailForm {
         }
     }
 
-    fn to_input(&self) -> std::result::Result<MailInput, String> {
+    fn to_input(&self) -> std::result::Result<MailInput, Msg> {
         let port = self
             .port
             .trim()
             .parse::<u16>()
-            .map_err(|_| "Der Port muss eine Zahl zwischen 1 und 65535 sein.".to_owned())?;
-        let security = Security::parse(&self.security)
-            .ok_or_else(|| "Bitte die Verschlüsselung wählen.".to_owned())?;
+            .map_err(|_| Msg::new("mail-port-invalid"))?;
+        let security =
+            Security::parse(&self.security).ok_or_else(|| Msg::new("mail-security-missing"))?;
         Ok(MailInput {
             enabled: self.enabled.is_some(),
             host: self.host.clone(),
@@ -166,18 +166,18 @@ async fn render(
         .into_iter()
         .map(|n| LogRow {
             at: time_html(n.ts_ms),
-            kind: n.kind.label(),
+            kind: user.lang.get(n.kind.label_id()),
             subject: n.subject,
             recipients: n.recipients,
             ok: n.ok,
-            error: n.error,
+            error: user.lang.msg(&n.error),
         })
         .collect();
     let securities = [Security::StartTls, Security::Tls, Security::None]
         .into_iter()
         .map(|s| SecurityOption {
             value: s.as_str(),
-            label: s.label(),
+            label: user.lang.get(s.label_id()),
             selected: s == form.security,
         })
         .collect();
@@ -244,7 +244,7 @@ pub async fn save(
                 form.values(password_set),
                 Extras {
                     flash: None,
-                    error: Some(message),
+                    error: Some(user.lang.msg(&message)),
                     test: None,
                 },
             )
@@ -263,26 +263,29 @@ pub async fn send_test(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let config = store::load_config(&state.pool, &state.secrets).await?;
-    let subject = "[opennetmon] Test-E-Mail";
-    let body = "Dies ist eine Test-E-Mail von opennetmon.\nWenn sie ankommt, sind Server, Zugangsdaten und Empfänger richtig eingestellt.\n";
-    let outcome = mail::send(&config, subject, body).await;
+    // Mail texts stay German until the mail language can be chosen (PLAN phase 9, step 3).
+    let mail_lang = Lang::De;
+    let subject = format!("[opennetmon] {}", mail_lang.get("mail-test-subject"));
+    let body = format!("{}\n", mail_lang.get("mail-test-body"));
+    let outcome = mail::send(&config, &subject, &body).await;
     let error = outcome.as_ref().err().map(mail::MailError::user_message);
     store::record_notification(
         &state.pool,
         now_ms(),
         Kind::Test,
-        subject,
+        &subject,
         &config.recipients,
-        error.as_deref(),
+        error.as_ref(),
     )
     .await?;
     tracing::info!(user = %user.username, ok = error.is_none(), "test mail");
     let test = match error {
-        None => TestOutcome::Sent(format!(
-            "Test-E-Mail an {} gesendet.",
-            config.recipients.join(", ")
+        None => TestOutcome::Sent(user.lang.get1(
+            "mail-test-sent",
+            "recipients",
+            config.recipients.join(", "),
         )),
-        Some(message) => TestOutcome::Failed(message),
+        Some(message) => TestOutcome::Failed(user.lang.msg(&message)),
     };
     let view = store::get_view(&state.pool).await?;
     Ok(Html(
@@ -549,5 +552,32 @@ mod tests {
             page.body
         );
         assert!(page.body.contains("Fehler</span>"));
+    }
+
+    #[tokio::test]
+    async fn the_page_and_its_errors_are_shown_in_english() {
+        let h = harness(true).await;
+        crate::storage::users::set_language(&h.state.pool, 1, Some(Lang::En))
+            .await
+            .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(&h.app, get("/settings/mail", Some(&admin))).await;
+        for text in [
+            "<h1>E-mail notification</h1>",
+            "No encryption",
+            "No e-mails sent yet.",
+        ] {
+            assert!(page.body.contains(text), "{text} missing");
+        }
+        let form = format!(
+            "csrf_token={csrf}&enabled=on&host=mail.example.org&port=587&security=starttls&from_address=nope&recipients=a%40example.org"
+        );
+        let refused = send(&h.app, post("/settings/mail", Some(&admin), &form)).await;
+        assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(
+            refused
+                .body
+                .contains("“nope” is not a valid e-mail address.")
+        );
     }
 }

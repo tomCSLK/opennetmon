@@ -1,6 +1,7 @@
 //! How sensors are described and their values formatted, using the MIB index where it helps
 //! (object names instead of numeric OIDs, enumeration labels, units).
 
+use crate::i18n::Lang;
 use crate::mib::{MibIndex, ObjectKind};
 use crate::sensors::Unit;
 use crate::sensors::format::format_value;
@@ -94,7 +95,7 @@ impl ValueFormat {
         }
     }
 
-    pub fn format(&self, unit: Unit, value: f64) -> String {
+    pub fn format(&self, t: Lang, unit: Unit, value: f64) -> String {
         if value.fract() == 0.0
             && let Some((_, label)) = self.labels.iter().find(|(n, _)| *n as f64 == value)
         {
@@ -102,47 +103,28 @@ impl ValueFormat {
         }
         match (&self.unit_label, unit) {
             (Some(label), Unit::PerSecond) => {
-                format!("{} {label}/s", format_value(Unit::Count, value))
+                format!("{} {label}/s", format_value(t, Unit::Count, value))
             }
-            (Some(label), _) => format!("{} {label}", format_value(unit, value)),
-            (None, _) => format_value(unit, value),
+            (Some(label), _) => format!("{} {label}", format_value(t, unit, value)),
+            (None, _) => format_value(t, unit, value),
         }
     }
 }
 
 /// Description of a sensor for lists: custom OIDs by their MIB name when known.
-pub fn describe(spec: &SensorSpec, index: &MibIndex) -> String {
+pub fn describe(t: Lang, spec: &SensorSpec, index: &MibIndex) -> String {
     match spec {
-        SensorSpec::Oid {
-            oid,
-            mode,
-            scale,
-            unit,
-        } => {
+        SensorSpec::Oid { oid, .. } => {
             let Some((object, _)) = index.describe(oid) else {
-                return spec.describe();
+                return spec.describe(t);
             };
             if !matches!(object.kind, ObjectKind::Scalar | ObjectKind::Column) {
-                return spec.describe();
+                return spec.describe(t);
             }
             let name = index.name_of(oid).unwrap_or_default();
-            let mut text = format!(
-                "{name} ({}) · {}",
-                object.module,
-                match mode {
-                    OidMode::Gauge => "Wert",
-                    OidMode::Counter => "Zähler, Rate/s",
-                }
-            );
-            if *scale != 1.0 {
-                text.push_str(&format!(", Faktor {scale}"));
-            }
-            if let Some(u) = unit {
-                text.push_str(&format!(", Einheit {u}"));
-            }
-            text
+            format!("{name} ({}) · {}", object.module, spec.oid_details(t))
         }
-        _ => spec.describe(),
+        _ => spec.describe(t),
     }
 }
 
@@ -169,24 +151,27 @@ mod tests {
             Some("%"),
         );
         assert_eq!(
-            describe(&spec, &index),
+            describe(Lang::De, &spec, &index),
             "hrProcessorLoad.196608 (HOST-RESOURCES-MIB) · Wert, Einheit %"
         );
         let unknown = oid_spec(&[1, 3, 6, 1, 4, 1, 99999, 1, 0], OidMode::Gauge, None);
-        assert!(describe(&unknown, &index).starts_with("OID 1.3.6.1.4.1.99999.1.0"));
+        assert!(describe(Lang::De, &unknown, &index).starts_with("OID 1.3.6.1.4.1.99999.1.0"));
     }
 
     #[test]
     fn values_get_enumeration_labels_and_units() {
         let index = bundled_index();
         let status = ValueFormat::for_sensor(&SensorSpec::InterfaceStatus { if_index: 1 }, &index);
-        assert_eq!(status.format(Unit::State, 1.0), "up (1)");
-        assert_eq!(status.format(Unit::State, 7.0), "lowerLayerDown (7)");
-        assert_eq!(status.format(Unit::State, 42.0), "42");
+        assert_eq!(status.format(Lang::De, Unit::State, 1.0), "up (1)");
+        assert_eq!(
+            status.format(Lang::De, Unit::State, 7.0),
+            "lowerLayerDown (7)"
+        );
+        assert_eq!(status.format(Lang::De, Unit::State, 42.0), "42");
 
         let oper = oid_spec(&[1, 3, 6, 1, 2, 1, 2, 2, 1, 8, 3], OidMode::Gauge, None);
         assert_eq!(
-            ValueFormat::for_sensor(&oper, &index).format(Unit::Count, 2.0),
+            ValueFormat::for_sensor(&oper, &index).format(Lang::De, Unit::Count, 2.0),
             "down (2)"
         );
         let rate = oid_spec(&[1, 3, 6, 1, 2, 1, 2, 2, 1, 8, 3], OidMode::Counter, None);
@@ -199,8 +184,11 @@ mod tests {
             unit_label: Some("°C".to_owned()),
             labels: Vec::new(),
         };
-        assert_eq!(temp.format(Unit::Count, 41.5), "41,5 °C");
-        assert_eq!(temp.format(Unit::PerSecond, 3.0), "3 °C/s");
-        assert_eq!(ValueFormat::default().format(Unit::Count, 2.0), "2");
+        assert_eq!(temp.format(Lang::De, Unit::Count, 41.5), "41,5 °C");
+        assert_eq!(temp.format(Lang::De, Unit::PerSecond, 3.0), "3 °C/s");
+        assert_eq!(
+            ValueFormat::default().format(Lang::De, Unit::Count, 2.0),
+            "2"
+        );
     }
 }

@@ -1,0 +1,27 @@
+# Texts of the browser scripts (static/*.js). No Fluent variables: the script fills in %1, %2.
+js-decimal = .
+js-date = MM/DD/YYYY
+js-day = MM/DD
+js-unit-days = days
+js-unit-hours = h
+js-unit-minutes = min
+js-theme-system = Theme: system
+js-theme-light = Theme: light
+js-theme-dark = Theme: dark
+js-theme-toggle = %1 (switch)
+js-oid-index = append the index (%1), e.g. %2.1
+js-oid-not-pollable = not a pollable number
+js-samples-volume = %1 (volume)
+js-samples-speed = %1 (speed)
+js-samples-newest = newest %1 of %2 values
+js-samples-one = 1 value
+js-samples-many = %1 values
+js-samples-averages = averages per %1
+js-samples-period-from = Period from
+js-samples-date-time = Date time
+js-samples-sum = Sum
+js-samples-average = Average
+js-samples-minimum = Minimum
+js-samples-maximum = Maximum
+js-samples-from-one = %1 (of 1 value)
+js-samples-from-many = %1 (of %2 values)

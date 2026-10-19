@@ -5,6 +5,8 @@
 
 use std::fmt;
 
+use crate::i18n::{Lang, Msg};
+
 /// A secret string that never shows up in logs or debug output.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Secret(String);
@@ -57,9 +59,19 @@ string_enum!(SnmpVersion {
 });
 
 string_enum!(SecurityLevel {
-    AuthNoPriv => ("auth_no_priv", "authNoPriv (nur Authentifizierung)"),
-    AuthPriv => ("auth_priv", "authPriv (Authentifizierung und Verschlüsselung)"),
+    AuthNoPriv => ("auth_no_priv", "authNoPriv"),
+    AuthPriv => ("auth_priv", "authPriv"),
 });
+
+impl SecurityLevel {
+    /// Catalog id of the explained name, e.g. "authNoPriv (nur Authentifizierung)".
+    pub fn description_id(self) -> &'static str {
+        match self {
+            Self::AuthNoPriv => "profile-level-auth-no-priv",
+            Self::AuthPriv => "profile-level-auth-priv",
+        }
+    }
+}
 
 string_enum!(AuthProtocol {
     Md5 => ("md5", "MD5"),
@@ -134,16 +146,10 @@ pub struct ProfileView {
 
 impl ProfileView {
     /// One-line description for lists, e.g. `SNMPv3 · authNoPriv · MD5 · Benutzer MCS6_SNMP`.
-    pub fn summary(&self) -> String {
+    pub fn summary(&self, t: Lang) -> String {
         let mut parts = vec![self.version.label().to_owned()];
         if let Some(level) = self.level {
-            parts.push(
-                match level {
-                    SecurityLevel::AuthNoPriv => "authNoPriv",
-                    SecurityLevel::AuthPriv => "authPriv",
-                }
-                .to_owned(),
-            );
+            parts.push(level.label().to_owned());
         }
         if let Some(p) = self.auth_protocol {
             parts.push(p.label().to_owned());
@@ -152,7 +158,7 @@ impl ProfileView {
             parts.push(p.label().to_owned());
         }
         if let Some(user) = &self.username {
-            parts.push(format!("Benutzer {user}"));
+            parts.push(t.get1("profile-summary-user", "user", user));
         }
         parts.join(" · ")
     }
@@ -167,20 +173,18 @@ fn char_len(s: &str) -> usize {
 }
 
 impl ProfileInput {
-    /// Checks everything that does not depend on stored data. Returns a German message on failure.
-    pub fn validate(&self) -> Result<(), &'static str> {
+    /// Checks everything that does not depend on stored data.
+    pub fn validate(&self) -> Result<(), Msg> {
         let name = self.name.trim();
         if name.is_empty() || char_len(name) > MAX_NAME_LEN || has_control_chars(name) {
-            return Err(
-                "Der Name muss 1 bis 64 Zeichen lang sein und darf keine Steuerzeichen enthalten.",
-            );
+            return Err(Msg::new("name-invalid"));
         }
         match &self.kind {
             ProfileKind::V2c { community } => {
                 if let Some(c) = community {
                     let c = c.expose();
                     if c.is_empty() || char_len(c) > MAX_COMMUNITY_LEN || has_control_chars(c) {
-                        return Err("Die Community muss 1 bis 128 Zeichen lang sein.");
+                        return Err(Msg::new("profile-community-invalid"));
                     }
                 }
             }
@@ -197,18 +201,16 @@ impl ProfileInput {
                     || has_control_chars(username)
                     || username.chars().any(char::is_whitespace)
                 {
-                    return Err(
-                        "Der SNMPv3-Benutzer muss 1 bis 32 Zeichen lang sein und darf keine Leerzeichen enthalten.",
-                    );
+                    return Err(Msg::new("profile-username-invalid"));
                 }
                 for secret in [auth_password, priv_password].into_iter().flatten() {
                     let len = char_len(secret.expose());
                     if !(MIN_V3_PASSWORD_LEN..=MAX_V3_PASSWORD_LEN).contains(&len) {
-                        return Err("SNMPv3-Passwörter müssen 8 bis 128 Zeichen lang sein.");
+                        return Err(Msg::new("profile-password-length"));
                     }
                 }
                 if *level == SecurityLevel::AuthPriv && priv_protocol.is_none() {
-                    return Err("Für authPriv ist ein Verschlüsselungsverfahren erforderlich.");
+                    return Err(Msg::new("profile-priv-protocol-missing"));
                 }
             }
         }
@@ -396,7 +398,7 @@ mod tests {
             priv_protocol: None,
         };
         assert_eq!(
-            view.summary(),
+            view.summary(Lang::De),
             "SNMPv3 · authNoPriv · MD5 · Benutzer MCS6_SNMP"
         );
     }

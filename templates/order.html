@@ -1,21 +1,21 @@
 {% extends "app.html" %}
-{% block title %}Reihenfolge – opennetmon{% endblock %}
+{% block title %}{{ t.get("order") }} – opennetmon{% endblock %}
 {% block head %}
   <script src="/static/order.js" defer></script>
 {% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb">{% for c in crumbs %}<a href="{{ c.0 }}">{{ c.1 }}</a><span>›</span>{% endfor %}<span>Reihenfolge</span></div>
+    <div class="breadcrumb">{% for c in crumbs %}<a href="{{ c.0 }}">{{ c.1 }}</a><span>›</span>{% endfor %}<span>{{ t.get("order") }}</span></div>
     <h1>{{ heading }}</h1>
-    <p class="subtitle">Zeilen am Griff ziehen, mit ↑/↓ verschieben oder eine Position eintragen, dann speichern.</p>
+    <p class="subtitle">{{ t.get("order-subtitle") }}</p>
   </div>
 </div>
 
 <form method="post" action="{{ action }}" class="stack">
   <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
   {% if lists.is_empty() %}
-  <div class="card"><div class="empty"><strong>Hier gibt es nichts zu ordnen.</strong></div></div>
+  <div class="card"><div class="empty"><strong>{{ t.get("order-nothing") }}</strong></div></div>
   {% endif %}
   {% for l in lists %}
   <section class="card flush">
@@ -23,14 +23,14 @@
     <ol class="order-list" aria-label="{{ l.title }}">
       {% for item in l.items %}
       <li>
-        <span class="handle" aria-hidden="true" title="Ziehen zum Verschieben">
+        <span class="handle" aria-hidden="true" title="{{ t.get("order-drag") }}">
           <svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
         </span>
         <span class="order-name"><strong>{{ item.name }}</strong>{% if !item.sub.is_empty() %}<span class="sub">{{ item.sub }}</span>{% endif %}</span>
-        <input class="pos" type="number" name="{{ l.prefix }}_{{ item.id }}" value="{{ item.position }}" min="1" max="100000" inputmode="numeric" aria-label="Position von {{ item.name }}">
+        <input class="pos" type="number" name="{{ l.prefix }}_{{ item.id }}" value="{{ item.position }}" min="1" max="100000" inputmode="numeric" aria-label="{{ t.get1("order-position-of", "name", item.name.as_str()) }}">
         <span class="move">
-          <button type="button" class="ghost small" data-move="up" aria-label="{{ item.name }} nach oben">↑</button>
-          <button type="button" class="ghost small" data-move="down" aria-label="{{ item.name }} nach unten">↓</button>
+          <button type="button" class="ghost small" data-move="up" aria-label="{{ t.get1("order-move-up", "name", item.name.as_str()) }}">↑</button>
+          <button type="button" class="ghost small" data-move="down" aria-label="{{ t.get1("order-move-down", "name", item.name.as_str()) }}">↓</button>
         </span>
       </li>
       {% endfor %}
@@ -38,11 +38,10 @@
   </section>
   {% endfor %}
   <div class="form-actions">
-    {% if !lists.is_empty() %}<button type="submit" name="action" value="save">Reihenfolge speichern</button>{% endif %}
-    <button type="submit" name="action" value="reset" class="secondary">Automatisch sortieren</button>
-    <a class="button ghost" href="{{ back }}">Abbrechen</a>
+    {% if !lists.is_empty() %}<button type="submit" name="action" value="save">{{ t.get("order-save") }}</button>{% endif %}
+    <button type="submit" name="action" value="reset" class="secondary">{{ t.get("order-auto") }}</button>
+    <a class="button ghost" href="{{ back }}">{{ t.get("cancel") }}</a>
   </div>
-  <p class="hint">„Automatisch sortieren“ ordnet wieder nach Namen (Zahlen der Größe nach, z. B. Port 2 vor Port 10), Sensoren zuerst nach Typ:
-    Ping, Uptime, Traffic, Interface-Status, dann eigene Werte. Neue Einträge kommen nach den von Hand geordneten.</p>
+  <p class="hint">{{ t.get("order-hint") }}</p>
 </form>
 {% endblock %}

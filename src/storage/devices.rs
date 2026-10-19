@@ -4,6 +4,7 @@ use sqlx::{FromRow, SqlitePool};
 
 use crate::devices::{Device, DeviceInput, Polling};
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 use crate::ordering::{natural_cmp, position_cmp};
 use crate::storage::{OrderScope, write_positions};
 
@@ -77,11 +78,9 @@ pub async fn get_device(pool: &SqlitePool, id: i64) -> Result<Option<Device>> {
 
 fn map_write_error(e: sqlx::Error) -> Error {
     match e.as_database_error() {
-        Some(d) if d.is_unique_violation() => {
-            Error::conflict("Ein Gerät mit diesem Namen existiert bereits.")
-        }
+        Some(d) if d.is_unique_violation() => Error::conflict(Msg::new("device-name-taken")),
         Some(d) if d.is_foreign_key_violation() => {
-            Error::invalid("Die gewählte Gruppe oder das gewählte SNMP-Profil existiert nicht.")
+            Error::invalid(Msg::new("device-group-or-profile-missing"))
         }
         _ => e.into(),
     }
@@ -89,9 +88,7 @@ fn map_write_error(e: sqlx::Error) -> Error {
 
 /// Creates (`id = None`) or updates a device and returns its id.
 pub async fn save_device(pool: &SqlitePool, id: Option<i64>, input: DeviceInput) -> Result<i64> {
-    let input = input
-        .validated()
-        .map_err(|m| Error::invalid(m.to_owned()))?;
+    let input = input.validated().map_err(Error::Invalid)?;
     if id.is_some() && get_device(pool, id.unwrap_or_default()).await?.is_none() {
         return Err(Error::NotFound);
     }

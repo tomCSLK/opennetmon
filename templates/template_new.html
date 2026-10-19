@@ -1,11 +1,11 @@
 {% extends "app.html" %}
-{% block title %}Als Vorlage speichern – opennetmon{% endblock %}
+{% block title %}{{ t.get("template-save-as") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>Als Vorlage speichern</span></div>
-    <h1>Vorlage aus {{ device.name }}</h1>
-    <p class="subtitle">Was übernommen wird, legt opennetmon später auf anderen Geräten an.</p>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("template-save-as") }}</span></div>
+    <h1>{{ t.get1("template-from-device", "device", device.name.as_str()) }}</h1>
+    <p class="subtitle">{{ t.get("template-new-subtitle") }}</p>
   </div>
 </div>
 
@@ -13,7 +13,7 @@
 <p class="error" role="alert">{{ message }}</p>
 {% endif %}
 {% if let Some(message) = notice %}
-<p class="notice" role="status">Das Gerät konnte nicht vollständig gelesen werden: {{ message }} Gerätekennung und „dieselben Ports“ fehlen deshalb.</p>
+<p class="notice" role="status">{{ t.get1("template-read-partly", "message", message.as_str()) }}</p>
 {% endif %}
 
 <form method="post" action="/devices/{{ device.id }}/template" class="stack">
@@ -21,45 +21,45 @@
   <section class="card">
     <div class="form-grid">
       <div>
-        <label for="name">Name der Vorlage</label>
+        <label for="name">{{ t.get("template-name") }}</label>
         <input id="name" name="name" type="text" value="{{ name }}" maxlength="64" required>
       </div>
       <div>
-        <label for="object_id">Gerätekennung (sysObjectID)</label>
-        <input id="object_id" name="object_id" type="text" value="{{ object_id }}" maxlength="300" autocapitalize="off" spellcheck="false" placeholder="leer: nur von Hand wählbar">
+        <label for="object_id">{{ t.get("template-object-id-label") }}</label>
+        <input id="object_id" name="object_id" type="text" value="{{ object_id }}" maxlength="300" autocapitalize="off" spellcheck="false" placeholder="{{ t.get("template-object-id-placeholder") }}">
       </div>
     </div>
-    <p class="hint">Geräte mit derselben Kennung (gleiches Modell) bekommen diese Vorlage automatisch vorgeschlagen.</p>
+    <p class="hint">{{ t.get("template-new-detection-hint") }}</p>
   </section>
 
   {% for group in ports %}
   <section class="card">
     <h2>{{ group.title }}</h2>
-    {% if group.current.is_empty() %}<p class="muted small">Dieses Gerät hat keine {{ group.title }}-Sensoren.</p>
-    {% else %}<p class="muted small">Am Gerät: {% for name in group.current %}{{ name }}{% if !loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+    {% if group.current.is_empty() %}<p class="muted small">{{ t.get1("template-no-sensors-of-kind", "kind", group.title.as_str()) }}</p>
+    {% else %}<p class="muted small">{{ t.get("template-on-device") }} {% for name in group.current %}{{ name }}{% if !loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
     <div class="choices">
-      <label class="inline"><input type="radio" name="{{ group.field }}" value="up"{% if group.choice == "up" %} checked{% endif %}> <span>alle <strong>aktiven Ports</strong> des Zielgeräts</span></label>
-      <label class="inline"><input type="radio" name="{{ group.field }}" value="all"{% if group.choice == "all" %} checked{% endif %}> <span><strong>alle Ports</strong>, auch inaktive</span></label>
+      <label class="inline"><input type="radio" name="{{ group.field }}" value="up"{% if group.choice == "up" %} checked{% endif %}> <span>{{ t.get("template-choice-up") }}</span></label>
+      <label class="inline"><input type="radio" name="{{ group.field }}" value="all"{% if group.choice == "all" %} checked{% endif %}> <span>{{ t.get("template-choice-all") }}</span></label>
       {% if !group.current.is_empty() %}
-      <label class="inline"><input type="radio" name="{{ group.field }}" value="same"{% if group.choice == "same" %} checked{% endif %}{% if !interfaces_known %} disabled{% endif %}> <span><strong>dieselben Ports</strong> (nach Portnamen, mit den Sensornamen von hier)</span></label>
+      <label class="inline"><input type="radio" name="{{ group.field }}" value="same"{% if group.choice == "same" %} checked{% endif %}{% if !interfaces_known %} disabled{% endif %}> <span>{{ t.get("template-choice-same") }}</span></label>
       {% endif %}
-      <label class="inline"><input type="radio" name="{{ group.field }}" value="skip"{% if group.choice == "skip" %} checked{% endif %}> <span>nicht übernehmen</span></label>
+      <label class="inline"><input type="radio" name="{{ group.field }}" value="skip"{% if group.choice == "skip" %} checked{% endif %}> <span>{{ t.get("template-choice-skip") }}</span></label>
     </div>
   </section>
   {% endfor %}
 
   <section class="card flush">
-    <div class="card-head"><h2>Weitere Sensoren</h2><span class="muted small">{{ sensors.len() }}</span></div>
+    <div class="card-head"><h2>{{ t.get("template-other-sensors") }}</h2><span class="muted small">{{ sensors.len() }}</span></div>
     {% if sensors.is_empty() %}
-    <p class="empty small">Keine Ping-, Uptime- oder eigenen Sensoren.</p>
+    <p class="empty small">{{ t.get("template-no-other-sensors") }}</p>
     {% else %}
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Übernehmen</th><th>Sensor</th><th>Zustand</th></tr></thead>
+      <thead><tr><th>{{ t.get("template-take") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("discover-state") }}</th></tr></thead>
       <tbody>
       {% for s in sensors %}
         <tr>
-          <td><input type="checkbox" name="i_{{ s.id }}" value="on" aria-label="{{ s.name }} übernehmen"{% if self.is_included(s.id) %} checked{% endif %}></td>
+          <td><input type="checkbox" name="i_{{ s.id }}" value="on" aria-label="{{ t.get1("template-take-named", "name", s.name.as_str()) }}"{% if self.is_included(s.id) %} checked{% endif %}></td>
           <td><strong>{{ s.name }}</strong><span class="sub">{{ s.description }}</span></td>
           <td>{{ s.state }}</td>
         </tr>
@@ -71,10 +71,9 @@
   </section>
 
   <div class="form-actions">
-    <button type="submit">Vorlage speichern</button>
-    <a class="button secondary" href="/devices/{{ device.id }}/sensors">Abbrechen</a>
+    <button type="submit">{{ t.get("template-save") }}</button>
+    <a class="button secondary" href="/devices/{{ device.id }}/sensors">{{ t.get("cancel") }}</a>
   </div>
-  <p class="hint">Übernommen werden Namen, Zustand (aktiv/inaktiv), Faktor, Einheit und Schwellwerte. Eigene Werte (z. B. PoE je Port) werden mit
-    derselben OID angelegt; liefert ein Zielgerät dafür keinen Wert, wird der Sensor übersprungen.</p>
+  <p class="hint">{{ t.get("template-new-hint") }}</p>
 </form>
 {% endblock %}

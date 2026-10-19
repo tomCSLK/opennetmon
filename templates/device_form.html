@@ -1,16 +1,16 @@
 {% extends "app.html" %}
 {% block page_class %} narrow{% endblock %}
-{% block title %}{{ heading }} – opennetmon{% endblock %}
+{% block title %}{{ t.get(heading) }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><span>{{ heading }}</span></div>
-    <h1>{{ heading }}</h1>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><span>{{ t.get(heading) }}</span></div>
+    <h1>{{ t.get(heading) }}</h1>
   </div>
   {% if let Some(test_action) = test_action %}{% if !no_snmp %}
   <form method="post" action="{{ test_action }}">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <button type="submit" class="secondary">Verbindung testen</button>
+    <button type="submit" class="secondary">{{ t.get("device-test-connection") }}</button>
   </form>
   {% endif %}{% endif %}
 </div>
@@ -18,90 +18,90 @@
 <p class="error" role="alert">{{ message }}</p>
 {% endif %}
 {% if profiles.is_empty() %}
-<p class="notice" role="status">Es gibt noch kein SNMP-Profil – Geräte lassen sich nur per Ping überwachen.&nbsp;<a href="/credentials/new">SNMP-Profil anlegen</a></p>
+<p class="notice" role="status">{{ t.get("device-no-profiles") }}&nbsp;<a href="/credentials/new">{{ t.get("profile-create") }}</a></p>
 {% endif %}
 <section class="card">
   <form method="post" action="{{ action }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="form-grid">
       <div>
-        <label for="name">Name</label>
+        <label for="name">{{ t.get("name") }}</label>
         <input id="name" name="name" type="text" value="{{ form.name }}" required maxlength="64" autofocus>
       </div>
       <div>
-        <label for="host">IP-Adresse oder Hostname</label>
+        <label for="host">{{ t.get("device-host") }}</label>
         <input id="host" name="host" type="text" value="{{ form.host }}" required maxlength="253" autocapitalize="off" spellcheck="false">
       </div>
       <div>
-        <label for="group_id">Gruppe</label>
+        <label for="group_id">{{ t.get("group") }}</label>
         <select id="group_id" name="group_id">
-          <option value="">– keine Gruppe –</option>
+          <option value="">{{ t.get("group-none") }}</option>
           {% for option in groups %}
           <option value="{{ option.id }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
       </div>
       <div>
-        <label for="profile_id">SNMP-Profil</label>
+        <label for="profile_id">{{ t.get("profile") }}</label>
         <select id="profile_id" name="profile_id" required>
           {% for option in profiles %}
           <option value="{{ option.id }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
-          <option value="none"{% if no_snmp %} selected{% endif %}>Kein SNMP – nur Ping</option>
+          <option value="none"{% if no_snmp %} selected{% endif %}>{{ t.get("device-ping-only") }}</option>
         </select>
-        <p class="hint">„Kein SNMP“ für Geräte ohne SNMP (z. B. Router, Drucker, Kameras): Beim Anlegen kommt gleich ein Ping-Sensor dazu.</p>
+        <p class="hint">{{ t.get("device-ping-only-hint") }}</p>
       </div>
     </div>
 
     <fieldset>
-      <legend>Abfrage</legend>
+      <legend>{{ t.get("device-polling") }}</legend>
       <div class="form-grid">
         <div>
-          <label for="port">UDP-Port</label>
+          <label for="port">{{ t.get("device-port") }}</label>
           <input id="port" name="port" type="number" min="1" max="65535" value="{{ form.port }}" required>
         </div>
         <div>
-          <label for="interval_secs">Intervall (Sekunden, 10 bis 3600)</label>
+          <label for="interval_secs">{{ t.get("device-interval") }}</label>
           <input id="interval_secs" name="interval_secs" type="number" min="10" max="3600" value="{{ form.interval_secs }}" required>
         </div>
         <div>
-          <label for="timeout_secs">Timeout je Versuch (Sekunden, 1 bis 60)</label>
+          <label for="timeout_secs">{{ t.get("device-timeout") }}</label>
           <input id="timeout_secs" name="timeout_secs" type="number" min="1" max="60" value="{{ form.timeout_secs }}" required>
         </div>
         <div>
-          <label for="retries">Wiederholungen (0 bis 5)</label>
+          <label for="retries">{{ t.get("device-retries") }}</label>
           <input id="retries" name="retries" type="number" min="0" max="5" value="{{ form.retries }}" required>
         </div>
       </div>
-      <p class="hint">Timeout × (Wiederholungen + 1) darf das Intervall nicht überschreiten.</p>
+      <p class="hint">{{ t.get("polling-attempts-too-long") }}</p>
     </fieldset>
 
     {% if !templates.is_empty() %}
     <fieldset>
-      <legend>Gerätevorlage</legend>
-      <label for="template">Nach dem Anlegen</label>
+      <legend>{{ t.get("device-template") }}</legend>
+      <label for="template">{{ t.get("device-template-after-create") }}</label>
       <select id="template" name="template">
         {% for o in templates %}
         <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>
         {% endfor %}
       </select>
-      <p class="hint">Legt die Sensoren der Vorlage gleich mit an. „Automatisch“ wählt die Vorlage, deren Gerätekennung zum Gerät passt. Gilt nur mit SNMP-Profil.</p>
+      <p class="hint">{{ t.get("device-template-hint") }}</p>
     </fieldset>
     {% endif %}
 
     <div class="form-actions">
-      <button type="submit">Speichern</button>
-      <a class="button secondary" href="/">Abbrechen</a>
+      <button type="submit">{{ t.get("save") }}</button>
+      <a class="button secondary" href="/">{{ t.get("cancel") }}</a>
     </div>
   </form>
 
   {% if let Some(delete_action) = delete_action %}
   <form method="post" action="{{ delete_action }}" class="delete">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <h3>Gerät löschen</h3>
-    <p class="muted small">Entfernt das Gerät mit allen Sensoren und Messwerten.</p>
-    <label class="inline"><input type="checkbox" name="confirm" value="yes" required> Ja, dieses Gerät löschen</label>
-    <button type="submit" class="danger">Gerät löschen</button>
+    <h3>{{ t.get("device-delete") }}</h3>
+    <p class="muted small">{{ t.get("device-delete-hint") }}</p>
+    <label class="inline"><input type="checkbox" name="confirm" value="yes" required> {{ t.get("device-delete-confirm") }}</label>
+    <button type="submit" class="danger">{{ t.get("device-delete") }}</button>
   </form>
   {% endif %}
 </section>

@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   var root = document.documentElement;
-  var LABELS = { system: 'Design: System', light: 'Design: Hell', dark: 'Design: Dunkel' };
+  var T = window.opennetmonText;
+  var LABELS = { system: T('theme-system'), light: T('theme-light'), dark: T('theme-dark') };
 
   function stored() {
     try { return localStorage.getItem('opennetmon-theme') || 'system'; } catch (e) { return 'system'; }
@@ -17,7 +18,7 @@
       buttons[i].setAttribute('data-mode', mode);
       var label = buttons[i].querySelector('.label');
       if (label) { label.textContent = LABELS[mode]; }
-      buttons[i].setAttribute('aria-label', LABELS[mode] + ' (umschalten)');
+      buttons[i].setAttribute('aria-label', T('theme-toggle', LABELS[mode]));
     }
     window.dispatchEvent(new Event('opennetmon:theme'));
   }

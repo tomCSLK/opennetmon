@@ -1,5 +1,5 @@
-//! Device template pages (admin only): list, details, "Als Vorlage speichern" on a device and
-//! "Vorlage anwenden" (also used right after creating a device).
+//! Device template pages (admin only): list, details, "save as template" on a device and
+//! "apply template" (also used right after creating a device).
 
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -14,7 +14,7 @@ use serde::Deserialize;
 use crate::devices::Device;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpError, SnmpTarget};
 use crate::storage::templates::{self as store, TemplateRecord};
@@ -96,7 +96,7 @@ pub async fn list(
         .await?
         .into_iter()
         .map(|t| ListRow {
-            summary: t.body.summary(),
+            summary: t.body.summary(user.lang),
             object_id: t.object_id.unwrap_or_default(),
             devices: usage.get(&t.id).copied().unwrap_or(0),
             id: t.id,
@@ -117,47 +117,59 @@ pub async fn list(
 struct ItemView {
     name: String,
     detail: String,
-    state: &'static str,
+    state: String,
 }
 
-fn state_label(enabled: bool) -> &'static str {
-    if enabled { "aktiv" } else { "inaktiv" }
+fn state_label(t: Lang, enabled: bool) -> String {
+    t.get(if enabled { "active" } else { "inactive" })
 }
 
-fn limits_note(limits: &[tpl::Limits]) -> &'static str {
+fn limits_note(t: Lang, limits: &[tpl::Limits]) -> String {
     let states = limits.iter().any(|l| !l.states.is_empty());
     let thresholds = limits.iter().any(|l| !l.thresholds().is_empty());
-    match (thresholds, states) {
-        (true, true) => " · mit Schwellwerten und Statusbewertung",
-        (true, false) => " · mit Schwellwerten",
-        (false, true) => " · mit Statusbewertung",
-        (false, false) => "",
-    }
+    let id = match (thresholds, states) {
+        (true, true) => "template-with-thresholds-and-states",
+        (true, false) => "template-with-thresholds",
+        (false, true) => "template-with-states",
+        (false, false) => return String::new(),
+    };
+    format!(" · {}", t.get(id))
 }
 
-fn rule_items(what: &str, rule: &PortRule) -> Vec<ItemView> {
+fn rule_items(t: Lang, what: &str, rule: &PortRule) -> Vec<ItemView> {
     match rule.selection {
         PortSelection::Same => rule
             .ports
             .iter()
             .map(|p| ItemView {
                 name: p.name.clone(),
-                detail: format!("{what} an „{}“{}", p.interface, limits_note(&p.limits)),
-                state: state_label(p.enabled),
+                detail: format!(
+                    "{}{}",
+                    t.get2(
+                        "template-rule-port",
+                        "what",
+                        what,
+                        "interface",
+                        p.interface.as_str()
+                    ),
+                    limits_note(t, &p.limits)
+                ),
+                state: state_label(t, p.enabled),
             })
             .collect(),
         PortSelection::Up | PortSelection::All => vec![ItemView {
-            name: format!("{what} {}", tpl::selection_label(rule)),
+            name: format!("{what} {}", tpl::selection_label(t, rule)),
             detail: format!(
-                "je Port ein Sensor „{what} <Portname>“{}",
-                limits_note(&rule.limits)
+                "{}{}",
+                t.get1("template-rule-each-port", "what", what),
+                limits_note(t, &rule.limits)
             ),
-            state: state_label(rule.enabled),
+            state: state_label(t, rule.enabled),
         }],
     }
 }
 
-fn items_of(body: &tpl::Body) -> Vec<ItemView> {
+fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
     let mut items: Vec<ItemView> = body
         .basics
         .iter()
@@ -169,34 +181,39 @@ fn items_of(body: &tpl::Body) -> Vec<ItemView> {
                     BasicKind::Ping => "Ping",
                     BasicKind::Uptime => "Uptime",
                 },
-                limits_note(&b.limits)
+                limits_note(t, &b.limits)
             ),
-            state: state_label(b.enabled),
+            state: state_label(t, b.enabled),
         })
         .collect();
     if let Some(rule) = &body.traffic {
-        items.extend(rule_items("Traffic", rule));
+        items.extend(rule_items(t, "Traffic", rule));
     }
     if let Some(rule) = &body.status {
-        items.extend(rule_items("Status", rule));
+        items.extend(rule_items(t, "Status", rule));
     }
     items.extend(body.oids.iter().map(|o| ItemView {
         name: o.name.clone(),
         detail: format!(
             "OID {} · {}{}{}{}",
             o.oid,
-            if o.counter { "Zähler" } else { "Wert" },
+            t.get(if o.counter {
+                "template-oid-counter"
+            } else {
+                "template-oid-value"
+            }),
             if (o.scale - 1.0).abs() > f64::EPSILON {
-                format!(", Faktor {}", o.scale)
+                format!(", {}", t.get1("oid-detail-factor", "factor", o.scale))
             } else {
                 String::new()
             },
-            o.unit
-                .as_deref()
-                .map_or_else(String::new, |u| format!(", Einheit {u}")),
-            limits_note(&o.limits)
+            o.unit.as_deref().map_or_else(String::new, |u| format!(
+                ", {}",
+                t.get1("oid-detail-unit", "unit", u)
+            )),
+            limits_note(t, &o.limits)
         ),
-        state: state_label(o.enabled),
+        state: state_label(t, o.enabled),
     }));
     items
 }
@@ -231,7 +248,7 @@ fn detail_page(
     let page = DetailTemplate {
         layout: user.layout(),
         t: user.lang,
-        items: items_of(&template.body),
+        items: items_of(user.lang, &template.body),
         template,
         name,
         object_id,
@@ -316,12 +333,12 @@ struct SourceSensor {
     id: i64,
     name: String,
     description: String,
-    state: &'static str,
+    state: String,
 }
 
 struct PortGroup {
     field: &'static str,
-    title: &'static str,
+    title: String,
     /// Interface names of the device's sensors of this kind (empty: none).
     current: Vec<String>,
     choice: &'static str,
@@ -358,11 +375,16 @@ struct DeviceFacts {
     failure: Option<String>,
 }
 
-async fn read_facts(state: &AppState, device: &Device, interfaces: bool) -> Result<DeviceFacts> {
+async fn read_facts(
+    state: &AppState,
+    t: Lang,
+    device: &Device,
+    interfaces: bool,
+) -> Result<DeviceFacts> {
     let failed = |object_id, e: SnmpError| DeviceFacts {
         object_id,
         interfaces: None,
-        failure: Some(e.user_message()),
+        failure: Some(t.msg(&e.user_message())),
     };
     let mut client = match connect(state, device).await? {
         Ok(client) => client,
@@ -409,9 +431,10 @@ async fn render_new(
     let all = sensors::list_sensors(&state.pool, device.id).await?;
     let mibs = state.mib_index();
     let interfaces = facts.interfaces.as_deref();
+    let t = user.lang;
     let ports = [
-        (true, "traffic", "Traffic"),
-        (false, "status", "Interface-Status"),
+        (true, "traffic", t.get("template-traffic")),
+        (false, "status", t.get("template-interface-status")),
     ]
     .into_iter()
     .map(|(traffic, field, title)| {
@@ -427,11 +450,11 @@ async fn render_new(
         current.sort_by(|a, b| crate::ordering::natural_cmp(a, b));
         let default = if current.is_empty() { "skip" } else { "up" };
         let choice = match &choices {
-            Some((_, t, s)) => {
+            Some((_, traffic_choice, status_choice)) => {
                 if traffic {
-                    *t
+                    *traffic_choice
                 } else {
-                    *s
+                    *status_choice
                 }
             }
             None => default,
@@ -455,8 +478,8 @@ async fn render_new(
         .map(|s| SourceSensor {
             id: s.id,
             name: s.name.clone(),
-            description: crate::web::sensor_text::describe(&s.spec, &mibs),
-            state: state_label(s.enabled),
+            description: crate::web::sensor_text::describe(t, &s.spec, &mibs),
+            state: state_label(t, s.enabled),
         })
         .collect();
     let included = match choices {
@@ -486,7 +509,7 @@ pub async fn new_form(
 ) -> Result<Html<String>> {
     user.require_admin()?;
     let device = load_device(&state, id).await?;
-    let facts = read_facts(&state, &device, true).await?;
+    let facts = read_facts(&state, user.lang, &device, true).await?;
     let name = device.name.clone();
     let object_id = facts.object_id.clone().unwrap_or_default();
     Ok(Html(
@@ -512,7 +535,7 @@ pub async fn create(
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
     if fields.len() > MAX_FORM_FIELDS {
-        return Err(Error::invalid("Das Formular ist zu groß."));
+        return Err(Error::invalid(Msg::new("form-too-large")));
     }
     let device = load_device(&state, id).await?;
     let get = |key: &str| fields.get(key).map_or("", String::as_str);
@@ -524,7 +547,7 @@ pub async fn create(
         .collect();
     let needs_interfaces = traffic == "same" || status == "same";
     let facts = if needs_interfaces {
-        read_facts(&state, &device, true).await?
+        read_facts(&state, user.lang, &device, true).await?
     } else {
         DeviceFacts {
             object_id: None,
@@ -553,7 +576,7 @@ pub async fn create(
             )
             .await
         }
-        Err(message) => Err(Error::invalid(message)),
+        Err(message) => Err(Error::Invalid(message)),
     };
     match outcome {
         Ok(template) => {
@@ -612,7 +635,7 @@ pub async fn apply_form(
     user.require_admin()?;
     let device = load_device(&state, id).await?;
     let templates = store::list_templates(&state.pool).await?;
-    let facts = read_facts(&state, &device, false).await?;
+    let facts = read_facts(&state, user.lang, &device, false).await?;
     let detected = facts
         .object_id
         .as_deref()
@@ -623,7 +646,7 @@ pub async fn apply_form(
         .iter()
         .map(|t| TemplateOption {
             value: t.id.to_string(),
-            label: format!("{} ({})", t.name, t.body.summary()),
+            label: format!("{} ({})", t.name, t.body.summary(user.lang)),
             selected: Some(t.id) == preselect,
         })
         .collect();
@@ -652,6 +675,22 @@ struct ResultTemplate {
     present: usize,
     skipped: Vec<String>,
     failure: Option<String>,
+}
+
+impl ResultTemplate {
+    /// "3 Sensoren angelegt, 2 schon vorhanden, 1 übersprungen."
+    fn summary(&self) -> String {
+        let t = self.t;
+        let mut text = t.get1("template-result-created", "count", self.created.len());
+        if self.present > 0 {
+            text.push_str(&t.get1("template-result-present", "count", self.present));
+        }
+        if !self.skipped.is_empty() {
+            text.push_str(&t.get1("template-result-skipped", "count", self.skipped.len()));
+        }
+        text.push('.');
+        text
+    }
 }
 
 /// Which template to apply.
@@ -683,7 +722,7 @@ pub async fn apply_and_render(
     let mut client = match connect(state, &page.device).await? {
         Ok(client) => client,
         Err(e) => {
-            page.failure = Some(e.user_message());
+            page.failure = Some(user.lang.msg(&e.user_message()));
             return Ok(page.render()?);
         }
     };
@@ -694,7 +733,7 @@ pub async fn apply_and_render(
             let object_id = match tpl::read_object_id(&mut client).await {
                 Ok(id) => id,
                 Err(e) => {
-                    page.failure = Some(e.user_message());
+                    page.failure = Some(user.lang.msg(&e.user_message()));
                     return Ok(page.render()?);
                 }
             };
@@ -704,10 +743,10 @@ pub async fn apply_and_render(
             match found {
                 Some(t) => t,
                 None => {
-                    page.failure = Some(format!(
-                        "Keine Vorlage passt zur Gerätekennung {}. Eine Vorlage lässt sich unter „Vorlage anwenden“ auch von Hand wählen.",
-                        object_id.as_deref().unwrap_or("(keine)")
-                    ));
+                    page.failure = Some(match object_id.as_deref() {
+                        Some(oid) => user.lang.get1("template-no-match", "oid", oid),
+                        None => user.lang.get("template-no-object-id"),
+                    });
                     return Ok(page.render()?);
                 }
             }
@@ -727,9 +766,9 @@ pub async fn apply_and_render(
             );
             page.created = outcome.created;
             page.present = outcome.present;
-            page.skipped = outcome.skipped;
+            page.skipped = outcome.skipped.iter().map(|m| user.lang.msg(m)).collect();
         }
-        Err(ApplyError::Device(e)) => page.failure = Some(e.user_message()),
+        Err(ApplyError::Device(e)) => page.failure = Some(user.lang.msg(&e.user_message())),
         Err(ApplyError::Store(e)) => return Err(e),
     }
     Ok(page.render()?)
@@ -754,17 +793,23 @@ pub async fn apply(
         "auto" => Choice::Detect,
         text => Choice::Id(
             text.parse()
-                .map_err(|_| Error::invalid("Bitte eine Vorlage wählen."))?,
+                .map_err(|_| Error::invalid(Msg::new("template-choose")))?,
         ),
     };
-    let heading = format!("Vorlage angewendet auf {}", device.name);
+    let heading = user
+        .lang
+        .get1("template-applied-to", "device", device.name.as_str());
     Ok(Html(
         apply_and_render(&state, &user, device, choice, heading).await?,
     ))
 }
 
 /// Options for the "new device" form: none, detect, or a specific template.
-pub async fn device_form_options(state: &AppState, selected: &str) -> Result<Vec<TemplateOption>> {
+pub async fn device_form_options(
+    state: &AppState,
+    t: Lang,
+    selected: &str,
+) -> Result<Vec<TemplateOption>> {
     let templates = store::list_templates(&state.pool).await?;
     if templates.is_empty() {
         return Ok(Vec::new());
@@ -772,12 +817,12 @@ pub async fn device_form_options(state: &AppState, selected: &str) -> Result<Vec
     let mut options = vec![
         TemplateOption {
             value: String::new(),
-            label: "Keine – nur das Gerät anlegen".to_owned(),
+            label: t.get("template-option-none"),
             selected: selected.is_empty(),
         },
         TemplateOption {
             value: "auto".to_owned(),
-            label: "Automatisch anhand der Gerätekennung erkennen".to_owned(),
+            label: t.get("template-option-auto"),
             selected: selected == "auto",
         },
     ];
@@ -953,7 +998,7 @@ mod tests {
             .unwrap();
         assert_eq!(template.source, "Switch Büro");
         assert_eq!(
-            template.body.summary(),
+            template.body.summary(Lang::De),
             "Ping, Uptime, Traffic: 2 bestimmte Ports, Status: aktive Ports, 2 eigene Werte"
         );
         let detail = send(&h.app, get(reply.location(), Some(&admin))).await;
@@ -1043,7 +1088,7 @@ mod tests {
         .await;
         assert!(
             page.body
-                .contains("Passend zur Gerätekennung: <strong>TP-Link SG2008</strong>")
+                .contains("Passend zur Gerätekennung: TP-Link SG2008.")
         );
         let again = send(
             &h.app,
@@ -1242,5 +1287,22 @@ mod tests {
             6,
             "sensors stay"
         );
+    }
+
+    #[tokio::test]
+    async fn the_list_is_shown_in_english() {
+        let h = harness(true).await;
+        crate::storage::users::set_language(&h.state.pool, 1, Some(Lang::En))
+            .await
+            .unwrap();
+        let (admin, _) = login(&h, "anna").await;
+        let page = send(&h.app, get("/templates", Some(&admin))).await;
+        for text in [
+            "<h1>Device templates</h1>",
+            "No templates yet.",
+            "How templates work",
+        ] {
+            assert!(page.body.contains(text), "{text} missing");
+        }
     }
 }

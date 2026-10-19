@@ -56,7 +56,7 @@ impl DiscoveredInterface {
             Some(5) => "dormant",
             Some(6) => "notPresent",
             Some(7) => "lowerLayerDown",
-            _ => "unbekannt",
+            _ => "unknown",
         }
     }
 }

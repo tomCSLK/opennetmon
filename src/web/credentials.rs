@@ -1,4 +1,4 @@
-//! SNMP credential profile pages (admin only). Passwords are never rendered; forms show only "gesetzt".
+//! SNMP credential profile pages (admin only). Passwords are never rendered; forms show only "set".
 
 use askama::Template;
 use axum::Form;
@@ -12,7 +12,7 @@ use crate::credentials::{
     SnmpVersion,
 };
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::storage::credentials as store;
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout};
@@ -100,9 +100,9 @@ impl FormTemplate {
             layout: user.layout(),
             t: user.lang,
             heading: if existing.is_some() {
-                "Profil bearbeiten"
+                "profile-edit"
             } else {
-                "Neues Profil"
+                "profile-new"
             },
             action: existing.map_or_else(
                 || "/credentials".to_owned(),
@@ -159,8 +159,8 @@ fn secret(value: &str) -> Option<Secret> {
     (!value.is_empty()).then(|| Secret::new(value))
 }
 
-fn invalid(message: &str) -> Error {
-    Error::invalid(message.to_owned())
+fn invalid(id: &'static str) -> Error {
+    Error::invalid(Msg::new(id))
 }
 
 impl ProfileForm {
@@ -177,7 +177,7 @@ impl ProfileForm {
 
     fn to_input(&self) -> Result<ProfileInput> {
         let kind = match SnmpVersion::parse(&self.version)
-            .ok_or_else(|| invalid("Ungültige SNMP-Version."))?
+            .ok_or_else(|| invalid("profile-version-invalid"))?
         {
             SnmpVersion::V2c => ProfileKind::V2c {
                 community: secret(&self.community),
@@ -185,15 +185,15 @@ impl ProfileForm {
             SnmpVersion::V3 => ProfileKind::V3 {
                 username: self.username.trim().to_owned(),
                 level: SecurityLevel::parse(&self.level)
-                    .ok_or_else(|| invalid("Ungültige Sicherheitsstufe."))?,
+                    .ok_or_else(|| invalid("profile-level-invalid"))?,
                 auth_protocol: AuthProtocol::parse(&self.auth_protocol)
-                    .ok_or_else(|| invalid("Ungültiges Authentifizierungsverfahren."))?,
+                    .ok_or_else(|| invalid("profile-auth-protocol-invalid"))?,
                 auth_password: secret(&self.auth_password),
                 priv_protocol: match self.priv_protocol.as_str() {
                     "" => None,
                     other => Some(
                         PrivProtocol::parse(other)
-                            .ok_or_else(|| invalid("Ungültiges Verschlüsselungsverfahren."))?,
+                            .ok_or_else(|| invalid("profile-priv-protocol-invalid"))?,
                     ),
                 },
                 priv_password: secret(&self.priv_password),
@@ -318,7 +318,7 @@ pub async fn delete(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     if form.confirm.as_deref() != Some("yes") {
-        return Err(invalid("Bitte das Löschen bestätigen."));
+        return Err(invalid("confirm-delete-missing"));
     }
     if !store::delete_profile(&state.pool, id).await? {
         return Err(Error::NotFound);
@@ -639,5 +639,30 @@ mod tests {
             list.body.contains("&#60;b&#62;x&#60;/b&#62;")
                 || list.body.contains("&lt;b&gt;x&lt;/b&gt;")
         );
+    }
+
+    #[tokio::test]
+    async fn the_pages_and_their_errors_are_shown_in_english() {
+        let h = harness(true).await;
+        crate::storage::users::set_language(&h.state.pool, 1, Some(Lang::En))
+            .await
+            .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let form = send(&h.app, get("/credentials/new", Some(&admin))).await;
+        assert!(form.body.contains("<h1>New profile</h1>"));
+        assert!(form.body.contains("authNoPriv (authentication only)"));
+        let refused = send(
+            &h.app,
+            post(
+                "/credentials",
+                Some(&admin),
+                &format!("csrf_token={csrf}&name=Lab&version=v2c&community="),
+            ),
+        )
+        .await;
+        assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(refused.body.contains("Please enter a community."));
+        let list = send(&h.app, get("/credentials", Some(&admin))).await;
+        assert!(list.body.contains("No profiles yet."));
     }
 }

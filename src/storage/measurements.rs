@@ -37,12 +37,13 @@ impl Range {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    /// Catalog id of the label.
+    pub fn label_id(self) -> &'static str {
         match self {
-            Self::Hour => "1 Stunde",
-            Self::Day => "24 Stunden",
-            Self::Week => "7 Tage",
-            Self::Month => "30 Tage",
+            Self::Hour => "range-hour",
+            Self::Day => "range-day",
+            Self::Week => "range-week",
+            Self::Month => "range-month",
         }
     }
 

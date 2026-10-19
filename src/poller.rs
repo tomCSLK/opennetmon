@@ -23,6 +23,7 @@ use crate::alerting::{AlertEvent, Notifier};
 use crate::crypto::SecretBox;
 use crate::devices::Device;
 use crate::error::Result;
+use crate::i18n::Msg;
 use crate::maintenance::{self, Retention};
 use crate::sensors::ping::PingClients;
 use crate::sensors::spec::SensorSpec;
@@ -35,8 +36,6 @@ use crate::storage::status::{StatusChange, record_poll};
 use crate::storage::{credentials, devices};
 
 /// How often the supervisor looks for new devices.
-/// Message for SNMP sensors of a ping-only device.
-const NO_SNMP: &str = "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping).";
 const RESCAN_INTERVAL: Duration = Duration::from_secs(15);
 /// The first poll of a device is delayed by at most this much, however long its interval is.
 const MAX_START_OFFSET: Duration = Duration::from_secs(30);
@@ -55,7 +54,7 @@ pub struct Poller {
 }
 
 /// A status change of one sensor of the polled device.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SensorChange {
     pub change: StatusChange,
     pub sensor: String,
@@ -333,7 +332,7 @@ pub async fn poll_device_once(
     let cutoff = timeout * (polling.retries + 1) + POLL_GRACE;
 
     // Open the SNMP session only if some sensor needs it; a failure is reported per sensor.
-    let mut snmp_failure: Option<String> = None;
+    let mut snmp_failure: Option<Msg> = None;
     let mut client: Option<SnmpClient> = None;
     if records.iter().any(|r| r.spec.uses_snmp()) {
         let loaded = match device.profile_id {
@@ -346,14 +345,12 @@ pub async fn poll_device_once(
                 Err(e) => snmp_failure = Some(e.user_message()),
             },
             Ok(None) if device.profile_id.is_none() => {
-                snmp_failure = Some(NO_SNMP.to_owned());
+                snmp_failure = Some(Msg::new("poll-no-snmp"));
             }
-            Ok(None) => {
-                snmp_failure = Some("Das SNMP-Profil des Geräts existiert nicht mehr.".to_owned())
-            }
+            Ok(None) => snmp_failure = Some(Msg::new("poll-profile-missing")),
             Err(e) => {
                 tracing::error!(device = %device.name, error = %e, "cannot load credentials");
-                snmp_failure = Some("Die SNMP-Zugangsdaten sind nicht lesbar.".to_owned());
+                snmp_failure = Some(Msg::new("poll-credentials-unreadable"));
             }
         }
     }
@@ -366,7 +363,7 @@ pub async fn poll_device_once(
         let started = now_ms();
         let assessment_and_values = if spec.uses_snmp() && snmp_failure.is_some() {
             (
-                Assessment::Failed(snmp_failure.clone().unwrap_or_default()),
+                Assessment::Failed(snmp_failure.clone().unwrap_or(Msg::new("poll-no-snmp"))),
                 Vec::new(),
             )
         } else {
@@ -653,8 +650,11 @@ mod tests {
         env.poll(&mut state).await;
         let stored = get_state(&env.pool, sensor).await.unwrap().unwrap();
         assert_eq!(
-            (stored.status, stored.message.as_str()),
-            (Status::Warning, NO_SNMP)
+            (stored.status, stored.message.to_string().as_str()),
+            (
+                Status::Warning,
+                "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping)."
+            )
         );
     }
 
@@ -706,14 +706,14 @@ mod tests {
         env.poll(&mut state).await;
         let stored = get_state(&env.pool, sensor).await.unwrap().unwrap();
         assert_eq!(
-            (stored.status, stored.message.as_str()),
+            (stored.status, stored.message.to_string().as_str()),
             (Status::Down, "overload (3) gilt als Ausfall")
         );
         env.agent.set(&oid, FakeValue::Integer(2));
         env.poll(&mut state).await;
         let stored = get_state(&env.pool, sensor).await.unwrap().unwrap();
         assert_eq!(
-            (stored.status, stored.message.as_str()),
+            (stored.status, stored.message.to_string().as_str()),
             (Status::Up, "on (2)")
         );
     }
@@ -797,12 +797,12 @@ mod tests {
             assert_eq!(env.state_of(sensor).await, expected, "value {value}");
         }
         let message = get_state(&env.pool, sensor).await.unwrap().unwrap().message;
-        assert_eq!(message, "OK");
+        assert_eq!(message.to_string(), "OK");
         let events = recent_events(&env.pool, 10).await.unwrap();
         assert!(
-            events
-                .iter()
-                .any(|e| e.to == Status::Down && e.message.contains("Ausfallgrenze 300")),
+            events.iter().any(
+                |e| e.to == Status::Down && e.message.to_string().contains("Ausfallgrenze 300")
+            ),
             "{events:?}"
         );
     }

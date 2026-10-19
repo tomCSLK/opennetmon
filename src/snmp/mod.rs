@@ -10,6 +10,7 @@ use snmp2::v3::{Auth, AuthProtocol as WireAuth, Cipher, Security};
 use snmp2::{AsyncSession, Oid, Value};
 
 use crate::credentials::{AuthProtocol, Credentials, PrivProtocol};
+use crate::i18n::{Lang, Msg};
 
 pub const SYS_DESCR: &[u64] = &[1, 3, 6, 1, 2, 1, 1, 1, 0];
 pub const SYS_UPTIME: &[u64] = &[1, 3, 6, 1, 2, 1, 1, 3, 0];
@@ -41,18 +42,14 @@ pub enum SnmpError {
 }
 
 impl SnmpError {
-    /// Explanation for the UI (German); never contains secrets.
-    pub fn user_message(&self) -> String {
+    /// Explanation for the UI; never contains secrets.
+    pub fn user_message(&self) -> Msg {
         match self {
-            Self::Timeout => "Keine Antwort innerhalb des Timeouts. Mögliche Ursachen: Gerät oder Port nicht erreichbar, \
-                              SNMP nicht aktiviert, falsche Community oder falsche SNMPv3-Benutzerdaten."
-                .to_owned(),
-            Self::Auth => "Anmeldung fehlgeschlagen. Benutzer, Passwort, Authentifizierungs- oder Verschlüsselungsverfahren \
-                           stimmen nicht mit dem Gerät überein."
-                .to_owned(),
-            Self::Unreachable => "Das Gerät ist nicht erreichbar oder der SNMP-Port ist geschlossen.".to_owned(),
-            Self::Request(m) => format!("Die Anfrage konnte nicht aufgebaut werden: {m}"),
-            Self::Protocol(m) => format!("Unerwartete Antwort des Geräts: {m}"),
+            Self::Timeout => Msg::new("snmp-timeout"),
+            Self::Auth => Msg::new("snmp-auth"),
+            Self::Unreachable => Msg::new("snmp-unreachable"),
+            Self::Request(m) => Msg::new("snmp-request").with("detail", m),
+            Self::Protocol(m) => Msg::new("snmp-protocol").with("detail", m),
         }
     }
 }
@@ -326,7 +323,7 @@ pub async fn probe(
 }
 
 /// Formats TimeTicks (1/100 s) as e.g. `187 Tage 3 Std. 12 Min.`.
-pub fn format_uptime(ticks: u32) -> String {
+pub fn format_uptime(t: Lang, ticks: u32) -> String {
     let seconds = u64::from(ticks) / 100;
     let (days, hours, minutes) = (
         seconds / 86_400,
@@ -334,10 +331,16 @@ pub fn format_uptime(ticks: u32) -> String {
         (seconds % 3_600) / 60,
     );
     match (days, hours) {
-        (0, 0) => format!("{minutes} Min."),
-        (0, _) => format!("{hours} Std. {minutes} Min."),
-        (1, _) => format!("1 Tag {hours} Std. {minutes} Min."),
-        _ => format!("{days} Tage {hours} Std. {minutes} Min."),
+        (0, 0) => t.get1("duration-minutes", "minutes", minutes),
+        (0, _) => t.get2("duration-hours-minutes", "hours", hours, "minutes", minutes),
+        _ => t.fmt(
+            "duration-days-hours-minutes",
+            &[
+                ("days", days.into()),
+                ("hours", hours.into()),
+                ("minutes", minutes.into()),
+            ],
+        ),
     }
 }
 
@@ -348,14 +351,21 @@ mod tests {
 
     #[test]
     fn uptime_is_formatted_for_humans() {
-        assert_eq!(format_uptime(0), "0 Min.");
-        assert_eq!(format_uptime(59 * 6000 + 5900), "59 Min.");
-        assert_eq!(format_uptime(90 * 6000), "1 Std. 30 Min.");
+        assert_eq!(format_uptime(Lang::De, 0), "0 Min.");
+        assert_eq!(format_uptime(Lang::De, 59 * 6000 + 5900), "59 Min.");
+        assert_eq!(format_uptime(Lang::De, 90 * 6000), "1 Std. 30 Min.");
         assert_eq!(
-            format_uptime(86_400 * 100 + 3 * 360_000 + 12 * 6000),
+            format_uptime(Lang::De, 86_400 * 100 + 3 * 360_000 + 12 * 6000),
             "1 Tag 3 Std. 12 Min."
         );
-        assert_eq!(format_uptime(1_618_844_685), "187 Tage 8 Std. 47 Min.");
+        assert_eq!(
+            format_uptime(Lang::De, 1_618_844_685),
+            "187 Tage 8 Std. 47 Min."
+        );
+        assert_eq!(
+            format_uptime(Lang::En, 86_400 * 100 + 3 * 360_000 + 12 * 6000),
+            "1 day 3 h 12 min"
+        );
     }
 
     #[test]
@@ -379,7 +389,7 @@ mod tests {
             SnmpError::Protocol(_)
         ));
         for e in [SnmpError::Timeout, SnmpError::Auth, SnmpError::Unreachable] {
-            assert!(!e.user_message().is_empty());
+            assert!(!Lang::En.msg(&e.user_message()).is_empty());
         }
     }
 

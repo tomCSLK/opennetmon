@@ -1,11 +1,11 @@
 {% extends "app.html" %}
-{% block title %}Werte suchen {{ device.name }} – opennetmon{% endblock %}
+{% block title %}{{ t.get("sensors-find-values") }} {{ device.name }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>Werte suchen</span></div>
-    <h1>Werte von {{ device.name }}</h1>
-    <p class="subtitle">{% if searched_catalog %}Bekannte Tabellen (PoE, CPU, Speicher, Hardware-Sensoren …) aus den geladenen MIBs{% else %}Tabelle bzw. Gruppe „{{ object }}“{% endif %}
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("sensors-find-values") }}</span></div>
+    <h1>{{ t.get1("values-heading", "device", device.name.as_str()) }}</h1>
+    <p class="subtitle">{% if searched_catalog %}{{ t.get("values-catalog") }}{% else %}{{ t.get1("values-object", "name", object.as_str()) }}{% endif %}
       · <span class="num">{{ device.host }}:{{ device.polling.port }}</span></p>
   </div>
 </div>
@@ -14,10 +14,10 @@
   <form method="post" action="/devices/{{ device.id }}/values" class="search">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <input type="text" name="object" value="{{ object }}" maxlength="200" autocapitalize="off" spellcheck="false"
-      placeholder="Andere Tabelle oder Gruppe, z. B. tpPoePortConfigTable oder IF-MIB::ifXTable (leer: bekannte Tabellen)" aria-label="Tabelle oder Gruppe">
-    <button type="submit" class="secondary">Durchsuchen</button>
+      placeholder="{{ t.get("values-object-placeholder") }}" aria-label="{{ t.get("values-object-label") }}">
+    <button type="submit" class="secondary">{{ t.get("values-search") }}</button>
   </form>
-  <p class="hint">Namen findest du unter <a href="/mibs">MIB-Dateien</a>. Neue Sensoren werden <strong>inaktiv</strong> angelegt und erst nach dem Aktivieren abgefragt.</p>
+  <p class="hint">{{ t.get1("values-hint", "link", "<a href=\"/mibs\">MIB</a>")|safe }}</p>
 </section>
 
 {% if let Some(message) = failure %}
@@ -25,8 +25,8 @@
 {% endif %}
 
 {% if groups.is_empty() && failure.is_none() %}
-<div class="card"><div class="empty"><strong>Keine Werte gefunden.</strong>
-  {% if searched_catalog %}Das Gerät beantwortet keine der bekannten Tabellen. Fehlen vielleicht die MIB-Dateien des Herstellers? Oder eine bestimmte Tabelle oben eingeben.{% else %}Das Gerät liefert für diese Tabelle keine Zahlenwerte.{% endif %}</div></div>
+<div class="card"><div class="empty"><strong>{{ t.get("values-none") }}</strong>
+  {% if searched_catalog %}{{ t.get("values-none-catalog") }}{% else %}{{ t.get("values-none-object") }}{% endif %}</div></div>
 {% endif %}
 
 {% if !groups.is_empty() %}
@@ -36,21 +36,21 @@
   <section class="card flush">
     <div class="card-head">
       <h2>{{ g.title }}</h2>
-      <span class="muted small">{{ g.source }} · {{ g.candidates.len() }} Werte{% if let Some(note) = g.note %} · {{ note }}{% endif %}</span>
+      <span class="muted small">{{ g.source }} · {{ t.get1("count-values", "count", g.candidates.len()) }}{% if let Some(note) = g.note %} · {{ note }}{% endif %}</span>
     </div>
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Anlegen</th><th>Sensorname</th><th>Wert jetzt</th><th>OID</th></tr></thead>
+      <thead><tr><th>{{ t.get("values-create") }}</th><th>{{ t.get("values-sensor-name") }}</th><th>{{ t.get("values-now") }}</th><th>OID</th></tr></thead>
       <tbody>
       {% for c in g.candidates %}
         <tr>
           <td>
-            {% if c.exists %}<span class="badge">vorhanden</span>{% else %}
-            <input type="checkbox" name="c_{{ c.key }}" value="on" aria-label="{{ c.name }} anlegen"{% if c.selected %} checked{% endif %}>
+            {% if c.exists %}<span class="badge">{{ t.get("values-exists") }}</span>{% else %}
+            <input type="checkbox" name="c_{{ c.key }}" value="on" aria-label="{{ t.get1("values-create-named", "name", c.name.as_str()) }}"{% if c.selected %} checked{% endif %}>
             {% endif %}
           </td>
           <td>
-            <input type="text" name="n_{{ c.key }}" value="{{ c.name }}" maxlength="64" aria-label="Sensorname" class="compact">
+            <input type="text" name="n_{{ c.key }}" value="{{ c.name }}" maxlength="64" aria-label="{{ t.get("values-sensor-name") }}" class="compact">
             <input type="hidden" name="o_{{ c.key }}" value="{{ c.oid }}">
             <input type="hidden" name="f_{{ c.key }}" value="{{ c.scale }}">
             <input type="hidden" name="u_{{ c.key }}" value="{{ c.unit }}">
@@ -66,10 +66,10 @@
   </section>
   {% endfor %}
   <section class="card">
-    <label class="inline"><input type="checkbox" name="activate" value="on"> Sofort aktivieren (sonst inaktiv anlegen und später auf der Geräteseite aktivieren)</label>
+    <label class="inline"><input type="checkbox" name="activate" value="on"> {{ t.get("values-activate") }}</label>
     <div class="form-actions">
-      <button type="submit">Ausgewählte als Sensoren anlegen</button>
-      <a class="button secondary" href="/devices/{{ device.id }}/sensors">Abbrechen</a>
+      <button type="submit">{{ t.get("values-create-selected") }}</button>
+      <a class="button secondary" href="/devices/{{ device.id }}/sensors">{{ t.get("cancel") }}</a>
     </div>
   </section>
 </form>

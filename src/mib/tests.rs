@@ -165,12 +165,14 @@ fn user_input_with_names_resolves_to_numeric_oids() {
         index
             .resolve_input("noSuchThing.0")
             .unwrap_err()
+            .to_string()
             .contains("in keiner geladenen MIB")
     );
     assert!(
         index
             .resolve_input("sysUpTime.x")
             .unwrap_err()
+            .to_string()
             .contains("keine Zahl")
     );
     assert!(
@@ -261,22 +263,41 @@ fn sensor_targets_from_names_and_numbers() {
         "a vendor OID without its MIB is fine, just unnamed"
     );
 
-    assert!(index.oid_target("ifTable").unwrap_err().contains("Tabelle"));
+    assert!(
+        index
+            .oid_target("ifTable")
+            .unwrap_err()
+            .to_string()
+            .contains("Tabelle")
+    );
     assert!(
         index
             .oid_target("ifEntry")
             .unwrap_err()
+            .to_string()
             .contains("Tabellenzeile")
     );
-    assert!(index.oid_target("system").unwrap_err().contains("Knoten"));
-    let missing_index = index.oid_target("ifInOctets").unwrap_err();
+    assert!(
+        index
+            .oid_target("system")
+            .unwrap_err()
+            .to_string()
+            .contains("Knoten")
+    );
+    let missing_index = index.oid_target("ifInOctets").unwrap_err().to_string();
     assert!(
         missing_index.contains("Index anhängen") && missing_index.contains("ifIndex"),
         "{missing_index}"
     );
     assert!(index.oid_target("ifStackStatus.1.2").is_ok());
     assert!(index.oid_target("ifIndex.1").is_ok());
-    assert!(index.oid_target("").unwrap_err().contains("Bitte"));
+    assert!(
+        index
+            .oid_target("")
+            .unwrap_err()
+            .to_string()
+            .contains("Bitte")
+    );
     assert!(index.oid_target("1.3.x").is_err());
 }
 

@@ -1,35 +1,35 @@
 {% extends "app.html" %}
-{% block title %}Sensoren {{ device.name }} – opennetmon{% endblock %}
+{% block title %}{{ t.get("sensors") }} {{ device.name }} – opennetmon{% endblock %}
 {% block head %}
   <script src="/static/oid-help.js?v=2" defer></script>
 {% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><span>{{ device.name }}</span></div>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><span>{{ device.name }}</span></div>
     <h1>{{ device.name }}</h1>
     <p class="subtitle status-line">
       <span class="badge status-{{ device_status_class }}">{{ device_status_label }}</span>
-      <span class="num">{{ device.host }}{% if device.has_snmp() %}:{{ device.polling.port }}{% endif %}</span> · <span>alle {{ device.polling.interval_secs }} s</span>{% if !device.has_snmp() %} · <span>kein SNMP, nur Ping</span>{% endif %}
+      <span class="num">{{ device.host }}{% if device.has_snmp() %}:{{ device.polling.port }}{% endif %}</span> · <span>{{ t.get1("every-seconds", "seconds", device.polling.interval_secs) }}</span>{% if !device.has_snmp() %} · <span>{{ t.get("sensors-ping-only") }}</span>{% endif %}
     </p>
   </div>
   {% if layout.is_admin %}
   <div class="actions">
-    <a class="button ghost" href="/devices/{{ device.id }}/edit">Gerät bearbeiten</a>
+    <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
     {% if device.has_snmp() %}
     <form method="post" action="/devices/{{ device.id }}/test">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-      <button type="submit" class="secondary">Verbindung testen</button>
+      <button type="submit" class="secondary">{{ t.get("device-test-connection") }}</button>
     </form>
     <form method="post" action="/devices/{{ device.id }}/values">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-      <button type="submit" class="secondary">Werte suchen</button>
+      <button type="submit" class="secondary">{{ t.get("sensors-find-values") }}</button>
     </form>
     <form method="post" action="/devices/{{ device.id }}/discover">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
       <button type="submit">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
-        Interfaces suchen
+        {{ t.get("sensors-find-interfaces") }}
       </button>
     </form>
     {% endif %}
@@ -45,20 +45,20 @@
 {% endif %}
 
 <section class="card flush">
-  <div class="card-head"><h2>Sensoren</h2>
-    <div class="actions"><span class="muted small">{{ rows.len() }} aktiv{% if !inactive.is_empty() %} · {{ inactive.len() }} inaktiv{% endif %}</span>
-      {% if layout.is_admin && rows.len() + inactive.len() > 1 %}<a class="button ghost small" href="/devices/{{ device.id }}/sensors/order">Reihenfolge ändern</a>{% endif %}</div>
+  <div class="card-head"><h2>{{ t.get("sensors") }}</h2>
+    <div class="actions"><span class="muted small">{{ t.get1("count-active", "count", rows.len()) }}{% if !inactive.is_empty() %} · {{ t.get1("count-inactive", "count", inactive.len()) }}{% endif %}</span>
+      {% if layout.is_admin && rows.len() + inactive.len() > 1 %}<a class="button ghost small" href="/devices/{{ device.id }}/sensors/order">{{ t.get("order-change") }}</a>{% endif %}</div>
   </div>
   {% if rows.is_empty() %}
   <div class="empty">
-    <strong>{% if inactive.is_empty() %}Noch keine Sensoren.{% else %}Keine aktiven Sensoren.{% endif %}</strong>
-    {% if layout.is_admin %}{% if device.has_snmp() %}Mit „Interfaces suchen“ lassen sich Ports aus dem Gerät übernehmen, unten lassen sich Ping, Uptime und eigene OIDs anlegen.{% else %}Unten lässt sich ein Ping-Sensor anlegen.{% endif %}{% endif %}
+    <strong>{% if inactive.is_empty() %}{{ t.get("sensors-none-yet") }}{% else %}{{ t.get("sensors-none-active") }}{% endif %}</strong>
+    {% if layout.is_admin %}{% if device.has_snmp() %}{{ t.get("sensors-empty-hint") }}{% else %}{{ t.get("sensors-empty-hint-ping") }}{% endif %}{% endif %}
   </div>
   {% else %}
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>Status</th><th>Sensor</th><th>Meldung</th><th>Letzte Abfrage</th>{% if layout.is_admin %}<th class="right"><span class="muted">Aktionen</span></th>{% endif %}</tr>
+      <tr><th>{{ t.get("status") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("message") }}</th><th>{{ t.get("last-poll") }}</th>{% if layout.is_admin %}<th class="right"><span class="muted">{{ t.get("actions") }}</span></th>{% endif %}</tr>
     </thead>
     <tbody>
     {% for row in rows %}
@@ -72,11 +72,11 @@
           <div class="row-actions">
             <form method="post" action="/sensors/{{ row.id }}/toggle">
               <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-              <button type="submit" class="ghost small">Deaktivieren</button>
+              <button type="submit" class="ghost small">{{ t.get("sensors-deactivate") }}</button>
             </form>
             <form method="post" action="/sensors/{{ row.id }}/delete">
               <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-              <button type="submit" class="ghost small">Löschen</button>
+              <button type="submit" class="ghost small">{{ t.get("delete") }}</button>
             </form>
           </div>
         </td>
@@ -91,17 +91,17 @@
 
 {% if !inactive.is_empty() %}
 <details class="card flush panel"{% if rows.is_empty() %} open{% endif %}>
-  <summary class="card-head"><h2>Inaktive Sensoren ({{ inactive.len() }})</h2></summary>
-  <p class="hint panel-hint">Werden nicht abgefragt und lösen keine Benachrichtigung aus, bis sie aktiviert sind.</p>
+  <summary class="card-head"><h2>{{ t.get1("sensors-inactive-title", "count", inactive.len()) }}</h2></summary>
+  <p class="hint panel-hint">{{ t.get("sensors-inactive-hint") }}</p>
   <form method="post" action="/devices/{{ device.id }}/sensors/bulk">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="table-wrap">
     <table>
-      <thead><tr>{% if layout.is_admin %}<th></th>{% endif %}<th>Sensor</th><th>Status</th></tr></thead>
+      <thead><tr>{% if layout.is_admin %}<th></th>{% endif %}<th>{{ t.get("sensor") }}</th><th>{{ t.get("status") }}</th></tr></thead>
       <tbody>
       {% for row in inactive %}
         <tr>
-          {% if layout.is_admin %}<td><input type="checkbox" name="s_{{ row.id }}" value="on" aria-label="{{ row.name }} auswählen"></td>{% endif %}
+          {% if layout.is_admin %}<td><input type="checkbox" name="s_{{ row.id }}" value="on" aria-label="{{ t.get1("select-named", "name", row.name.as_str()) }}"></td>{% endif %}
           <td><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
           <td><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
         </tr>
@@ -111,9 +111,9 @@
     </div>
     {% if layout.is_admin %}
     <div class="form-actions panel-actions">
-      <button type="submit" name="action" value="activate">Ausgewählte aktivieren</button>
-      <button type="submit" name="action" value="activate_all" class="secondary">Alle aktivieren</button>
-      <button type="submit" name="action" value="delete" class="ghost">Ausgewählte löschen</button>
+      <button type="submit" name="action" value="activate">{{ t.get("sensors-activate-selected") }}</button>
+      <button type="submit" name="action" value="activate_all" class="secondary">{{ t.get("sensors-activate-all") }}</button>
+      <button type="submit" name="action" value="delete" class="ghost">{{ t.get("sensors-delete-selected") }}</button>
     </div>
     {% endif %}
   </form>
@@ -124,69 +124,70 @@
 <section class="card">
   <div class="split">
     <div>
-      <h2>Gerätevorlage</h2>
-      <p class="muted small">{% if let Some(name) = template_name %}Eingerichtet mit „{{ name }}“. {% endif %}Eine Vorlage legt fehlende Sensoren an; aus diesem Gerät lässt sich auch eine neue Vorlage speichern.</p>
+      <h2>{{ t.get("device-template") }}</h2>
+      <p class="muted small">{% if let Some(name) = template_name %}{{ t.get1("sensors-template-used", "name", name.as_str()) }} {% endif %}{{ t.get("sensors-template-hint") }}</p>
     </div>
     <div class="actions">
-      <a class="button secondary" href="/devices/{{ device.id }}/template/apply">Vorlage anwenden</a>
-      <a class="button ghost" href="/devices/{{ device.id }}/template/new">Als Vorlage speichern</a>
+      <a class="button secondary" href="/devices/{{ device.id }}/template/apply">{{ t.get("template-apply") }}</a>
+      <a class="button ghost" href="/devices/{{ device.id }}/template/new">{{ t.get("template-save-as") }}</a>
     </div>
   </div>
 </section>
+{% endif %}
 
+{% if layout.is_admin %}
 <section class="card">
-  <h2>Sensor hinzufügen</h2>
+  <h2>{{ t.get("sensors-add") }}</h2>
   <form method="post" action="/devices/{{ device.id }}/sensors" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="form-grid">
       <div>
-        <label for="kind">Typ</label>
+        <label for="kind">{{ t.get("sensors-type") }}</label>
         <select id="kind" name="kind">
-          <option value="ping"{% if form.kind == "ping" %} selected{% endif %}>Ping (Antwortzeit)</option>
+          <option value="ping"{% if form.kind == "ping" %} selected{% endif %}>{{ t.get("sensors-type-ping") }}</option>
           {% if device.has_snmp() %}
           <option value="uptime"{% if form.kind == "uptime" %} selected{% endif %}>Uptime (sysUpTime)</option>
-          <option value="oid"{% if form.kind == "oid" %} selected{% endif %}>Eigene OID</option>
+          <option value="oid"{% if form.kind == "oid" %} selected{% endif %}>{{ t.get("sensors-type-oid") }}</option>
           {% endif %}
         </select>
       </div>
       <div>
-        <label for="name">Name</label>
-        <input id="name" name="name" type="text" value="{{ form.name }}" maxlength="64" placeholder="leer: Ping, Uptime bzw. MIB-Name">
+        <label for="name">{{ t.get("name") }}</label>
+        <input id="name" name="name" type="text" value="{{ form.name }}" maxlength="64" placeholder="{{ t.get("sensors-name-placeholder") }}">
       </div>
     </div>
     {% if device.has_snmp() %}
     <fieldset>
-      <legend>Nur für „Eigene OID“</legend>
-      <label for="oid">OID oder MIB-Name</label>
+      <legend>{{ t.get("sensors-oid-only") }}</legend>
+      <label for="oid">{{ t.get("sensors-oid-or-name") }}</label>
       <input id="oid" name="oid" type="text" value="{{ form.oid }}" maxlength="600" autocapitalize="off" spellcheck="false"
-        autocomplete="off" list="mib-names" placeholder="z. B. tpSysMonitorCpu5Seconds.1, IF-MIB::ifInErrors.3 oder 1.3.6.1.2.1.1.3.0">
+        autocomplete="off" list="mib-names" placeholder="{{ t.get("sensors-oid-placeholder") }}">
       <datalist id="mib-names"></datalist>
-      <p class="hint" id="oid-info" aria-live="polite">Namen aus den geladenen MIBs werden beim Tippen vorgeschlagen (<a href="/mibs">MIB-Dateien</a>).
-        Einzelwerte bekommen automatisch „.0“, bei Tabellenspalten den Index anhängen.</p>
+      <p class="hint" id="oid-info" aria-live="polite">{{ t.get1("sensors-oid-hint", "link", "<a href=\"/mibs\">MIB</a>")|safe }}</p>
       <div class="form-grid">
         <div>
-          <label for="mode">Auswertung</label>
+          <label for="mode">{{ t.get("sensors-mode") }}</label>
           <select id="mode" name="mode">
-            <option value="auto"{% if form.mode == "auto" %} selected{% endif %}>Automatisch (aus der MIB, sonst Wert)</option>
-            <option value="gauge"{% if form.mode == "gauge" %} selected{% endif %}>Wert unverändert (Gauge)</option>
-            <option value="counter"{% if form.mode == "counter" %} selected{% endif %}>Zähler, Änderung pro Sekunde (Counter)</option>
+            <option value="auto"{% if form.mode == "auto" %} selected{% endif %}>{{ t.get("sensors-mode-auto") }}</option>
+            <option value="gauge"{% if form.mode == "gauge" %} selected{% endif %}>{{ t.get("sensors-mode-gauge") }}</option>
+            <option value="counter"{% if form.mode == "counter" %} selected{% endif %}>{{ t.get("sensors-mode-counter") }}</option>
           </select>
         </div>
         <div>
-          <label for="scale">Faktor</label>
+          <label for="scale">{{ t.get("sensors-scale") }}</label>
           <input id="scale" name="scale" type="text" value="{{ form.scale }}" maxlength="20" inputmode="decimal">
         </div>
         <div>
-          <label for="unit">Einheit (optional)</label>
-          <input id="unit" name="unit" type="text" value="{{ form.unit }}" maxlength="24" placeholder="leer: aus der MIB">
+          <label for="unit">{{ t.get("sensors-unit") }}</label>
+          <input id="unit" name="unit" type="text" value="{{ form.unit }}" maxlength="24" placeholder="{{ t.get("sensors-unit-placeholder") }}">
         </div>
       </div>
-      <p class="hint">Ohne Namen heißt der Sensor wie das MIB-Objekt (z. B. „tpSysMonitorCpu5Seconds.1“).</p>
+      <p class="hint">{{ t.get("sensors-name-hint") }}</p>
     </fieldset>
     {% else %}
-    <p class="hint">Dieses Gerät hat kein SNMP-Profil, daher gibt es nur Ping. Für Uptime, Interfaces und eigene Werte unter „Gerät bearbeiten“ ein SNMP-Profil wählen.</p>
+    <p class="hint">{{ t.get("sensors-no-snmp-hint") }}</p>
     {% endif %}
-    <button type="submit">Hinzufügen</button>
+    <button type="submit">{{ t.get("add") }}</button>
   </form>
 </section>
 {% endif %}

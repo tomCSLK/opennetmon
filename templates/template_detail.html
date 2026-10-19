@@ -3,9 +3,9 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/templates">Gerätevorlagen</a><span>›</span><span>{{ template.name }}</span></div>
+    <div class="breadcrumb"><a href="/templates">{{ t.get("nav-templates") }}</a><span>›</span><span>{{ template.name }}</span></div>
     <h1>{{ template.name }}</h1>
-    <p class="subtitle">{{ template.body.summary() }}{% if !template.source.is_empty() %} · erstellt aus {{ template.source }}{% endif %}</p>
+    <p class="subtitle">{{ template.body.summary(*t) }}{% if !template.source.is_empty() %} · {{ t.get1("template-created-from", "device", template.source.as_str()) }}{% endif %}</p>
   </div>
 </div>
 
@@ -17,10 +17,10 @@
 {% endif %}
 
 <section class="card flush">
-  <div class="card-head"><h2>Inhalt</h2><span class="muted small">{{ items.len() }} Einträge</span></div>
+  <div class="card-head"><h2>{{ t.get("template-contents") }}</h2><span class="muted small">{{ t.get1("count-entries", "count", items.len()) }}</span></div>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Sensor</th><th>Regel</th><th>Zustand</th></tr></thead>
+    <thead><tr><th>{{ t.get("sensor") }}</th><th>{{ t.get("template-rule") }}</th><th>{{ t.get("discover-state") }}</th></tr></thead>
     <tbody>
     {% for item in items %}
       <tr><td><strong>{{ item.name }}</strong></td><td class="wrap muted">{{ item.detail }}</td><td>{{ item.state }}</td></tr>
@@ -28,34 +28,34 @@
     </tbody>
   </table>
   </div>
-  <p class="hint panel-hint panel-actions">Den Inhalt änderst du, indem du ein Gerät passend einrichtest und daraus eine neue Vorlage speicherst.</p>
+  <p class="hint panel-hint panel-actions">{{ t.get("template-change-hint") }}</p>
 </section>
 
 <section class="card">
-  <h2>Name und Erkennung</h2>
+  <h2>{{ t.get("template-name-detection") }}</h2>
   <form method="post" action="/templates/{{ template.id }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="form-grid">
       <div>
-        <label for="name">Name</label>
+        <label for="name">{{ t.get("name") }}</label>
         <input id="name" name="name" type="text" value="{{ name }}" maxlength="64" required>
       </div>
       <div>
-        <label for="object_id">Gerätekennung (sysObjectID)</label>
-        <input id="object_id" name="object_id" type="text" value="{{ object_id }}" maxlength="300" autocapitalize="off" spellcheck="false" placeholder="leer: nur von Hand wählbar">
+        <label for="object_id">{{ t.get("template-object-id-label") }}</label>
+        <input id="object_id" name="object_id" type="text" value="{{ object_id }}" maxlength="300" autocapitalize="off" spellcheck="false" placeholder="{{ t.get("template-object-id-placeholder") }}">
       </div>
     </div>
-    <p class="hint">Geräte mit genau dieser Kennung bekommen die Vorlage beim Anlegen („automatisch erkennen“) und unter „Vorlage anwenden“ vorgeschlagen.</p>
-    <div class="form-actions"><button type="submit">Speichern</button></div>
+    <p class="hint">{{ t.get("template-detection-hint") }}</p>
+    <div class="form-actions"><button type="submit">{{ t.get("save") }}</button></div>
   </form>
 </section>
 
 <section class="card">
-  <h2>Löschen</h2>
-  <p class="muted">Geräte, die mit dieser Vorlage eingerichtet wurden, behalten ihre Sensoren.</p>
+  <h2>{{ t.get("delete") }}</h2>
+  <p class="muted">{{ t.get("template-delete-hint") }}</p>
   <form method="post" action="/templates/{{ template.id }}/delete">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <button type="submit" class="ghost">Vorlage löschen</button>
+    <button type="submit" class="ghost">{{ t.get("template-delete") }}</button>
   </form>
 </section>
 {% endblock %}

@@ -1,12 +1,12 @@
 {% extends "app.html" %}
-{% block title %}Übersicht – opennetmon{% endblock %}
-{% macro device_row(card, layout) %}
+{% block title %}{{ t.get("nav-overview") }} – opennetmon{% endblock %}
+{% macro device_row(card, layout, t) %}
 <div class="device">
   <div class="device-main">
     <span class="dot status-{{ card.status_class }}" title="{{ card.status_label }}"></span>
     <div class="device-text">
       <a class="device-name" href="/devices/{{ card.device.id }}/sensors">{{ card.device.name }}</a>
-      <div class="device-meta num">{{ card.device.host }}{% if card.device.has_snmp() %}:{{ card.device.polling.port }}{% endif %} · alle {{ card.device.polling.interval_secs }} s{% if layout.is_admin %} · {{ card.device.profile_label() }}{% endif %}</div>
+      <div class="device-meta num">{{ card.device.host }}{% if card.device.has_snmp() %}:{{ card.device.polling.port }}{% endif %} · {{ t.get1("every-seconds", "seconds", card.device.polling.interval_secs) }}{% if layout.is_admin %} · {{ card.device.profile_label(*t) }}{% endif %}</div>
     </div>
   </div>
   <div class="device-health">
@@ -16,55 +16,55 @@
     </svg>
     <div class="legend">
       <span class="badge status-{{ card.status_class }}">{{ card.status_label }}</span>
-      <span>{{ card.counts.active() }} {% if card.counts.active() == 1 %}Sensor{% else %}Sensoren{% endif %}</span>
-      {% if card.counts.paused > 0 %}<span>{{ card.counts.paused }} inaktiv</span>{% endif %}
-      {% if card.counts.warning > 0 %}<span class="c-warning">{{ card.counts.warning }} Warnung</span>{% endif %}
-      {% if card.counts.down > 0 %}<span class="c-down">{{ card.counts.down }} Ausfall</span>{% endif %}
+      <span>{{ t.get1("count-sensors", "count", card.counts.active()) }}</span>
+      {% if card.counts.paused > 0 %}<span>{{ t.get1("count-inactive", "count", card.counts.paused) }}</span>{% endif %}
+      {% if card.counts.warning > 0 %}<span class="c-warning">{{ t.get1("count-warning", "count", card.counts.warning) }}</span>{% endif %}
+      {% if card.counts.down > 0 %}<span class="c-down">{{ t.get1("count-down", "count", card.counts.down) }}</span>{% endif %}
     </div>
     {% else if card.counts.paused > 0 %}
-    <span class="muted small">nur inaktive Sensoren ({{ card.counts.paused }})</span>
+    <span class="muted small">{{ t.get1("overview-only-inactive", "count", card.counts.paused) }}</span>
     {% else %}
-    <span class="muted small">keine Sensoren</span>
+    <span class="muted small">{{ t.get("no-sensors") }}</span>
     {% endif %}
   </div>
   <div class="device-actions">
-    <a class="button secondary small" href="/devices/{{ card.device.id }}/sensors">Sensoren</a>
+    <a class="button secondary small" href="/devices/{{ card.device.id }}/sensors">{{ t.get("sensors") }}</a>
     {% if layout.is_admin %}
     {% if card.device.has_snmp() %}
     <form method="post" action="/devices/{{ card.device.id }}/test">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-      <button type="submit" class="ghost small">Testen</button>
+      <button type="submit" class="ghost small">{{ t.get("device-test") }}</button>
     </form>
     {% endif %}
-    <a class="button ghost small" href="/devices/{{ card.device.id }}/edit" aria-label="{{ card.device.name }} bearbeiten">Bearbeiten</a>
+    <a class="button ghost small" href="/devices/{{ card.device.id }}/edit" aria-label="{{ t.get1("edit-named", "name", card.device.name) }}">{{ t.get("edit") }}</a>
     {% endif %}
   </div>
 </div>
 {% endmacro %}
 
-{% macro group_info(s) %}
-<span class="group-count">{{ s.devices }} {% if s.devices == 1 %}Gerät{% else %}Geräte{% endif %}</span>
+{% macro group_info(s, t) %}
+<span class="group-count">{{ t.get1("count-devices", "count", s.devices) }}</span>
 {% if s.counts.active() > 0 %}<span class="badge status-{{ s.status_class }}">{{ s.status_label }}</span>{% endif %}
-{% if s.counts.down > 0 %}<span class="c-down small">{{ s.counts.down }} Ausfall</span>{% endif %}
-{% if s.counts.warning > 0 %}<span class="c-warning small">{{ s.counts.warning }} Warnung</span>{% endif %}
+{% if s.counts.down > 0 %}<span class="c-down small">{{ t.get1("count-down", "count", s.counts.down) }}</span>{% endif %}
+{% if s.counts.warning > 0 %}<span class="c-warning small">{{ t.get1("count-warning", "count", s.counts.warning) }}</span>{% endif %}
 {% endmacro %}
 
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Übersicht</h1>
-    <p class="subtitle">{{ device_count }} {% if device_count == 1 %}Gerät{% else %}Geräte{% endif %} · {{ totals.total() }} Sensoren{% if devices_down > 0 %} · <strong class="c-down">{{ devices_down }} {% if devices_down == 1 %}Gerät{% else %}Geräte{% endif %} mit Ausfall</strong>{% endif %}</p>
+    <h1>{{ t.get("nav-overview") }}</h1>
+    <p class="subtitle">{{ t.get1("count-devices", "count", device_count) }} · {{ t.get1("count-sensors", "count", totals.total()) }}{% if devices_down > 0 %} · <strong class="c-down">{{ t.get1("overview-devices-down", "count", devices_down) }}</strong>{% endif %}</p>
   </div>
   {% if layout.is_admin %}
   <div class="actions">
-    {% if top_groups > 1 %}<a class="button ghost" href="/groups/0/order">Gruppen anordnen</a>{% endif %}
+    {% if top_groups > 1 %}<a class="button ghost" href="/groups/0/order">{{ t.get("overview-order-groups") }}</a>{% endif %}
     <a class="button secondary" href="/groups/new">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      Neue Gruppe
+      {{ t.get("group-new") }}
     </a>
     <a class="button" href="/devices/new">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Neues Gerät
+      {{ t.get("device-new") }}
     </a>
   </div>
   {% endif %}
@@ -74,19 +74,19 @@
 <p class="flash" role="status">{{ message }}</p>
 {% endif %}
 
-<section class="tiles" aria-label="Sensorstatus">
-  <div class="tile"><div class="tile-value">{{ totals.total() }}</div><div class="tile-label">Sensoren</div></div>
-  <div class="tile status-up"><div class="tile-value">{{ totals.up }}</div><div class="tile-label">In Ordnung</div></div>
-  <div class="tile status-warning{% if totals.warning > 0 %} active{% endif %}"><div class="tile-value">{{ totals.warning }}</div><div class="tile-label">Warnung</div></div>
-  <div class="tile status-down{% if totals.down > 0 %} active{% endif %}"><div class="tile-value">{{ totals.down }}</div><div class="tile-label">Ausfall</div></div>
-  <div class="tile status-paused"><div class="tile-value">{{ totals.paused + totals.unknown }}</div><div class="tile-label">Inaktiv / unbekannt</div></div>
+<section class="tiles" aria-label="{{ t.get("overview-sensor-status") }}">
+  <div class="tile"><div class="tile-value">{{ totals.total() }}</div><div class="tile-label">{{ t.get("sensors") }}</div></div>
+  <div class="tile status-up"><div class="tile-value">{{ totals.up }}</div><div class="tile-label">{{ t.get("status-up") }}</div></div>
+  <div class="tile status-warning{% if totals.warning > 0 %} active{% endif %}"><div class="tile-value">{{ totals.warning }}</div><div class="tile-label">{{ t.get("status-warning") }}</div></div>
+  <div class="tile status-down{% if totals.down > 0 %} active{% endif %}"><div class="tile-value">{{ totals.down }}</div><div class="tile-label">{{ t.get("status-down") }}</div></div>
+  <div class="tile status-paused"><div class="tile-value">{{ totals.paused + totals.unknown }}</div><div class="tile-label">{{ t.get("overview-paused-unknown") }}</div></div>
 </section>
 
 {% if ungrouped.is_none() && groups.is_empty() %}
 <div class="card">
   <div class="empty">
-    <strong>Noch keine Geräte angelegt.</strong>
-    {% if layout.is_admin %}Lege ein <a href="/devices/new">Gerät</a> an – mit SNMP-Profil oder „Kein SNMP – nur Ping“.{% endif %}
+    <strong>{{ t.get("overview-empty") }}</strong>
+    {% if layout.is_admin %}{{ t.get("overview-empty-hint") }} <a href="/devices/new">{{ t.get("device-new") }}</a>{% endif %}
   </div>
 </div>
 {% endif %}
@@ -95,10 +95,10 @@
 <section class="card flush">
   <div class="group-head">
     <h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> {{ section.name }} <span class="muted small">{{ section.devices.len() }}</span></h2>
-    {% if layout.is_admin %}<div class="row-actions"><a class="button ghost small" href="/groups/0/order">Reihenfolge</a></div>{% endif %}
+    {% if layout.is_admin %}<div class="row-actions"><a class="button ghost small" href="/groups/0/order">{{ t.get("order") }}</a></div>{% endif %}
   </div>
   <div class="devices">
-    {% for card in section.devices %}{% call device_row(card, layout) %}{% endcall %}{% endfor %}
+    {% for card in section.devices %}{% call device_row(card, layout, t) %}{% endcall %}{% endfor %}
   </div>
 </section>
 {% endif %}
@@ -108,10 +108,10 @@
   <summary class="group-head">
     <h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> {{ top.summary.name }}</h2>
     <div class="group-info">
-      {% call group_info(top.summary) %}{% endcall %}
+      {% call group_info(top.summary, t) %}{% endcall %}
       {% if layout.is_admin %}
-      <a class="button ghost small" href="/groups/{{ top.summary.id }}/order">Reihenfolge</a>
-      <a class="button ghost small" href="/groups/{{ top.summary.id }}/edit">Gruppe bearbeiten</a>
+      <a class="button ghost small" href="/groups/{{ top.summary.id }}/order">{{ t.get("order") }}</a>
+      <a class="button ghost small" href="/groups/{{ top.summary.id }}/edit">{{ t.get("group-edit") }}</a>
       {% endif %}
     </div>
   </summary>
@@ -121,7 +121,7 @@
   </svg>
   {% endif %}
   <div class="devices">
-  {% if top.rows.is_empty() %}<p class="empty small">Keine Geräte in dieser Gruppe.</p>{% endif %}
+  {% if top.rows.is_empty() %}<p class="empty small">{{ t.get("group-empty") }}</p>{% endif %}
   {% for row in top.rows %}
     {% match row %}
     {% when Row::Start with (s) %}
@@ -129,15 +129,15 @@
       <summary class="subgroup-head">
         <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> {{ s.name }}</h3>
         <div class="group-info">
-          {% call group_info(s) %}{% endcall %}
-          {% if layout.is_admin %}<a class="button ghost small" href="/groups/{{ s.id }}/order">Reihenfolge</a>
-          <a class="button ghost small" href="/groups/{{ s.id }}/edit">Gruppe bearbeiten</a>{% endif %}
+          {% call group_info(s, t) %}{% endcall %}
+          {% if layout.is_admin %}<a class="button ghost small" href="/groups/{{ s.id }}/order">{{ t.get("order") }}</a>
+          <a class="button ghost small" href="/groups/{{ s.id }}/edit">{{ t.get("group-edit") }}</a>{% endif %}
         </div>
       </summary>
     {% when Row::Device with (card) %}
-      {% call device_row(card, layout) %}{% endcall %}
+      {% call device_row(card, layout, t) %}{% endcall %}
     {% when Row::Empty %}
-      <p class="muted small subgroup-empty">Keine Geräte in dieser Gruppe.</p>
+      <p class="muted small subgroup-empty">{{ t.get("group-empty") }}</p>
     {% when Row::End %}
     </details>
     {% endmatch %}

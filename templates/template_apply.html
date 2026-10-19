@@ -1,36 +1,36 @@
 {% extends "app.html" %}
 {% block page_class %} narrow{% endblock %}
-{% block title %}Vorlage anwenden – opennetmon{% endblock %}
+{% block title %}{{ t.get("template-apply") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>Vorlage anwenden</span></div>
-    <h1>Vorlage anwenden</h1>
-    <p class="subtitle">{{ device.name }} · <span class="num">{{ device.host }}</span>{% if let Some(oid) = object_id %} · Kennung <span class="num">{{ oid }}</span>{% endif %}</p>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("template-apply") }}</span></div>
+    <h1>{{ t.get("template-apply") }}</h1>
+    <p class="subtitle">{{ device.name }} · <span class="num">{{ device.host }}</span>{% if let Some(oid) = object_id %} · {{ t.get("template-identification") }} <span class="num">{{ oid }}</span>{% endif %}</p>
   </div>
 </div>
 
 {% if let Some(message) = notice %}
-<p class="notice" role="status">Die Gerätekennung konnte nicht gelesen werden: {{ message }}</p>
+<p class="notice" role="status">{{ t.get1("template-object-id-unread", "message", message.as_str()) }}</p>
 {% endif %}
 
 <section class="card">
   {% if options.is_empty() %}
-  <div class="empty"><strong>Noch keine Vorlagen.</strong> Speichere zuerst ein fertig eingerichtetes Gerät als Vorlage.</div>
+  <div class="empty"><strong>{{ t.get("templates-none") }}</strong> {{ t.get("templates-none-apply") }}</div>
   {% else %}
   <form method="post" action="/devices/{{ device.id }}/template/apply" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <label for="template_id">Vorlage</label>
+    <label for="template_id">{{ t.get("template") }}</label>
     <select id="template_id" name="template_id">
       {% for o in options %}
       <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>
       {% endfor %}
     </select>
-    {% if let Some(name) = detected %}<p class="hint">Passend zur Gerätekennung: <strong>{{ name }}</strong>.</p>{% endif %}
-    <p class="hint">Angelegt werden nur Sensoren, die noch fehlen. Vorhandene Sensoren bleiben unverändert, nichts wird gelöscht.</p>
+    {% if let Some(name) = detected %}<p class="hint">{{ t.get1("template-detected", "name", name.as_str()) }}</p>{% endif %}
+    <p class="hint">{{ t.get("template-apply-hint") }}</p>
     <div class="form-actions">
-      <button type="submit">Anwenden</button>
-      <a class="button secondary" href="/devices/{{ device.id }}/sensors">Abbrechen</a>
+      <button type="submit">{{ t.get("template-apply-button") }}</button>
+      <a class="button secondary" href="/devices/{{ device.id }}/sensors">{{ t.get("cancel") }}</a>
     </div>
   </form>
   {% endif %}

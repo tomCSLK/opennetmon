@@ -1,11 +1,10 @@
 {% extends "app.html" %}
-{% block title %}MIB-Dateien – opennetmon{% endblock %}
+{% block title %}{{ t.get("nav-mibs") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>MIB-Dateien</h1>
-    <p class="subtitle">{{ total_modules }} Module mit {{ total_objects }} Objekten geladen. Hochgeladene Hersteller-MIBs liefern Namen, Typen,
-      Einheiten und Klartext für Statuswerte bei eigenen OID-Sensoren.</p>
+    <h1>{{ t.get("nav-mibs") }}</h1>
+    <p class="subtitle">{{ t.get2("mibs-subtitle", "modules", total_modules, "objects", total_objects) }}</p>
   </div>
 </div>
 
@@ -16,37 +15,36 @@
 <p class="error" role="alert">{{ message }}</p>
 {% endif %}
 {% if let Some(up) = upload %}
-<p class="flash" role="status">{{ up.accepted }} {% if up.accepted == 1 %}Datei{% else %}Dateien{% endif %} mit {{ up.modules }} {% if up.modules == 1 %}Modul{% else %}Modulen{% endif %} übernommen{% if up.replaced > 0 %}, {{ up.replaced }} ältere Fassung(en) ersetzt{% endif %}.</p>
+<p class="flash" role="status">{{ up.summary(*t) }}</p>
 {% if !up.skipped.is_empty() %}
-<div class="notice" role="status"><div><strong>{{ up.skipped.len() }} übersprungen:</strong>
+<div class="notice" role="status"><div><strong>{{ t.get1("mibs-skipped", "count", up.skipped.len()) }}</strong>
   <ul class="plain">{% for s in up.skipped %}<li>{{ s }}</li>{% endfor %}</ul></div></div>
 {% endif %}
 {% endif %}
 
 <section class="card">
-  <h2>Hochladen</h2>
+  <h2>{{ t.get("mibs-upload") }}</h2>
   <form method="post" action="/mibs/upload" enctype="multipart/form-data" class="upload">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <input type="file" name="files" multiple accept=".mib,.my,.txt,.mi2,text/plain" required aria-label="MIB-Dateien auswählen">
-    <button type="submit">Hochladen</button>
+    <input type="file" name="files" multiple accept=".mib,.my,.txt,.mi2,text/plain" required aria-label="{{ t.get("mibs-choose-files") }}">
+    <button type="submit">{{ t.get("mibs-upload") }}</button>
   </form>
-  <p class="hint">Mehrere Dateien auf einmal auswählen (z. B. den ganzen entpackten Ordner eines Herstellers). Eine Datei, die ein bereits
-    geladenes Modul enthält, ersetzt die ältere Fassung. Standard-MIBs wie IF-MIB oder HOST-RESOURCES-MIB sind schon dabei.</p>
+  <p class="hint">{{ t.get("mibs-upload-hint") }}</p>
 </section>
 
 <section class="card">
-  <h2>Suchen</h2>
+  <h2>{{ t.get("mibs-search") }}</h2>
   <form method="get" action="/mibs" class="search">
-    <input type="text" name="q" value="{{ query }}" placeholder="Name oder Begriff, z. B. tpSysMonitorCpu, temperature, ifHCInOctets" aria-label="MIB-Objekt suchen">
-    <button type="submit" class="secondary">Suchen</button>
+    <input type="text" name="q" value="{{ query }}" placeholder="{{ t.get("mibs-search-placeholder") }}" aria-label="{{ t.get("mibs-search-label") }}">
+    <button type="submit" class="secondary">{{ t.get("mibs-search") }}</button>
   </form>
   {% if !query.is_empty() %}
   {% if results.is_empty() %}
-  <p class="empty small">Nichts gefunden.</p>
+  <p class="empty small">{{ t.get("mibs-nothing-found") }}</p>
   {% else %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Name</th><th>OID</th><th>Art / Typ</th><th>Beschreibung</th></tr></thead>
+    <thead><tr><th>{{ t.get("name") }}</th><th>OID</th><th>{{ t.get("mibs-kind-type") }}</th><th>{{ t.get("description") }}</th></tr></thead>
     <tbody>
     {% for o in results %}
       <tr>
@@ -65,13 +63,13 @@
 </section>
 
 <section class="card flush">
-  <div class="card-head"><h2>Hochgeladene Dateien</h2><span class="muted small">{{ files.len() }}</span></div>
+  <div class="card-head"><h2>{{ t.get("mibs-uploaded-files") }}</h2><span class="muted small">{{ files.len() }}</span></div>
   {% if files.is_empty() %}
-  <p class="empty small">Noch keine Hersteller-MIBs hochgeladen.</p>
+  <p class="empty small">{{ t.get("mibs-none-uploaded") }}</p>
   {% else %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Datei</th><th>Module</th><th>Hochgeladen</th><th></th></tr></thead>
+    <thead><tr><th>{{ t.get("mibs-file") }}</th><th>{{ t.get("mibs-modules") }}</th><th>{{ t.get("mibs-uploaded-at") }}</th><th></th></tr></thead>
     <tbody>
     {% for f in files %}
       <tr>
@@ -79,14 +77,14 @@
         <td class="wrap">
           {% for m in f.modules %}
           <div>{% if m.ok %}<span class="badge status-up">{{ m.name }}</span>{% else %}<span class="badge status-warning">{{ m.name }}</span>{% endif %}
-            <span class="muted small">{{ m.objects }} Objekte{% if !m.problem.is_empty() %} · {{ m.problem }}{% endif %}</span></div>
+            <span class="muted small">{{ t.get1("count-objects", "count", m.objects) }}{% if !m.problem.is_empty() %} · {{ m.problem }}{% endif %}</span></div>
           {% endfor %}
         </td>
         <td class="num">{{ f.uploaded_at|safe }}</td>
         <td class="right">
           <form method="post" action="/mibs/files/{{ f.id }}/delete">
             <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-            <button type="submit" class="ghost small">Löschen</button>
+            <button type="submit" class="ghost small">{{ t.get("delete") }}</button>
           </form>
         </td>
       </tr>
@@ -98,10 +96,10 @@
 </section>
 
 <details class="card panel">
-  <summary><h2>Mitgelieferte Standard-MIBs ({{ bundled.len() }})</h2></summary>
+  <summary><h2>{{ t.get1("mibs-bundled", "count", bundled.len()) }}</h2></summary>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Modul</th><th>Objekte</th></tr></thead>
+    <thead><tr><th>{{ t.get("mibs-module") }}</th><th>{{ t.get("mibs-objects") }}</th></tr></thead>
     <tbody>
     {% for m in bundled %}
       <tr><td>{{ m.name }}</td><td class="num">{{ m.objects }}</td></tr>

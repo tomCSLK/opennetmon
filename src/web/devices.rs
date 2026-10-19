@@ -14,7 +14,7 @@ use crate::devices::{
     DeviceInput, Polling,
 };
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{self, SnmpTarget, format_uptime};
 use crate::storage::{credentials, devices as store, groups, sensors};
@@ -72,6 +72,7 @@ struct FormTemplate {
     /// Language of the page.
     t: Lang,
     layout: Layout,
+    /// Catalog id of the heading.
     heading: &'static str,
     action: String,
     test_action: Option<String>,
@@ -128,15 +129,11 @@ pub struct DeleteForm {
     confirm: Option<String>,
 }
 
-fn invalid(message: &str) -> Error {
-    Error::invalid(message.to_owned())
-}
-
-fn number<T: std::str::FromStr>(value: &str, what: &str) -> Result<T> {
+fn number<T: std::str::FromStr>(value: &str, invalid: &'static str) -> Result<T> {
     value
         .trim()
         .parse()
-        .map_err(|_| Error::invalid(format!("Ungültiger Wert für {what}.")))
+        .map_err(|_| Error::invalid(Msg::new(invalid)))
 }
 
 impl DeviceForm {
@@ -163,13 +160,16 @@ impl DeviceForm {
     fn to_input(&self) -> Result<DeviceInput> {
         let group_id = match self.group_id.trim() {
             "" => None,
-            text => Some(text.parse().map_err(|_| invalid("Ungültige Gruppe."))?),
+            text => Some(
+                text.parse()
+                    .map_err(|_| Error::invalid(Msg::new("group-invalid")))?,
+            ),
         };
         let profile_id = match self.profile_id.trim() {
             "none" => None,
             text => Some(
                 text.parse()
-                    .map_err(|_| invalid("Bitte ein SNMP-Profil oder „Kein SNMP“ auswählen."))?,
+                    .map_err(|_| Error::invalid(Msg::new("device-profile-missing")))?,
             ),
         };
         Ok(DeviceInput {
@@ -178,21 +178,25 @@ impl DeviceForm {
             group_id,
             profile_id,
             polling: Polling {
-                port: number(&self.port, "den Port")?,
-                interval_secs: number(&self.interval_secs, "das Intervall")?,
-                timeout_secs: number(&self.timeout_secs, "den Timeout")?,
-                retries: number(&self.retries, "die Wiederholungen")?,
+                port: number(&self.port, "polling-port-not-number")?,
+                interval_secs: number(&self.interval_secs, "polling-interval-not-number")?,
+                timeout_secs: number(&self.timeout_secs, "polling-timeout-not-number")?,
+                retries: number(&self.retries, "polling-retries-not-number")?,
             },
         })
     }
 }
 
-async fn profile_options(state: &AppState, selected: Option<i64>) -> Result<Vec<SelectOption>> {
+async fn profile_options(
+    state: &AppState,
+    user: &CurrentUser,
+    selected: Option<i64>,
+) -> Result<Vec<SelectOption>> {
     Ok(credentials::list_profiles(&state.pool)
         .await?
         .into_iter()
         .map(|p| SelectOption {
-            label: format!("{} ({})", p.name, p.summary()),
+            label: format!("{} ({})", p.name, p.summary(user.lang)),
             selected: selected == Some(p.id),
             id: p.id,
         })
@@ -210,7 +214,7 @@ async fn render_form(
 ) -> Result<String> {
     let all_groups = groups::list_groups(&state.pool).await?;
     let templates = if existing.is_none() {
-        crate::web::templates::device_form_options(state, &form.template).await?
+        crate::web::templates::device_form_options(state, user.lang, &form.template).await?
     } else {
         Vec::new()
     };
@@ -220,9 +224,9 @@ async fn render_form(
         layout: user.layout(),
         t: user.lang,
         heading: if existing.is_some() {
-            "Gerät bearbeiten"
+            "device-edit"
         } else {
-            "Neues Gerät"
+            "device-new"
         },
         action: existing.map_or_else(|| "/devices".to_owned(), |d| format!("/devices/{}", d.id)),
         test_action: existing.map(|d| format!("/devices/{}/test", d.id)),
@@ -230,7 +234,7 @@ async fn render_form(
         error,
         form,
         groups: group_options(&all_groups, selected_group, &[]),
-        profiles: profile_options(state, selected_profile).await?,
+        profiles: profile_options(state, user, selected_profile).await?,
     };
     Ok(page.render()?)
 }
@@ -335,7 +339,7 @@ async fn save(
                 let device = store::get_device(&state.pool, saved)
                     .await?
                     .ok_or(Error::NotFound)?;
-                let heading = format!("Gerät „{}“ angelegt", device.name);
+                let heading = user.lang.get1("device-created-named", "name", &device.name);
                 let html =
                     crate::web::templates::apply_and_render(state, user, device, choice, heading)
                         .await?;
@@ -384,9 +388,9 @@ async fn snmp_sensors_left(state: &AppState, id: Option<i64>, input: &DeviceInpu
         .filter(|s| s.spec.uses_snmp())
         .count();
     if left > 0 {
-        return Err(Error::invalid(format!(
-            "Das Gerät hat noch {left} SNMP-Sensor(en). Für „Kein SNMP“ diese zuerst löschen oder ein SNMP-Profil behalten."
-        )));
+        return Err(Error::invalid(
+            Msg::new("device-snmp-sensors-left").with("count", left),
+        ));
     }
     Ok(())
 }
@@ -400,7 +404,7 @@ pub async fn delete(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     if form.confirm.as_deref() != Some("yes") {
-        return Err(invalid("Bitte das Löschen bestätigen."));
+        return Err(Error::invalid(Msg::new("confirm-delete")));
     }
     if !store::delete_device(&state.pool, id).await? {
         return Err(Error::NotFound);
@@ -425,7 +429,7 @@ pub async fn test_connection(
     let profile_summary =
         credentials::get_profile(&state.pool, device.profile_id.unwrap_or_default())
             .await?
-            .map(|p| p.summary())
+            .map(|p| p.summary(user.lang))
             .unwrap_or_default();
 
     let target = SnmpTarget {
@@ -443,12 +447,12 @@ pub async fn test_connection(
         Ok(result) => (
             Some(ProbeView {
                 sys_descr: result.sys_descr,
-                uptime: format_uptime(result.uptime_ticks),
+                uptime: format_uptime(user.lang, result.uptime_ticks),
                 round_trip_ms: result.round_trip.as_millis(),
             }),
             None,
         ),
-        Err(e) => (None, Some(e.user_message())),
+        Err(e) => (None, Some(user.lang.msg(&e.user_message()))),
     };
     let page = TestTemplate {
         layout: user.layout(),
@@ -1009,8 +1013,8 @@ mod tests {
         );
         let device = store::get_device(&h.state.pool, 1).await.unwrap().unwrap();
         assert_eq!(
-            (device.profile_id, device.profile_label()),
-            (None, "kein SNMP")
+            (device.profile_id, device.profile_label(Lang::De)),
+            (None, "kein SNMP".to_owned())
         );
         let sensors = sensors::list_sensors(&h.state.pool, 1).await.unwrap();
         assert_eq!(sensors.len(), 1);
@@ -1075,7 +1079,7 @@ mod tests {
         )
         .await;
         assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert!(refused.body.contains("noch 1 SNMP-Sensor"));
+        assert!(refused.body.contains("noch einen SNMP-Sensor"));
         let uptime = sensors::list_sensors(&h.state.pool, 1)
             .await
             .unwrap()
@@ -1106,5 +1110,49 @@ mod tests {
                 .profile_id,
             None
         );
+    }
+
+    #[tokio::test]
+    async fn device_pages_and_their_errors_are_shown_in_english() {
+        let h = harness(true).await;
+        crate::storage::users::set_language(&h.state.pool, 1, Some(Lang::En))
+            .await
+            .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let form = send(&h.app, get("/devices/new", Some(&admin))).await;
+        assert!(form.body.contains("<h1>New device</h1>"));
+        assert!(form.body.contains("No SNMP – ping only"));
+        let bad = ping_only(&csrf, "Drucker", "300.1.1.1");
+        let refused = send(&h.app, post("/devices", Some(&admin), &bad)).await;
+        assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(
+            refused
+                .body
+                .contains("Please enter a valid IP address or host name.")
+        );
+
+        let created = send(
+            &h.app,
+            post(
+                "/devices",
+                Some(&admin),
+                &ping_only(&csrf, "Drucker", "10.0.0.9"),
+            ),
+        )
+        .await;
+        assert_eq!(created.status, StatusCode::SEE_OTHER);
+        let home = send(&h.app, get("/?msg=device_created", Some(&admin))).await;
+        for text in [
+            "Device created.",
+            "1 device",
+            "every 60 s",
+            "no SNMP",
+            "All devices",
+            "Inactive / unknown",
+        ] {
+            assert!(home.body.contains(text), "{text}");
+        }
+        let group = send(&h.app, get("/groups/new", Some(&admin))).await;
+        assert!(group.body.contains("<h1>New group</h1>") && group.body.contains("– top level –"));
     }
 }

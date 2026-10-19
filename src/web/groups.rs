@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::devices::subtree_ids;
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::storage::groups as store;
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout, SelectOption, group_options};
@@ -20,6 +20,7 @@ struct FormTemplate {
     /// Language of the page.
     t: Lang,
     layout: Layout,
+    /// Catalog id of the heading.
     heading: &'static str,
     action: String,
     delete_action: Option<String>,
@@ -48,7 +49,7 @@ fn parse_optional_id(value: &str) -> Result<Option<i64>> {
         text => text
             .parse()
             .map(Some)
-            .map_err(|_| Error::invalid("Ungültige Gruppe.")),
+            .map_err(|_| Error::invalid(Msg::new("group-invalid"))),
     }
 }
 
@@ -58,7 +59,7 @@ pub async fn new_form(State(state): State<AppState>, user: CurrentUser) -> Resul
     let page = FormTemplate {
         layout: user.layout(),
         t: user.lang,
-        heading: "Neue Gruppe",
+        heading: "group-new",
         action: "/groups".to_owned(),
         delete_action: None,
         error: None,
@@ -79,7 +80,7 @@ pub async fn edit_form(
     let page = FormTemplate {
         layout: user.layout(),
         t: user.lang,
-        heading: "Gruppe bearbeiten",
+        heading: "group-edit",
         action: format!("/groups/{id}"),
         delete_action: Some(format!("/groups/{id}/delete")),
         error: None,
@@ -142,9 +143,9 @@ async fn save(
                 layout: user.layout(),
                 t: user.lang,
                 heading: if id.is_some() {
-                    "Gruppe bearbeiten"
+                    "group-edit"
                 } else {
-                    "Neue Gruppe"
+                    "group-new"
                 },
                 action: id.map_or_else(|| "/groups".to_owned(), |id| format!("/groups/{id}")),
                 delete_action: id.map(|id| format!("/groups/{id}/delete")),
@@ -171,7 +172,7 @@ pub async fn delete(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     if form.confirm.as_deref() != Some("yes") {
-        return Err(Error::invalid("Bitte das Löschen bestätigen."));
+        return Err(Error::invalid(Msg::new("confirm-delete")));
     }
     store::delete_group(&state.pool, id).await?;
     tracing::info!(user = %user.username, group = id, "group deleted");

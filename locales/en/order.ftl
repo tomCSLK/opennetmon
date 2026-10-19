@@ -1,0 +1,16 @@
+order-groups = Groups
+order-subgroups = Subgroups
+order-devices-ungrouped = Devices without a group
+order-devices = Devices
+order-in-group = Order in “{ $name }”
+order-top-level = Order of the top level
+order-sensors-of = Order of the sensors of { $device }
+order-subtitle = Drag rows by the handle, move them with ↑/↓ or enter a position, then save.
+order-nothing = There is nothing to order here.
+order-drag = Drag to move
+order-position-of = Position of { $name }
+order-move-up = Move { $name } up
+order-move-down = Move { $name } down
+order-save = Save order
+order-auto = Sort automatically
+order-hint = “Sort automatically” orders by name again (numbers by value, e.g. port 2 before port 10), sensors first by type: ping, uptime, traffic, interface status, then custom values. New entries come after the ones ordered by hand.

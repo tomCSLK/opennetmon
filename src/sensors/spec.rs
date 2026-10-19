@@ -6,6 +6,7 @@ use super::snmp::{
     InterfaceStatusSensor, InterfaceTrafficSensor, OidMode, OidSensor, UptimeSensor,
 };
 use super::{Sensor, Unit};
+use crate::i18n::{Lang, Msg};
 
 pub const MAX_OID_ARCS: usize = 128;
 /// Largest accepted `ifIndex` (the value is a 31-bit integer in the IF-MIB).
@@ -79,34 +80,40 @@ impl SensorSpec {
         }
     }
 
-    /// Short German description for lists, e.g. `Interface-Traffic (Index 49153)`.
-    pub fn describe(&self) -> String {
+    /// Short description for lists, e.g. `Interface-Traffic (Index 49153)`.
+    pub fn describe(&self, t: Lang) -> String {
         match self {
             Self::Ping => "Ping".to_owned(),
             Self::Uptime => "Uptime".to_owned(),
-            Self::InterfaceTraffic { if_index } => format!("Interface-Traffic (Index {if_index})"),
-            Self::InterfaceStatus { if_index } => format!("Interface-Status (Index {if_index})"),
-            Self::Oid {
-                oid,
-                mode,
-                scale,
-                unit,
-            } => format!(
-                "OID {} ({}{}{})",
-                format_oid(oid),
-                match mode {
-                    OidMode::Gauge => "Wert",
-                    OidMode::Counter => "Zähler, Rate/s",
-                },
-                if *scale == 1.0 {
-                    String::new()
-                } else {
-                    format!(", Faktor {scale}")
-                },
-                unit.as_deref()
-                    .map_or_else(String::new, |u| format!(", Einheit {u}"))
-            ),
+            Self::InterfaceTraffic { if_index } => {
+                t.get1("sensor-describe-traffic", "index", *if_index)
+            }
+            Self::InterfaceStatus { if_index } => {
+                t.get1("sensor-describe-status", "index", *if_index)
+            }
+            Self::Oid { oid, .. } => format!("OID {} ({})", format_oid(oid), self.oid_details(t)),
         }
+    }
+
+    /// Mode, factor and unit of a custom OID sensor, e.g. `Wert, Faktor 0.1, Einheit °C`.
+    pub fn oid_details(&self, t: Lang) -> String {
+        let Self::Oid {
+            mode, scale, unit, ..
+        } = self
+        else {
+            return String::new();
+        };
+        let mut text = t.get(match mode {
+            OidMode::Gauge => "oid-mode-gauge",
+            OidMode::Counter => "oid-mode-counter",
+        });
+        if *scale != 1.0 {
+            text.push_str(&t.get1("oid-detail-factor", "factor", scale.to_string()));
+        }
+        if let Some(u) = unit {
+            text.push_str(&t.get1("oid-detail-unit", "unit", u));
+        }
+        text
     }
 
     pub fn channels(&self) -> Vec<ChannelDef> {
@@ -141,28 +148,26 @@ impl SensorSpec {
         !matches!(self, Self::Ping)
     }
 
-    pub fn validate(&self) -> Result<(), &'static str> {
+    pub fn validate(&self) -> Result<(), Msg> {
         match self {
             Self::InterfaceTraffic { if_index } | Self::InterfaceStatus { if_index }
                 if *if_index == 0 || *if_index > MAX_IF_INDEX =>
             {
-                Err("Der Interface-Index muss zwischen 1 und 2147483647 liegen.")
+                Err(Msg::new("sensor-if-index-invalid"))
             }
             Self::Oid {
                 oid, scale, unit, ..
             } => {
                 validate_oid(oid)?;
                 if !scale.is_finite() || *scale == 0.0 {
-                    return Err("Der Faktor muss eine Zahl ungleich 0 sein.");
+                    return Err(Msg::new("sensor-factor-invalid"));
                 }
                 if let Some(u) = unit
                     && (u.trim().is_empty()
                         || u.chars().count() > MAX_UNIT_CHARS
                         || u.chars().any(char::is_control))
                 {
-                    return Err(
-                        "Die Einheit darf höchstens 24 Zeichen lang sein und keine Steuerzeichen enthalten.",
-                    );
+                    return Err(Msg::new("sensor-unit-invalid"));
                 }
                 Ok(())
             }
@@ -184,9 +189,7 @@ impl SensorSpec {
     }
 }
 
-fn validate_oid(oid: &[u64]) -> Result<(), &'static str> {
-    const INVALID: &str =
-        "Die OID ist ungültig (mindestens 2 Zahlen, erste 0 bis 2, höchstens 128 Stellen).";
+fn validate_oid(oid: &[u64]) -> Result<(), Msg> {
     match oid {
         [first, second, ..]
             if oid.len() <= MAX_OID_ARCS
@@ -196,23 +199,22 @@ fn validate_oid(oid: &[u64]) -> Result<(), &'static str> {
         {
             Ok(())
         }
-        _ => Err(INVALID),
+        _ => Err(Msg::new("oid-invalid")),
     }
 }
 
 /// Parses a numeric dotted OID such as `1.3.6.1.2.1.1.3.0` (a leading dot is tolerated).
-pub fn parse_oid(text: &str) -> Result<Vec<u64>, &'static str> {
-    const INVALID: &str =
-        "Die OID ist ungültig. Erwartet wird eine numerische OID wie 1.3.6.1.2.1.1.3.0.";
+pub fn parse_oid(text: &str) -> Result<Vec<u64>, Msg> {
+    let invalid = || Msg::new("oid-not-numeric");
     let oid: Vec<u64> = text
         .trim()
         .trim_start_matches('.')
         .split('.')
         .map(|part| {
             if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
-                return Err(INVALID);
+                return Err(invalid());
             }
-            part.parse::<u64>().map_err(|_| INVALID)
+            part.parse::<u64>().map_err(|_| invalid())
         })
         .collect::<Result<_, _>>()?;
     validate_oid(&oid)?;

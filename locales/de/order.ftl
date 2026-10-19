@@ -1,0 +1,16 @@
+order-groups = Gruppen
+order-subgroups = Untergruppen
+order-devices-ungrouped = Geräte ohne Gruppe
+order-devices = Geräte
+order-in-group = Reihenfolge in „{ $name }“
+order-top-level = Reihenfolge der obersten Ebene
+order-sensors-of = Reihenfolge der Sensoren von { $device }
+order-subtitle = Zeilen am Griff ziehen, mit ↑/↓ verschieben oder eine Position eintragen, dann speichern.
+order-nothing = Hier gibt es nichts zu ordnen.
+order-drag = Ziehen zum Verschieben
+order-position-of = Position von { $name }
+order-move-up = { $name } nach oben
+order-move-down = { $name } nach unten
+order-save = Reihenfolge speichern
+order-auto = Automatisch sortieren
+order-hint = „Automatisch sortieren“ ordnet wieder nach Namen (Zahlen der Größe nach, z. B. Port 2 vor Port 10), Sensoren zuerst nach Typ: Ping, Uptime, Traffic, Interface-Status, dann eigene Werte. Neue Einträge kommen nach den von Hand geordneten.

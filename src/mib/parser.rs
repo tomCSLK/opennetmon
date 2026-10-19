@@ -477,7 +477,7 @@ impl Parser {
                 }
                 other => {
                     module.warnings.push(format!(
-                        "Zeile {line}: unerwartetes Zeichen {other:?} übersprungen"
+                        "line {line}: unexpected character {other:?} skipped"
                     ));
                     self.pos += 1;
                 }
@@ -520,7 +520,7 @@ impl Parser {
             if !self.eat(&Token::Assign) {
                 module
                     .warnings
-                    .push(format!("Zeile {line}: {name}: kein „::=“ gefunden"));
+                    .push(format!("line {line}: {name}: no \"::=\" found"));
                 return;
             }
             match self.peek() {
@@ -545,9 +545,9 @@ impl Parser {
             self.type_assignment(name, module);
             return;
         }
-        module.warnings.push(format!(
-            "Zeile {line}: „{name}“ nicht verstanden, übersprungen"
-        ));
+        module
+            .warnings
+            .push(format!("line {line}: \"{name}\" not understood, skipped"));
     }
 }
 

@@ -8,6 +8,7 @@
   var info = document.getElementById('samples-info');
   if (!box || !window.opennetmonFormat) { return; }
   var F = window.opennetmonFormat;
+  var T = window.opennetmonText;
   var LIMITS = [50, 100, 500];
   var select = document.getElementById('samples-limit');
   var shown = LIMITS[0];
@@ -55,11 +56,11 @@
     d.series.forEach(function (s) {
       if (s.unit === 'bps') {
         cols.push({
-          title: s.label + ' (Volumen)',
+          title: T('samples-volume', s.label),
           values: s.values.map(function (v, i) { return v === null ? null : v * dur[i] / 8; }),
           fmt: F.bytes, sum: true
         });
-        cols.push({ title: s.label + ' (Geschwindigkeit)', values: s.values,
+        cols.push({ title: T('samples-speed', s.label), values: s.values,
           fmt: function (v) { return F.value('bps', v); }, sum: false });
       } else {
         cols.push({ title: s.label + (s.unit_label ? ' (' + s.unit_label + ')' : ''), values: s.values,
@@ -94,10 +95,11 @@
     var limit = Math.min(shown, count);
     if (info) {
       var text;
-      if (count > limit) { text = 'neueste ' + limit + ' von ' + count + ' Werten'; }
-      else { text = count + (count === 1 ? ' Wert' : ' Werte'); }
+      if (count > limit) { text = T('samples-newest', limit, count); }
+      else { text = count === 1 ? T('samples-one') : T('samples-many', count); }
       if (data.step_secs) {
-        text += ' · Mittelwerte je ' + (data.step_secs >= 3600 ? (data.step_secs / 3600) + ' Std.' : (data.step_secs / 60) + ' Min.');
+        text += ' · ' + T('samples-averages', data.step_secs >= 3600 ?
+          (data.step_secs / 3600) + ' ' + T('unit-hours') : (data.step_secs / 60) + ' ' + T('unit-minutes'));
       }
       info.textContent = text;
     }
@@ -105,7 +107,7 @@
     var table = el('table', 'samples');
     var head = el('thead');
     var hr = el('tr');
-    hr.appendChild(el('th', null, data.step_secs ? 'Zeitraum ab' : 'Datum Zeit'));
+    hr.appendChild(el('th', null, data.step_secs ? T('samples-period-from') : T('samples-date-time')));
     cols.forEach(function (c) { hr.appendChild(el('th', 'n', c.title)); });
     head.appendChild(hr);
     table.appendChild(head);
@@ -113,17 +115,17 @@
     var body = el('tbody');
     var st = cols.map(function (c) { return stats(c.values); });
     var summary = [
-      { label: 'Summe', pick: function (s, c) { return c.sum ? c.fmt(s.n ? s.sum : null) : ''; }, onlyIf: function () { return cols.some(function (c) { return c.sum; }); } },
-      { label: 'Mittelwert', pick: function (s, c) { return c.state ? '' : c.fmt(s.avg); } },
-      { label: 'Minimum', pick: function (s, c) { return c.fmt(s.min); } },
-      { label: 'Maximum', pick: function (s, c) { return c.fmt(s.max); } }
+      { label: T('samples-sum'), pick: function (s, c) { return c.sum ? c.fmt(s.n ? s.sum : null) : ''; }, onlyIf: function () { return cols.some(function (c) { return c.sum; }); } },
+      { label: T('samples-average'), pick: function (s, c) { return c.state ? '' : c.fmt(s.avg); } },
+      { label: T('samples-minimum'), pick: function (s, c) { return c.fmt(s.min); } },
+      { label: T('samples-maximum'), pick: function (s, c) { return c.fmt(s.max); } }
     ];
     var lastSummary = null;
     summary.forEach(function (row) {
       if (row.onlyIf && !row.onlyIf()) { return; }
       var tr = el('tr', 'summary');
       lastSummary = tr;
-      tr.appendChild(el('td', null, row.label + ' (aus ' + count + ' ' + (count === 1 ? 'Wert' : 'Werten') + ')'));
+      tr.appendChild(el('td', null, count === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, count)));
       cols.forEach(function (c, i) { tr.appendChild(el('td', 'n', row.pick(st[i], c))); });
       body.appendChild(tr);
     });

@@ -92,3 +92,68 @@ flash-mib-deleted = MIB file deleted.
 flash-profile-created = Profile created.
 flash-profile-updated = Profile saved.
 flash-profile-deleted = Profile deleted.
+
+status-up = OK
+status-warning = Warning
+status-down = Down
+status-unknown = Unknown
+status-paused = Inactive
+no-sensors = no sensors
+sensors = Sensors
+name = Name
+cancel = Cancel
+order = Order
+edit-named = Edit { $name }
+every-seconds = every { $seconds } s
+count-devices =
+    { $count ->
+        [one] { $count } device
+       *[other] { $count } devices
+    }
+count-sensors =
+    { $count ->
+        [one] { $count } sensor
+       *[other] { $count } sensors
+    }
+count-inactive = { $count } inactive
+count-warning = { $count } warning
+count-down = { $count } down
+duration-minutes = { $minutes } min
+duration-hours-minutes = { $hours } h { $minutes } min
+duration-days-hours-minutes =
+    { $days ->
+        [one] { $days } day
+       *[other] { $days } days
+    } { $hours } h { $minutes } min
+event-first-poll = first poll: { $status }
+snmp-timeout = No answer within the timeout. Possible causes: device or port not reachable, SNMP not enabled, wrong community or wrong SNMPv3 credentials.
+snmp-auth = Authentication failed. User, password, authentication or privacy protocol do not match the device.
+snmp-unreachable = The device is not reachable or the SNMP port is closed.
+snmp-request = The request could not be built: { $detail }
+snmp-protocol = Unexpected answer from the device: { $detail }
+
+profile-summary-user = user { $user }
+
+duration-minutes-seconds = { $minutes } min { $seconds } s
+channel-in = Inbound
+channel-out = Outbound
+channel-rtt = Response time
+channel-uptime = Uptime
+channel-oper-status = Status
+channel-value = Value
+threshold-not-a-number = A threshold must be a number.
+threshold-not-finite = A threshold must be a finite number.
+
+unknown-action = Unknown action.
+inactive = inactive
+
+status = Status
+sensor = Sensor
+message = Message
+last-poll = Last poll
+actions = Actions
+
+active = active
+
+backup-path-not-utf8 = The backup path is not valid UTF-8.
+backup-exists = { $path } already exists; an existing backup is never overwritten.

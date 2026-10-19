@@ -92,3 +92,68 @@ flash-mib-deleted = MIB-Datei gelöscht.
 flash-profile-created = Profil angelegt.
 flash-profile-updated = Profil gespeichert.
 flash-profile-deleted = Profil gelöscht.
+
+status-up = In Ordnung
+status-warning = Warnung
+status-down = Ausfall
+status-unknown = Unbekannt
+status-paused = Inaktiv
+no-sensors = keine Sensoren
+sensors = Sensoren
+name = Name
+cancel = Abbrechen
+order = Reihenfolge
+edit-named = { $name } bearbeiten
+every-seconds = alle { $seconds } s
+count-devices =
+    { $count ->
+        [one] { $count } Gerät
+       *[other] { $count } Geräte
+    }
+count-sensors =
+    { $count ->
+        [one] { $count } Sensor
+       *[other] { $count } Sensoren
+    }
+count-inactive = { $count } inaktiv
+count-warning = { $count } Warnung
+count-down = { $count } Ausfall
+duration-minutes = { $minutes } Min.
+duration-hours-minutes = { $hours } Std. { $minutes } Min.
+duration-days-hours-minutes =
+    { $days ->
+        [one] { $days } Tag
+       *[other] { $days } Tage
+    } { $hours } Std. { $minutes } Min.
+event-first-poll = erste Abfrage: { $status }
+snmp-timeout = Keine Antwort innerhalb des Timeouts. Mögliche Ursachen: Gerät oder Port nicht erreichbar, SNMP nicht aktiviert, falsche Community oder falsche SNMPv3-Benutzerdaten.
+snmp-auth = Anmeldung fehlgeschlagen. Benutzer, Passwort, Authentifizierungs- oder Verschlüsselungsverfahren stimmen nicht mit dem Gerät überein.
+snmp-unreachable = Das Gerät ist nicht erreichbar oder der SNMP-Port ist geschlossen.
+snmp-request = Die Anfrage konnte nicht aufgebaut werden: { $detail }
+snmp-protocol = Unerwartete Antwort des Geräts: { $detail }
+
+profile-summary-user = Benutzer { $user }
+
+duration-minutes-seconds = { $minutes } Min. { $seconds } s
+channel-in = Eingehend
+channel-out = Ausgehend
+channel-rtt = Antwortzeit
+channel-uptime = Laufzeit
+channel-oper-status = Status
+channel-value = Wert
+threshold-not-a-number = Ein Schwellwert muss eine Zahl sein.
+threshold-not-finite = Ein Schwellwert muss eine endliche Zahl sein.
+
+unknown-action = Unbekannte Aktion.
+inactive = inaktiv
+
+status = Status
+sensor = Sensor
+message = Meldung
+last-poll = Letzte Abfrage
+actions = Aktionen
+
+active = aktiv
+
+backup-path-not-utf8 = Der Pfad der Sicherung ist kein gültiges UTF-8.
+backup-exists = { $path } existiert bereits; eine vorhandene Sicherung wird nie überschrieben.

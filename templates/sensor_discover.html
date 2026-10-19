@@ -3,8 +3,8 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>Interfaces</span></div>
-    <h1>Interfaces von {{ device.name }}</h1>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>Interfaces</span></div>
+    <h1>{{ t.get1("discover-heading", "device", device.name.as_str()) }}</h1>
     <p class="subtitle num">{{ device.host }}:{{ device.polling.port }}</p>
   </div>
 </div>
@@ -13,35 +13,35 @@
 <div class="actions">
   <form method="post" action="/devices/{{ device.id }}/discover">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <button type="submit">Erneut suchen</button>
+    <button type="submit">{{ t.get("discover-again") }}</button>
   </form>
-  <a class="button secondary" href="/devices/{{ device.id }}/sensors">Zurück zu den Sensoren</a>
+  <a class="button secondary" href="/devices/{{ device.id }}/sensors">{{ t.get("back-to-sensors") }}</a>
 </div>
 {% else if rows.is_empty() %}
-<div class="card"><div class="empty"><strong>Das Gerät meldet keine Interfaces.</strong>
-  <a href="/devices/{{ device.id }}/sensors">Zurück zu den Sensoren</a></div></div>
+<div class="card"><div class="empty"><strong>{{ t.get("discover-none") }}</strong>
+  <a href="/devices/{{ device.id }}/sensors">{{ t.get("back-to-sensors") }}</a></div></div>
 {% else %}
 <form method="post" action="/devices/{{ device.id }}/sensors/interfaces">
   <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
   <section class="card flush">
     <div class="card-head">
-      <h2>{{ rows.len() }} Interfaces gefunden</h2>
-      <span class="muted small">Vorausgewählt: aktive Ports (Ethernet, WLAN). Vorhandene Sensoren sind gesperrt.</span>
+      <h2>{{ t.get1("discover-found", "count", rows.len()) }}</h2>
+      <span class="muted small">{{ t.get("discover-hint") }}</span>
     </div>
     <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>Traffic</th><th>Status</th><th>Index</th><th>Name</th><th>Beschreibung</th><th>Zustand</th><th>Tempo</th></tr>
+        <tr><th>Traffic</th><th>{{ t.get("status") }}</th><th>Index</th><th>{{ t.get("name") }}</th><th>{{ t.get("description") }}</th><th>{{ t.get("discover-state") }}</th><th>{{ t.get("discover-speed") }}</th></tr>
       </thead>
       <tbody>
       {% for row in rows %}
         <tr>
           <td>
-            <input type="checkbox" name="t_{{ row.index }}" value="on" aria-label="Traffic-Sensor für {{ row.name }}"
+            <input type="checkbox" name="t_{{ row.index }}" value="on" aria-label="{{ t.get1("discover-traffic-for", "name", row.name.as_str()) }}"
               {% if row.has_traffic %}disabled checked{% else if row.preselect %}checked{% endif %}>
           </td>
           <td>
-            <input type="checkbox" name="s_{{ row.index }}" value="on" aria-label="Status-Sensor für {{ row.name }}"
+            <input type="checkbox" name="s_{{ row.index }}" value="on" aria-label="{{ t.get1("discover-status-for", "name", row.name.as_str()) }}"
               {% if row.has_status %}disabled checked{% endif %}>
           </td>
           <td class="num muted">{{ row.index }}</td>
@@ -56,8 +56,8 @@
     </div>
   </section>
   <div class="form-actions">
-    <button type="submit">Sensoren anlegen</button>
-    <a class="button secondary" href="/devices/{{ device.id }}/sensors">Abbrechen</a>
+    <button type="submit">{{ t.get("discover-create") }}</button>
+    <a class="button secondary" href="/devices/{{ device.id }}/sensors">{{ t.get("cancel") }}</a>
   </div>
 </form>
 {% endif %}

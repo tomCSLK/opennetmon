@@ -1,10 +1,10 @@
 {% extends "app.html" %}
-{% block title %}Gerätevorlagen – opennetmon{% endblock %}
+{% block title %}{{ t.get("nav-templates") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Gerätevorlagen</h1>
-    <p class="subtitle">Sensoren eines fertig eingerichteten Geräts auf weitere Geräte übertragen</p>
+    <h1>{{ t.get("nav-templates") }}</h1>
+    <p class="subtitle">{{ t.get("templates-subtitle") }}</p>
   </div>
 </div>
 
@@ -15,19 +15,19 @@
 <section class="card flush">
   {% if rows.is_empty() %}
   <div class="empty">
-    <strong>Noch keine Vorlagen.</strong>
-    Richte ein Gerät fertig ein und wähle auf seiner Sensorseite unter „Gerätevorlage“ den Knopf „Als Vorlage speichern“.
+    <strong>{{ t.get("templates-none") }}</strong>
+    {{ t.get("templates-none-hint") }}
   </div>
   {% else %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Vorlage</th><th>Inhalt</th><th>Gerätekennung</th><th class="right">Geräte</th></tr></thead>
+    <thead><tr><th>{{ t.get("template") }}</th><th>{{ t.get("template-contents") }}</th><th>{{ t.get("template-object-id") }}</th><th class="right">{{ t.get("order-devices") }}</th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
-        <td><a href="/templates/{{ row.id }}"><strong>{{ row.name }}</strong></a>{% if !row.source.is_empty() %}<span class="sub">aus {{ row.source }}</span>{% endif %}</td>
+        <td><a href="/templates/{{ row.id }}"><strong>{{ row.name }}</strong></a>{% if !row.source.is_empty() %}<span class="sub">{{ t.get1("template-from", "device", row.source.as_str()) }}</span>{% endif %}</td>
         <td class="wrap">{{ row.summary }}</td>
-        <td class="num small">{% if row.object_id.is_empty() %}<span class="muted">– (nur von Hand)</span>{% else %}{{ row.object_id }}{% endif %}</td>
+        <td class="num small">{% if row.object_id.is_empty() %}<span class="muted">{{ t.get("template-by-hand-only") }}</span>{% else %}{{ row.object_id }}{% endif %}</td>
         <td class="num right">{{ row.devices }}</td>
       </tr>
     {% endfor %}
@@ -38,12 +38,11 @@
 </section>
 
 <section class="card">
-  <h2>So funktionieren Vorlagen</h2>
+  <h2>{{ t.get("templates-how") }}</h2>
   <ul class="plain">
-    <li>„Als Vorlage speichern“ auf der Sensorseite eines Geräts übernimmt Ping, Uptime, Interface-Sensoren und eigene Werte
-      (z. B. PoE, CPU) samt Namen, Zustand (aktiv/inaktiv), Faktor, Einheit und Schwellwerten.</li>
-    <li>Beim Anlegen eines Geräts oder später mit „Vorlage anwenden“ werden nur fehlende Sensoren angelegt; Werte, die das Gerät nicht liefert, werden übersprungen.</li>
-    <li>Die Gerätekennung (sysObjectID) bestimmt, welche Vorlage automatisch vorgeschlagen wird.</li>
+    <li>{{ t.get("templates-how-save") }}</li>
+    <li>{{ t.get("templates-how-apply") }}</li>
+    <li>{{ t.get("templates-how-detect") }}</li>
   </ul>
 </section>
 {% endblock %}

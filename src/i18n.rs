@@ -5,6 +5,7 @@
 //! (checked by the tests). Pages get the language as a template field `t` and call `t.get("nav-overview")`; Rust code
 //! that has no request at hand returns a [`Msg`] that is translated where it is shown.
 
+use std::borrow::Cow;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -12,6 +13,8 @@ use std::sync::LazyLock;
 use fluent_bundle::concurrent::FluentBundle;
 use fluent_bundle::{FluentArgs, FluentResource, FluentValue};
 use rust_embed::RustEmbed;
+
+use crate::sensors::Unit;
 
 #[derive(RustEmbed)]
 #[folder = "locales/"]
@@ -122,8 +125,46 @@ impl Lang {
     /// The text of a [`Msg`] in this language.
     pub fn msg(self, msg: &Msg) -> String {
         match msg {
-            Msg::Key { id, args } => self.fmt(id, args),
+            Msg::Key { id, args } => {
+                let args: Vec<(&str, Arg)> = args
+                    .iter()
+                    .map(|(name, value)| (name.as_ref(), self.resolve(value)))
+                    .collect();
+                self.fmt(id, &args)
+            }
             Msg::Text(text) => text.clone(),
+            Msg::List(items) => items
+                .iter()
+                .map(|m| self.msg(m))
+                .collect::<Vec<_>>()
+                .join(", "),
+        }
+    }
+
+    /// Nested messages and measured values become text in this language.
+    fn resolve(self, arg: &Arg) -> Arg {
+        match arg {
+            Arg::Msg(msg) => Arg::Text(self.msg(msg)),
+            Arg::Value { unit, value } => {
+                Arg::Text(crate::sensors::format::format_value(self, *unit, *value))
+            }
+            other => other.clone(),
+        }
+    }
+
+    /// Decimal separator of numbers written by the program (values, thresholds).
+    /// Texts of the browser scripts (`js-*` messages, all without variables) as a JSON object for the
+    /// page's data block `#i18n`, keyed without the prefix. `<` is escaped so the block cannot end early.
+    pub fn js_texts(self) -> &'static str {
+        static TEXTS: LazyLock<Vec<String>> = LazyLock::new(|| Lang::ALL.map(js_catalog).into());
+        let index = Lang::ALL.iter().position(|l| *l == self).unwrap_or(0);
+        &TEXTS[index]
+    }
+
+    pub fn decimal_separator(self) -> char {
+        match self {
+            Self::De => ',',
+            Self::En => '.',
         }
     }
 }
@@ -133,6 +174,13 @@ impl Lang {
 pub enum Arg {
     Text(String),
     Number(f64),
+    /// A message translated into the same language.
+    Msg(Box<Msg>),
+    /// A measured value, formatted with its unit in the language of the reader.
+    Value {
+        unit: Unit,
+        value: f64,
+    },
 }
 
 impl Arg {
@@ -140,6 +188,13 @@ impl Arg {
         match self {
             Self::Text(text) => FluentValue::from(text.as_str()),
             Self::Number(n) => FluentValue::from(*n),
+            // Resolved by `Lang::msg` before formatting; German as a fallback.
+            Self::Msg(msg) => FluentValue::from(msg.to_string()),
+            Self::Value { unit, value } => FluentValue::from(crate::sensors::format::format_value(
+                Lang::De,
+                *unit,
+                *value,
+            )),
         }
     }
 }
@@ -162,6 +217,12 @@ impl From<&String> for Arg {
     }
 }
 
+impl From<Msg> for Arg {
+    fn from(msg: Msg) -> Self {
+        Self::Msg(Box::new(msg))
+    }
+}
+
 macro_rules! number_arg {
     ($($t:ty)*) => {$(
         impl From<$t> for Arg {
@@ -176,23 +237,25 @@ macro_rules! number_arg {
         }
     )*};
 }
-number_arg!(i32 i64 u32 u64 usize f64);
+number_arg!(i32 i64 u16 u32 u64 u128 usize f64);
 
-/// A user-facing message that is translated where it is shown: a catalog id with variables, or a text that
-/// is shown as it is (e.g. an error text reported by a device).
+/// A user-facing message that is translated where it is shown: a catalog id with variables, a text that
+/// is shown as it is (e.g. an error text reported by a device) or a list shown comma-separated.
+/// Status messages are stored with [`Msg::encode`], so they appear in the language of whoever reads them.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Msg {
     Key {
-        id: &'static str,
-        args: Vec<(&'static str, Arg)>,
+        id: Cow<'static, str>,
+        args: Vec<(Cow<'static, str>, Arg)>,
     },
     Text(String),
+    List(Vec<Msg>),
 }
 
 impl Msg {
     pub fn new(id: &'static str) -> Self {
         Self::Key {
-            id,
+            id: Cow::Borrowed(id),
             args: Vec::new(),
         }
     }
@@ -200,9 +263,95 @@ impl Msg {
     /// Adds a variable.
     pub fn with(mut self, name: &'static str, value: impl Into<Arg>) -> Self {
         if let Self::Key { args, .. } = &mut self {
-            args.push((name, value.into()));
+            args.push((Cow::Borrowed(name), value.into()));
         }
         self
+    }
+
+    /// Adds a measured value with its unit.
+    pub fn with_value(self, name: &'static str, unit: Unit, value: f64) -> Self {
+        self.with(name, Arg::Value { unit, value })
+    }
+
+    /// The message as stored in the database: JSON for catalog messages and lists, the plain text otherwise
+    /// (so texts stored before the translation was introduced still read back as they are).
+    pub fn encode(&self) -> String {
+        match self {
+            Self::Text(text) => text.clone(),
+            other => other.to_json().to_string(),
+        }
+    }
+
+    /// Inverse of [`Msg::encode`]; anything that is not an encoded message is a plain text.
+    pub fn decode(stored: &str) -> Self {
+        serde_json::from_str::<serde_json::Value>(stored)
+            .ok()
+            .filter(|v| v.get("msg").is_some() || v.get("list").is_some())
+            .and_then(|v| Self::from_json(&v))
+            .unwrap_or_else(|| Self::Text(stored.to_owned()))
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        use serde_json::{Value, json};
+        match self {
+            Self::Text(text) => json!({ "text": text }),
+            Self::List(items) => {
+                json!({ "list": items.iter().map(Self::to_json).collect::<Vec<_>>() })
+            }
+            Self::Key { id, args } => {
+                let args: serde_json::Map<String, Value> = args
+                    .iter()
+                    .map(|(name, arg)| {
+                        let value = match arg {
+                            Arg::Text(text) => json!(text),
+                            Arg::Number(n) => json!(n),
+                            Arg::Msg(msg) => msg.to_json(),
+                            Arg::Value { unit, value } => {
+                                json!({ "unit": unit.as_str(), "value": value })
+                            }
+                        };
+                        (name.to_string(), value)
+                    })
+                    .collect();
+                json!({ "msg": id, "args": args })
+            }
+        }
+    }
+
+    fn from_json(value: &serde_json::Value) -> Option<Self> {
+        if let Some(text) = value.get("text").and_then(|t| t.as_str()) {
+            return Some(Self::Text(text.to_owned()));
+        }
+        if let Some(items) = value.get("list").and_then(|l| l.as_array()) {
+            return items
+                .iter()
+                .map(Self::from_json)
+                .collect::<Option<_>>()
+                .map(Self::List);
+        }
+        let id = value.get("msg")?.as_str()?.to_owned();
+        let mut args = Vec::new();
+        if let Some(map) = value.get("args").and_then(|a| a.as_object()) {
+            for (name, v) in map {
+                let arg = if let Some(text) = v.as_str() {
+                    Arg::Text(text.to_owned())
+                } else if let Some(n) = v.as_f64() {
+                    Arg::Number(n)
+                } else if let (Some(unit), Some(n)) = (
+                    v.get("unit").and_then(|u| u.as_str()).and_then(Unit::parse),
+                    v.get("value").and_then(|n| n.as_f64()),
+                ) {
+                    Arg::Value { unit, value: n }
+                } else {
+                    Arg::Msg(Box::new(Self::from_json(v)?))
+                };
+                args.push((Cow::Owned(name.clone()), arg));
+            }
+        }
+        Some(Self::Key {
+            id: Cow::Owned(id),
+            args,
+        })
     }
 }
 
@@ -266,6 +415,27 @@ fn load(lang: Lang) -> Bundle {
         }
     }
     bundle
+}
+
+/// Ids of the `js-*` messages of a language.
+fn js_ids(lang: Lang) -> Vec<String> {
+    sources(lang)
+        .values()
+        .flat_map(|source| source.lines())
+        .filter_map(|line| line.split_once(" =").map(|(id, _)| id))
+        .filter(|id| id.starts_with("js-"))
+        .map(str::to_owned)
+        .collect()
+}
+
+fn js_catalog(lang: Lang) -> String {
+    let texts: BTreeMap<String, String> = js_ids(lang)
+        .into_iter()
+        .map(|id| (id["js-".len()..].to_owned(), lang.get(&id)))
+        .collect();
+    serde_json::to_string(&texts)
+        .unwrap_or_else(|_| "{}".to_owned())
+        .replace('<', "\\u003c")
 }
 
 /// Numbers in German texts use a decimal comma.
@@ -406,6 +576,23 @@ mod tests {
         out
     }
 
+    /// The browser scripts, which look texts up with `T('key')` (message `js-key`).
+    fn script_sources() -> Vec<(String, String)> {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("static");
+        std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "js"))
+            .map(|p| {
+                (
+                    p.display().to_string(),
+                    std::fs::read_to_string(&p).unwrap(),
+                )
+            })
+            .collect()
+    }
+
     /// Whether the text before a `.get(` call ends with a language: `t`, `lang`, `user.lang`, `Lang::En` …
     fn is_language_receiver(before: &str) -> bool {
         let ident: String = before
@@ -441,6 +628,35 @@ mod tests {
             }
         }
         assert!(checked > 10, "the scan found almost no translation calls");
+        let mut checked = 0;
+        for (file, text) in script_sources() {
+            for (pos, _) in text.match_indices("T('") {
+                let rest = &text[pos + 3..];
+                let key = &rest[..rest.find('\'').unwrap_or(0)];
+                assert!(
+                    known.contains_key(&format!("js-{key}")),
+                    "{file}: unknown script text {key}"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 10, "the scan found almost no script texts");
+    }
+
+    /// Script texts are plain: the scripts fill in `%1`, `%2` themselves.
+    #[test]
+    fn script_texts_have_no_variables() {
+        for lang in Lang::ALL {
+            let texts: BTreeMap<String, String> = serde_json::from_str(lang.js_texts()).unwrap();
+            assert!(texts.len() > 10);
+            for (key, text) in &texts {
+                assert!(
+                    !text.contains('{') && !text.contains("js-"),
+                    "{key}: {text}"
+                );
+            }
+        }
+        assert!(!Lang::De.js_texts().contains('<'));
     }
 
     /// Every message is used somewhere (as a string literal), so the catalogs do not collect dead texts.
@@ -448,7 +664,16 @@ mod tests {
     fn every_message_is_used() {
         let mut sources = program_sources();
         sources.retain(|(file, _)| !file.ends_with("i18n.rs"));
+        let scripts = script_sources();
         for id in all_messages(Lang::De).keys() {
+            if let Some(key) = id.strip_prefix("js-") {
+                let call = format!("T('{key}'");
+                assert!(
+                    scripts.iter().any(|(_, text)| text.contains(&call)),
+                    "script text {key} is not used"
+                );
+                continue;
+            }
             let quoted = format!("\"{id}\"");
             assert!(
                 sources.iter().any(|(_, text)| text.contains(&quoted)),
@@ -518,6 +743,38 @@ mod tests {
         assert_eq!(Lang::En.msg(&msg), "5 seconds");
         assert_eq!(msg.to_string(), "5 Sekunden");
         assert_eq!(Lang::En.msg(&Msg::Text("as is".to_owned())), "as is");
+    }
+
+    #[test]
+    fn stored_messages_read_back_and_translate_when_shown() {
+        let msg = Msg::List(vec![
+            Msg::new("event-first-poll").with("status", Msg::new("status-down")),
+            Msg::new("login-wait-seconds").with("seconds", 3),
+            Msg::Text("{\"not\": \"a message\"}".to_owned()),
+        ]);
+        let stored = msg.encode();
+        assert_eq!(Msg::decode(&stored), msg);
+        assert_eq!(
+            Lang::En.msg(&Msg::decode(&stored)),
+            "first poll: Down, 3 seconds, {\"not\": \"a message\"}"
+        );
+        assert_eq!(
+            Lang::De.msg(&Msg::decode(&stored)),
+            "erste Abfrage: Ausfall, 3 Sekunden, {\"not\": \"a message\"}"
+        );
+        // Texts stored before translations existed, and JSON that is not a message, stay as they are.
+        for old in [
+            "Antwortzeit: 80 ms liegt über der Warngrenze 50 ms",
+            "{\"a\": 1}",
+            "OK",
+        ] {
+            assert_eq!(Msg::decode(old), Msg::Text(old.to_owned()));
+            assert_eq!(Msg::Text(old.to_owned()).encode(), old);
+        }
+        let value = Msg::new("event-first-poll").with_value("status", Unit::Milliseconds, 2.5);
+        assert_eq!(Msg::decode(&value.encode()), value);
+        assert_eq!(Lang::De.msg(&value), "erste Abfrage: 2,5 ms");
+        assert_eq!(Lang::En.msg(&value), "first poll: 2.5 ms");
     }
 
     #[tokio::test]

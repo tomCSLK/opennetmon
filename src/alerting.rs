@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 
 use crate::crypto::SecretBox;
 use crate::error::Result;
+use crate::i18n::Lang;
 use crate::mail;
 use crate::status::Status;
 use crate::storage::mail::{Kind, load_config, record_notification};
@@ -25,7 +26,7 @@ const BATCH_WINDOW: Duration = Duration::from_secs(10);
 const QUEUE_SIZE: usize = 1_000;
 
 /// A status change with the names a human wants to read.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlertEvent {
     pub change: StatusChange,
     pub device: String,
@@ -83,14 +84,19 @@ pub fn compose(events: &[AlertEvent]) -> (String, String) {
     };
     let mut body = String::new();
     for e in events {
-        let from = e.change.from.map_or("erste Abfrage", Status::label);
+        // Mails are German until they get their own language setting.
+        let t = Lang::De;
+        let from = e
+            .change
+            .from
+            .map_or_else(|| "erste Abfrage".to_owned(), |s| t.get(s.label_id()));
         body.push_str(&format!(
             "{}  {} / {}\n  {from} -> {}\n  {}\n\n",
             format_utc(e.change.ts_ms),
             e.device,
             e.sensor,
-            e.change.to.label(),
-            e.change.message,
+            t.get(e.change.to.label_id()),
+            crate::status::shown(t, &e.change.message),
         ));
     }
     body.push_str("-- \nopennetmon\n");
@@ -141,7 +147,7 @@ pub async fn deliver(
         Kind::Alert,
         &subject,
         &config.recipients,
-        error.as_deref(),
+        error.as_ref(),
     )
     .await?;
     match error {
@@ -248,7 +254,7 @@ mod tests {
             sensor_id: 1,
             from,
             to,
-            message: "Meldung".to_owned(),
+            message: crate::i18n::Msg::Text("Meldung".to_owned()),
             ts_ms: 1_000,
         }
     }
@@ -397,7 +403,11 @@ mod tests {
         );
         let log = recent_notifications(&pool, 5).await.unwrap();
         assert!(
-            !log[0].ok && log[0].error.starts_with("Versand fehlgeschlagen"),
+            !log[0].ok
+                && log[0]
+                    .error
+                    .to_string()
+                    .starts_with("Versand fehlgeschlagen"),
             "{log:?}"
         );
     }

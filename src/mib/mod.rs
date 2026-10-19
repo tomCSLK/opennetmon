@@ -12,6 +12,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use parser::{DefKind, Module, OidDef, OidPart, Syntax, SyntaxKind, TypeDef};
 use rust_embed::RustEmbed;
 
+use crate::i18n::{Lang, Msg};
+
 #[derive(RustEmbed)]
 #[folder = "mibs/"]
 struct Bundled;
@@ -66,20 +68,22 @@ impl BaseType {
         })
     }
 
-    pub fn label(self) -> &'static str {
-        match self {
+    /// Name of the type; the technical names are the same in every language.
+    pub fn label(self, t: Lang) -> String {
+        let name = match self {
+            Self::OctetString => return t.get("mib-type-octet-string"),
+            Self::IpAddress => return t.get("mib-type-ip-address"),
             Self::Integer => "Integer",
             Self::Unsigned32 => "Unsigned32",
             Self::Gauge32 => "Gauge32",
             Self::Counter32 => "Counter32",
             Self::Counter64 => "Counter64",
             Self::TimeTicks => "TimeTicks",
-            Self::OctetString => "Text/Bytes",
             Self::ObjectIdentifier => "OID",
-            Self::IpAddress => "IP-Adresse",
             Self::Bits => "Bits",
             Self::Opaque => "Opaque",
-        }
+        };
+        name.to_owned()
     }
 
     /// Counters are monitored as a rate per second, everything numeric else as a value.
@@ -111,13 +115,13 @@ pub enum ObjectKind {
 }
 
 impl ObjectKind {
-    pub fn label(self) -> &'static str {
+    pub fn label_id(self) -> &'static str {
         match self {
-            Self::Node => "Knoten",
-            Self::Scalar => "Einzelwert",
-            Self::Table => "Tabelle",
-            Self::Row => "Tabellenzeile",
-            Self::Column => "Tabellenspalte",
+            Self::Node => "mib-kind-node",
+            Self::Scalar => "mib-kind-scalar",
+            Self::Table => "mib-kind-table",
+            Self::Row => "mib-kind-row",
+            Self::Column => "mib-kind-column",
         }
     }
 }
@@ -640,7 +644,7 @@ impl MibIndex {
 
     /// Resolves user input like `ifInOctets.3`, `IF-MIB::ifInOctets.3` or `sysUpTime.0` to a numeric
     /// OID and the object it refers to. Numeric input is left to the caller.
-    pub fn resolve_input(&self, input: &str) -> Result<(Vec<u64>, &MibObject), String> {
+    pub fn resolve_input(&self, input: &str) -> Result<(Vec<u64>, &MibObject), Msg> {
         let input = input.trim().trim_start_matches('.');
         let (module, rest) = match input.split_once("::") {
             Some((m, r)) => (Some(m.trim()), r.trim()),
@@ -651,7 +655,7 @@ impl MibIndex {
         let suffix: Vec<u64> = parts
             .map(|p| {
                 p.parse::<u64>()
-                    .map_err(|_| format!("„{p}“ ist keine Zahl im Instanzteil der OID."))
+                    .map_err(|_| Msg::new("mib-instance-not-number").with("part", p))
             })
             .collect::<Result<_, _>>()?;
         let candidates = self.by_name(name, module);
@@ -662,20 +666,22 @@ impl MibIndex {
             }
         }
         match distinct.as_slice() {
-            [] => Err(format!("„{name}“ ist in keiner geladenen MIB bekannt.")),
+            [] => Err(Msg::new("mib-name-unknown").with("name", name)),
             [object] => {
                 let mut oid = object.oid.clone();
                 oid.extend(suffix);
                 Ok((oid, object))
             }
-            many => Err(format!(
-                "„{name}“ ist mehrdeutig ({}). Bitte mit Modul angeben, z. B. {}::{name}.",
-                many.iter()
-                    .map(|o| o.module.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                many[0].module
-            )),
+            many => Err(Msg::new("mib-name-ambiguous")
+                .with("name", name)
+                .with(
+                    "modules",
+                    many.iter()
+                        .map(|o| o.module.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+                .with("module", many[0].module.as_str())),
         }
     }
 
@@ -732,17 +738,17 @@ impl MibIndex {
     /// (`sysUpTime.0`, `IF-MIB::ifInOctets.3`). A scalar given without instance gets `.0`;
     /// tables, rows, plain nodes, columns without an index and unreadable objects are refused
     /// with an explanation. Messages are user-facing (German).
-    pub fn oid_target(&self, input: &str) -> Result<OidTarget, String> {
+    pub fn oid_target(&self, input: &str) -> Result<OidTarget, Msg> {
         let input = input.trim();
         if input.is_empty() {
-            return Err("Bitte eine OID oder einen MIB-Namen angeben.".to_owned());
+            return Err(Msg::new("mib-oid-missing"));
         }
         // Anything starting with a digit is meant as a numeric OID (and gets that error message).
         let numeric = input
             .trim_start_matches('.')
             .starts_with(|c: char| c.is_ascii_digit());
         let (mut oid, object) = if numeric {
-            let oid = crate::sensors::spec::parse_oid(input).map_err(str::to_owned)?;
+            let oid = crate::sensors::spec::parse_oid(input)?;
             // Only an object that the OID points into as a value counts (not e.g. `enterprises`).
             let object = self
                 .describe(&oid)
@@ -755,37 +761,29 @@ impl MibIndex {
             match object.kind {
                 ObjectKind::Scalar | ObjectKind::Column => {}
                 other => {
-                    return Err(format!(
-                        "„{}“ ist ein(e) {}, kein abfragbarer Wert. Bitte einen Einzelwert oder eine Tabellenspalte wählen.",
-                        object.name,
-                        other.label()
-                    ));
+                    return Err(Msg::new("mib-not-pollable")
+                        .with("name", object.name.as_str())
+                        .with("kind", Msg::new(other.label_id())));
                 }
             }
             (oid, Some(object.clone()))
         };
         if let Some(o) = &object {
             if o.access.as_deref().is_some_and(|a| !a.starts_with("read")) {
-                return Err(format!(
-                    "„{}“ ist laut MIB nicht lesbar ({}).",
-                    o.name,
-                    o.access.as_deref().unwrap_or("")
-                ));
+                return Err(Msg::new("mib-not-readable")
+                    .with("name", o.name.as_str())
+                    .with("access", o.access.as_deref().unwrap_or("")));
             }
             if oid == o.oid {
                 match o.kind {
                     ObjectKind::Scalar => oid.push(0),
                     _ => {
-                        return Err(format!(
-                            "„{}“ ist eine Tabellenspalte: bitte den Index anhängen, z. B. {}.1 (Index: {}).",
-                            o.name,
-                            o.name,
-                            if o.index.is_empty() {
-                                "unbekannt".to_owned()
-                            } else {
-                                o.index.join(", ")
-                            }
-                        ));
+                        let message = if o.index.is_empty() {
+                            Msg::new("mib-column-needs-index-unknown")
+                        } else {
+                            Msg::new("mib-column-needs-index").with("index", o.index.join(", "))
+                        };
+                        return Err(message.with("name", o.name.as_str()));
                     }
                 }
             }

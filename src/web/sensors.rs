@@ -14,7 +14,7 @@ use serde::Deserialize;
 use crate::devices::Device;
 use crate::discovery::discover_interfaces;
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::mib::MibIndex;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
@@ -37,7 +37,7 @@ struct SensorRowView {
     id: i64,
     name: String,
     description: String,
-    status_label: &'static str,
+    status_label: String,
     status_class: &'static str,
     message: String,
     last_poll: String,
@@ -74,7 +74,7 @@ struct SensorsTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
-    device_status_label: &'static str,
+    device_status_label: String,
     device_status_class: &'static str,
     /// Active sensors (polled).
     rows: Vec<SensorRowView>,
@@ -141,7 +141,7 @@ impl SensorForm {
     /// Name and configuration for the chosen sensor type. A custom OID may be given by MIB name;
     /// mode ("auto"), unit and name then default to what the MIB says.
     fn to_spec(&self, mibs: &MibIndex) -> Result<(String, SensorSpec)> {
-        let invalid = |m: &str| Error::invalid(m.to_owned());
+        let invalid = |id: &'static str| Error::invalid(Msg::new(id));
         let (default_name, spec) = match self.kind.as_str() {
             "ping" => ("Ping".to_owned(), SensorSpec::Ping),
             "uptime" => ("Uptime".to_owned(), SensorSpec::Uptime),
@@ -159,9 +159,7 @@ impl SensorForm {
                         }
                     }
                     _ => {
-                        return Err(invalid(
-                            "Bitte den Modus (automatisch, Wert oder Zähler) wählen.",
-                        ));
+                        return Err(invalid("sensors-mode-missing"));
                     }
                 };
                 let scale = match self.scale.trim() {
@@ -169,7 +167,7 @@ impl SensorForm {
                     text => text
                         .replace(',', ".")
                         .parse::<f64>()
-                        .map_err(|_| invalid("Der Faktor muss eine Zahl sein."))?,
+                        .map_err(|_| invalid("sensors-scale-not-number"))?,
                 };
                 let unit = match self.unit.trim() {
                     "" => object.and_then(|o| o.units.clone()),
@@ -188,16 +186,14 @@ impl SensorForm {
                     },
                 )
             }
-            _ => return Err(invalid("Bitte einen Sensortyp wählen.")),
+            _ => return Err(invalid("sensors-type-missing")),
         };
         let name = match self.name.trim() {
             "" => default_name,
             name => name.to_owned(),
         };
         if name.is_empty() {
-            return Err(invalid(
-                "Bitte einen Namen angeben (die OID ist in keiner geladenen MIB bekannt).",
-            ));
+            return Err(invalid("sensors-name-missing"));
         }
         let name: String = name.chars().take(crate::devices::MAX_NAME_LEN).collect();
         Ok((name, spec))
@@ -238,10 +234,12 @@ async fn render_sensors(
             SensorRowView {
                 id: r.id,
                 name: r.name.clone(),
-                description: crate::web::sensor_text::describe(&r.spec, &mibs),
-                status_label: status.label(),
+                description: crate::web::sensor_text::describe(user.lang, &r.spec, &mibs),
+                status_label: user.lang.get(status.label_id()),
                 status_class: status.as_str(),
-                message: state.map(|s| s.message.clone()).unwrap_or_default(),
+                message: state
+                    .map(|s| crate::status::shown(user.lang, &s.message))
+                    .unwrap_or_default(),
                 last_poll: state.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
                 enabled: r.enabled,
             }
@@ -259,7 +257,7 @@ async fn render_sensors(
         layout: user.layout(),
         t: user.lang,
         device,
-        device_status_label: overall.label(),
+        device_status_label: user.lang.get(overall.label_id()),
         device_status_class: overall.as_str(),
         rows,
         inactive,
@@ -301,9 +299,9 @@ pub async fn create(
     let device = load_device(&state, id).await?;
     let mibs = state.mib_index();
     let outcome = match form.to_spec(&mibs) {
-        Ok((_, spec)) if spec.uses_snmp() && !device.has_snmp() => Err(Error::invalid(
-            "Dieses Gerät hat kein SNMP-Profil; ohne SNMP gibt es nur Ping.",
-        )),
+        Ok((_, spec)) if spec.uses_snmp() && !device.has_snmp() => {
+            Err(Error::invalid(Msg::new("device-without-snmp")))
+        }
         Ok((name, spec)) => match store::create_sensor(&state.pool, id, &name, &spec).await {
             Ok(sensor) => {
                 crate::web::sensor_text::rate_new_sensor(&state.pool, sensor, &spec, &mibs)
@@ -392,7 +390,7 @@ pub async fn discover(
                 .collect(),
             None,
         ),
-        Err(e) => (Vec::new(), Some(e.user_message())),
+        Err(e) => (Vec::new(), Some(user.lang.msg(&e.user_message()))),
     };
     let page = DiscoverTemplate {
         layout: user.layout(),
@@ -439,7 +437,7 @@ pub async fn create_interfaces(
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
     load_device(&state, id).await?;
     if fields.len() > MAX_FORM_FIELDS {
-        return Err(Error::invalid("Das Formular ist zu groß."));
+        return Err(Error::invalid(Msg::new("form-too-large")));
     }
 
     let existing = store::list_sensors(&state.pool, id).await?;
@@ -459,7 +457,7 @@ pub async fn create_interfaces(
         .collect();
     wanted.sort_unstable();
     if wanted.is_empty() {
-        return Err(Error::invalid("Bitte mindestens ein Interface auswählen."));
+        return Err(Error::invalid(Msg::new("sensors-select-interface")));
     }
 
     let mut created = 0usize;
@@ -545,7 +543,7 @@ pub async fn bulk(
         ids
     };
     if ids.is_empty() {
-        return Err(Error::invalid("Bitte mindestens einen Sensor auswählen."));
+        return Err(Error::invalid(Msg::new("sensors-select-sensor")));
     }
     let (changed, msg) = match action {
         "activate" | "activate_all" => (
@@ -560,7 +558,7 @@ pub async fn bulk(
             store::delete_many(&state.pool, id, &ids).await?,
             "sensors_deleted",
         ),
-        _ => return Err(Error::invalid("Unbekannte Aktion.")),
+        _ => return Err(Error::invalid(Msg::new("unknown-action"))),
     };
     tracing::info!(user = %user.username, device = id, action, changed, "bulk sensor change");
     Ok(Redirect::to(&format!("/devices/{id}/sensors?msg={msg}")).into_response())
@@ -1094,7 +1092,7 @@ mod tests {
             sensor,
             1_000,
             &[],
-            &crate::status::Assessment::Failed("weg".to_owned()),
+            &crate::status::Assessment::Failed("weg".into()),
         )
         .await
         .unwrap();
@@ -1103,7 +1101,7 @@ mod tests {
             sensor,
             2_000,
             &[],
-            &crate::status::Assessment::Failed("weg".to_owned()),
+            &crate::status::Assessment::Failed("weg".into()),
         )
         .await
         .unwrap();
@@ -1305,6 +1303,73 @@ mod tests {
         assert!(
             uptime.channels[0].states.is_empty(),
             "plain numbers stay unrated"
+        );
+    }
+
+    #[tokio::test]
+    async fn sensor_pages_and_their_errors_are_shown_in_english() {
+        let h = harness(true).await;
+        let device = save_device(
+            &h.state.pool,
+            None,
+            DeviceInput {
+                name: "Printer".to_owned(),
+                host: "192.0.2.9".to_owned(),
+                group_id: None,
+                profile_id: None,
+                polling: Polling::default(),
+            },
+        )
+        .await
+        .unwrap();
+        crate::storage::users::set_language(&h.state.pool, 1, Some(Lang::En))
+            .await
+            .unwrap();
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(
+            &h.app,
+            get(&format!("/devices/{device}/sensors"), Some(&admin)),
+        )
+        .await;
+        for text in [
+            "No sensors yet.",
+            "Add sensor",
+            "no SNMP, ping only",
+            "every 60 s",
+        ] {
+            assert!(page.body.contains(text), "{text} missing");
+        }
+        let refused = send(
+            &h.app,
+            post(
+                &format!("/devices/{device}/sensors"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&kind=bogus"),
+            ),
+        )
+        .await;
+        assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(refused.body.contains("Please choose a sensor type."));
+        let values = send(
+            &h.app,
+            post(
+                &format!("/devices/{device}/values"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&object=noSuchTable"),
+            ),
+        )
+        .await;
+        assert!(
+            values
+                .body
+                .contains("“noSuchTable” is not known in any loaded MIB."),
+            "{}",
+            values.body
+        );
+        let order = send(&h.app, get("/groups/0/order", Some(&admin))).await;
+        assert!(
+            order.body.contains("Order of the top level")
+                && order.body.contains("Sort automatically")
         );
     }
 }

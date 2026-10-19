@@ -10,7 +10,7 @@ use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::ordering::{positions_from_form, reorder};
 use crate::storage::{devices, groups, sensors};
 use crate::web::auth::CurrentUser;
@@ -24,7 +24,7 @@ struct Item {
 }
 
 struct List {
-    title: &'static str,
+    title: String,
     /// Form field prefix: `g`, `d` or `s`.
     prefix: &'static str,
     items: Vec<Item>,
@@ -44,7 +44,7 @@ struct OrderTemplate {
     lists: Vec<List>,
 }
 
-fn list(title: &'static str, prefix: &'static str, items: Vec<(i64, String, String)>) -> List {
+fn list(title: String, prefix: &'static str, items: Vec<(i64, String, String)>) -> List {
     List {
         title,
         prefix,
@@ -92,21 +92,22 @@ pub async fn group_page(
         .filter(|d| d.group_id == parent)
         .map(|d| (d.id, d.name, d.host))
         .collect();
+    let t = user.lang;
     let mut lists = vec![list(
-        if parent.is_none() {
-            "Gruppen"
+        t.get(if parent.is_none() {
+            "order-groups"
         } else {
-            "Untergruppen"
-        },
+            "order-subgroups"
+        }),
         "g",
         subgroups,
     )];
     lists.push(list(
-        if parent.is_none() {
-            "Geräte ohne Gruppe"
+        t.get(if parent.is_none() {
+            "order-devices-ungrouped"
         } else {
-            "Geräte"
-        },
+            "order-devices"
+        }),
         "d",
         members,
     ));
@@ -115,10 +116,10 @@ pub async fn group_page(
         layout: user.layout(),
         t: user.lang,
         heading: match &group {
-            Some(g) => format!("Reihenfolge in „{}“", g.name),
-            None => "Reihenfolge der obersten Ebene".to_owned(),
+            Some(g) => t.get1("order-in-group", "name", g.name.as_str()),
+            None => t.get("order-top-level"),
         },
-        crumbs: vec![("/".to_owned(), "Übersicht".to_owned())],
+        crumbs: vec![("/".to_owned(), t.get("nav-overview"))],
         back: "/".to_owned(),
         action: format!("/groups/{id}/order"),
         lists,
@@ -140,20 +141,23 @@ pub async fn sensor_page(
         .await?
         .into_iter()
         .map(|s| {
-            let mut sub = crate::web::sensor_text::describe(&s.spec, &mibs);
+            let mut sub = crate::web::sensor_text::describe(user.lang, &s.spec, &mibs);
             if !s.enabled {
-                sub.push_str(" · inaktiv");
+                sub.push_str(" · ");
+                sub.push_str(&user.lang.get("inactive"));
             }
             (s.id, s.name, sub)
         })
         .collect();
-    let lists = vec![list("Sensoren", "s", items)];
+    let lists = vec![list(user.lang.get("sensors"), "s", items)];
     let page = OrderTemplate {
         layout: user.layout(),
         t: user.lang,
-        heading: format!("Reihenfolge der Sensoren von {}", device.name),
+        heading: user
+            .lang
+            .get1("order-sensors-of", "device", device.name.as_str()),
         crumbs: vec![
-            ("/".to_owned(), "Übersicht".to_owned()),
+            ("/".to_owned(), user.lang.get("nav-overview")),
             (format!("/devices/{id}/sensors"), device.name),
         ],
         back: format!("/devices/{id}/sensors"),
@@ -168,7 +172,7 @@ fn wants_reset(fields: &HashMap<String, String>) -> Result<bool> {
     match fields.get("action").map(String::as_str) {
         Some("save") => Ok(false),
         Some("reset") => Ok(true),
-        _ => Err(Error::invalid("Unbekannte Aktion.")),
+        _ => Err(Error::invalid(Msg::new("unknown-action"))),
     }
 }
 

@@ -5,6 +5,7 @@ use sqlx::{FromRow, SqlitePool};
 use crate::credentials::Secret;
 use crate::crypto::SecretBox;
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 use crate::mail::{CheckedMail, MailConfig, Security};
 
 const PASSWORD_CONTEXT: &str = "smtp.password";
@@ -139,22 +140,47 @@ impl Kind {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label_id(self) -> &'static str {
         match self {
-            Self::Alert => "Alarm",
-            Self::Test => "Test",
+            Self::Alert => "mail-kind-alert",
+            Self::Test => "mail-kind-test",
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Notification {
     pub ts_ms: i64,
     pub kind: Kind,
     pub subject: String,
     pub recipients: String,
     pub ok: bool,
-    pub error: String,
+    /// Empty text on success.
+    pub error: Msg,
+}
+
+/// A stored error message: the variables (e.g. an SMTP server's answer) are clipped like other texts.
+fn clip_message(message: &Msg) -> Msg {
+    match message {
+        Msg::Text(text) => Msg::Text(clip(text)),
+        Msg::Key { id, args } => Msg::Key {
+            id: id.clone(),
+            args: args
+                .iter()
+                .map(|(name, value)| {
+                    let value = match value {
+                        crate::i18n::Arg::Text(text) => crate::i18n::Arg::Text(clip(text)),
+                        crate::i18n::Arg::Msg(m) => {
+                            crate::i18n::Arg::Msg(Box::new(clip_message(m)))
+                        }
+                        other => other.clone(),
+                    };
+                    (name.clone(), value)
+                })
+                .collect(),
+        },
+        Msg::List(items) => Msg::List(items.iter().map(clip_message).collect()),
+    }
 }
 
 fn clip(text: &str) -> String {
@@ -171,7 +197,7 @@ pub async fn record_notification(
     kind: Kind,
     subject: &str,
     recipients: &[String],
-    error: Option<&str>,
+    error: Option<&Msg>,
 ) -> Result<()> {
     sqlx::query(
         "INSERT INTO notifications (ts_ms, kind, subject, recipients, ok, error) VALUES (?, ?, ?, ?, ?, ?)",
@@ -181,7 +207,7 @@ pub async fn record_notification(
     .bind(clip(subject))
     .bind(clip(&recipients.join(", ")))
     .bind(i64::from(error.is_none()))
-    .bind(error.map(clip))
+    .bind(error.map(|m| clip_message(m).encode()))
     .execute(pool)
     .await?;
     Ok(())
@@ -210,7 +236,7 @@ pub async fn recent_notifications(pool: &SqlitePool, limit: u32) -> Result<Vec<N
                 subject,
                 recipients,
                 ok: ok != 0,
-                error: error.unwrap_or_default(),
+                error: error.map_or_else(|| Msg::Text(String::new()), |e| Msg::decode(&e)),
             },
         )
         .collect())
@@ -321,14 +347,14 @@ mod tests {
             Kind::Test,
             &"x\n".repeat(400),
             &to,
-            Some("kaputt"),
+            Some(&Msg::Text("kaputt".to_owned())),
         )
         .await
         .unwrap();
         let log = recent_notifications(&pool, 10).await.unwrap();
         assert_eq!(log.len(), 2);
         assert_eq!(
-            (log[0].kind, log[0].ok, log[0].error.as_str()),
+            (log[0].kind, log[0].ok, log[0].error.to_string().as_str()),
             (Kind::Test, false, "kaputt")
         );
         assert!(

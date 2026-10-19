@@ -5,28 +5,29 @@ use std::collections::HashMap;
 use sqlx::{FromRow, SqlitePool};
 
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 use crate::status::{Assessment, SensorState, Status, advance};
 
 use super::sensors::Sample;
 
 /// A status transition, e.g. for alerting. `from` is `None` for the first poll of a sensor.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StatusChange {
     pub sensor_id: i64,
     pub from: Option<Status>,
     pub to: Status,
-    pub message: String,
+    pub message: Msg,
     pub ts_ms: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Event {
     pub id: i64,
     pub ts_ms: i64,
     pub sensor_id: i64,
     pub from: Option<Status>,
     pub to: Status,
-    pub message: String,
+    pub message: Msg,
 }
 
 #[derive(FromRow)]
@@ -53,7 +54,7 @@ impl TryFrom<StateRow> for (i64, SensorState) {
                 status: parse_status(&r.status)?,
                 since_ms: r.since_ms,
                 last_poll_ms: r.last_poll_ms,
-                message: r.message,
+                message: Msg::decode(&r.message),
                 consecutive_failures: u32::try_from(r.consecutive_failures)
                     .map_err(|_| Error::Internal("invalid failure count in database".to_owned()))?,
             },
@@ -120,7 +121,7 @@ pub async fn record_poll(
     .bind(next.status.as_str())
     .bind(next.since_ms)
     .bind(next.last_poll_ms)
-    .bind(&next.message)
+    .bind(next.message.encode())
     .bind(i64::from(next.consecutive_failures))
     .execute(&mut *tx)
     .await?;
@@ -141,7 +142,7 @@ pub async fn record_poll(
         .bind(sensor_id)
         .bind(change.from.map(Status::as_str))
         .bind(change.to.as_str())
-        .bind(&change.message)
+        .bind(change.message.encode())
         .execute(&mut *tx)
         .await?;
     }
@@ -158,7 +159,7 @@ fn event_from_row((id, ts_ms, sensor_id, from, to, message): EventRow) -> Result
         sensor_id,
         from: from.as_deref().map(parse_status).transpose()?,
         to: parse_status(&to)?,
-        message,
+        message: Msg::decode(&message),
     })
 }
 
@@ -222,11 +223,11 @@ mod tests {
     }
 
     fn ok() -> Assessment {
-        Assessment::Healthy("OK".to_owned())
+        Assessment::Healthy("OK".into())
     }
 
     fn fail() -> Assessment {
-        Assessment::Failed("timeout".to_owned())
+        Assessment::Failed("timeout".into())
     }
 
     #[tokio::test]

@@ -1,12 +1,11 @@
 {% extends "app.html" %}
 {% block page_class %} narrow{% endblock %}
-{% block title %}E-Mail-Benachrichtigung – opennetmon{% endblock %}
+{% block title %}{{ t.get("mail-title") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>E-Mail-Benachrichtigung</h1>
-    <p class="subtitle">Bei Ausfall, Warnung und Wiederherstellung kommt eine E-Mail. Wechsel, die kurz nacheinander passieren, werden zusammengefasst.
-      Änderungen gelten sofort.</p>
+    <h1>{{ t.get("mail-title") }}</h1>
+    <p class="subtitle">{{ t.get("mail-subtitle") }}</p>
   </div>
 </div>
 {% if let Some(message) = flash %}
@@ -26,16 +25,16 @@
   <form method="post" action="/settings/mail" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
 
-    <label class="inline"><input type="checkbox" name="enabled" value="on"{% if form.enabled %} checked{% endif %}> Benachrichtigungen aktiv</label>
-    <label class="inline"><input type="checkbox" name="notify_warnings" value="on"{% if form.notify_warnings %} checked{% endif %}> Auch bei Warnungen benachrichtigen (sonst nur bei Ausfall und Wiederherstellung)</label>
+    <label class="inline"><input type="checkbox" name="enabled" value="on"{% if form.enabled %} checked{% endif %}> {{ t.get("mail-enabled") }}</label>
+    <label class="inline"><input type="checkbox" name="notify_warnings" value="on"{% if form.notify_warnings %} checked{% endif %}> {{ t.get("mail-notify-warnings") }}</label>
 
     <fieldset>
-      <legend>SMTP-Server</legend>
-      <label for="host">Server (Hostname oder IP-Adresse)</label>
+      <legend>{{ t.get("mail-smtp-server") }}</legend>
+      <label for="host">{{ t.get("mail-host") }}</label>
       <input id="host" name="host" type="text" value="{{ form.host }}" maxlength="253" autocapitalize="off" spellcheck="false">
       <div class="form-grid">
         <div>
-          <label for="security">Verschlüsselung</label>
+          <label for="security">{{ t.get("mail-security") }}</label>
           <select id="security" name="security">
             {% for option in securities %}
             <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
@@ -47,55 +46,55 @@
           <input id="port" name="port" type="number" min="1" max="65535" value="{{ form.port }}" required>
         </div>
       </div>
-      <p class="hint">Üblich: STARTTLS 587, TLS (SMTPS) 465, unverschlüsselt 25 (nur für ein vertrauenswürdiges lokales Relay).</p>
+      <p class="hint">{{ t.get("mail-port-hint") }}</p>
     </fieldset>
 
     <fieldset>
-      <legend>Anmeldung (optional)</legend>
+      <legend>{{ t.get("mail-login") }}</legend>
       <div class="form-grid">
         <div>
-          <label for="username">Benutzername</label>
-          <input id="username" name="username" type="text" value="{{ form.username }}" maxlength="256" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="leer = ohne Anmeldung">
+          <label for="username">{{ t.get("username") }}</label>
+          <input id="username" name="username" type="text" value="{{ form.username }}" maxlength="256" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="{{ t.get("mail-username-placeholder") }}">
         </div>
         <div>
-          <label for="password">Passwort</label>
+          <label for="password">{{ t.get("password") }}</label>
           <input id="password" name="password" type="password" autocomplete="new-password" maxlength="256"
-            placeholder="{% if form.password_set %}gesetzt – leer lassen zum Beibehalten{% else %}nicht gesetzt{% endif %}">
+            placeholder="{% if form.password_set %}{{ t.get("profile-keep") }}{% else %}{{ t.get("mail-not-set") }}{% endif %}">
         </div>
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>Absender und Empfänger</legend>
-      <label for="from_address">Absenderadresse</label>
+      <legend>{{ t.get("mail-from-to") }}</legend>
+      <label for="from_address">{{ t.get("mail-from") }}</label>
       <input id="from_address" name="from_address" type="text" value="{{ form.from_address }}" maxlength="256" autocapitalize="off" spellcheck="false" placeholder="opennetmon@example.org">
-      <label for="recipients">Empfänger (eine Adresse pro Zeile, höchstens 20)</label>
+      <label for="recipients">{{ t.get("mail-recipients") }}</label>
       <textarea id="recipients" name="recipients" rows="4" maxlength="5000" spellcheck="false">{{ form.recipients }}</textarea>
     </fieldset>
 
-    <button type="submit">Speichern</button>
+    <button type="submit">{{ t.get("save") }}</button>
   </form>
 
   <form method="post" action="/settings/mail/test" class="inline-note">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <button type="submit" class="secondary">Test-E-Mail senden</button>
-    <span class="muted">Verwendet die <em>gespeicherten</em> Einstellungen (erst speichern, dann testen) – auch wenn die Benachrichtigung noch aus ist.</span>
+    <button type="submit" class="secondary">{{ t.get("mail-send-test") }}</button>
+    <span class="muted">{{ t.get("mail-test-hint") }}</span>
   </form>
 </section>
 
 <section class="card flush">
-  <div class="card-head"><h2>Letzte Sendeversuche</h2></div>
+  <div class="card-head"><h2>{{ t.get("mail-log") }}</h2></div>
   {% if log.is_empty() %}
-  <p class="empty small">Noch keine E-Mails gesendet.</p>
+  <p class="empty small">{{ t.get("mail-log-empty") }}</p>
   {% else %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Zeitpunkt</th><th>Art</th><th>Betreff</th><th>Empfänger</th><th>Ergebnis</th></tr></thead>
+    <thead><tr><th>{{ t.get("detail-when") }}</th><th>{{ t.get("mail-log-kind") }}</th><th>{{ t.get("mail-log-subject") }}</th><th>{{ t.get("mail-log-recipients") }}</th><th>{{ t.get("mail-log-result") }}</th></tr></thead>
     <tbody>
     {% for row in log %}
       <tr>
         <td class="num">{{ row.at|safe }}</td><td>{{ row.kind }}</td><td class="wrap">{{ row.subject }}</td><td class="wrap muted">{{ row.recipients }}</td>
-        <td class="wrap">{% if row.ok %}<span class="badge status-up">gesendet</span>{% else %}<span class="badge status-down">Fehler</span> <span class="muted small">{{ row.error }}</span>{% endif %}</td>
+        <td class="wrap">{% if row.ok %}<span class="badge status-up">{{ t.get("mail-sent") }}</span>{% else %}<span class="badge status-down">{{ t.get("mail-failed") }}</span> <span class="muted small">{{ row.error }}</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

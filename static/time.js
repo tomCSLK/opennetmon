@@ -1,11 +1,13 @@
 // Shows the timestamps the server renders as <time class="ts" datetime="...Z"> in the browser's time zone,
-// 24-hour clock, German date order. The UTC text from the server stays as tooltip (and as the fallback without JS).
+// 24-hour clock, date order of the page's language. The UTC text from the server stays as tooltip (and as
+// the fallback without JS).
 (function () {
   'use strict';
+  var T = window.opennetmonText;
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function local(d) {
-    return two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' +
-      two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
+    return T('date').replace('DD', two(d.getDate())).replace('MM', two(d.getMonth() + 1)).replace('YYYY', d.getFullYear()) +
+      ' ' + two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
   }
   var times = document.querySelectorAll('time.ts');
   for (var i = 0; i < times.length; i++) {

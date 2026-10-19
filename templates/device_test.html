@@ -1,21 +1,21 @@
 {% extends "app.html" %}
 {% block page_class %} narrow{% endblock %}
-{% block title %}Verbindungstest – opennetmon{% endblock %}
+{% block title %}{{ t.get("device-test-title") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">Übersicht</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>Verbindungstest</span></div>
-    <h1>Verbindungstest: {{ device.name }}</h1>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("device-test-title") }}</span></div>
+    <h1>{{ t.get1("device-test-heading", "name", device.name) }}</h1>
     <p class="subtitle"><span class="num">{{ device.host }}:{{ device.polling.port }}</span> · {{ profile_summary }}</p>
   </div>
 </div>
 <section class="card">
   {% if let Some(ok) = success %}
-  <p class="flash" role="status">Verbindung erfolgreich ({{ ok.round_trip_ms }} ms).</p>
+  <p class="flash" role="status">{{ t.get1("device-test-ok", "ms", ok.round_trip_ms) }}</p>
   <table>
     <tbody>
-      <tr><th scope="row">Gerätebeschreibung</th><td class="wrap">{{ ok.sys_descr }}</td></tr>
-      <tr><th scope="row">Laufzeit</th><td>{{ ok.uptime }}</td></tr>
+      <tr><th scope="row">{{ t.get("device-sys-descr") }}</th><td class="wrap">{{ ok.sys_descr }}</td></tr>
+      <tr><th scope="row">{{ t.get("device-uptime") }}</th><td>{{ ok.uptime }}</td></tr>
     </tbody>
   </table>
   {% endif %}
@@ -26,10 +26,10 @@
 <div class="actions">
   <form method="post" action="/devices/{{ device.id }}/test">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <button type="submit">Erneut testen</button>
+    <button type="submit">{{ t.get("device-test-again") }}</button>
   </form>
-  <a class="button secondary" href="/devices/{{ device.id }}/sensors">Zu den Sensoren</a>
-  <a class="button ghost" href="/devices/{{ device.id }}/edit">Gerät bearbeiten</a>
+  <a class="button secondary" href="/devices/{{ device.id }}/sensors">{{ t.get("device-to-sensors") }}</a>
+  <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
 </div>
-<p class="muted small">Der Test nutzt höchstens 10 Sekunden Timeout und eine Wiederholung.</p>
+<p class="muted small">{{ t.get("device-test-limits") }}</p>
 {% endblock %}

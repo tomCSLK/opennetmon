@@ -3,6 +3,7 @@
 use sqlx::{FromRow, SqlitePool};
 
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 use crate::ordering::natural_cmp;
 use crate::templates::Body;
 
@@ -58,15 +59,13 @@ pub fn normalize_object_id(text: &str) -> Result<Option<String>> {
             .split('.')
             .all(|p| !p.is_empty() && p.parse::<u64>().is_ok());
     if !valid {
-        return Err(Error::invalid(
-            "Die Gerätekennung muss eine numerische OID sein, z. B. 1.3.6.1.4.1.11863.1.1.11.",
-        ));
+        return Err(Error::invalid(Msg::new("template-object-id-invalid")));
     }
     Ok(Some(text.to_owned()))
 }
 
 fn name_taken() -> Error {
-    Error::conflict("Eine Vorlage mit diesem Namen gibt es bereits.")
+    Error::conflict(Msg::new("template-name-taken"))
 }
 
 fn map_write_error(e: sqlx::Error) -> Error {
@@ -104,7 +103,7 @@ pub async fn create_template(
     source: &str,
     body: &Body,
 ) -> Result<i64> {
-    let name = crate::devices::validate_name(name).map_err(|m| Error::invalid(m.to_owned()))?;
+    let name = crate::devices::validate_name(name).map_err(Error::invalid)?;
     let object_id = normalize_object_id(object_id.unwrap_or_default())?;
     body.validate().map_err(Error::invalid)?;
     let done = sqlx::query(
@@ -132,7 +131,7 @@ pub async fn update_template(
     name: &str,
     object_id: &str,
 ) -> Result<()> {
-    let name = crate::devices::validate_name(name).map_err(|m| Error::invalid(m.to_owned()))?;
+    let name = crate::devices::validate_name(name).map_err(Error::invalid)?;
     let object_id = normalize_object_id(object_id)?;
     let done = sqlx::query("UPDATE device_templates SET name = ?, object_id = ? WHERE id = ?")
         .bind(name)

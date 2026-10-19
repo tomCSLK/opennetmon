@@ -6,6 +6,7 @@ use crate::devices::{
     Group, MAX_GROUP_DEPTH, depth_of, subtree_height, subtree_ids, validate_name,
 };
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 use crate::ordering::{natural_cmp, position_cmp};
 use crate::storage::{OrderScope, write_positions};
 
@@ -48,27 +49,21 @@ pub async fn get_group(pool: &SqlitePool, id: i64) -> Result<Option<Group>> {
     )
 }
 
-fn invalid(message: &str) -> Error {
-    Error::invalid(message.to_owned())
-}
-
 fn name_taken() -> Error {
-    Error::conflict("In dieser Ebene gibt es bereits eine Gruppe mit diesem Namen.")
+    Error::conflict(Msg::new("group-name-taken"))
 }
 
 /// Creates a group below `parent_id` (or at the top level).
 pub async fn create_group(pool: &SqlitePool, name: &str, parent_id: Option<i64>) -> Result<i64> {
-    let name = validate_name(name).map_err(invalid)?;
+    let name = validate_name(name).map_err(Error::Invalid)?;
     let groups = list_groups(pool).await?;
     if let Some(parent) = parent_id
         && !groups.iter().any(|g| g.id == parent)
     {
-        return Err(invalid("Die übergeordnete Gruppe existiert nicht."));
+        return Err(Error::invalid(Msg::new("group-parent-missing")));
     }
     if depth_of(&groups, parent_id) + 1 > MAX_GROUP_DEPTH {
-        return Err(invalid(
-            "Die Gruppen sind höchstens 8 Ebenen tief verschachtelbar.",
-        ));
+        return Err(Error::invalid(Msg::new("group-too-deep")));
     }
     let result = sqlx::query("INSERT INTO groups (name, parent_id) VALUES (?, ?)")
         .bind(name)
@@ -99,25 +94,21 @@ pub async fn update_group(
     name: &str,
     parent_id: Option<i64>,
 ) -> Result<()> {
-    let name = validate_name(name).map_err(invalid)?;
+    let name = validate_name(name).map_err(Error::Invalid)?;
     let groups = list_groups(pool).await?;
     if !groups.iter().any(|g| g.id == id) {
         return Err(Error::NotFound);
     }
     if let Some(parent) = parent_id {
         if !groups.iter().any(|g| g.id == parent) {
-            return Err(invalid("Die übergeordnete Gruppe existiert nicht."));
+            return Err(Error::invalid(Msg::new("group-parent-missing")));
         }
         if subtree_ids(&groups, id).contains(&parent) {
-            return Err(invalid(
-                "Eine Gruppe kann nicht in sich selbst oder in eine ihrer Untergruppen verschoben werden.",
-            ));
+            return Err(Error::invalid(Msg::new("group-move-into-itself")));
         }
     }
     if depth_of(&groups, parent_id) + 1 + subtree_height(&groups, id) > MAX_GROUP_DEPTH {
-        return Err(invalid(
-            "Die Gruppen sind höchstens 8 Ebenen tief verschachtelbar.",
-        ));
+        return Err(Error::invalid(Msg::new("group-too-deep")));
     }
     // A group moved to another parent loses its manual place (it was relative to the old siblings).
     let result = sqlx::query(
@@ -148,14 +139,14 @@ pub async fn delete_group(pool: &SqlitePool, id: i64) -> Result<()> {
         .fetch_one(pool)
         .await?;
     if children > 0 {
-        return Err(Error::conflict("Die Gruppe enthält noch Untergruppen."));
+        return Err(Error::conflict(Msg::new("group-has-subgroups")));
     }
     let members: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE group_id = ?")
         .bind(id)
         .fetch_one(pool)
         .await?;
     if members > 0 {
-        return Err(Error::conflict("Die Gruppe enthält noch Geräte."));
+        return Err(Error::conflict(Msg::new("group-has-devices")));
     }
     let done = sqlx::query("DELETE FROM groups WHERE id = ?")
         .bind(id)
