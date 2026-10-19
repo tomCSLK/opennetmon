@@ -1,6 +1,6 @@
 # E-Mail-Benachrichtigung
 
-Bei einem Statuswechsel eines Sensors schickt netmon eine E-Mail. Die Einstellungen stehen **in der Oberfläche** unter **E-Mail** (nur Administratoren,
+Bei einem Statuswechsel eines Sensors schickt opennetmon eine E-Mail. Die Einstellungen stehen **in der Oberfläche** unter **E-Mail** (nur Administratoren,
 `/settings/mail`) und gelten sofort – ein Neustart ist nicht nötig.
 
 ## Einstellungen
@@ -38,7 +38,7 @@ Messfehler sind zunächst nur eine Warnung und erst der zweite in Folge ein Ausf
 
 - Der Poller legt jeden Statuswechsel in eine Warteschlange (1000 Plätze, nie blockierend; ist sie voll, wird gewarnt und der Alarm verworfen).
 - Eine eigene Aufgabe sammelt Wechsel, die innerhalb von **10 Sekunden** nach dem ersten eintreffen, zu **einer Mail** („3 Statuswechsel: 2 Ausfall, 1 Warnung“).
-  Fällt ein ganzes Gerät aus, kommt so eine Mail statt eine je Sensor. Ein einzelner Wechsel hat einen eigenen Betreff, z. B. `[netmon] Ausfall: Switch Büro / Ping`.
+  Fällt ein ganzes Gerät aus, kommt so eine Mail statt eine je Sensor. Ein einzelner Wechsel hat einen eigenen Betreff, z. B. `[opennetmon] Ausfall: Switch Büro / Ping`.
 - Die Einstellungen werden für jede Mail frisch gelesen. Beim Beenden des Servers wird eine noch wartende Sammlung noch verschickt.
 - Der Text ist reiner Text (Zeit in UTC, Gerät / Sensor, alt → neu, Meldung). Es gibt **keine automatische Wiederholung** bei Zustellfehlern; der Fehler steht im Log und in der Tabelle.
 
@@ -52,7 +52,7 @@ Messfehler sind zunächst nur eine Warnung und erst der zweite in Folge ein Ausf
 ## Entwicklung und Tests
 
 - `dev/smtp_sink.py [port]` ist ein Wegwerf-SMTP-Server (Standardbibliothek, Port 1025), der alle Mails als `.eml` unter `dev/data/mail/` ablegt.
-  In netmon: Server `127.0.0.1`, Port `1025`, Verschlüsselung „Keine“, ohne Anmeldung. Nie ins Netz hängen.
+  In opennetmon: Server `127.0.0.1`, Port `1025`, Verschlüsselung „Keine“, ohne Anmeldung. Nie ins Netz hängen.
 - `src/mail/testsmtp.rs` ist ein kleiner Test-SMTP-Server für die Rust-Tests (optional mit `AUTH PLAIN`, optional mit abgelehnten Empfängern).
 - Getestet: Adress- und Einstellungsvalidierung, Versand mit und ohne Anmeldung, Fehlerfälle, verschlüsselte Ablage des Passworts, Auswahl der meldenswerten Wechsel, Zusammenfassen,
   Beenden mit wartender Mail, die Kette „Gerät fällt aus → eine Mail“ und die Weboberfläche (Rechte, CSRF, Passwort nie im HTML, Testmail).

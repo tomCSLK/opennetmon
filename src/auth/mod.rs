@@ -100,7 +100,7 @@ pub fn verify_password(hash: &str, password: &str) -> bool {
 /// and wrong passwords take the same time.
 pub fn dummy_hash() -> &'static str {
     static DUMMY: OnceLock<String> = OnceLock::new();
-    DUMMY.get_or_init(|| hash_password("netmon-dummy-password").unwrap_or_default())
+    DUMMY.get_or_init(|| hash_password("opennetmon-dummy-password").unwrap_or_default())
 }
 
 /// 256 random bits as lowercase hex (session tokens, CSRF tokens).

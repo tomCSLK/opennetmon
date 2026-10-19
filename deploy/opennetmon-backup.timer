@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily netmon database backup
+Description=Daily opennetmon database backup
 
 [Timer]
 OnCalendar=*-*-* 03:30:00

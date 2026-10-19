@@ -1,4 +1,4 @@
-/* netmon design system. Colors are tokens; the dark set applies by system preference unless the
+/* opennetmon design system. Colors are tokens; the dark set applies by system preference unless the
    user picked a theme (html[data-theme], set by static/theme.js). No inline styles (CSP). */
 
 :root {

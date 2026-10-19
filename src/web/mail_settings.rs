@@ -259,8 +259,8 @@ pub async fn send_test(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let config = store::load_config(&state.pool, &state.secrets).await?;
-    let subject = "[netmon] Test-E-Mail";
-    let body = "Dies ist eine Test-E-Mail von netmon.\nWenn sie ankommt, sind Server, Zugangsdaten und Empfänger richtig eingestellt.\n";
+    let subject = "[opennetmon] Test-E-Mail";
+    let body = "Dies ist eine Test-E-Mail von opennetmon.\nWenn sie ankommt, sind Server, Zugangsdaten und Empfänger richtig eingestellt.\n";
     let outcome = mail::send(&config, subject, body).await;
     let error = outcome.as_ref().err().map(mail::MailError::user_message);
     store::record_notification(
@@ -305,7 +305,7 @@ mod tests {
     fn form(csrf: &str, port: u16, extra: &str) -> String {
         format!(
             "csrf_token={csrf}&enabled=on&notify_warnings=on&host=127.0.0.1&port={port}&security=none\
-             &username=&password=&from_address=netmon%40example.org&recipients=admin%40example.org%0Aops%40example.org{extra}"
+             &username=&password=&from_address=opennetmon%40example.org&recipients=admin%40example.org%0Aops%40example.org{extra}"
         )
     }
 
@@ -366,7 +366,7 @@ mod tests {
         let (admin, csrf) = login(&h, "anna").await;
         let body = form(&csrf, 2525, "").replace(
             "username=&password=",
-            "username=netmon&password=pw-sehr-geheim",
+            "username=opennetmon&password=pw-sehr-geheim",
         );
         let reply = send(&h.app, post("/settings/mail", Some(&admin), &body)).await;
         assert_eq!(reply.location(), "/settings/mail?msg=mail_saved");
@@ -389,7 +389,7 @@ mod tests {
         assert!(
             page.body.contains("value=\"127.0.0.1\"")
                 && page.body.contains("value=\"2525\"")
-                && page.body.contains("value=\"netmon\"")
+                && page.body.contains("value=\"opennetmon\"")
         );
         assert!(page.body.contains("admin@example.org\nops@example.org"));
         assert!(page.body.contains("gesetzt – leer lassen zum Beibehalten"));
@@ -399,7 +399,7 @@ mod tests {
         );
 
         // An empty password field keeps the stored password.
-        let again = form(&csrf, 2525, "").replace("username=&", "username=netmon&");
+        let again = form(&csrf, 2525, "").replace("username=&", "username=opennetmon&");
         send(&h.app, post("/settings/mail", Some(&admin), &again)).await;
         let kept = crate::storage::mail::load_config(&h.state.pool, &h.state.secrets)
             .await
@@ -495,7 +495,7 @@ mod tests {
         assert!(
             smtp.received()[0]
                 .data
-                .contains("Subject: [netmon] Test-E-Mail")
+                .contains("Subject: [opennetmon] Test-E-Mail")
         );
         assert!(page.body.contains("gesendet</span>") && page.body.contains("Test"));
     }

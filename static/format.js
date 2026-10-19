@@ -77,5 +77,5 @@
     };
   }
 
-  window.netmonFormat = { num: num, value: value, bytes: bytes, clock: clock, day: day, dateTime: dateTime, forSeries: forSeries };
+  window.opennetmonFormat = { num: num, value: value, bytes: bytes, clock: clock, day: day, dateTime: dateTime, forSeries: forSeries };
 })();

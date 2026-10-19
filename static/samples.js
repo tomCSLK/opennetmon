@@ -1,13 +1,13 @@
 // Table of measured values below the chart (like PRTG's "Live data" table): one row per point,
 // newest first, with average/minimum/maximum (and the summed volume for traffic) on top. The summary
 // covers the whole range; the viewer picks how many of the newest rows are listed (50/100/500).
-// Renders from the data static/chart.js loads (event "netmon:data"), so both refresh together.
+// Renders from the data static/chart.js loads (event "opennetmon:data"), so both refresh together.
 (function () {
   'use strict';
   var box = document.getElementById('samples');
   var info = document.getElementById('samples-info');
-  if (!box || !window.netmonFormat) { return; }
-  var F = window.netmonFormat;
+  if (!box || !window.opennetmonFormat) { return; }
+  var F = window.opennetmonFormat;
   var LIMITS = [50, 100, 500];
   var select = document.getElementById('samples-limit');
   var shown = LIMITS[0];
@@ -15,7 +15,7 @@
 
   // The chosen number of rows is a per-viewer convenience; storage may be blocked.
   try {
-    var saved = parseInt(localStorage.getItem('netmon-samples-limit'), 10);
+    var saved = parseInt(localStorage.getItem('opennetmon-samples-limit'), 10);
     if (LIMITS.indexOf(saved) >= 0) { shown = saved; }
   } catch (e) { /* default */ }
   if (select) {
@@ -24,7 +24,7 @@
       var n = parseInt(select.value, 10);
       if (LIMITS.indexOf(n) < 0) { return; }
       shown = n;
-      try { localStorage.setItem('netmon-samples-limit', String(n)); } catch (e) { /* not remembered */ }
+      try { localStorage.setItem('opennetmon-samples-limit', String(n)); } catch (e) { /* not remembered */ }
       render();
     });
   }
@@ -140,5 +140,5 @@
     box.appendChild(table);
   }
 
-  window.addEventListener('netmon:data', function (e) { data = e.detail; render(); });
+  window.addEventListener('opennetmon:data', function (e) { data = e.detail; render(); });
 })();

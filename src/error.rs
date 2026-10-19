@@ -60,7 +60,7 @@ mod tests {
 
     #[tokio::test]
     async fn response_hides_details() {
-        let err = Error::Io(std::io::Error::other("secret path /etc/netmon/key"));
+        let err = Error::Io(std::io::Error::other("secret path /etc/opennetmon/key"));
         let response = err.into_response();
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
         let body = response.into_body().collect().await.unwrap().to_bytes();

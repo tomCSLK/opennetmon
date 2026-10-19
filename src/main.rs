@@ -4,20 +4,20 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use clap::{Parser, Subcommand, ValueEnum};
-use netmon::auth::{self, Role};
-use netmon::config::Config;
-use netmon::crypto::SecretBox;
-use netmon::maintenance::Retention;
-use netmon::poller::Poller;
-use netmon::storage::{self, users};
-use netmon::web::{self, AppState};
+use opennetmon::auth::{self, Role};
+use opennetmon::config::Config;
+use opennetmon::crypto::SecretBox;
+use opennetmon::maintenance::Retention;
+use opennetmon::poller::Poller;
+use opennetmon::storage::{self, users};
+use opennetmon::web::{self, AppState};
 use sqlx::SqlitePool;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(version, about = "Agentless SNMP network monitor")]
 struct Args {
-    /// Path to the TOML config file (defaults and NETMON_* environment variables apply without it)
+    /// Path to the TOML config file (defaults and OPENNETMON_* environment variables apply without it)
     #[arg(short, long, global = true)]
     config: Option<PathBuf>,
     #[command(subcommand)]
@@ -131,13 +131,13 @@ async fn main() -> anyhow::Result<()> {
 async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
     let secrets = SecretBox::from_key_file(&config.secret_key_file).with_context(|| {
         format!(
-            "loading the encryption key (create one with `netmon key generate`; config key secret_key_file = {})",
+            "loading the encryption key (create one with `opennetmon key generate`; config key secret_key_file = {})",
             config.secret_key_file.display()
         )
     })?;
     if users::count_users(&pool).await? == 0 {
         tracing::warn!(
-            "no users exist yet; create an admin with `netmon user add <name> --role admin`"
+            "no users exist yet; create an admin with `opennetmon user add <name> --role admin`"
         );
     }
     if !config.listen.ip().is_loopback() {
@@ -152,7 +152,7 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(config.listen)
         .await
         .with_context(|| format!("binding {}", config.listen))?;
-    tracing::info!(listen = %config.listen, db = %config.database_path.display(), "netmon started");
+    tracing::info!(listen = %config.listen, db = %config.database_path.display(), "opennetmon started");
 
     let secrets = Arc::new(secrets);
     let poller = if config.poller_enabled {
@@ -187,7 +187,7 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         poller.stop().await;
     }
     served?;
-    tracing::info!("netmon stopped");
+    tracing::info!("opennetmon stopped");
     Ok(())
 }
 

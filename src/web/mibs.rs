@@ -121,7 +121,7 @@ fn object_view(o: &MibObject) -> ObjectView {
 fn module_view(r: &mib::ModuleReport) -> ModuleView {
     let mut problems = Vec::new();
     if r.shadowed {
-        problems.push("übersprungen: wird mit netmon mitgeliefert".to_owned());
+        problems.push("übersprungen: wird mit opennetmon mitgeliefert".to_owned());
     }
     if !r.missing_modules.is_empty() {
         problems.push(format!("fehlt: {}", r.missing_modules.join(", ")));
@@ -290,7 +290,7 @@ pub async fn upload(
         }
         if modules.iter().all(|m| bundled.contains(m)) {
             skipped.push(format!(
-                "{name}: {} wird mit netmon mitgeliefert",
+                "{name}: {} wird mit opennetmon mitgeliefert",
                 modules.join(", ")
             ));
             continue;
@@ -434,7 +434,7 @@ END
 
     /// A multipart upload request with the CSRF token and the given files.
     fn upload_request(cookie: &str, csrf: &str, files: &[(&str, &str)]) -> Request<Body> {
-        let boundary = "netmonTestBoundary7MA4YWxk";
+        let boundary = "opennetmonTestBoundary7MA4YWxk";
         let mut body = format!(
             "--{boundary}\r\nContent-Disposition: form-data; name=\"csrf_token\"\r\n\r\n{csrf}\r\n"
         );
@@ -547,7 +547,7 @@ END
         assert!(
             reply
                 .body
-                .contains("RFC1213-MIB.mib: RFC1213-MIB wird mit netmon mitgeliefert")
+                .contains("RFC1213-MIB.mib: RFC1213-MIB wird mit opennetmon mitgeliefert")
         );
         assert!(reply.body.contains("vendor.mib") && reply.body.contains("VENDOR-MIB"));
         let (oid, _) = h

@@ -15,8 +15,8 @@ use crate::error::{Error, Result};
 use crate::storage::users::{self, SessionUser};
 use crate::web::{AppState, Layout};
 
-pub(crate) const SESSION_COOKIE: &str = "netmon_session";
-pub(crate) const LOGIN_CSRF_COOKIE: &str = "netmon_login";
+pub(crate) const SESSION_COOKIE: &str = "opennetmon_session";
+pub(crate) const LOGIN_CSRF_COOKIE: &str = "opennetmon_login";
 const LOGIN_CSRF_TTL_SECS: i64 = 3600;
 /// Bounds for credentials in a login request; keeps Argon2 work bounded.
 const MAX_LOGIN_USERNAME_LEN: usize = 64;
@@ -305,7 +305,7 @@ mod tests {
         let reply = send(&h.app, get("/", None)).await;
         assert_eq!(reply.status, StatusCode::SEE_OTHER);
         assert_eq!(reply.location(), "/login");
-        let reply = send(&h.app, get("/", Some("netmon_session=garbage"))).await;
+        let reply = send(&h.app, get("/", Some("opennetmon_session=garbage"))).await;
         assert_eq!(reply.location(), "/login");
     }
 
@@ -330,7 +330,7 @@ mod tests {
         let session = reply
             .set_cookies()
             .into_iter()
-            .find(|c| c.starts_with("netmon_session="))
+            .find(|c| c.starts_with("opennetmon_session="))
             .unwrap();
         for attr in ["HttpOnly", "SameSite=Strict", "Secure", "Max-Age=604800"] {
             assert!(session.contains(attr), "{session} lacks {attr}");
@@ -340,7 +340,7 @@ mod tests {
             reply
                 .set_cookies()
                 .iter()
-                .any(|c| c.starts_with("netmon_login=;") && c.contains("Max-Age=0"))
+                .any(|c| c.starts_with("opennetmon_login=;") && c.contains("Max-Age=0"))
         );
         // Only the hash of the token is stored.
         let token = session
@@ -477,10 +477,10 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(
             header::COOKIE,
-            "a=1; netmon_session=tok; b=2".parse().unwrap(),
+            "a=1; opennetmon_session=tok; b=2".parse().unwrap(),
         );
         assert_eq!(
-            cookie_value(&headers, "netmon_session").as_deref(),
+            cookie_value(&headers, "opennetmon_session").as_deref(),
             Some("tok")
         );
         assert_eq!(cookie_value(&headers, "missing"), None);

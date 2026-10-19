@@ -1,7 +1,7 @@
-# Plan: netmon – SNMP-Monitor für Linux
+# Plan: opennetmon – SNMP-Monitor für Linux
 
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
-> Der Name ist **netmon** (festgelegt am 2026-10-16, mit Logo). „PRTG" ist eine Marke von Paessler; netmon ist nur vom Bedienkonzept inspiriert.
+> Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 > **Status (2026-10-16): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 sind Login,
 > SNMP-Credential-Profile, Gruppen, Geräte und der Verbindungstest umgesetzt. **MVP-Schritt 1 ist damit komplett.**
 > Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); **der Poller mit Statuslogik und Ereignislog läuft ebenfalls** (`docs/poller.md`). **MVP 3 (Sensor-Oberfläche und Interface-Discovery) ist ebenfalls umgesetzt.** **MVP 4 ist umgesetzt** (Schwellwerte, Detailseite mit uPlot-Graph 1h/24h/7d/30d, Rollups und Retention; `docs/graphen-und-schwellwerte.md`). **MVP 6 (E-Mail-Benachrichtigung, einstellbar in der Oberfläche, getestet gegen Test-SMTP-Server) ist umgesetzt** (`docs/benachrichtigung.md`). **Die Begrenzung der Anmeldeversuche, die Anzeige aller Zeiten in der Browser-Zeitzone das neue Oberflächendesign (Seitenleiste, Kacheln, hell/dunkel) und die Messwerte-Tabelle wie die PRTG-Livedaten sind umgesetzt. **MIB-Import Schritt 1** (Parser, Standard-MIBs, Upload, OID per Name mit Typ/Einheit/Klartext; `docs/mibs.md`) ist umgesetzt; **Schritt 2** (Werte suchen: bekannte und frei wählbare Tabellen walken, z. B. PoE je Port, CPU, Speicher, Temperaturen, Lüfter; neue Sensoren standardmäßig inaktiv, Aktivieren einzeln oder gesammelt; getestet am SG2008P) ist umgesetzt; **Schritt 3 (Gerätevorlagen) ist umgesetzt:** Vorlage aus einem fertig eingerichteten Gerät speichern, beim Anlegen eines Geräts automatisch per `sysObjectID` oder später per Knopf anwenden, nur Fehlendes anlegen (`docs/geraetevorlagen.md`, getestet SG2008 → SG2008). **Die Benutzerverwaltung in der Oberfläche und „Mein Konto“ (eigenes Passwort) sind umgesetzt** (`docs/benutzer-und-login.md`). **Geräte ohne SNMP (nur Ping) sind umgesetzt** (`docs/geraete-und-gruppen.md`; der ER605 läuft so). **Die Statusbewertung von Aufzählungswerten ist umgesetzt** (je Wert In Ordnung/Warnung/Ausfall, Vorschlag aus den Namen beim Anlegen, auch für den Interface-Status; `docs/graphen-und-schwellwerte.md`, getestet am SG2008P).** **Umbenennen von Sensoren (Detailseite) und die Reihenfolge (automatisch natürlich sortiert, Sensoren nach Typ; von Hand per Ziehen, ↑/↓ oder Position für Gruppen, Geräte und Sensoren) sind umgesetzt** (`docs/geraete-und-gruppen.md`, `docs/sensoren.md`). **Der Betrieb ist vorbereitet** (systemd-Unit, Installer, Backup, Proxy-Beispiele; `docs/betrieb.md`). Als Nächstes: Installation auf dem echten Server, echter Mailserver des Nutzers, htmx und Feinschliff.**
@@ -24,7 +24,7 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 | Ping | `surge-ping`, bevorzugt unprivilegierte ICMP-Sockets (`ping_group_range` ist auf dem Entwicklungsrechner gesetzt) |
 | DB | SQLite über `sqlx`, WAL, Migrations in `migrations/` |
 | Auth | Lokale Benutzer, Rollen Admin/Leser, argon2, serverseitige Sitzungen, CSRF – umgesetzt |
-| Secrets | SNMP-Passwörter mit XChaCha20-Poly1305 verschlüsselt, Schlüsseldatei 0600 (`netmon key generate`) – umgesetzt |
+| Secrets | SNMP-Passwörter mit XChaCha20-Poly1305 verschlüsselt, Schlüsseldatei 0600 (`opennetmon key generate`) – umgesetzt |
 | Betrieb | Statisches musl-Binary, systemd-Unit, Reverse Proxy (Caddy/nginx) für TLS, Standard-Bind `127.0.0.1:8080` |
 
 ## PRTG-Funktionsprinzip, das nachgebaut wird
@@ -77,7 +77,7 @@ benutzerdefinierter OID-Sensor (Gauge/Counter).
 ## Projektstruktur (Stand)
 
 ```
-netmon/
+opennetmon/
   Cargo.toml
   CLAUDE.md, PLAN.md
   src/
@@ -102,7 +102,7 @@ netmon/
   tests/              # snmp_local.rs (lokaler snmpd), omada_manual.rs (echte Hardware, #[ignore])
   migrations/         # 0001_init, 0002_users_sessions, 0003_credential_profiles, 0004_groups_devices
   dev/                # config.toml, sync.sh, sync-filter.txt (Drive-Abgleich nur CLAUDE.md und PLAN.md)
-  deploy/             # geplant: netmon.service
+  deploy/             # geplant: opennetmon.service
   docs/               # decisions/0001-sprache.md, dev-testagent.md, benutzer-und-login.md, snmp-profile.md, geraete-und-gruppen.md
 ```
 
@@ -118,7 +118,7 @@ netmon/
 4. **Poller:** Scheduler mit Jitter, Semaphore, Timeouts/Retries; Statuslogik und Ereignislog.
 5. **MVP 3:** Interface-Discovery per Walk mit Auswahl durch den Nutzer (Namen über `ifName`/`ifDescr`) – **umgesetzt** (`src/discovery.rs`, `src/web/sensors.rs`, `docs/sensoren.md`).
 6. **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph (1h/24h/7d/30d), Rollups und Retention – **umgesetzt** (`docs/graphen-und-schwellwerte.md`).
-7. **Betrieb:** musl-Release-Build (zuletzt nach den Geräten geprüft: statisch gelinkt, 9,3 MB), `deploy/netmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
+7. **Betrieb:** musl-Release-Build (zuletzt nach den Geräten geprüft: statisch gelinkt, 9,3 MB), `deploy/opennetmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
 8. **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel – **umgesetzt** (`docs/benachrichtigung.md`).
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.

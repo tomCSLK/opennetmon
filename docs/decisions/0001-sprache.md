@@ -6,7 +6,7 @@
 
 ## Kontext
 
-`netmon` soll TP-Link-Omada-Geräte (ER605, SG2008/SG2008P, EAP225/EAP653) per SNMP überwachen. Rust ist bevorzugt (statisches Binary, geringer
+`opennetmon` soll TP-Link-Omada-Geräte (ER605, SG2008/SG2008P, EAP225/EAP653) per SNMP überwachen. Rust ist bevorzugt (statisches Binary, geringer
 Ressourcenbedarf). Das Risiko liegt in SNMPv3 mit der auf den Geräten konfigurierten Auth/Priv-Kombination
 und der Bibliothek `snmp2`.
 

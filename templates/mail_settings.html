@@ -1,6 +1,6 @@
 {% extends "app.html" %}
 {% block page_class %} narrow{% endblock %}
-{% block title %}E-Mail-Benachrichtigung – netmon{% endblock %}
+{% block title %}E-Mail-Benachrichtigung – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -68,7 +68,7 @@
     <fieldset>
       <legend>Absender und Empfänger</legend>
       <label for="from_address">Absenderadresse</label>
-      <input id="from_address" name="from_address" type="text" value="{{ form.from_address }}" maxlength="256" autocapitalize="off" spellcheck="false" placeholder="netmon@example.org">
+      <input id="from_address" name="from_address" type="text" value="{{ form.from_address }}" maxlength="256" autocapitalize="off" spellcheck="false" placeholder="opennetmon@example.org">
       <label for="recipients">Empfänger (eine Adresse pro Zeile, höchstens 20)</label>
       <textarea id="recipients" name="recipients" rows="4" maxlength="5000" spellcheck="false">{{ form.recipients }}</textarea>
     </fieldset>

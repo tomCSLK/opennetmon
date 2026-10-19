@@ -3,7 +3,7 @@
 
     python3 dev/smtp_sink.py [port]        # default 127.0.0.1:1025
 
-In netmon (E-Mail settings): server 127.0.0.1, port 1025, encryption "none", no login.
+In opennetmon (E-Mail settings): server 127.0.0.1, port 1025, encryption "none", no login.
 Plain text only, no TLS, no authentication check. Never expose it to a network.
 """
 import asyncio
@@ -19,7 +19,7 @@ async def handle(reader, writer):
         writer.write(line.encode() + b"\r\n")
         await writer.drain()
 
-    await say("220 netmon-dev-sink ESMTP")
+    await say("220 opennetmon-dev-sink ESMTP")
     sender, recipients = "", []
     while True:
         raw = await reader.readline()
@@ -28,7 +28,7 @@ async def handle(reader, writer):
         line = raw.decode("utf-8", "replace").rstrip("\r\n")
         cmd = line.upper()
         if cmd.startswith(("EHLO", "HELO")):
-            await say("250-netmon-dev-sink")
+            await say("250-opennetmon-dev-sink")
             await say("250 8BITMIME")
         elif cmd.startswith("MAIL FROM"):
             sender, recipients = line.split(":", 1)[1].strip(), []

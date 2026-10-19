@@ -1,9 +1,9 @@
-# CLAUDE.md – netmon
+# CLAUDE.md – opennetmon
 
-> Name: **netmon** („Network Monitoring“), festgelegt am 2026-10-16; Crate, Binary, Paket und GitHub-Repo (`tomCSLK/netmon`) heißen so.
-> Logo: Original außerhalb des Repos (`~/Bilder/netmon_Logo_v1.jpeg`), daraus `static/logo-mark.png` (Seitenleiste, Touch-Icon),
-> `static/favicon-32.png`/`-64.png`, `static/logo-wide.jpg` (Anmeldeseite) und `docs/assets/netmon-logo.jpg` (README).
-> „PRTG" ist eine Marke von Paessler; netmon ist nur vom Bedienkonzept inspiriert und steht in keiner Verbindung zu Paessler.
+> Name: **opennetmon** („Network Monitoring“), festgelegt am 2026-10-19 (vorher seit 2026-10-16 „netmon“); Crate, Binary, Paket und GitHub-Repo (`tomCSLK/opennetmon`) heißen so.
+> Logo: Original außerhalb des Repos (`~/Bilder/opennetmon_Logo_v1.jpeg`), daraus `static/logo-mark.png` (Seitenleiste, Touch-Icon),
+> `static/favicon-32.png`/`-64.png`, `static/logo-wide.jpg` (Anmeldeseite) und `docs/assets/opennetmon-logo.jpg` (README).
+> „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert und steht in keiner Verbindung zu Paessler.
 
 ## Ziel
 
@@ -36,7 +36,7 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - Design: `static/app.css` ist ein kleines Designsystem (Farb-Tokens für hell/dunkel, Seitenleiste, Kacheln, Karten, Badges, Tabellen, Formulare);
   Schema folgt dem System, Umschalter in der Seitenleiste (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js` für Umschalter, aktiven Menüpunkt
   und Handy-Menü). Keine Inline-Styles (CSP): Breiten z. B. der Sensor-Statusleiste als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen
-  und zeichnen bei Schemawechsel neu (Event `netmon:theme`)
+  und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`)
 - Statische Dateien (`web::assets`): `Cache-Control: no-cache` + ETag (SHA-256 des eingebetteten Inhalts), Antwort `304` bei unverändertem Stand –
   neue Versionen gelten nach einem Update sofort, ohne Versionsnummern in den Adressen pflegen zu müssen
 - SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
@@ -89,7 +89,7 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 ## Architektur
 
 Ein Binary, ein Prozess, Module:
-- `config` – TOML-Datei + ENV-Overrides (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`, `NETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
+- `config` – TOML-Datei + ENV-Overrides (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
 - `snmp` – `SnmpClient` (GET und GETBULK-`walk` mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; `discovery` – Interface-Discovery über IF-MIB-Walks (`merge` ist reine Logik); Poller und Sensoren bauen darauf auf
 - `mib` – MIB-Parser (`mib::lexer`, `mib::parser`, tolerant) und Index (`MibIndex`: Auflösung über Module, Textual Conventions, Tabellen inkl. AUGMENTS,
@@ -133,7 +133,7 @@ Ein Binary, ein Prozess, Module:
 
 - SNMP ausschließlich lesend
 - SNMP-Community/v3-Passwörter verschlüsselt in der DB (XChaCha20-Poly1305, Spaltenkontext als AAD); Schlüssel aus Datei mit Rechten 0600
-  (`secret_key_file`, Server startet sonst nicht, Erzeugung mit `netmon key generate`); Entschlüsselung nur für den Poller;
+  (`secret_key_file`, Server startet sonst nicht, Erzeugung mit `opennetmon key generate`); Entschlüsselung nur für den Poller;
   Profil-Seiten nur für Administratoren
 - Secrets niemals loggen, nie in HTML ausgeben (Formulare zeigen nur „gesetzt/nicht gesetzt")
 - Passwörter mit argon2; Session-Cookies `HttpOnly`, `SameSite=Strict`, `Secure` laut Config (`cookie_secure`, Standard `true`);
@@ -150,13 +150,13 @@ Ein Binary, ein Prozess, Module:
 Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 
 - Release-Build als statisches Binary: Target `x86_64-unknown-linux-musl` (vermeidet glibc-Versionskonflikte zwischen Zorin und dem Server)
-- `deploy/install.sh` (wiederholbar; `DESTDIR=… ` für einen Trockenlauf): Systembenutzer `netmon`, `/usr/local/bin/netmon` (alte Version als `.previous`),
-  `/etc/netmon/config.toml` und `secret.key` (werden nie überschrieben), Unit, sysctl für Ping, täglicher Backup-Timer
-- `deploy/netmon.service`: eigener Benutzer, `StateDirectory=netmon` (`/var/lib/netmon`), strenges Hardening (`ProtectSystem=strict`, `NoNewPrivileges`, leere Capabilities,
+- `deploy/install.sh` (wiederholbar; `DESTDIR=… ` für einen Trockenlauf): Systembenutzer `opennetmon`, `/usr/local/bin/opennetmon` (alte Version als `.previous`),
+  `/etc/opennetmon/config.toml` und `secret.key` (werden nie überschrieben), Unit, sysctl für Ping, täglicher Backup-Timer
+- `deploy/opennetmon.service`: eigener Benutzer, `StateDirectory=opennetmon` (`/var/lib/opennetmon`), strenges Hardening (`ProtectSystem=strict`, `NoNewPrivileges`, leere Capabilities,
   Syscall-Filter `@system-service` ohne `@privileged @resources`, `MemoryDenyWriteExecute`); `systemd-analyze security` ≈ 1,3; als transienter Dienst real getestet
-- Pfade: Config `/etc/netmon/config.toml`, Daten `/var/lib/netmon/`, Sicherungen `/var/backups/netmon`, Logs über journald
-- Ping über `net.ipv4.ping_group_range` (`deploy/99-netmon-ping.conf`); Alternative `CAP_NET_RAW` (Hinweis in der Unit); der Poller warnt beim Start, wenn keine ICMP-Sockets möglich sind
-- `netmon backup <datei>` (SQLite `VACUUM INTO`, Modus 0600, überschreibt nie, ohne Schlüssel) und `deploy/netmon-backup.sh` + `.timer` (täglich, 14 Kopien)
+- Pfade: Config `/etc/opennetmon/config.toml`, Daten `/var/lib/opennetmon/`, Sicherungen `/var/backups/opennetmon`, Logs über journald
+- Ping über `net.ipv4.ping_group_range` (`deploy/99-opennetmon-ping.conf`); Alternative `CAP_NET_RAW` (Hinweis in der Unit); der Poller warnt beim Start, wenn keine ICMP-Sockets möglich sind
+- `opennetmon backup <datei>` (SQLite `VACUUM INTO`, Modus 0600, überschreibt nie, ohne Schlüssel) und `deploy/opennetmon-backup.sh` + `.timer` (täglich, 14 Kopien)
 - Reverse-Proxy-Beispiele: `deploy/Caddyfile.example`, `deploy/nginx.conf.example` (mit Login-Begrenzung)
 - Health-Endpoint `/healthz` (ohne Auth, ohne interne Details)
 
@@ -172,7 +172,7 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 
 - Unit-Tests für Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Config-Parsing
 - Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent (`tests/snmp_local.rs`, überspringen sich ohne Agent oder
-  ohne `NETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`; u. a. `sensors_work_on_switch_and_access_point` und `poller_cycle_against_real_devices`, `interface_discovery_on_switch_and_access_point`)
+  ohne `OPENNETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`; u. a. `sensors_work_on_switch_and_access_point` und `poller_cycle_against_real_devices`, `interface_discovery_on_switch_and_access_point`)
 - Handler-Tests mit `axum`/`tower::ServiceExt::oneshot`, gemeinsame Helfer in `src/web/testutil.rs`; SNMP-Tests ohne Netz über den
   Fake-v2c-Agenten `src/snmp/testagent.rs` (setzbare OID-Tabelle, GET/GETNEXT/GETBULK)
 
@@ -201,9 +201,9 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 
 - Ist der Server vom Internet getrennt? (relevant für Updates und E-Mail-Versand)
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller auf ein längeres
-  Passwort ändern und lokal in `~/.config/netmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
+  Passwort ändern und lokal in `~/.config/opennetmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - uPlot 1.6.32 ist eingebunden (`static/vendor/uplot/`); htmx ist noch nicht eingebunden (die Oberfläche ist sonst rein serverseitig gerendert) – dafür braucht es dein Okay zum Herunterladen
 
-Geklärt: Name netmon (mit Logo), Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.
+Geklärt: Name opennetmon (mit Logo), Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

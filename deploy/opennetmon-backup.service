@@ -1,18 +1,18 @@
 [Unit]
-Description=netmon database backup
-Documentation=https://github.com/tomCSLK/netmon
+Description=opennetmon database backup
+Documentation=https://github.com/tomCSLK/opennetmon
 
 [Service]
 Type=oneshot
-User=netmon
-Group=netmon
-ExecStart=/usr/local/sbin/netmon-backup
+User=opennetmon
+Group=opennetmon
+ExecStart=/usr/local/sbin/opennetmon-backup
 UMask=0077
 
-# Reading a WAL database needs write access to its -wal/-shm files, hence /var/lib/netmon.
+# Reading a WAL database needs write access to its -wal/-shm files, hence /var/lib/opennetmon.
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/var/lib/netmon /var/backups/netmon
+ReadWritePaths=/var/lib/opennetmon /var/backups/opennetmon
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

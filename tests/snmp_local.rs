@@ -2,13 +2,13 @@
 //! Each test skips itself (with a note on stderr) when the agent or its credentials are not available,
 //! so `cargo test` also passes on machines without `snmpd`.
 //!
-//! v3 tests read `NETMON_TEST_V3_USER`, `NETMON_TEST_V3_AUTH_PASS` and `NETMON_TEST_V3_PRIV_PASS`
-//! (SHA-256 / AES-128), e.g. via `set -a; . ~/.config/netmon-dev/test-agent.env; set +a`.
+//! v3 tests read `OPENNETMON_TEST_V3_USER`, `OPENNETMON_TEST_V3_AUTH_PASS` and `OPENNETMON_TEST_V3_PRIV_PASS`
+//! (SHA-256 / AES-128), e.g. via `set -a; . ~/.config/opennetmon-dev/test-agent.env; set +a`.
 
 use std::time::Duration;
 
-use netmon::credentials::{AuthProtocol, Credentials, PrivProtocol, Secret};
-use netmon::snmp::{SnmpClient, SnmpError, SnmpTarget, SnmpValue, probe};
+use opennetmon::credentials::{AuthProtocol, Credentials, PrivProtocol, Secret};
+use opennetmon::snmp::{SnmpClient, SnmpError, SnmpTarget, SnmpValue, probe};
 
 const IF_HC_IN_OCTETS: &[u64] = &[1, 3, 6, 1, 2, 1, 31, 1, 1, 1, 6, 1];
 
@@ -29,12 +29,12 @@ fn v2c() -> Credentials {
 
 fn v3_from_env() -> Option<Credentials> {
     Some(Credentials::V3 {
-        username: std::env::var("NETMON_TEST_V3_USER").ok()?,
+        username: std::env::var("OPENNETMON_TEST_V3_USER").ok()?,
         auth_protocol: AuthProtocol::Sha256,
-        auth_password: Secret::new(std::env::var("NETMON_TEST_V3_AUTH_PASS").ok()?),
+        auth_password: Secret::new(std::env::var("OPENNETMON_TEST_V3_AUTH_PASS").ok()?),
         privacy: Some((
             PrivProtocol::Aes128,
-            Secret::new(std::env::var("NETMON_TEST_V3_PRIV_PASS").ok()?),
+            Secret::new(std::env::var("OPENNETMON_TEST_V3_PRIV_PASS").ok()?),
         )),
     })
 }
@@ -77,7 +77,7 @@ async fn v3_auth_priv_probe_matches_v2c() {
         return;
     }
     let Some(creds) = v3_from_env() else {
-        eprintln!("skipped: NETMON_TEST_V3_* not set");
+        eprintln!("skipped: OPENNETMON_TEST_V3_* not set");
         return;
     };
     let v3 = probe(&target(), &creds).await.unwrap();
@@ -97,7 +97,7 @@ async fn v3_with_wrong_password_is_an_authentication_error() {
         ..
     }) = v3_from_env()
     else {
-        eprintln!("skipped: NETMON_TEST_V3_* not set");
+        eprintln!("skipped: OPENNETMON_TEST_V3_* not set");
         return;
     };
     let wrong = Credentials::V3 {
@@ -115,7 +115,7 @@ async fn v3_can_read_interface_counters() {
         return;
     }
     let Some(creds) = v3_from_env() else {
-        eprintln!("skipped: NETMON_TEST_V3_* not set");
+        eprintln!("skipped: OPENNETMON_TEST_V3_* not set");
         return;
     };
     let mut client = SnmpClient::connect(&target(), &creds).await.unwrap();

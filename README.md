@@ -1,11 +1,11 @@
-# netmon
+# opennetmon
 
-<p align="center"><img src="docs/assets/netmon-logo.jpg" alt="netmon – Network Monitoring" width="600"></p>
+<p align="center"><img src="docs/assets/opennetmon-logo.jpg" alt="opennetmon – Network Monitoring" width="600"></p>
 
 Agentloses Netzwerk-Monitoring per SNMP mit Weboberfläche, inspiriert vom Bedienkonzept von PRTG.
 Ein einzelnes, statisch gelinktes Binary (Rust) mit SQLite – gedacht für den Betrieb auf einem Ubuntu Server ohne GUI, Bedienung im Browser.
 
-> „PRTG“ ist eine Marke von Paessler; netmon steht in keiner Verbindung zu Paessler.
+> „PRTG“ ist eine Marke von Paessler; opennetmon steht in keiner Verbindung zu Paessler.
 > Zielumgebung ist ein privates Netz mit TP-Link Omada (Switches und Access Points per SNMPv3); es funktioniert mit jedem Gerät, das SNMP v2c oder v3 spricht.
 
 ## Status
@@ -60,14 +60,14 @@ und manuelle `#[ignore]`-Tests gegen echte Geräte (`tests/omada_manual.rs`).
 
 ## Konfiguration
 
-TOML-Datei (`--config`) plus Umgebungsvariablen (`NETMON_LISTEN`, `NETMON_DATABASE_PATH`, `NETMON_LOG_FILTER`, `NETMON_SECRET_KEY_FILE`).
+TOML-Datei (`--config`) plus Umgebungsvariablen (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`).
 Beispiel mit allen Schlüsseln und ihren Standardwerten:
 
 ```toml
 listen = "127.0.0.1:8080"                  # TLS übernimmt ein vorgeschalteter Reverse Proxy (Caddy, nginx)
-database_path = "/var/lib/netmon/netmon.db"
+database_path = "/var/lib/opennetmon/opennetmon.db"
 log_filter = "info"
-secret_key_file = "/etc/netmon/secret.key" # Rechte 0600, sonst startet der Server nicht
+secret_key_file = "/etc/opennetmon/secret.key" # Rechte 0600, sonst startet der Server nicht
 cookie_secure = true                       # nur für Entwicklung ohne TLS auf false setzen
 session_ttl_hours = 168
 poller_enabled = true
@@ -81,9 +81,9 @@ retention_hourly_days = 365                # Tageswerte bleiben unbegrenzt
 ```bash
 rustup target add x86_64-unknown-linux-musl
 cargo build --release --target x86_64-unknown-linux-musl     # statisches Binary, keine glibc-Abhängigkeit
-sudo deploy/install.sh --binary target/x86_64-unknown-linux-musl/release/netmon   # auf dem Server (nach dem Kopieren von Binary und deploy/)
-sudo -u netmon /usr/local/bin/netmon --config /etc/netmon/config.toml user add admin --role admin
-sudo systemctl start netmon
+sudo deploy/install.sh --binary target/x86_64-unknown-linux-musl/release/opennetmon   # auf dem Server (nach dem Kopieren von Binary und deploy/)
+sudo -u opennetmon /usr/local/bin/opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
+sudo systemctl start opennetmon
 ```
 
 Der Installer legt Benutzer, Konfiguration, Schlüssel, gehärtete systemd-Unit, die Ping-Berechtigung und eine tägliche Datenbanksicherung an und lässt vorhandene Konfiguration,

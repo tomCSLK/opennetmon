@@ -11,15 +11,15 @@ fn main() {
             }
         })
         .collect();
-    let sources: Vec<netmon::mib::Source<'_>> = texts
+    let sources: Vec<opennetmon::mib::Source<'_>> = texts
         .iter()
         .enumerate()
-        .map(|(i, text)| netmon::mib::Source {
-            origin: netmon::mib::Origin::Imported(i as i64),
+        .map(|(i, text)| opennetmon::mib::Source {
+            origin: opennetmon::mib::Origin::Imported(i as i64),
             text,
         })
         .collect();
-    let index = netmon::mib::MibIndex::build(&sources);
+    let index = opennetmon::mib::MibIndex::build(&sources);
     for r in index.reports() {
         if !r.is_ok() || !r.warnings.is_empty() {
             eprintln!(
@@ -29,6 +29,6 @@ fn main() {
         }
     }
     for o in index.all() {
-        println!("{}\t{}", o.name, netmon::mib::dotted(&o.oid));
+        println!("{}\t{}", o.name, opennetmon::mib::dotted(&o.oid));
     }
 }

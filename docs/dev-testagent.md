@@ -22,15 +22,15 @@ Das Klartextpasswort steht danach nicht mehr in der Datei. `rouser` erlaubt auss
 ## Test
 
 Auf dem Entwicklungsrechner sind keine MIB-Dateien installiert (`snmp-mibs-downloader` ist non-free), daher mit
-numerischen OIDs arbeiten. Die Zugangsdaten liegen lokal in `~/.config/netmon-dev/test-agent.env` (Rechte 0600,
-nicht im Repository). Vorher laden mit `. ~/.config/netmon-dev/test-agent.env`.
+numerischen OIDs arbeiten. Die Zugangsdaten liegen lokal in `~/.config/opennetmon-dev/test-agent.env` (Rechte 0600,
+nicht im Repository). Vorher laden mit `. ~/.config/opennetmon-dev/test-agent.env`.
 
 ```bash
 # v2c: sysDescr, sysUpTime
 snmpget -v2c -c public -On 127.0.0.1 1.3.6.1.2.1.1.1.0 1.3.6.1.2.1.1.3.0
 
 # v3 authPriv, SHA-256 / AES-128
-V3=(-v3 -l authPriv -u "$NETMON_TEST_V3_USER" -a SHA-256 -A "$NETMON_TEST_V3_AUTH_PASS" -x AES -X "$NETMON_TEST_V3_PRIV_PASS")
+V3=(-v3 -l authPriv -u "$OPENNETMON_TEST_V3_USER" -a SHA-256 -A "$OPENNETMON_TEST_V3_AUTH_PASS" -x AES -X "$OPENNETMON_TEST_V3_PRIV_PASS")
 snmpget "${V3[@]}" -On 127.0.0.1 1.3.6.1.2.1.1.1.0 1.3.6.1.2.1.1.3.0
 
 # GETBULK-Walk über ifXTable (1.3.6.1.2.1.31.1.1) und ifTable (1.3.6.1.2.1.2.2)

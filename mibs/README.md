@@ -1,6 +1,6 @@
 # Mitgelieferte Standard-MIBs
 
-Diese MIB-Module werden in das netmon-Binary eingebettet und stehen immer zur Verfügung. Herstellerspezifische MIBs
+Diese MIB-Module werden in das opennetmon-Binary eingebettet und stehen immer zur Verfügung. Herstellerspezifische MIBs
 (z. B. von TP-Link) werden in der Oberfläche unter „MIB-Dateien“ hochgeladen und gehören nicht hierher.
 
 | Datei | Quelle |

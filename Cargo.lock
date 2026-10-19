@@ -1439,39 +1439,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
-name = "netmon"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "argon2",
- "askama",
- "axum",
- "base64 0.23.1",
- "chacha20poly1305",
- "clap",
- "http-body-util",
- "lettre",
- "rand 0.9.5",
- "rpassword",
- "rust-embed",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "snmp2",
- "sqlx",
- "subtle",
- "surge-ping",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "toml",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "no-std-net"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1561,6 +1528,39 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "opennetmon"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "askama",
+ "axum",
+ "base64 0.23.1",
+ "chacha20poly1305",
+ "clap",
+ "http-body-util",
+ "lettre",
+ "rand 0.9.5",
+ "rpassword",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "snmp2",
+ "sqlx",
+ "subtle",
+ "surge-ping",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "parking"

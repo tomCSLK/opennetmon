@@ -1,8 +1,8 @@
 [package]
-name = "netmon"
+name = "opennetmon"
 version = "0.1.0"
 edition = "2024"
-description = "netmon – agentless SNMP network monitoring with a web interface"
+description = "opennetmon – agentless SNMP network monitoring with a web interface"
 publish = false
 
 [dependencies]

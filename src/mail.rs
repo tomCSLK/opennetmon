@@ -238,7 +238,7 @@ fn build_message(config: &MailConfig, subject: &str, body: &str) -> Result<Messa
     let from: Mailbox = config
         .from_address
         .parse::<Address>()
-        .map(|a| Mailbox::new(Some("netmon".to_owned()), a))
+        .map(|a| Mailbox::new(Some("opennetmon".to_owned()), a))
         .map_err(|_| bad("Die Absenderadresse"))?;
     let mut builder: MessageBuilder = Message::builder().from(from).subject(subject);
     if config.recipients.is_empty() {
@@ -317,7 +317,7 @@ mod tests {
             security: Security::StartTls,
             username: String::new(),
             password: None,
-            from_address: "netmon@example.org".to_owned(),
+            from_address: "opennetmon@example.org".to_owned(),
             recipients: "a@example.org".to_owned(),
             notify_warnings: true,
         }
@@ -331,7 +331,7 @@ mod tests {
             security: Security::None,
             username: None,
             password: None,
-            from_address: "netmon@example.org".to_owned(),
+            from_address: "opennetmon@example.org".to_owned(),
             recipients: vec!["admin@example.org".to_owned(), "ops@example.org".to_owned()],
             notify_warnings: true,
         }
@@ -440,22 +440,26 @@ mod tests {
         let smtp = TestSmtp::spawn(Behavior::default()).await;
         send(
             &config(smtp.port),
-            "[netmon] Ausfall: Test",
+            "[opennetmon] Ausfall: Test",
             "Zeile 1\n.Zeile mit Punkt\nÄÖÜ",
         )
         .await
         .unwrap();
         let mails = smtp.received();
         assert_eq!(mails.len(), 1);
-        assert_eq!(mails[0].from, "netmon@example.org");
+        assert_eq!(mails[0].from, "opennetmon@example.org");
         assert_eq!(mails[0].to, ["admin@example.org", "ops@example.org"]);
         assert!(
-            mails[0].data.contains("Subject: [netmon] Ausfall: Test"),
+            mails[0]
+                .data
+                .contains("Subject: [opennetmon] Ausfall: Test"),
             "{}",
             mails[0].data
         );
         assert!(
-            mails[0].data.contains("From: netmon <netmon@example.org>"),
+            mails[0]
+                .data
+                .contains("From: opennetmon <opennetmon@example.org>"),
             "{}",
             mails[0].data
         );

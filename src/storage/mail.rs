@@ -237,7 +237,7 @@ mod tests {
             security: Security::StartTls,
             username: username.to_owned(),
             password: password.map(Secret::new),
-            from_address: "netmon@example.org".to_owned(),
+            from_address: "opennetmon@example.org".to_owned(),
             recipients: "a@example.org\nb@example.org".to_owned(),
             notify_warnings: false,
         }
@@ -260,12 +260,12 @@ mod tests {
     async fn settings_round_trip_and_the_password_is_encrypted() {
         let (_dir, pool) = db().await;
         let secrets = SecretBox::from_key([3u8; 32]);
-        save(&pool, &secrets, &input("netmon", Some("pw-geheim-1")))
+        save(&pool, &secrets, &input("opennetmon", Some("pw-geheim-1")))
             .await
             .unwrap();
 
         let view = get_view(&pool).await.unwrap();
-        assert_eq!(view.username, "netmon");
+        assert_eq!(view.username, "opennetmon");
         assert!(view.password_set);
         assert_eq!(view.recipients, "a@example.org\nb@example.org");
         assert!(!view.notify_warnings);
@@ -290,14 +290,14 @@ mod tests {
     async fn an_empty_password_keeps_the_stored_one_until_the_user_is_removed() {
         let (_dir, pool) = db().await;
         let secrets = SecretBox::from_key([3u8; 32]);
-        save(&pool, &secrets, &input("netmon", Some("pw-geheim-1")))
+        save(&pool, &secrets, &input("opennetmon", Some("pw-geheim-1")))
             .await
             .unwrap();
-        save(&pool, &secrets, &input("netmon2", None))
+        save(&pool, &secrets, &input("opennetmon2", None))
             .await
             .unwrap();
         let config = load_config(&pool, &secrets).await.unwrap();
-        assert_eq!(config.username.as_deref(), Some("netmon2"));
+        assert_eq!(config.username.as_deref(), Some("opennetmon2"));
         assert_eq!(
             config.password.as_ref().map(Secret::expose),
             Some("pw-geheim-1")

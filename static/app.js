@@ -5,12 +5,12 @@
   var LABELS = { system: 'Design: System', light: 'Design: Hell', dark: 'Design: Dunkel' };
 
   function stored() {
-    try { return localStorage.getItem('netmon-theme') || 'system'; } catch (e) { return 'system'; }
+    try { return localStorage.getItem('opennetmon-theme') || 'system'; } catch (e) { return 'system'; }
   }
   function apply(mode) {
     if (mode === 'light' || mode === 'dark') { root.setAttribute('data-theme', mode); } else { root.removeAttribute('data-theme'); }
     try {
-      if (mode === 'system') { localStorage.removeItem('netmon-theme'); } else { localStorage.setItem('netmon-theme', mode); }
+      if (mode === 'system') { localStorage.removeItem('opennetmon-theme'); } else { localStorage.setItem('opennetmon-theme', mode); }
     } catch (e) { /* not remembered, still applied */ }
     var buttons = document.querySelectorAll('[data-theme-toggle]');
     for (var i = 0; i < buttons.length; i++) {
@@ -19,7 +19,7 @@
       if (label) { label.textContent = LABELS[mode]; }
       buttons[i].setAttribute('aria-label', LABELS[mode] + ' (umschalten)');
     }
-    window.dispatchEvent(new Event('netmon:theme'));
+    window.dispatchEvent(new Event('opennetmon:theme'));
   }
 
   var toggles = document.querySelectorAll('[data-theme-toggle]');
@@ -32,7 +32,7 @@
   apply(stored());
   if (window.matchMedia) {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
-    var onChange = function () { if (stored() === 'system') { window.dispatchEvent(new Event('netmon:theme')); } };
+    var onChange = function () { if (stored() === 'system') { window.dispatchEvent(new Event('opennetmon:theme')); } };
     if (mq.addEventListener) { mq.addEventListener('change', onChange); }
   }
 
@@ -50,7 +50,7 @@
   if (best) { best.setAttribute('aria-current', 'page'); }
 
   // Overview: folded groups are remembered per browser (only a convenience; without storage all stay open).
-  var FOLDED = 'netmon-folded-groups';
+  var FOLDED = 'opennetmon-folded-groups';
   function foldedGroups() {
     try { return JSON.parse(localStorage.getItem(FOLDED) || '[]'); } catch (e) { return []; }
   }

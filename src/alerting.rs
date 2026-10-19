@@ -58,7 +58,7 @@ fn word(change: &StatusChange) -> &'static str {
 pub fn compose(events: &[AlertEvent]) -> (String, String) {
     let subject = match events {
         [one] => format!(
-            "[netmon] {}: {} / {}",
+            "[opennetmon] {}: {} / {}",
             word(&one.change),
             one.device,
             one.sensor
@@ -75,7 +75,7 @@ pub fn compose(events: &[AlertEvent]) -> (String, String) {
             .map(|(s, label)| format!("{} {label}", count(s)))
             .collect();
             format!(
-                "[netmon] {} Statuswechsel: {}",
+                "[opennetmon] {} Statuswechsel: {}",
                 many.len(),
                 parts.join(", ")
             )
@@ -93,7 +93,7 @@ pub fn compose(events: &[AlertEvent]) -> (String, String) {
             e.change.message,
         ));
     }
-    body.push_str("-- \nnetmon\n");
+    body.push_str("-- \nopennetmon\n");
     (subject, body)
 }
 
@@ -285,11 +285,11 @@ mod tests {
     fn a_single_change_gets_a_specific_subject() {
         let (subject, body) =
             compose(&[event("Switch Büro", "Ping", Some(Status::Up), Status::Down)]);
-        assert_eq!(subject, "[netmon] Ausfall: Switch Büro / Ping");
+        assert_eq!(subject, "[opennetmon] Ausfall: Switch Büro / Ping");
         assert!(body.contains("Switch Büro / Ping") && body.contains("In Ordnung -> Ausfall"));
         assert!(body.contains("Meldung") && body.contains("1970-01-01 00:00:01 UTC"));
         let (subject, _) = compose(&[event("AP", "Uptime", Some(Status::Down), Status::Up)]);
-        assert_eq!(subject, "[netmon] Wieder in Ordnung: AP / Uptime");
+        assert_eq!(subject, "[opennetmon] Wieder in Ordnung: AP / Uptime");
         let (_, body) = compose(&[event("AP", "Uptime", None, Status::Down)]);
         assert!(body.contains("erste Abfrage -> Ausfall"));
     }
@@ -302,7 +302,10 @@ mod tests {
             event("Switch", "Port 1", Some(Status::Up), Status::Warning),
         ];
         let (subject, body) = compose(&events);
-        assert_eq!(subject, "[netmon] 3 Statuswechsel: 2 Ausfall, 1 Warnung");
+        assert_eq!(
+            subject,
+            "[opennetmon] 3 Statuswechsel: 2 Ausfall, 1 Warnung"
+        );
         assert_eq!(body.matches("Switch / ").count(), 3);
     }
 
@@ -323,7 +326,7 @@ mod tests {
             security: Security::None,
             username: String::new(),
             password: None::<Secret>,
-            from_address: "netmon@example.org".to_owned(),
+            from_address: "opennetmon@example.org".to_owned(),
             recipients: "admin@example.org".to_owned(),
             notify_warnings,
         };
@@ -350,7 +353,7 @@ mod tests {
         assert!(
             mails[0]
                 .data
-                .contains("Subject: [netmon] Ausfall: Switch / Ping"),
+                .contains("Subject: [opennetmon] Ausfall: Switch / Ping"),
             "only the worthy change: {}",
             mails[0].data
         );

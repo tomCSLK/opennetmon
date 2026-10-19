@@ -5,7 +5,7 @@ Switches desselben Modells. Alle Vorlagenseiten sind nur für Administratoren.
 
 ## Vorlage erstellen: „Als Vorlage speichern“
 
-Auf der Sensorseite eines Geräts im Bereich **Gerätevorlage** (`/devices/<id>/template/new`). netmon liest dabei vom Gerät die
+Auf der Sensorseite eines Geräts im Bereich **Gerätevorlage** (`/devices/<id>/template/new`). opennetmon liest dabei vom Gerät die
 Gerätekennung (`sysObjectID`) und die Interfaces.
 
 | Teil | Möglichkeiten |

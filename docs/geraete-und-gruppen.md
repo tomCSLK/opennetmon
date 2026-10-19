@@ -62,7 +62,7 @@ bevor es überhaupt ein SNMP-Profil gibt.
 - Die Spalte war bis Version 0011 Pflicht. SQLite lässt das nur durch einen Neuaufbau der Tabelle ändern, der abgeschaltete Fremdschlüssel braucht
   (sonst würde das Löschen der alten Tabelle alle Sensoren mitnehmen) – das geht nicht in einer sqlx-Migration. Deshalb erledigt
   `storage::migrate` das einmalig beim Start (`allow_devices_without_profile`: neue Tabelle, Daten kopieren, Indizes, `PRAGMA foreign_key_check`,
-  erst dann `COMMIT`); danach ist es ein No-op. Vorher eine Sicherung mit `netmon backup` machen.
+  erst dann `COMMIT`); danach ist es ein No-op. Vorher eine Sicherung mit `opennetmon backup` machen.
 
 ## Verbindungstest
 
@@ -89,6 +89,6 @@ Passwörter erscheinen weder auf der Ergebnisseite noch im Log (das Log nennt nu
 ## Tests
 
 - Unit- und Handler-Tests nutzen einen kleinen **Fake-SNMPv2c-Agenten** (`src/snmp/testagent.rs`), der wie echte Agenten bei falscher Community schweigt.
-- `tests/snmp_local.rs`: Integrationstests gegen den lokalen `snmpd` (v2c, v3 mit `NETMON_TEST_V3_*`); überspringen sich selbst, wenn der Agent oder die Variablen fehlen.
+- `tests/snmp_local.rs`: Integrationstests gegen den lokalen `snmpd` (v2c, v3 mit `OPENNETMON_TEST_V3_*`); überspringen sich selbst, wenn der Agent oder die Variablen fehlen.
 - `tests/omada_manual.rs`: manuelle Tests gegen die echten Omada-Geräte, alle `#[ignore]`:
-  `set -a; . ~/.config/netmon-dev/omada.env; set +a; cargo test --test omada_manual -- --ignored --nocapture`
+  `set -a; . ~/.config/opennetmon-dev/omada.env; set +a; cargo test --test omada_manual -- --ignored --nocapture`

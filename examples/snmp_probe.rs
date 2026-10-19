@@ -1,11 +1,11 @@
 //! Phase 0 spike: probes an SNMP agent with `snmp2` (v2c and v3 authPriv).
 //!
 //! Secrets are read from the environment only, never from the command line:
-//!   NETMON_PROBE_COMMUNITY                    (v2c)
-//!   NETMON_PROBE_AUTH_PASS, NETMON_PROBE_PRIV_PASS (v3; the priv password only with `--level auth-priv`)
+//!   OPENNETMON_PROBE_COMMUNITY                    (v2c)
+//!   OPENNETMON_PROBE_AUTH_PASS, OPENNETMON_PROBE_PRIV_PASS (v3; the priv password only with `--level auth-priv`)
 //!
 //! Example:
-//!   NETMON_PROBE_COMMUNITY=public cargo run --example snmp_probe -- -t 127.0.0.1:161 v2c
+//!   OPENNETMON_PROBE_COMMUNITY=public cargo run --example snmp_probe -- -t 127.0.0.1:161 v2c
 //!   cargo run --example snmp_probe -- -t 127.0.0.1:161 v3 -u netmontest --auth sha256 --priv aes128
 
 use std::future::Future;
@@ -40,9 +40,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Mode {
-    /// SNMPv2c (community from NETMON_PROBE_COMMUNITY)
+    /// SNMPv2c (community from OPENNETMON_PROBE_COMMUNITY)
     V2c,
-    /// SNMPv3 (passwords from NETMON_PROBE_AUTH_PASS / NETMON_PROBE_PRIV_PASS)
+    /// SNMPv3 (passwords from OPENNETMON_PROBE_AUTH_PASS / OPENNETMON_PROBE_PRIV_PASS)
     V3 {
         #[arg(short, long)]
         user: String,
@@ -138,7 +138,7 @@ async fn with_timeout<T>(
 async fn open(cli: &Cli) -> Result<AsyncSession> {
     match &cli.mode {
         Mode::V2c => {
-            let community = env_secret("NETMON_PROBE_COMMUNITY")?;
+            let community = env_secret("OPENNETMON_PROBE_COMMUNITY")?;
             Ok(AsyncSession::new_v2c(cli.target.as_str(), &community, 1).await?)
         }
         Mode::V3 {
@@ -147,12 +147,12 @@ async fn open(cli: &Cli) -> Result<AsyncSession> {
             auth,
             priv_,
         } => {
-            let auth_pass = env_secret("NETMON_PROBE_AUTH_PASS")?;
+            let auth_pass = env_secret("OPENNETMON_PROBE_AUTH_PASS")?;
             let auth_mode = match level {
                 LevelArg::AuthNoPriv => Auth::AuthNoPriv,
                 LevelArg::AuthPriv => Auth::AuthPriv {
                     cipher: (*priv_).into(),
-                    privacy_password: env_secret("NETMON_PROBE_PRIV_PASS")?,
+                    privacy_password: env_secret("OPENNETMON_PROBE_PRIV_PASS")?,
                 },
             };
             let security = Security::new(user.as_bytes(), &auth_pass)

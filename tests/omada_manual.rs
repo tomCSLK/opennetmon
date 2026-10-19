@@ -1,15 +1,15 @@
 //! Manual tests against the real Omada devices; never part of `cargo test` (all tests are `#[ignore]`).
 //!
 //! ```bash
-//! set -a; . ~/.config/netmon-dev/omada.env; set +a
+//! set -a; . ~/.config/opennetmon-dev/omada.env; set +a
 //! cargo test --test omada_manual -- --ignored --nocapture
 //! ```
-//! Needs `NETMON_PROBE_AUTH_PASS` (the SNMPv3 password of user `MCS6_SNMP`, authNoPriv/MD5).
+//! Needs `OPENNETMON_PROBE_AUTH_PASS` (the SNMPv3 password of user `MCS6_SNMP`, authNoPriv/MD5).
 
 use std::time::Duration;
 
-use netmon::credentials::{AuthProtocol, Credentials, Secret};
-use netmon::snmp::{SnmpClient, SnmpTarget, SnmpValue, probe};
+use opennetmon::credentials::{AuthProtocol, Credentials, Secret};
+use opennetmon::snmp::{SnmpClient, SnmpTarget, SnmpValue, probe};
 
 const SWITCH: &str = "192.168.178.253";
 const ACCESS_POINT: &str = "192.168.178.240";
@@ -21,7 +21,7 @@ fn credentials() -> Credentials {
         username: "MCS6_SNMP".to_owned(),
         auth_protocol: AuthProtocol::Md5,
         auth_password: Secret::new(
-            std::env::var("NETMON_PROBE_AUTH_PASS").expect("NETMON_PROBE_AUTH_PASS"),
+            std::env::var("OPENNETMON_PROBE_AUTH_PASS").expect("OPENNETMON_PROBE_AUTH_PASS"),
         ),
         privacy: None,
     }
@@ -78,9 +78,9 @@ async fn access_point_answers_with_32_bit_counters_only() {
 /// Runs the real sensors twice against a device and prints what they report.
 async fn poll_twice(
     host: &str,
-    sensor: &mut dyn netmon::sensors::Sensor,
+    sensor: &mut dyn opennetmon::sensors::Sensor,
 ) -> Vec<(String, Option<f64>)> {
-    use netmon::sensors::{PollContext, ping::PingClients};
+    use opennetmon::sensors::{PollContext, ping::PingClients};
     let mut client = SnmpClient::connect(&target(host), &credentials())
         .await
         .unwrap();
@@ -111,7 +111,7 @@ async fn poll_twice(
 #[tokio::test]
 #[ignore = "needs the real Omada network"]
 async fn sensors_work_on_switch_and_access_point() {
-    use netmon::sensors::spec::SensorSpec;
+    use opennetmon::sensors::spec::SensorSpec;
     // Switch port 1 has 64-bit counters, the access point's first interface only 32-bit ones.
     for host in [SWITCH, ACCESS_POINT] {
         for spec in [
@@ -135,14 +135,14 @@ async fn sensors_work_on_switch_and_access_point() {
 #[tokio::test]
 #[ignore = "needs the real Omada network"]
 async fn poller_cycle_against_real_devices() {
-    use netmon::credentials::{ProfileInput, ProfileKind, SecurityLevel};
-    use netmon::crypto::SecretBox;
-    use netmon::devices::{DeviceInput, Polling};
-    use netmon::poller::{SensorSet, poll_device_once};
-    use netmon::sensors::ping::PingClients;
-    use netmon::sensors::spec::SensorSpec;
-    use netmon::status::Status;
-    use netmon::storage::{self, credentials, devices, sensors, status};
+    use opennetmon::credentials::{ProfileInput, ProfileKind, SecurityLevel};
+    use opennetmon::crypto::SecretBox;
+    use opennetmon::devices::{DeviceInput, Polling};
+    use opennetmon::poller::{SensorSet, poll_device_once};
+    use opennetmon::sensors::ping::PingClients;
+    use opennetmon::sensors::spec::SensorSpec;
+    use opennetmon::status::Status;
+    use opennetmon::storage::{self, credentials, devices, sensors, status};
 
     let dir = tempfile::tempdir().unwrap();
     let pool = storage::connect(&dir.path().join("m.db")).await.unwrap();
@@ -159,7 +159,8 @@ async fn poller_cycle_against_real_devices() {
                 level: SecurityLevel::AuthNoPriv,
                 auth_protocol: AuthProtocol::Md5,
                 auth_password: Some(Secret::new(
-                    std::env::var("NETMON_PROBE_AUTH_PASS").expect("NETMON_PROBE_AUTH_PASS"),
+                    std::env::var("OPENNETMON_PROBE_AUTH_PASS")
+                        .expect("OPENNETMON_PROBE_AUTH_PASS"),
                 )),
                 priv_protocol: None,
                 priv_password: None,
@@ -223,7 +224,7 @@ async fn interface_discovery_on_switch_and_access_point() {
         let mut client = SnmpClient::connect(&target(host), &credentials())
             .await
             .unwrap();
-        let found = netmon::discovery::discover_interfaces(&mut client)
+        let found = opennetmon::discovery::discover_interfaces(&mut client)
             .await
             .unwrap();
         println!("{host}: {} interfaces", found.len());

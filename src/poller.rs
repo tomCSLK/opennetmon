@@ -820,7 +820,7 @@ mod tests {
             security: Security::None,
             username: String::new(),
             password: None,
-            from_address: "netmon@example.org".to_owned(),
+            from_address: "opennetmon@example.org".to_owned(),
             recipients: "admin@example.org".to_owned(),
             notify_warnings: true,
         };

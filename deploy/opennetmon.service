@@ -1,21 +1,21 @@
 [Unit]
-Description=netmon - agentless SNMP network monitor
-Documentation=https://github.com/tomCSLK/netmon
+Description=opennetmon - agentless SNMP network monitor
+Documentation=https://github.com/tomCSLK/opennetmon
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=netmon
-Group=netmon
-ExecStart=/usr/local/bin/netmon --config /etc/netmon/config.toml serve
+User=opennetmon
+Group=opennetmon
+ExecStart=/usr/local/bin/opennetmon --config /etc/opennetmon/config.toml serve
 Restart=on-failure
 RestartSec=5
 # On shutdown the poller stops first, then pending alert mails are sent (up to 20 s).
 TimeoutStopSec=40
 
-# /var/lib/netmon (database), created and owned by the service user, mode 0750.
-StateDirectory=netmon
+# /var/lib/opennetmon (database), created and owned by the service user, mode 0750.
+StateDirectory=opennetmon
 StateDirectoryMode=0750
 UMask=0077
 
@@ -44,7 +44,7 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 CapabilityBoundingSet=
 AmbientCapabilities=
-# Ping uses unprivileged ICMP sockets (sysctl net.ipv4.ping_group_range, see deploy/99-netmon-ping.conf).
+# Ping uses unprivileged ICMP sockets (sysctl net.ipv4.ping_group_range, see deploy/99-opennetmon-ping.conf).
 # Without that sysctl, grant raw sockets to this service instead by replacing the two lines above with:
 #   CapabilityBoundingSet=CAP_NET_RAW
 #   AmbientCapabilities=CAP_NET_RAW

@@ -8,10 +8,10 @@ use serde::Deserialize;
 
 use crate::auth::throttle::ClientIpHeader;
 
-const ENV_LISTEN: &str = "NETMON_LISTEN";
-const ENV_DATABASE_PATH: &str = "NETMON_DATABASE_PATH";
-const ENV_LOG_FILTER: &str = "NETMON_LOG_FILTER";
-const ENV_SECRET_KEY_FILE: &str = "NETMON_SECRET_KEY_FILE";
+const ENV_LISTEN: &str = "OPENNETMON_LISTEN";
+const ENV_DATABASE_PATH: &str = "OPENNETMON_DATABASE_PATH";
+const ENV_LOG_FILTER: &str = "OPENNETMON_LOG_FILTER";
+const ENV_SECRET_KEY_FILE: &str = "OPENNETMON_SECRET_KEY_FILE";
 const MAX_SESSION_TTL_HOURS: u64 = 24 * 90;
 const MAX_POLL_CONCURRENCY: usize = 256;
 
@@ -37,10 +37,10 @@ pub struct Config {
     pub listen: SocketAddr,
     /// Path of the SQLite database file.
     pub database_path: PathBuf,
-    /// `tracing` filter directive, e.g. `info,netmon=debug`. `RUST_LOG` takes precedence.
+    /// `tracing` filter directive, e.g. `info,opennetmon=debug`. `RUST_LOG` takes precedence.
     pub log_filter: String,
     /// File with the 256-bit key (64 hex characters, mode 0600) that encrypts stored SNMP secrets.
-    /// Create it with `netmon key generate`; losing it makes stored secrets unreadable.
+    /// Create it with `opennetmon key generate`; losing it makes stored secrets unreadable.
     pub secret_key_file: PathBuf,
     /// Mark session cookies `Secure`. Keep `true` behind a TLS reverse proxy; only plain-HTTP development needs `false`.
     pub cookie_secure: bool,
@@ -64,9 +64,9 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             listen: SocketAddr::from(([127, 0, 0, 1], 8080)),
-            database_path: PathBuf::from("/var/lib/netmon/netmon.db"),
+            database_path: PathBuf::from("/var/lib/opennetmon/opennetmon.db"),
             log_filter: "info".to_owned(),
-            secret_key_file: PathBuf::from("/etc/netmon/secret.key"),
+            secret_key_file: PathBuf::from("/etc/opennetmon/secret.key"),
             cookie_secure: true,
             session_ttl_hours: 168,
             client_ip_header: None,
@@ -79,7 +79,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Loads the config from an optional file, then applies `NETMON_*` environment overrides.
+    /// Loads the config from an optional file, then applies `OPENNETMON_*` environment overrides.
     pub fn load(path: Option<&Path>) -> Result<Self, ConfigError> {
         let text = match path {
             Some(path) => Some(
@@ -255,7 +255,7 @@ mod tests {
         let config = Config::from_sources(None, no_env).unwrap();
         assert_eq!(
             config.secret_key_file,
-            PathBuf::from("/etc/netmon/secret.key")
+            PathBuf::from("/etc/opennetmon/secret.key")
         );
         let env = |name: &str| (name == ENV_SECRET_KEY_FILE).then(|| "/k/x.key".to_owned());
         let config = Config::from_sources(None, env).unwrap();
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn missing_file_reports_path() {
-        let err = Config::load(Some(Path::new("/nonexistent/netmon.toml"))).unwrap_err();
+        let err = Config::load(Some(Path::new("/nonexistent/opennetmon.toml"))).unwrap_err();
         assert!(matches!(err, ConfigError::Read { .. }));
     }
 }

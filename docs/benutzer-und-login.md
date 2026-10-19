@@ -35,10 +35,10 @@ Erreichbar über Name und Rolle unten in der Seitenleiste. Zeigt Benutzername un
 Der erste Administrator wird auf dem Server angelegt, es gibt keine Standardzugangsdaten:
 
 ```bash
-netmon --config /etc/netmon/config.toml user add admin --role admin
-netmon --config /etc/netmon/config.toml user add lena --role viewer
-netmon --config /etc/netmon/config.toml user passwd lena    # beendet alle Sitzungen des Benutzers
-netmon --config /etc/netmon/config.toml user list
+opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
+opennetmon --config /etc/opennetmon/config.toml user add lena --role viewer
+opennetmon --config /etc/opennetmon/config.toml user passwd lena    # beendet alle Sitzungen des Benutzers
+opennetmon --config /etc/opennetmon/config.toml user list
 ```
 
 Das Passwort wird abgefragt (zweimal, ohne Anzeige). Bei Eingabe über eine Pipe wird eine Zeile von stdin gelesen.
@@ -47,9 +47,9 @@ Regeln: Benutzername 3 bis 32 Zeichen (`a-z A-Z 0-9 . _ -`, Groß-/Kleinschreibu
 ## Sicherheitsmerkmale
 
 - Passwörter: Argon2id mit zufälligem Salt. Auch bei unbekanntem Benutzer wird ein Hash geprüft, damit Antwortzeit und Meldung gleich bleiben.
-- Sitzung: zufälliges 256-Bit-Token im Cookie `netmon_session` (`HttpOnly`, `SameSite=Strict`, `Secure` laut Config). In der Datenbank steht nur der SHA-256-Wert des Tokens.
+- Sitzung: zufälliges 256-Bit-Token im Cookie `opennetmon_session` (`HttpOnly`, `SameSite=Strict`, `Secure` laut Config). In der Datenbank steht nur der SHA-256-Wert des Tokens.
 - Lebensdauer: absolut `session_ttl_hours` (Standard 168 Stunden). Abgelaufene Sitzungen werden beim Anmelden gelöscht.
-- CSRF: Anmeldeformular per Double-Submit-Cookie (`netmon_login`), alle weiteren POST-Formulare mit einem Token pro Sitzung.
+- CSRF: Anmeldeformular per Double-Submit-Cookie (`opennetmon_login`), alle weiteren POST-Formulare mit einem Token pro Sitzung.
 - Antwort-Header: `Content-Security-Policy` (nur eigene Ressourcen), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
 - Passwörter erscheinen nie in Logs. Fehlgeschlagene Anmeldungen werden ohne Benutzernamen protokolliert.
 

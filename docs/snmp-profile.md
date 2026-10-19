@@ -30,12 +30,12 @@ Beim Wechsel auf authNoPriv wird das Verschlüsselungs-Passwort gelöscht.
 - Der Kontext (`snmp.community`, `snmp.auth_password`, `snmp.priv_password`) ist als zusätzliche authentifizierte Daten gebunden:
   ein Chiffrat lässt sich nicht in eine andere Spalte kopieren.
 - Der Schlüssel (256 Bit, 64 Hex-Zeichen) liegt in einer Datei, Pfad in der Config (`secret_key_file`,
-  Standard `/etc/netmon/secret.key`, Umgebungsvariable `NETMON_SECRET_KEY_FILE`).
+  Standard `/etc/opennetmon/secret.key`, Umgebungsvariable `OPENNETMON_SECRET_KEY_FILE`).
   Der Server startet nur, wenn die Datei existiert und **nicht für Gruppe oder andere lesbar** ist (`chmod 600`).
 - Schlüssel erzeugen (einmalig, überschreibt nie eine vorhandene Datei):
 
   ```bash
-  netmon --config /etc/netmon/config.toml key generate
+  opennetmon --config /etc/opennetmon/config.toml key generate
   ```
 
 - **Schlüssel getrennt von der Datenbank sichern.** Ohne Schlüssel sind die gespeicherten Geheimnisse nicht mehr lesbar;

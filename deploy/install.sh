@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Installs or upgrades netmon on a systemd-based Ubuntu/Debian server. Run as root:
+# Installs or upgrades opennetmon on a systemd-based Ubuntu/Debian server. Run as root:
 #
 #   sudo deploy/install.sh [--binary PATH] [--no-sysctl] [--no-backup]
 #
-# First run: creates the service user, /etc/netmon (config + encryption key) and the systemd unit.
+# First run: creates the service user, /etc/opennetmon (config + encryption key) and the systemd unit.
 # Re-running replaces the binary and unit, never touches an existing config, key or database,
 # and restarts the service if it was running (schema migrations run on start).
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 DESTDIR="${DESTDIR:-}"
-BINARY="target/x86_64-unknown-linux-musl/release/netmon"
+BINARY="target/x86_64-unknown-linux-musl/release/opennetmon"
 SYSCTL=yes
 BACKUP=yes
 while [ $# -gt 0 ]; do
@@ -26,13 +26,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-USER_NAME=netmon
+USER_NAME=opennetmon
 BIN_DIR="$DESTDIR/usr/local/bin"
-CONF_DIR="$DESTDIR/etc/netmon"
+CONF_DIR="$DESTDIR/etc/opennetmon"
 UNIT_DIR="$DESTDIR/etc/systemd/system"
 SYSCTL_DIR="$DESTDIR/etc/sysctl.d"
 SBIN_DIR="$DESTDIR/usr/local/sbin"
-BACKUP_DIR="$DESTDIR/var/backups/netmon"
+BACKUP_DIR="$DESTDIR/var/backups/opennetmon"
 CONFIG="$CONF_DIR/config.toml"
 KEY="$CONF_DIR/secret.key"
 REAL=yes
@@ -61,12 +61,12 @@ if [ "$REAL" = yes ] && ! id "$USER_NAME" >/dev/null 2>&1; then
 fi
 
 # 2. Binary.
-step "installing the binary to $BIN_DIR/netmon"
+step "installing the binary to $BIN_DIR/opennetmon"
 install -d -m 0755 "$BIN_DIR"
 # Keep the previous binary for a quick rollback (see docs/betrieb.md).
-[ -e "$BIN_DIR/netmon" ] && cp -p "$BIN_DIR/netmon" "$BIN_DIR/netmon.previous"
-install -m 0755 "$BINARY" "$BIN_DIR/netmon.new"
-mv -f "$BIN_DIR/netmon.new" "$BIN_DIR/netmon"
+[ -e "$BIN_DIR/opennetmon" ] && cp -p "$BIN_DIR/opennetmon" "$BIN_DIR/opennetmon.previous"
+install -m 0755 "$BINARY" "$BIN_DIR/opennetmon.new"
+mv -f "$BIN_DIR/opennetmon.new" "$BIN_DIR/opennetmon"
 
 # 3. Configuration directory, config (kept if present) and encryption key (kept if present).
 install -d -m 0750 "$CONF_DIR"
@@ -81,7 +81,7 @@ fi
 if [ ! -e "$KEY" ]; then
   step "generating the encryption key $KEY"
   # The key path in the config is absolute; with DESTDIR, generate into the prefixed path instead.
-  NETMON_SECRET_KEY_FILE="$KEY" "$BIN_DIR/netmon" --config "$CONFIG" key generate >/dev/null
+  OPENNETMON_SECRET_KEY_FILE="$KEY" "$BIN_DIR/opennetmon" --config "$CONFIG" key generate >/dev/null
   chmod 0600 "$KEY"
   [ "$REAL" = yes ] && chown "$USER_NAME":"$USER_NAME" "$KEY"
   KEY_IS_NEW=yes
@@ -93,31 +93,31 @@ fi
 # 4. systemd unit and the ping sysctl.
 step "installing the systemd unit"
 install -d -m 0755 "$UNIT_DIR"
-install -m 0644 deploy/netmon.service "$UNIT_DIR/netmon.service"
+install -m 0644 deploy/opennetmon.service "$UNIT_DIR/opennetmon.service"
 if [ "$SYSCTL" = yes ]; then
   step "allowing unprivileged ICMP sockets for ping sensors"
   install -d -m 0755 "$SYSCTL_DIR"
-  install -m 0644 deploy/99-netmon-ping.conf "$SYSCTL_DIR/99-netmon-ping.conf"
-  [ "$REAL" = yes ] && sysctl -q -p "$SYSCTL_DIR/99-netmon-ping.conf"
+  install -m 0644 deploy/99-opennetmon-ping.conf "$SYSCTL_DIR/99-opennetmon-ping.conf"
+  [ "$REAL" = yes ] && sysctl -q -p "$SYSCTL_DIR/99-opennetmon-ping.conf"
 fi
 
 # 5. Daily database backup (without the key file).
 if [ "$BACKUP" = yes ]; then
-  step "installing the daily backup (netmon-backup.timer, 14 copies in /var/backups/netmon)"
+  step "installing the daily backup (opennetmon-backup.timer, 14 copies in /var/backups/opennetmon)"
   install -d -m 0755 "$SBIN_DIR"
-  install -m 0755 deploy/netmon-backup.sh "$SBIN_DIR/netmon-backup"
+  install -m 0755 deploy/opennetmon-backup.sh "$SBIN_DIR/opennetmon-backup"
   install -d -m 0700 "$BACKUP_DIR"
   [ "$REAL" = yes ] && chown "$USER_NAME":"$USER_NAME" "$BACKUP_DIR"
-  install -m 0644 deploy/netmon-backup.service deploy/netmon-backup.timer "$UNIT_DIR/"
+  install -m 0644 deploy/opennetmon-backup.service deploy/opennetmon-backup.timer "$UNIT_DIR/"
 fi
 
 if [ "$REAL" = yes ]; then
   systemctl daemon-reload
-  systemctl enable netmon.service >/dev/null 2>&1
-  [ "$BACKUP" = yes ] && systemctl enable --now netmon-backup.timer >/dev/null 2>&1
-  if systemctl is-active --quiet netmon.service; then
+  systemctl enable opennetmon.service >/dev/null 2>&1
+  [ "$BACKUP" = yes ] && systemctl enable --now opennetmon-backup.timer >/dev/null 2>&1
+  if systemctl is-active --quiet opennetmon.service; then
     step "restarting the running service"
-    systemctl restart netmon.service
+    systemctl restart opennetmon.service
   fi
 fi
 
@@ -129,14 +129,14 @@ if [ "$REAL" = yes ]; then
     echo "IMPORTANT: back up $KEY separately from the database. Without it the stored"
     echo "SNMP/SMTP passwords cannot be decrypted."
   fi
-  if ! systemctl is-active --quiet netmon.service; then
+  if ! systemctl is-active --quiet opennetmon.service; then
     echo
     echo "Next steps:"
     echo "  1. Create the first administrator:"
-    echo "       sudo -u $USER_NAME $BIN_DIR/netmon --config $CONFIG user add admin --role admin"
-    echo "  2. Start the service:   sudo systemctl start netmon"
+    echo "       sudo -u $USER_NAME $BIN_DIR/opennetmon --config $CONFIG user add admin --role admin"
+    echo "  2. Start the service:   sudo systemctl start opennetmon"
     echo "  3. Put a TLS reverse proxy in front (deploy/Caddyfile.example, deploy/nginx.conf.example)."
-    echo "  4. Check:               systemctl status netmon; journalctl -u netmon -e; curl -s http://127.0.0.1:8080/healthz"
+    echo "  4. Check:               systemctl status opennetmon; journalctl -u opennetmon -e; curl -s http://127.0.0.1:8080/healthz"
   fi
 else
   echo "(dry run into $DESTDIR: no user, ownership, systemctl or sysctl changes)"

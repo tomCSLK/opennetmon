@@ -1,6 +1,6 @@
 # MIB-Dateien
 
-netmon versteht MIB-Dateien. Damit lassen sich eigene OID-Sensoren **per Name** anlegen (`tpSysMonitorCpu5Seconds.1` statt
+opennetmon versteht MIB-Dateien. Damit lassen sich eigene OID-Sensoren **per Name** anlegen (`tpSysMonitorCpu5Seconds.1` statt
 `1.3.6.1.4.1.11863.6.4.1.1.1.1.2.1`), und Auswertung, Einheit und Klartext für Statuswerte kommen aus der MIB.
 
 ## Mitgelieferte Standard-MIBs
@@ -87,7 +87,7 @@ Auf der Sensorseite eines Geräts öffnet **Werte suchen** eine Liste aller Mess
   Tabellen/Zeilen/Spalten inkl. `AUGMENTS`, Suche, Name ↔ OID. Der Index liegt im Speicher und wird beim Start sowie nach jedem Upload/Löschen neu
   gebaut (Datenbank: nur die Dateitexte, Tabelle `mib_files`, Migration `0009`).
 - Gegenprobe mit net-snmp: `dev/mib-oracle.sh dev/data/mibs/tplink/*.mib` vergleicht alle aufgelösten OIDs mit `snmptranslate`.
-  Ergebnis mit den Standard- und TP-Link-MIBs: 2963 gemeinsame Namen, **0 Abweichungen**; netmon kennt 230 Objekte mehr, weil net-snmp zwei
+  Ergebnis mit den Standard- und TP-Link-MIBs: 2963 gemeinsame Namen, **0 Abweichungen**; opennetmon kennt 230 Objekte mehr, weil net-snmp zwei
   fehlerhafte TP-Link-Dateien abweist.
 - `src/mib/catalog.rs`: bekannte Tabellen mit Spalten, Namen, Faktoren und Einheiten; Einheiten aus Beschreibungen (`unit_from_description`).
   `src/value_discovery.rs`: Walk je Spalte, Zeilennamen, Vorschläge; `src/web/sensor_values.rs`: Suchseite und Anlegen.

@@ -3,7 +3,7 @@
 (function () {
   'use strict';
   var root = document.getElementById('charts');
-  if (!root || !window.uPlot || !window.netmonFormat) { return; }
+  if (!root || !window.uPlot || !window.opennetmonFormat) { return; }
 
   var REFRESH_MS = 30000;
   var charts = [];
@@ -13,7 +13,7 @@
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
 
-  var F = window.netmonFormat;
+  var F = window.opennetmonFormat;
   var day = F.day, clock = F.clock;
 
   function xValues(u, splits, axisIdx, foundSpace, foundIncr) {
@@ -82,7 +82,7 @@
       .then(function (data) {
         build(data);
         // The table of values (static/samples.js) renders from the same data.
-        window.dispatchEvent(new CustomEvent('netmon:data', { detail: data }));
+        window.dispatchEvent(new CustomEvent('opennetmon:data', { detail: data }));
       })
       .catch(function () { /* keep the last picture; the next refresh retries */ });
   }
@@ -93,7 +93,7 @@
     });
   });
   // Colors come from CSS variables: redraw when the color scheme changes.
-  window.addEventListener('netmon:theme', function () { if (lastData) { build(lastData); } });
+  window.addEventListener('opennetmon:theme', function () { if (lastData) { build(lastData); } });
   load();
   setInterval(load, REFRESH_MS);
 })();
