@@ -1,5 +1,5 @@
-//! "Mein Konto" for every signed-in user: shows name and role and changes the own password
-//! (current password required; wrong attempts count towards the login throttle).
+//! "Mein Konto" for every signed-in user: shows name and role, chooses the language and changes the own
+//! password (current password required; wrong attempts count towards the login throttle).
 
 use askama::Template;
 use axum::Form;
@@ -10,22 +10,34 @@ use serde::Deserialize;
 
 use crate::auth;
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::storage::users as store;
 use crate::web::auth::{CurrentUser, SESSION_COOKIE, cookie_value};
-use crate::web::{AppState, Layout, flash_message};
+use crate::web::{
+    AppState, LanguageOption, Layout, flash_message, language_options, parse_language_choice,
+};
 
 #[derive(Template)]
 #[template(path = "account.html")]
 struct AccountTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
-    role_label: &'static str,
-    flash: Option<&'static str>,
+    languages: Vec<LanguageOption>,
+    flash: Option<String>,
     error: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct FlashQuery {
     msg: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct LanguageForm {
+    csrf_token: String,
+    #[serde(default)]
+    language: String,
 }
 
 #[derive(Deserialize)]
@@ -36,10 +48,11 @@ pub struct PasswordForm {
     password_repeat: String,
 }
 
-fn page(user: &CurrentUser, flash: Option<&'static str>, error: Option<String>) -> Result<String> {
+fn page(user: &CurrentUser, flash: Option<String>, error: Option<String>) -> Result<String> {
     Ok(AccountTemplate {
         layout: user.layout(),
-        role_label: user.role.label(),
+        t: user.lang,
+        languages: language_options(user.lang, user.language),
         flash,
         error,
     }
@@ -49,9 +62,29 @@ fn page(user: &CurrentUser, flash: Option<&'static str>, error: Option<String>) 
 pub async fn show(user: CurrentUser, Query(query): Query<FlashQuery>) -> Result<Html<String>> {
     Ok(Html(page(
         &user,
-        flash_message(query.msg.as_deref()),
+        flash_message(user.lang, query.msg.as_deref()),
         None,
     )?))
+}
+
+pub async fn set_language(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Form(form): Form<LanguageForm>,
+) -> Result<Response> {
+    user.verify_csrf(&form.csrf_token)?;
+    match parse_language_choice(&form.language) {
+        Ok(language) => {
+            store::set_language(&state.pool, user.id, language).await?;
+            Ok(Redirect::to("/account?msg=language_saved").into_response())
+        }
+        Err(Error::Invalid(message)) => Ok((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Html(page(&user, None, Some(user.lang.msg(&message)))?),
+        )
+            .into_response()),
+        Err(e) => Err(e),
+    }
 }
 
 pub async fn change_password(
@@ -74,7 +107,7 @@ pub async fn change_password(
         .check(now_ms, &user.username, None)
         .is_err()
     {
-        return refuse("Zu viele falsche Passwörter. Bitte später erneut versuchen.".to_owned());
+        return refuse(user.lang.get("account-too-many-attempts"));
     }
     let stored = store::get_user(&state.pool, user.id)
         .await?
@@ -89,16 +122,16 @@ pub async fn change_password(
             .login_throttle
             .record_failure(now_ms, &user.username, None);
         tracing::info!(user = %user.username, "own password change refused: wrong current password");
-        return refuse("Das bisherige Passwort ist falsch.".to_owned());
+        return refuse(user.lang.get("account-current-wrong"));
     }
     if let Err(message) = auth::validate_password(&form.password) {
-        return refuse(message.to_owned());
+        return refuse(user.lang.msg(&message));
     }
     if form.password != form.password_repeat {
-        return refuse("Die beiden neuen Passwörter stimmen nicht überein.".to_owned());
+        return refuse(user.lang.get("password-mismatch"));
     }
     if form.password == form.current {
-        return refuse("Das neue Passwort muss sich vom bisherigen unterscheiden.".to_owned());
+        return refuse(user.lang.get("account-password-unchanged"));
     }
     let hash = auth::hash_password(&form.password)?;
     let keep = cookie_value(&headers, SESSION_COOKIE).map(|t| auth::token_hash(&t));
@@ -221,5 +254,82 @@ mod tests {
             auth::verify_password(&stored.password_hash, PASSWORD),
             "unchanged"
         );
+    }
+
+    #[tokio::test]
+    async fn the_language_follows_the_browser_until_one_is_chosen() {
+        let h = harness(true).await;
+        let (viewer, csrf) = login(&h, "bert").await;
+        let english = send(
+            &h.app,
+            accepting(get("/account", Some(&viewer)), "en-US,en;q=0.9"),
+        )
+        .await;
+        assert!(english.body.contains("<html lang=\"en\">") && english.body.contains("My account"));
+        assert!(
+            english
+                .body
+                .contains("<option value=\"\" selected>Same as the browser</option>")
+        );
+
+        let saved = send(
+            &h.app,
+            post(
+                "/account/language",
+                Some(&viewer),
+                &format!("csrf_token={csrf}&language=de"),
+            ),
+        )
+        .await;
+        assert_eq!(saved.status, StatusCode::SEE_OTHER);
+        assert_eq!(saved.location(), "/account?msg=language_saved");
+        let german = send(
+            &h.app,
+            accepting(get("/account?msg=language_saved", Some(&viewer)), "en"),
+        )
+        .await;
+        assert!(
+            german.body.contains("<html lang=\"de\">")
+                && german.body.contains("Sprache gespeichert.")
+        );
+        assert!(
+            german
+                .body
+                .contains("<option value=\"de\" selected>Deutsch</option>")
+        );
+
+        let back = format!("csrf_token={csrf}&language=");
+        send(&h.app, post("/account/language", Some(&viewer), &back)).await;
+        let page = send(&h.app, accepting(get("/account", Some(&viewer)), "en")).await;
+        assert!(page.body.contains("My account"));
+    }
+
+    #[tokio::test]
+    async fn an_unknown_language_or_a_missing_csrf_token_is_refused() {
+        let h = harness(true).await;
+        let (viewer, csrf) = login(&h, "bert").await;
+        let unknown = send(
+            &h.app,
+            post(
+                "/account/language",
+                Some(&viewer),
+                &format!("csrf_token={csrf}&language=xx"),
+            ),
+        )
+        .await;
+        assert_eq!(unknown.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(unknown.body.contains("Diese Sprache gibt es nicht."));
+        let forged = send(
+            &h.app,
+            post(
+                "/account/language",
+                Some(&viewer),
+                "csrf_token=wrong&language=en",
+            ),
+        )
+        .await;
+        assert_eq!(forged.status, StatusCode::FORBIDDEN);
+        let stored = store::get_user(&h.state.pool, 2).await.unwrap().unwrap();
+        assert_eq!(stored.language, None);
     }
 }

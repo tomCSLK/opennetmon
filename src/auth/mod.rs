@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 
 pub const MIN_PASSWORD_LEN: usize = 10;
 /// Upper bound that keeps Argon2 work (and request size) bounded.
@@ -33,11 +34,11 @@ impl Role {
         }
     }
 
-    /// UI label (German).
-    pub fn label(self) -> &'static str {
+    /// Catalog id of the UI label.
+    pub fn label_id(self) -> &'static str {
         match self {
-            Self::Admin => "Administrator",
-            Self::Viewer => "Leser",
+            Self::Admin => "role-admin",
+            Self::Viewer => "role-viewer",
         }
     }
 
@@ -54,29 +55,29 @@ impl Role {
     }
 }
 
-/// Validates a new username. Messages are user-facing (German).
-pub fn validate_username(name: &str) -> Result<(), &'static str> {
+/// Validates a new username.
+pub fn validate_username(name: &str) -> Result<(), Msg> {
     let len = name.chars().count();
     if !(MIN_USERNAME_LEN..=MAX_USERNAME_LEN).contains(&len) {
-        return Err("Der Benutzername muss 3 bis 32 Zeichen lang sein.");
+        return Err(Msg::new("username-length"));
     }
     if !name
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
     {
-        return Err("Erlaubt sind Buchstaben, Ziffern sowie . _ -");
+        return Err(Msg::new("username-chars"));
     }
     Ok(())
 }
 
-/// Validates a new password. Messages are user-facing (German).
-pub fn validate_password(password: &str) -> Result<(), &'static str> {
+/// Validates a new password.
+pub fn validate_password(password: &str) -> Result<(), Msg> {
     let len = password.chars().count();
     if len < MIN_PASSWORD_LEN {
-        return Err("Das Passwort muss mindestens 10 Zeichen lang sein.");
+        return Err(Msg::new("password-too-short"));
     }
     if len > MAX_PASSWORD_LEN {
-        return Err("Das Passwort darf höchstens 128 Zeichen lang sein.");
+        return Err(Msg::new("password-too-long"));
     }
     Ok(())
 }

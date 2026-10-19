@@ -14,6 +14,7 @@ use serde::Deserialize;
 use crate::devices::Device;
 use crate::discovery::discover_interfaces;
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::mib::MibIndex;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
@@ -69,6 +70,8 @@ impl Default for SensorFormValues {
 #[derive(Template)]
 #[template(path = "sensors.html")]
 struct SensorsTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     device: Device,
     device_status_label: &'static str,
@@ -77,7 +80,7 @@ struct SensorsTemplate {
     rows: Vec<SensorRowView>,
     /// Inactive sensors (not polled until activated).
     inactive: Vec<SensorRowView>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     error: Option<String>,
     form: SensorFormValues,
     /// The device template this device was set up with.
@@ -99,6 +102,8 @@ struct DiscoverRowView {
 #[derive(Template)]
 #[template(path = "sensor_discover.html")]
 struct DiscoverTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     device: Device,
     rows: Vec<DiscoverRowView>,
@@ -136,12 +141,12 @@ impl SensorForm {
     /// Name and configuration for the chosen sensor type. A custom OID may be given by MIB name;
     /// mode ("auto"), unit and name then default to what the MIB says.
     fn to_spec(&self, mibs: &MibIndex) -> Result<(String, SensorSpec)> {
-        let invalid = |m: &str| Error::Invalid(m.to_owned());
+        let invalid = |m: &str| Error::invalid(m.to_owned());
         let (default_name, spec) = match self.kind.as_str() {
             "ping" => ("Ping".to_owned(), SensorSpec::Ping),
             "uptime" => ("Uptime".to_owned(), SensorSpec::Uptime),
             "oid" => {
-                let target = mibs.oid_target(&self.oid).map_err(Error::Invalid)?;
+                let target = mibs.oid_target(&self.oid).map_err(Error::invalid)?;
                 let object = target.object.as_ref();
                 let mode = match self.mode.as_str() {
                     "gauge" => OidMode::Gauge,
@@ -209,7 +214,7 @@ async fn render_sensors(
     state: &AppState,
     user: &CurrentUser,
     device: Device,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     error: Option<String>,
     form: SensorFormValues,
 ) -> Result<String> {
@@ -252,6 +257,7 @@ async fn render_sensors(
     let page = SensorsTemplate {
         template_name,
         layout: user.layout(),
+        t: user.lang,
         device,
         device_status_label: overall.label(),
         device_status_class: overall.as_str(),
@@ -276,7 +282,7 @@ pub async fn list(
             &state,
             &user,
             device,
-            flash_message(query.msg.as_deref()),
+            flash_message(user.lang, query.msg.as_deref()),
             None,
             SensorFormValues::default(),
         )
@@ -295,8 +301,8 @@ pub async fn create(
     let device = load_device(&state, id).await?;
     let mibs = state.mib_index();
     let outcome = match form.to_spec(&mibs) {
-        Ok((_, spec)) if spec.uses_snmp() && !device.has_snmp() => Err(Error::Invalid(
-            "Dieses Gerät hat kein SNMP-Profil; ohne SNMP gibt es nur Ping.".to_owned(),
+        Ok((_, spec)) if spec.uses_snmp() && !device.has_snmp() => Err(Error::invalid(
+            "Dieses Gerät hat kein SNMP-Profil; ohne SNMP gibt es nur Ping.",
         )),
         Ok((name, spec)) => match store::create_sensor(&state.pool, id, &name, &spec).await {
             Ok(sensor) => {
@@ -314,8 +320,15 @@ pub async fn create(
             Ok(Redirect::to(&format!("/devices/{id}/sensors?msg=sensor_created")).into_response())
         }
         Err(Error::Invalid(message) | Error::Conflict(message)) => {
-            let html =
-                render_sensors(&state, &user, device, None, Some(message), form.values()).await?;
+            let html = render_sensors(
+                &state,
+                &user,
+                device,
+                None,
+                Some(user.lang.msg(&message)),
+                form.values(),
+            )
+            .await?;
             Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
         }
         Err(e) => Err(e),
@@ -383,6 +396,7 @@ pub async fn discover(
     };
     let page = DiscoverTemplate {
         layout: user.layout(),
+        t: user.lang,
         device,
         rows,
         failure,
@@ -425,7 +439,7 @@ pub async fn create_interfaces(
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
     load_device(&state, id).await?;
     if fields.len() > MAX_FORM_FIELDS {
-        return Err(Error::Invalid("Das Formular ist zu groß.".to_owned()));
+        return Err(Error::invalid("Das Formular ist zu groß."));
     }
 
     let existing = store::list_sensors(&state.pool, id).await?;
@@ -445,9 +459,7 @@ pub async fn create_interfaces(
         .collect();
     wanted.sort_unstable();
     if wanted.is_empty() {
-        return Err(Error::Invalid(
-            "Bitte mindestens ein Interface auswählen.".to_owned(),
-        ));
+        return Err(Error::invalid("Bitte mindestens ein Interface auswählen."));
     }
 
     let mut created = 0usize;
@@ -533,9 +545,7 @@ pub async fn bulk(
         ids
     };
     if ids.is_empty() {
-        return Err(Error::Invalid(
-            "Bitte mindestens einen Sensor auswählen.".to_owned(),
-        ));
+        return Err(Error::invalid("Bitte mindestens einen Sensor auswählen."));
     }
     let (changed, msg) = match action {
         "activate" | "activate_all" => (
@@ -550,7 +560,7 @@ pub async fn bulk(
             store::delete_many(&state.pool, id, &ids).await?,
             "sensors_deleted",
         ),
-        _ => return Err(Error::Invalid("Unbekannte Aktion.".to_owned())),
+        _ => return Err(Error::invalid("Unbekannte Aktion.")),
     };
     tracing::info!(user = %user.username, device = id, action, changed, "bulk sensor change");
     Ok(Redirect::to(&format!("/devices/{id}/sensors?msg={msg}")).into_response())

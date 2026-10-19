@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Anmelden – opennetmon{% endblock %}
+{% block title %}{{ t.get("login-title") }} – opennetmon{% endblock %}
 {% block body %}
 <main class="auth">
   <div class="auth-card">
     <img class="auth-logo" src="/static/logo-wide.jpg" alt="opennetmon – Network Monitoring" width="800" height="346">
     <div class="card">
-      <h1>Anmelden</h1>
-      <p class="muted">Netzwerk-Monitoring</p>
+      <h1>{{ t.get("login-title") }}</h1>
+      <p class="muted">{{ t.get("login-tagline") }}</p>
       {% if let Some(message) = error %}
       <p class="error" role="alert">{{ message }}</p>
       {% endif %}
       <form method="post" action="/login" class="stack">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label for="username">Benutzername</label>
+        <label for="username">{{ t.get("username") }}</label>
         <input id="username" name="username" type="text" autocomplete="username" required autofocus maxlength="64">
-        <label for="password">Passwort</label>
+        <label for="password">{{ t.get("password") }}</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024">
-        <button type="submit">Anmelden</button>
+        <button type="submit">{{ t.get("login-submit") }}</button>
       </form>
     </div>
-    <p class="auth-meta">opennetmon ist freie Software unter der AGPL-3.0 · <a href="{{ crate::web::SOURCE_URL }}">Quellcode</a></p>
+    <p class="auth-meta">{{ t.get("login-free-software") }} · <a href="{{ crate::web::SOURCE_URL }}">{{ t.get("source-code") }}</a></p>
   </div>
 </main>
 {% endblock %}

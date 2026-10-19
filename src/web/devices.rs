@@ -14,6 +14,7 @@ use crate::devices::{
     DeviceInput, Polling,
 };
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{self, SnmpTarget, format_uptime};
 use crate::storage::{credentials, devices as store, groups, sensors};
@@ -68,6 +69,8 @@ impl FormValues {
 #[derive(Template)]
 #[template(path = "device_form.html")]
 struct FormTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     heading: &'static str,
     action: String,
@@ -92,6 +95,8 @@ pub struct ProbeView {
 #[derive(Template)]
 #[template(path = "device_test.html")]
 struct TestTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     device: Device,
     profile_summary: String,
@@ -124,14 +129,14 @@ pub struct DeleteForm {
 }
 
 fn invalid(message: &str) -> Error {
-    Error::Invalid(message.to_owned())
+    Error::invalid(message.to_owned())
 }
 
 fn number<T: std::str::FromStr>(value: &str, what: &str) -> Result<T> {
     value
         .trim()
         .parse()
-        .map_err(|_| Error::Invalid(format!("Ungültiger Wert für {what}.")))
+        .map_err(|_| Error::invalid(format!("Ungültiger Wert für {what}.")))
 }
 
 impl DeviceForm {
@@ -213,6 +218,7 @@ async fn render_form(
         no_snmp: selected_profile.is_none(),
         templates,
         layout: user.layout(),
+        t: user.lang,
         heading: if existing.is_some() {
             "Gerät bearbeiten"
         } else {
@@ -358,7 +364,7 @@ async fn save(
                 form.values(),
                 form.selected_group(),
                 form.selected_profile(),
-                Some(message),
+                Some(user.lang.msg(&message)),
             )
             .await?;
             Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
@@ -378,7 +384,7 @@ async fn snmp_sensors_left(state: &AppState, id: Option<i64>, input: &DeviceInpu
         .filter(|s| s.spec.uses_snmp())
         .count();
     if left > 0 {
-        return Err(Error::Invalid(format!(
+        return Err(Error::invalid(format!(
             "Das Gerät hat noch {left} SNMP-Sensor(en). Für „Kein SNMP“ diese zuerst löschen oder ein SNMP-Profil behalten."
         )));
     }
@@ -446,6 +452,7 @@ pub async fn test_connection(
     };
     let page = TestTemplate {
         layout: user.layout(),
+        t: user.lang,
         device,
         profile_summary,
         success,

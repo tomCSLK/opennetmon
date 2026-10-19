@@ -1,11 +1,11 @@
 {% extends "app.html" %}
 {% block page_class %} narrow{% endblock %}
-{% block title %}Mein Konto – opennetmon{% endblock %}
+{% block title %}{{ t.get("nav-account") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Mein Konto</h1>
-    <p class="subtitle">{{ layout.username }} · {{ role_label }}</p>
+    <h1>{{ t.get("nav-account") }}</h1>
+    <p class="subtitle">{{ layout.username }} · {{ layout.role_label }}</p>
   </div>
 </div>
 
@@ -17,23 +17,38 @@
 {% endif %}
 
 <section class="card">
-  <h2>Passwort ändern</h2>
+  <h2>{{ t.get("language") }}</h2>
+  <form method="post" action="/account/language" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label for="language" class="visually-hidden">{{ t.get("language") }}</label>
+    <select id="language" name="language">
+      {% for option in languages %}
+      <option value="{{ option.code }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">{{ t.get("save") }}</button>
+  </form>
+  <p class="hint">{{ t.get("account-language-hint") }}</p>
+</section>
+
+<section class="card">
+  <h2>{{ t.get("account-password-title") }}</h2>
   <form method="post" action="/account/password" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <label for="current">Bisheriges Passwort</label>
+    <label for="current">{{ t.get("account-current-password") }}</label>
     <input id="current" name="current" type="password" required maxlength="128" autocomplete="current-password">
     <div class="form-grid">
       <div>
-        <label for="password">Neues Passwort</label>
+        <label for="password">{{ t.get("password-new") }}</label>
         <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
       </div>
       <div>
-        <label for="password_repeat">Neues Passwort wiederholen</label>
+        <label for="password_repeat">{{ t.get("password-new-repeat") }}</label>
         <input id="password_repeat" name="password_repeat" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
       </div>
     </div>
-    <p class="hint">10 bis 128 Zeichen. Deine anderen Sitzungen (z. B. auf dem Handy) werden abgemeldet, diese bleibt angemeldet.</p>
-    <div class="form-actions"><button type="submit">Passwort ändern</button></div>
+    <p class="hint">{{ t.get("account-password-hint") }}</p>
+    <div class="form-actions"><button type="submit">{{ t.get("account-password-title") }}</button></div>
   </form>
 </section>
 {% endblock %}

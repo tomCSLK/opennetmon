@@ -4,6 +4,7 @@ use sqlx::{FromRow, SqlitePool};
 
 use crate::auth::Role;
 use crate::error::{Error, Result};
+use crate::i18n::{Lang, Msg};
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -11,6 +12,8 @@ pub struct User {
     pub username: String,
     pub password_hash: String,
     pub role: Role,
+    /// Chosen language; `None` follows the browser.
+    pub language: Option<Lang>,
 }
 
 #[derive(FromRow)]
@@ -19,6 +22,7 @@ struct UserRow {
     username: String,
     password_hash: String,
     role: String,
+    language: Option<String>,
 }
 
 impl TryFrom<UserRow> for User {
@@ -32,6 +36,7 @@ impl TryFrom<UserRow> for User {
             username: row.username,
             password_hash: row.password_hash,
             role,
+            language: row.language.as_deref().and_then(Lang::parse),
         })
     }
 }
@@ -42,22 +47,24 @@ pub async fn create_user(
     username: &str,
     password_hash: &str,
     role: Role,
+    language: Option<Lang>,
 ) -> Result<i64> {
-    let result = sqlx::query("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)")
-        .bind(username)
-        .bind(password_hash)
-        .bind(role.as_str())
-        .execute(pool)
-        .await;
+    let result = sqlx::query(
+        "INSERT INTO users (username, password_hash, role, language) VALUES (?, ?, ?, ?)",
+    )
+    .bind(username)
+    .bind(password_hash)
+    .bind(role.as_str())
+    .bind(language.map(Lang::code))
+    .execute(pool)
+    .await;
     match result {
         Ok(done) => Ok(done.last_insert_rowid()),
         Err(e)
             if e.as_database_error()
                 .is_some_and(|d| d.is_unique_violation()) =>
         {
-            Err(Error::Conflict(
-                "Der Benutzername ist bereits vergeben.".to_owned(),
-            ))
+            Err(Error::conflict(Msg::new("username-taken")))
         }
         Err(e) => Err(e.into()),
     }
@@ -65,7 +72,7 @@ pub async fn create_user(
 
 pub async fn find_by_username(pool: &SqlitePool, username: &str) -> Result<Option<User>> {
     sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+        "SELECT id, username, password_hash, role, language FROM users WHERE username = ?",
     )
     .bind(username)
     .fetch_optional(pool)
@@ -76,7 +83,7 @@ pub async fn find_by_username(pool: &SqlitePool, username: &str) -> Result<Optio
 
 pub async fn list_users(pool: &SqlitePool) -> Result<Vec<User>> {
     sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, password_hash, role FROM users ORDER BY username",
+        "SELECT id, username, password_hash, role, language FROM users ORDER BY username",
     )
     .fetch_all(pool)
     .await?
@@ -101,12 +108,13 @@ pub async fn set_password_hash(pool: &SqlitePool, username: &str, hash: &str) ->
     Ok(done.rows_affected() > 0)
 }
 
-/// A user for the user list: role, creation time and open sessions.
+/// A user for the user list: role, language, creation time and open sessions.
 #[derive(Debug, Clone, PartialEq, Eq, FromRow)]
 pub struct UserInfo {
     pub id: i64,
     pub username: String,
     pub role: String,
+    pub language: Option<String>,
     pub created_at: String,
     pub sessions: i64,
 }
@@ -114,7 +122,7 @@ pub struct UserInfo {
 /// All users by name with their number of unexpired sessions.
 pub async fn list_user_infos(pool: &SqlitePool, now: i64) -> Result<Vec<UserInfo>> {
     let mut list = sqlx::query_as::<_, UserInfo>(
-        "SELECT u.id, u.username, u.role, u.created_at, \
+        "SELECT u.id, u.username, u.role, u.language, u.created_at, \
          (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?) AS sessions \
          FROM users u",
     )
@@ -126,18 +134,18 @@ pub async fn list_user_infos(pool: &SqlitePool, now: i64) -> Result<Vec<UserInfo
 }
 
 pub async fn get_user(pool: &SqlitePool, id: i64) -> Result<Option<User>> {
-    sqlx::query_as::<_, UserRow>("SELECT id, username, password_hash, role FROM users WHERE id = ?")
-        .bind(id)
-        .fetch_optional(pool)
-        .await?
-        .map(User::try_from)
-        .transpose()
+    sqlx::query_as::<_, UserRow>(
+        "SELECT id, username, password_hash, role, language FROM users WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?
+    .map(User::try_from)
+    .transpose()
 }
 
 fn last_admin() -> Error {
-    Error::Conflict(
-        "Das ist der letzte Administrator. Lege zuerst einen weiteren Administrator an.".to_owned(),
-    )
+    Error::conflict(Msg::new("user-last-admin"))
 }
 
 /// Changes the role. The last administrator cannot become a viewer (checked in the same statement,
@@ -204,12 +212,26 @@ pub async fn change_password(
     Ok(())
 }
 
+/// Sets the language of a user (`None`: follow the browser).
+pub async fn set_language(pool: &SqlitePool, id: i64, language: Option<Lang>) -> Result<()> {
+    let done = sqlx::query("UPDATE users SET language = ? WHERE id = ?")
+        .bind(language.map(Lang::code))
+        .bind(id)
+        .execute(pool)
+        .await?;
+    if done.rows_affected() == 0 {
+        return Err(Error::NotFound);
+    }
+    Ok(())
+}
+
 /// The user and CSRF token behind a valid session.
 #[derive(Debug, Clone)]
 pub struct SessionUser {
     pub user_id: i64,
     pub username: String,
     pub role: Role,
+    pub language: Option<Lang>,
     pub csrf_token: String,
 }
 
@@ -218,6 +240,7 @@ struct SessionRow {
     user_id: i64,
     username: String,
     role: String,
+    language: Option<String>,
     csrf_token: String,
 }
 
@@ -249,7 +272,7 @@ pub async fn find_session(
     now: i64,
 ) -> Result<Option<SessionUser>> {
     let row = sqlx::query_as::<_, SessionRow>(
-        "SELECT u.id AS user_id, u.username, u.role, s.csrf_token \
+        "SELECT u.id AS user_id, u.username, u.role, u.language, s.csrf_token \
          FROM sessions s JOIN users u ON u.id = s.user_id \
          WHERE s.id = ? AND s.expires_at > ?",
     )
@@ -264,6 +287,7 @@ pub async fn find_session(
             user_id: r.user_id,
             username: r.username,
             role,
+            language: r.language.as_deref().and_then(Lang::parse),
             csrf_token: r.csrf_token,
         })
     })
@@ -309,10 +333,10 @@ mod tests {
     #[tokio::test]
     async fn usernames_are_unique_case_insensitively() {
         let (pool, _dir) = pool().await;
-        create_user(&pool, "Admin", "hash", Role::Admin)
+        create_user(&pool, "Admin", "hash", Role::Admin, None)
             .await
             .unwrap();
-        let err = create_user(&pool, "admin", "hash", Role::Viewer)
+        let err = create_user(&pool, "admin", "hash", Role::Viewer, None)
             .await
             .unwrap_err();
         assert!(matches!(err, Error::Conflict(_)));
@@ -325,7 +349,7 @@ mod tests {
     #[tokio::test]
     async fn sessions_expire_and_cascade() {
         let (pool, _dir) = pool().await;
-        let id = create_user(&pool, "anna", "hash", Role::Viewer)
+        let id = create_user(&pool, "anna", "hash", Role::Viewer, None)
             .await
             .unwrap();
         create_session(&pool, "h1", id, "csrf", 100, 200)
@@ -354,7 +378,7 @@ mod tests {
     #[tokio::test]
     async fn set_password_hash_reports_missing_user() {
         let (pool, _dir) = pool().await;
-        create_user(&pool, "anna", "old", Role::Viewer)
+        create_user(&pool, "anna", "old", Role::Viewer, None)
             .await
             .unwrap();
         assert!(set_password_hash(&pool, "anna", "new").await.unwrap());
@@ -366,8 +390,12 @@ mod tests {
     #[tokio::test]
     async fn the_last_admin_can_be_neither_demoted_nor_deleted() {
         let (pool, _dir) = pool().await;
-        let a = create_user(&pool, "anna", "h", Role::Admin).await.unwrap();
-        let b = create_user(&pool, "bert", "h", Role::Viewer).await.unwrap();
+        let a = create_user(&pool, "anna", "h", Role::Admin, None)
+            .await
+            .unwrap();
+        let b = create_user(&pool, "bert", "h", Role::Viewer, None)
+            .await
+            .unwrap();
         assert!(matches!(
             set_role(&pool, a, Role::Viewer).await,
             Err(Error::Conflict(_))
@@ -398,7 +426,7 @@ mod tests {
     #[tokio::test]
     async fn changing_a_password_ends_all_sessions_but_the_kept_one() {
         let (pool, _dir) = pool().await;
-        let a = create_user(&pool, "anna", "old", Role::Admin)
+        let a = create_user(&pool, "anna", "old", Role::Admin, None)
             .await
             .unwrap();
         for token in ["s1", "s2", "s3"] {

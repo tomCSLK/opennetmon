@@ -47,6 +47,8 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
 - Uploads: axum-Feature `multipart` (nutzt `multer`) für MIB-Dateien
 - `serde_json` für die Regeln der Gerätevorlagen (war über axum schon im Build)
+- Übersetzungen: `fluent-bundle` 0.16 (Fluent, Kataloge `locales/<code>/*.ftl` per `rust-embed`; nebenläufige Bundles, Isolationszeichen aus,
+  Dezimalkomma per Formatter im deutschen Bundle) und `unic-langid` (Sprachkennung, war über fluent schon im Build)
 - Mail: `lettre` 0.11 (Features `builder`, `smtp-transport`, `tokio1`, `tokio1-rustls-tls`; ohne native-tls/OpenSSL, damit der musl-Build statisch bleibt)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
   `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
@@ -94,6 +96,10 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 
 Ein Binary, ein Prozess, Module:
 - `config` – TOML-Datei + ENV-Overrides (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
+- `i18n` – Sprachen (`Lang`: `code`, `native_name`, `from_accept_language`, `get`/`get1`/`get2`/`fmt`/`msg`), `Msg` (Katalog-ID mit Variablen oder
+  `Msg::Text` unverändert; `Display` = Deutsch für Logs), Sprache der Anfrage als Task-Local (`scope`, `current`, `set_current`; gesetzt von der
+  Middleware `web::request_language` aus `Accept-Language` und vom `CurrentUser`-Extractor aus `users.language`); Tests prüfen die Kataloge
+  gegeneinander und gegen den Code (`docs/uebersetzungen.md`)
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
 - `snmp` – `SnmpClient` (GET und GETBULK-`walk` mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; `discovery` – Interface-Discovery über IF-MIB-Walks (`merge` ist reine Logik); Poller und Sensoren bauen darauf auf
 - `mib` – MIB-Parser (`mib::lexer`, `mib::parser`, tolerant) und Index (`MibIndex`: Auflösung über Module, Textual Conventions, Tabellen inkl. AUGMENTS,
@@ -121,7 +127,7 @@ Ein Binary, ein Prozess, Module:
 - `mail` – SMTP-Einstellungen, Validierung, Versand mit `lettre` (rustls, kein OpenSSL); `storage::mail` – Einstellungen (Passwort verschlüsselt, Kontext `smtp.password`) und Sendelog `notifications`; Seite `web::mail_settings`
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
-  (`web::overview`: eine Karte je oberster Gruppe, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, aufklappbar, Zustand in `localStorage` über `static/app.js`), Gruppen-, Geräte-, Profil- und Benutzerseiten (`web::groups`, `web::devices`, `web::credentials`, `web::users`: letzter Admin geschützt, eigenes Konto nicht löschbar, Passwortwechsel beendet die übrigen Sitzungen; `web::account` „Mein Konto“ für alle: eigenes Passwort mit dem bisherigen, Fehlversuche über `login_throttle`), Sensorseiten mit Discovery (`web::sensors`), Detailseite mit JSON-Endpoint für uPlot, Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`) und Schwellwertformular (`web::sensor_detail`)
+  (`web::overview`: eine Karte je oberster Gruppe, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, aufklappbar, Zustand in `localStorage` über `static/app.js`), Gruppen-, Geräte-, Profil- und Benutzerseiten (`web::groups`, `web::devices`, `web::credentials`, `web::users`: letzter Admin geschützt, eigenes Konto nicht löschbar, Passwortwechsel beendet die übrigen Sitzungen, Sprache je Benutzer; `web::account` „Mein Konto“ für alle: eigene Sprache, eigenes Passwort mit dem bisherigen, Fehlversuche über `login_throttle`), Sensorseiten mit Discovery (`web::sensors`), Detailseite mit JSON-Endpoint für uPlot, Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`) und Schwellwertformular (`web::sensor_detail`)
 
 ### Messdaten
 
@@ -167,7 +173,9 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 ## Konventionen
 
 - Code, Bezeichner, Commit-Messages und Code-Kommentare: Englisch
-- UI-Texte und Projektdokumentation (`docs/`): Deutsch (Mehrsprachigkeit mit Englisch und Sprache je Benutzer ist als nächster Schritt geplant, siehe `PLAN.md`)
+- UI-Texte: über die Fluent-Kataloge in `locales/` (Deutsch ist Ausgangssprache, Englisch muss mitgepflegt werden; keine festen Texte mehr in Templates
+  oder Rust-Code – Seiten nutzen `t.get("id")`, Fachlogik liefert `Msg`). Die Umstellung läuft bereichsweise (Stand in `PLAN.md`, Phase 9);
+  noch nicht umgestellte Meldungen sind `Msg::Text` auf Deutsch. Projektdokumentation (`docs/`): Deutsch
 - Kein `unwrap()`/`expect()` außerhalb von Tests und Startcode; Fehler über eigenen Error-Typ mit `IntoResponse`
 - Kleine, thematisch abgeschlossene Commits; nach jedem MVP-Schritt lauffähiger Stand
 - Neue Sensortypen nur über den `Sensor`-Trait, keine Sonderfälle im Poller

@@ -127,7 +127,7 @@ pub async fn backup_to(pool: &SqlitePool, target: &Path) -> Result<()> {
 
     let target = std::path::absolute(target)?;
     let text = target.to_str().ok_or_else(|| {
-        crate::error::Error::Invalid("Der Pfad der Sicherung ist kein gültiges UTF-8.".to_owned())
+        crate::error::Error::invalid("Der Pfad der Sicherung ist kein gültiges UTF-8.")
     })?;
     // SQLite accepts a missing or an empty target; create it ourselves so the mode is right from the start.
     match std::fs::OpenOptions::new()
@@ -139,7 +139,7 @@ pub async fn backup_to(pool: &SqlitePool, target: &Path) -> Result<()> {
         Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             if std::fs::metadata(&target)?.len() > 0 {
-                return Err(crate::error::Error::Invalid(format!(
+                return Err(crate::error::Error::invalid(format!(
                     "{} existiert bereits; eine vorhandene Sicherung wird nie überschrieben.",
                     target.display()
                 )));

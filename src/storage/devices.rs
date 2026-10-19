@@ -78,11 +78,11 @@ pub async fn get_device(pool: &SqlitePool, id: i64) -> Result<Option<Device>> {
 fn map_write_error(e: sqlx::Error) -> Error {
     match e.as_database_error() {
         Some(d) if d.is_unique_violation() => {
-            Error::Conflict("Ein Gerät mit diesem Namen existiert bereits.".to_owned())
+            Error::conflict("Ein Gerät mit diesem Namen existiert bereits.")
         }
-        Some(d) if d.is_foreign_key_violation() => Error::Invalid(
-            "Die gewählte Gruppe oder das gewählte SNMP-Profil existiert nicht.".to_owned(),
-        ),
+        Some(d) if d.is_foreign_key_violation() => {
+            Error::invalid("Die gewählte Gruppe oder das gewählte SNMP-Profil existiert nicht.")
+        }
         _ => e.into(),
     }
 }
@@ -91,7 +91,7 @@ fn map_write_error(e: sqlx::Error) -> Error {
 pub async fn save_device(pool: &SqlitePool, id: Option<i64>, input: DeviceInput) -> Result<i64> {
     let input = input
         .validated()
-        .map_err(|m| Error::Invalid(m.to_owned()))?;
+        .map_err(|m| Error::invalid(m.to_owned()))?;
     if id.is_some() && get_device(pool, id.unwrap_or_default()).await?.is_none() {
         return Err(Error::NotFound);
     }

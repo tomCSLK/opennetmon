@@ -10,6 +10,7 @@ use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::ordering::{positions_from_form, reorder};
 use crate::storage::{devices, groups, sensors};
 use crate::web::auth::CurrentUser;
@@ -32,6 +33,8 @@ struct List {
 #[derive(Template)]
 #[template(path = "order.html")]
 struct OrderTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     heading: String,
     /// Breadcrumb links before the last part: (href, label).
@@ -110,6 +113,7 @@ pub async fn group_page(
     lists.retain(|l| !l.items.is_empty());
     let page = OrderTemplate {
         layout: user.layout(),
+        t: user.lang,
         heading: match &group {
             Some(g) => format!("Reihenfolge in „{}“", g.name),
             None => "Reihenfolge der obersten Ebene".to_owned(),
@@ -146,6 +150,7 @@ pub async fn sensor_page(
     let lists = vec![list("Sensoren", "s", items)];
     let page = OrderTemplate {
         layout: user.layout(),
+        t: user.lang,
         heading: format!("Reihenfolge der Sensoren von {}", device.name),
         crumbs: vec![
             ("/".to_owned(), "Übersicht".to_owned()),
@@ -163,7 +168,7 @@ fn wants_reset(fields: &HashMap<String, String>) -> Result<bool> {
     match fields.get("action").map(String::as_str) {
         Some("save") => Ok(false),
         Some("reset") => Ok(true),
-        _ => Err(Error::Invalid("Unbekannte Aktion.".to_owned())),
+        _ => Err(Error::invalid("Unbekannte Aktion.")),
     }
 }
 

@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use opennetmon::auth::{self, Role};
 use opennetmon::config::Config;
 use opennetmon::crypto::SecretBox;
+use opennetmon::i18n::Lang;
 use opennetmon::maintenance::Retention;
 use opennetmon::poller::Poller;
 use opennetmon::storage::{self, users};
@@ -54,6 +55,9 @@ enum UserCommand {
         username: String,
         #[arg(long, value_enum, default_value = "viewer")]
         role: RoleArg,
+        /// Language of the user interface (de, en); without it the browser's language is used
+        #[arg(long, value_parser = parse_language)]
+        language: Option<Lang>,
     },
     /// Set a new password and end all sessions of the user
     Passwd { username: String },
@@ -65,6 +69,13 @@ enum UserCommand {
 enum RoleArg {
     Admin,
     Viewer,
+}
+
+fn parse_language(code: &str) -> Result<Lang, String> {
+    Lang::parse(code).ok_or_else(|| {
+        let known: Vec<_> = Lang::ALL.iter().map(|l| l.code()).collect();
+        format!("unknown language '{code}' (known: {})", known.join(", "))
+    })
 }
 
 impl From<RoleArg> for Role {
@@ -193,11 +204,15 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
 
 async fn manage_users(pool: &SqlitePool, cmd: UserCommand) -> anyhow::Result<()> {
     match cmd {
-        UserCommand::Add { username, role } => {
-            auth::validate_username(&username).map_err(anyhow::Error::msg)?;
+        UserCommand::Add {
+            username,
+            role,
+            language,
+        } => {
+            auth::validate_username(&username).map_err(|m| anyhow::anyhow!(Lang::En.msg(&m)))?;
             let password = read_new_password()?;
             let hash = auth::hash_password(&password)?;
-            users::create_user(pool, &username, &hash, role.into()).await?;
+            users::create_user(pool, &username, &hash, role.into(), language).await?;
             println!("User '{username}' created.");
         }
         UserCommand::Passwd { username } => {
@@ -233,7 +248,7 @@ fn read_new_password() -> anyhow::Result<String> {
         std::io::stdin().take(1024).read_to_string(&mut line)?;
         line.lines().next().unwrap_or_default().to_owned()
     };
-    auth::validate_password(&password).map_err(anyhow::Error::msg)?;
+    auth::validate_password(&password).map_err(|m| anyhow::anyhow!(Lang::En.msg(&m)))?;
     Ok(password)
 }
 

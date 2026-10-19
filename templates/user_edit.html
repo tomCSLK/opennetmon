@@ -4,8 +4,8 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/users">Benutzer</a><span>›</span><span>{{ user.username }}</span></div>
-    <h1>{{ user.username }}{% if is_me %} <span class="muted small">(du)</span>{% endif %}</h1>
+    <div class="breadcrumb"><a href="/users">{{ t.get("nav-users") }}</a><span>›</span><span>{{ user.username }}</span></div>
+    <h1>{{ user.username }}{% if is_me %} <span class="muted small">{{ t.get("users-me") }}</span>{% endif %}</h1>
     <p class="subtitle">{{ role_label }}</p>
   </div>
 </div>
@@ -18,45 +18,59 @@
 {% endif %}
 
 <section class="card">
-  <h2>Rolle</h2>
+  <h2>{{ t.get("role") }}</h2>
   <form method="post" action="/users/{{ user.id }}/role" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <label for="role" class="visually-hidden">Rolle</label>
+    <label for="role" class="visually-hidden">{{ t.get("role") }}</label>
     <select id="role" name="role">
-      <option value="viewer"{% if !user.role.is_admin() %} selected{% endif %}>Leser – nur ansehen</option>
-      <option value="admin"{% if user.role.is_admin() %} selected{% endif %}>Administrator – alles ändern</option>
+      <option value="viewer"{% if !user.role.is_admin() %} selected{% endif %}>{{ t.get("role-viewer-option") }}</option>
+      <option value="admin"{% if user.role.is_admin() %} selected{% endif %}>{{ t.get("role-admin-option") }}</option>
     </select>
-    <button type="submit">Speichern</button>
+    <button type="submit">{{ t.get("save") }}</button>
   </form>
-  <p class="hint">Gilt sofort, auch in offenen Sitzungen. Der letzte Administrator bleibt Administrator.</p>
+  <p class="hint">{{ t.get("user-role-hint") }}</p>
 </section>
 
 <section class="card">
-  <h2>Passwort setzen</h2>
+  <h2>{{ t.get("language") }}</h2>
+  <form method="post" action="/users/{{ user.id }}/language" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label for="language" class="visually-hidden">{{ t.get("language") }}</label>
+    <select id="language" name="language">
+      {% for option in languages %}
+      <option value="{{ option.code }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">{{ t.get("save") }}</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ t.get("user-password-title") }}</h2>
   <form method="post" action="/users/{{ user.id }}/password" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="form-grid">
       <div>
-        <label for="password">Neues Passwort</label>
+        <label for="password">{{ t.get("password-new") }}</label>
         <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
       </div>
       <div>
-        <label for="password_repeat">Wiederholen</label>
+        <label for="password_repeat">{{ t.get("password-repeat-short") }}</label>
         <input id="password_repeat" name="password_repeat" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
       </div>
     </div>
-    <p class="hint">{% if is_me %}Deine anderen Sitzungen werden beendet, diese bleibt angemeldet.{% else %}Alle Sitzungen von {{ user.username }} werden beendet.{% endif %}</p>
-    <div class="form-actions"><button type="submit">Passwort setzen</button></div>
+    <p class="hint">{% if is_me %}{{ t.get("user-password-hint-me") }}{% else %}{{ t.get1("user-password-hint-other", "name", user.username) }}{% endif %}</p>
+    <div class="form-actions"><button type="submit">{{ t.get("user-password-title") }}</button></div>
   </form>
 </section>
 
 {% if !is_me %}
 <section class="card">
-  <h2>Löschen</h2>
+  <h2>{{ t.get("delete") }}</h2>
   <form method="post" action="/users/{{ user.id }}/delete" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <label class="inline"><input type="checkbox" name="confirm" value="yes"> {{ user.username }} wirklich löschen (meldet alle Sitzungen ab)</label>
-    <div class="form-actions"><button type="submit" class="ghost">Benutzer löschen</button></div>
+    <label class="inline"><input type="checkbox" name="confirm" value="yes"> {{ t.get1("user-delete-confirm", "name", user.username) }}</label>
+    <div class="form-actions"><button type="submit" class="ghost">{{ t.get("user-delete") }}</button></div>
   </form>
 </section>
 {% endif %}

@@ -8,8 +8,10 @@ Ein einzelnes, statisch gelinktes Binary (Rust) mit SQLite – gedacht für den 
 > „PRTG“ ist eine Marke von Paessler; opennetmon steht in keiner Verbindung zu Paessler.
 > Zielumgebung ist ein privates Netz mit TP-Link Omada (Switches und Access Points per SNMPv3); es funktioniert mit jedem Gerät, das SNMP v2c oder v3 spricht.
 
-> **Sprache / Language:** opennetmon wird derzeit auf Deutsch entwickelt; Oberfläche und Dokumentation sind deutsch. Weitere Sprachen (zuerst Englisch) sind geplant.
-> *opennetmon is currently developed in German; the user interface and documentation are in German. More languages, starting with English, are planned.*
+> **Sprache / Language:** opennetmon wird derzeit auf Deutsch entwickelt; die Dokumentation ist deutsch. Die Oberfläche wird gerade zweisprachig
+> (Deutsch/Englisch, Sprache je Benutzer); noch sind nicht alle Seiten übersetzt.
+> *opennetmon is currently developed in German; the documentation is in German. The user interface is becoming bilingual (German/English,
+> language per user); not all pages are translated yet.*
 
 ## Status
 
@@ -18,7 +20,8 @@ Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN
 | | |
 |---|---|
 | Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Umbenennen von Sensoren, eigene Reihenfolge von Gruppen, Geräten und Sensoren (Ziehen oder ↑/↓), Benutzerverwaltung in der Oberfläche, Geräte ohne SNMP (nur Ping), Bewertung von Statuswerten, Gerätevorlagen (aus einem Gerät erzeugt, beim Anlegen automatisch per Gerätekennung angewendet), MIB-Import mit „Werte suchen“ (Tabellen als zunächst inaktive Sensoren), Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
-| Offen | Mehrsprachigkeit (Englisch, Sprache je Benutzer), Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
+| In Arbeit | Mehrsprachigkeit: Sprache je Benutzer, Seitenrahmen, Anmeldung, Konto und Benutzerverwaltung auf Englisch; übrige Seiten und Mails folgen |
+| Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
 | Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
 
 ## Funktionen
@@ -119,6 +122,7 @@ Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb
 | [`docs/geraetevorlagen.md`](docs/geraetevorlagen.md) | Gerätevorlagen: aus einem Gerät erzeugen, beim Anlegen oder später anwenden |
 | [`docs/mibs.md`](docs/mibs.md) | MIB-Dateien, eigene OID per Name, Werte suchen |
 | [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-Mail-Einstellungen, Regeln, Test-SMTP-Server |
+| [`docs/uebersetzungen.md`](docs/uebersetzungen.md) | Übersetzungen: Fluent-Kataloge, Regeln, neue Sprache |
 | [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Entscheidung für Rust (Spike-Ergebnisse) |
 
 ## Lizenz

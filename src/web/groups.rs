@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 use crate::devices::subtree_ids;
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::storage::groups as store;
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout, SelectOption, group_options};
@@ -16,6 +17,8 @@ use crate::web::{AppState, Layout, SelectOption, group_options};
 #[derive(Template)]
 #[template(path = "group_form.html")]
 struct FormTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     heading: &'static str,
     action: String,
@@ -45,7 +48,7 @@ fn parse_optional_id(value: &str) -> Result<Option<i64>> {
         text => text
             .parse()
             .map(Some)
-            .map_err(|_| Error::Invalid("Ungültige Gruppe.".to_owned())),
+            .map_err(|_| Error::invalid("Ungültige Gruppe.")),
     }
 }
 
@@ -54,6 +57,7 @@ pub async fn new_form(State(state): State<AppState>, user: CurrentUser) -> Resul
     let groups = store::list_groups(&state.pool).await?;
     let page = FormTemplate {
         layout: user.layout(),
+        t: user.lang,
         heading: "Neue Gruppe",
         action: "/groups".to_owned(),
         delete_action: None,
@@ -74,6 +78,7 @@ pub async fn edit_form(
     let group = groups.iter().find(|g| g.id == id).ok_or(Error::NotFound)?;
     let page = FormTemplate {
         layout: user.layout(),
+        t: user.lang,
         heading: "Gruppe bearbeiten",
         action: format!("/groups/{id}"),
         delete_action: Some(format!("/groups/{id}/delete")),
@@ -135,6 +140,7 @@ async fn save(
             let exclude = id.map(|id| subtree_ids(&groups, id)).unwrap_or_default();
             let page = FormTemplate {
                 layout: user.layout(),
+                t: user.lang,
                 heading: if id.is_some() {
                     "Gruppe bearbeiten"
                 } else {
@@ -142,7 +148,7 @@ async fn save(
                 },
                 action: id.map_or_else(|| "/groups".to_owned(), |id| format!("/groups/{id}")),
                 delete_action: id.map(|id| format!("/groups/{id}/delete")),
-                error: Some(message),
+                error: Some(user.lang.msg(&message)),
                 name: form.name.clone(),
                 parents: group_options(
                     &groups,
@@ -165,7 +171,7 @@ pub async fn delete(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     if form.confirm.as_deref() != Some("yes") {
-        return Err(Error::Invalid("Bitte das Löschen bestätigen.".to_owned()));
+        return Err(Error::invalid("Bitte das Löschen bestätigen."));
     }
     store::delete_group(&state.pool, id).await?;
     tracing::info!(user = %user.username, group = id, "group deleted");

@@ -192,7 +192,7 @@ pub async fn set_positions(pool: &SqlitePool, device_id: i64, ids: &[i64]) -> Re
 
 /// Gives a sensor a new name (unique per device); history, thresholds and status stay.
 pub async fn rename_sensor(pool: &SqlitePool, id: i64, name: &str) -> Result<()> {
-    let name = crate::devices::validate_name(name).map_err(|m| Error::Invalid(m.to_owned()))?;
+    let name = crate::devices::validate_name(name).map_err(|m| Error::invalid(m.to_owned()))?;
     let done = sqlx::query("UPDATE sensors SET name = ? WHERE id = ?")
         .bind(name)
         .bind(id)
@@ -209,7 +209,7 @@ pub async fn rename_sensor(pool: &SqlitePool, id: i64, name: &str) -> Result<()>
 }
 
 fn name_taken() -> Error {
-    Error::Conflict("Ein Sensor mit diesem Namen existiert an diesem Gerät bereits.".to_owned())
+    Error::conflict("Ein Sensor mit diesem Namen existiert an diesem Gerät bereits.")
 }
 
 /// All sensors of all devices (enabled or not), for overviews; by device, then display order.
@@ -257,8 +257,8 @@ pub async fn create_sensor_with_state(
     spec: &SensorSpec,
     enabled: bool,
 ) -> Result<i64> {
-    let name = crate::devices::validate_name(name).map_err(|m| Error::Invalid(m.to_owned()))?;
-    spec.validate().map_err(|m| Error::Invalid(m.to_owned()))?;
+    let name = crate::devices::validate_name(name).map_err(|m| Error::invalid(m.to_owned()))?;
+    spec.validate().map_err(|m| Error::invalid(m.to_owned()))?;
     let (if_index, oid, oid_mode, scale, unit_label) = match spec {
         SensorSpec::InterfaceTraffic { if_index } | SensorSpec::InterfaceStatus { if_index } => {
             (Some(i64::from(*if_index)), None, None, None, None)
@@ -300,7 +300,7 @@ pub async fn create_sensor_with_state(
     .map_err(|e| match e.as_database_error() {
         Some(d) if d.is_unique_violation() => name_taken(),
         Some(d) if d.is_foreign_key_violation() => {
-            Error::Invalid("Das gewählte Gerät existiert nicht.".to_owned())
+            Error::invalid("Das gewählte Gerät existiert nicht.")
         }
         _ => e.into(),
     })?;
@@ -323,7 +323,7 @@ pub async fn set_thresholds(
     limits: &[(i64, Thresholds)],
 ) -> Result<()> {
     for (_, t) in limits {
-        t.validate().map_err(|m| Error::Invalid(m.to_owned()))?;
+        t.validate().map_err(|m| Error::invalid(m.to_owned()))?;
     }
     let mut tx = pool.begin().await?;
     for (channel_id, t) in limits {
@@ -359,13 +359,11 @@ pub async fn set_value_states(
 ) -> Result<()> {
     for s in states {
         if !matches!(s.status, Status::Up | Status::Warning | Status::Down) {
-            return Err(Error::Invalid("Ungültige Bewertung.".to_owned()));
+            return Err(Error::invalid("Ungültige Bewertung."));
         }
         if s.label.chars().count() > MAX_STATE_LABEL_CHARS || s.label.chars().any(char::is_control)
         {
-            return Err(Error::Invalid(
-                "Ungültiger Name eines Statuswerts.".to_owned(),
-            ));
+            return Err(Error::invalid("Ungültiger Name eines Statuswerts."));
         }
     }
     let mut tx = pool.begin().await?;

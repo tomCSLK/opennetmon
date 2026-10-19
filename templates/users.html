@@ -1,10 +1,10 @@
 {% extends "app.html" %}
-{% block title %}Benutzer – opennetmon{% endblock %}
+{% block title %}{{ t.get("nav-users") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Benutzer</h1>
-    <p class="subtitle">Administratoren dürfen alles ändern, Leser nur ansehen.</p>
+    <h1>{{ t.get("nav-users") }}</h1>
+    <p class="subtitle">{{ t.get("users-subtitle") }}</p>
   </div>
 </div>
 
@@ -16,18 +16,19 @@
 {% endif %}
 
 <section class="card flush">
-  <div class="card-head"><h2>Benutzer</h2><span class="muted small">{{ rows.len() }}</span></div>
+  <div class="card-head"><h2>{{ t.get("nav-users") }}</h2><span class="muted small">{{ rows.len() }}</span></div>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Benutzername</th><th>Rolle</th><th>Angelegt</th><th class="right">Sitzungen</th><th></th></tr></thead>
+    <thead><tr><th>{{ t.get("username") }}</th><th>{{ t.get("role") }}</th><th>{{ t.get("language") }}</th><th>{{ t.get("users-created") }}</th><th class="right">{{ t.get("users-sessions") }}</th><th></th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
-        <td><a href="/users/{{ row.info.id }}"><strong>{{ row.info.username }}</strong></a>{% if row.is_me %} <span class="muted small">(du)</span>{% endif %}</td>
+        <td><a href="/users/{{ row.info.id }}"><strong>{{ row.info.username }}</strong></a>{% if row.is_me %} <span class="muted small">{{ t.get("users-me") }}</span>{% endif %}</td>
         <td>{{ row.role_label }}</td>
+        <td>{{ row.language_label }}</td>
         <td class="num">{{ row.created|safe }}</td>
         <td class="num right">{{ row.info.sessions }}</td>
-        <td class="right"><a class="button ghost small" href="/users/{{ row.info.id }}">Bearbeiten</a></td>
+        <td class="right"><a class="button ghost small" href="/users/{{ row.info.id }}">{{ t.get("edit") }}</a></td>
       </tr>
     {% endfor %}
     </tbody>
@@ -36,32 +37,40 @@
 </section>
 
 <section class="card">
-  <h2>Neuer Benutzer</h2>
+  <h2>{{ t.get("users-new") }}</h2>
   <form method="post" action="/users" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="form-grid">
       <div>
-        <label for="username">Benutzername</label>
+        <label for="username">{{ t.get("username") }}</label>
         <input id="username" name="username" type="text" value="{{ username }}" required minlength="3" maxlength="32" autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
       <div>
-        <label for="role">Rolle</label>
+        <label for="role">{{ t.get("role") }}</label>
         <select id="role" name="role">
-          <option value="viewer"{% if role == "viewer" %} selected{% endif %}>Leser – nur ansehen</option>
-          <option value="admin"{% if role == "admin" %} selected{% endif %}>Administrator – alles ändern</option>
+          <option value="viewer"{% if role == "viewer" %} selected{% endif %}>{{ t.get("role-viewer-option") }}</option>
+          <option value="admin"{% if role == "admin" %} selected{% endif %}>{{ t.get("role-admin-option") }}</option>
         </select>
       </div>
       <div>
-        <label for="password">Passwort</label>
+        <label for="password">{{ t.get("password") }}</label>
         <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
       </div>
       <div>
-        <label for="password_repeat">Passwort wiederholen</label>
+        <label for="password_repeat">{{ t.get("password-repeat") }}</label>
         <input id="password_repeat" name="password_repeat" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
       </div>
+      <div>
+        <label for="language">{{ t.get("language") }}</label>
+        <select id="language" name="language">
+          {% for option in languages %}
+          <option value="{{ option.code }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
-    <p class="hint">Benutzername 3 bis 32 Zeichen (Buchstaben, Ziffern, . _ -), Passwort 10 bis 128 Zeichen. Das Passwort gibst du der Person auf einem sicheren Weg weiter.</p>
-    <div class="form-actions"><button type="submit">Benutzer anlegen</button></div>
+    <p class="hint">{{ t.get("users-new-hint") }}</p>
+    <div class="form-actions"><button type="submit">{{ t.get("users-create") }}</button></div>
   </form>
 </section>
 {% endblock %}

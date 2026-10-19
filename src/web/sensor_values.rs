@@ -14,6 +14,7 @@ use serde::Deserialize;
 
 use crate::devices::Device;
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::mib::{self, MibIndex, ObjectKind};
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::{SensorSpec, parse_oid};
@@ -52,6 +53,8 @@ struct GroupView {
 #[derive(Template)]
 #[template(path = "sensor_values.html")]
 struct PageTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     device: Device,
     groups: Vec<GroupView>,
@@ -159,6 +162,7 @@ pub async fn discover(
     let object = form.object.trim().to_owned();
     let page = |groups, failure, searched_catalog| PageTemplate {
         layout: user.layout(),
+        t: user.lang,
         device: device.clone(),
         groups,
         object: object.clone(),
@@ -205,7 +209,7 @@ struct Proposal {
 }
 
 fn proposals(fields: &HashMap<String, String>) -> Result<Vec<Proposal>> {
-    let invalid = |m: String| Error::Invalid(m);
+    let invalid = |m: String| Error::invalid(m);
     let get = |prefix: &str, key: &str| {
         fields
             .get(&format!("{prefix}_{key}"))
@@ -260,13 +264,11 @@ pub async fn create(
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
     load_device(&state, id).await?;
     if fields.len() > MAX_FIELDS {
-        return Err(Error::Invalid("Das Formular ist zu groß.".to_owned()));
+        return Err(Error::invalid("Das Formular ist zu groß."));
     }
     let wanted = proposals(&fields)?;
     if wanted.is_empty() {
-        return Err(Error::Invalid(
-            "Bitte mindestens einen Wert auswählen.".to_owned(),
-        ));
+        return Err(Error::invalid("Bitte mindestens einen Wert auswählen."));
     }
     let activate = fields.get("activate").is_some_and(|v| v == "on");
     let mut existing = existing_oids(&store::list_sensors(&state.pool, id).await?);

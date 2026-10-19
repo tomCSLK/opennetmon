@@ -13,22 +13,35 @@ Handler, die nur Administratoren erlauben sollen, rufen `CurrentUser::require_ad
 
 Unter **Einstellungen → Benutzer**:
 
-- **Liste** mit Rolle, Anlagezeitpunkt und Zahl der offenen Sitzungen; das eigene Konto ist mit „(du)“ markiert.
-- **Neuer Benutzer:** Benutzername, Rolle (Leser oder Administrator), Passwort zweimal. Bei Fehlern bleiben Name und Rolle stehen, Passwörter nie.
+- **Liste** mit Rolle, Sprache, Anlagezeitpunkt und Zahl der offenen Sitzungen; das eigene Konto ist mit „(du)“ markiert.
+- **Neuer Benutzer:** Benutzername, Rolle (Leser oder Administrator), Passwort zweimal und Sprache (Standard „Wie im Browser“).
+  Bei Fehlern bleiben Name, Rolle und Sprache stehen, Passwörter nie.
 - **Je Benutzer** (`/users/<id>`):
   - **Rolle ändern** – gilt sofort, auch in offenen Sitzungen. Der **letzte Administrator** kann nicht zum Leser werden (in derselben
     SQL-Anweisung geprüft, damit zwei gleichzeitige Änderungen nicht beide Administratoren entfernen). Wer sich selbst zum Leser macht, landet auf der Übersicht.
+  - **Sprache** – siehe unten.
   - **Passwort setzen** – beendet alle Sitzungen des Benutzers; beim eigenen Konto bleibt die aktuelle Sitzung angemeldet.
   - **Löschen** – mit Bestätigungshaken, meldet alle Sitzungen ab; nie das eigene Konto und nie den letzten Administrator.
 - Aktionen werden protokolliert (wer, was, welcher Benutzer), Passwörter nie.
 
 ## Mein Konto (`/account`, alle Benutzer)
 
-Erreichbar über Name und Rolle unten in der Seitenleiste. Zeigt Benutzername und Rolle und ändert das **eigene Passwort**:
+Erreichbar über Name und Rolle unten in der Seitenleiste. Zeigt Benutzername und Rolle, wählt die **eigene Sprache** und ändert das **eigene Passwort**:
 
 - Nötig sind das bisherige Passwort und das neue zweimal (10 bis 128 Zeichen, anders als das bisherige).
 - Falsche bisherige Passwörter zählen wie fehlgeschlagene Anmeldungen für den Benutzernamen (`auth::throttle`); ab 5 Fehlversuchen wird gebremst.
 - Danach werden alle anderen Sitzungen des Benutzers abgemeldet, die aktuelle bleibt angemeldet.
+
+## Sprache
+
+Die Oberfläche gibt es auf Deutsch und Englisch. Jeder Benutzer hat eine Sprache (Spalte `users.language`):
+
+- **„Wie im Browser“** (Standard, `NULL`): die bevorzugte Sprache aus dem `Accept-Language`-Header des Browsers; passt keine, gilt Deutsch.
+- **Deutsch** oder **English**: gilt fest, unabhängig vom Browser.
+
+Wählbar unter **Mein Konto** (eigene Sprache), beim Anlegen eines Benutzers und auf dessen Seite (Administratoren). Die Anmeldeseite und Fehlerseiten
+vor der Anmeldung folgen immer dem Browser. Gespeicherte Namen (Geräte, Gruppen, Sensoren) werden nicht übersetzt.
+Die Texte stehen in `locales/<sprache>/*.ftl` ([Fluent](https://projectfluent.org/)); Hinweise zum Übersetzen in `docs/uebersetzungen.md`.
 
 ## Benutzer anlegen (Kommandozeile)
 
@@ -36,7 +49,7 @@ Der erste Administrator wird auf dem Server angelegt, es gibt keine Standardzuga
 
 ```bash
 opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
-opennetmon --config /etc/opennetmon/config.toml user add lena --role viewer
+opennetmon --config /etc/opennetmon/config.toml user add lena --role viewer --language en   # ohne --language: wie im Browser
 opennetmon --config /etc/opennetmon/config.toml user passwd lena    # beendet alle Sitzungen des Benutzers
 opennetmon --config /etc/opennetmon/config.toml user list
 ```

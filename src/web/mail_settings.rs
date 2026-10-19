@@ -11,6 +11,7 @@ use serde::Deserialize;
 
 use crate::credentials::Secret;
 use crate::error::Result;
+use crate::i18n::Lang;
 use crate::mail::{self, MailInput, Security};
 use crate::storage::mail::{self as store, Kind, MailView};
 use crate::web::auth::{CsrfForm, CurrentUser};
@@ -72,11 +73,13 @@ enum TestOutcome {
 #[derive(Template)]
 #[template(path = "mail_settings.html")]
 struct PageTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     form: FormValues,
     securities: Vec<SecurityOption>,
     log: Vec<LogRow>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     error: Option<String>,
     test_ok: Option<String>,
     test_error: Option<String>,
@@ -147,7 +150,7 @@ impl MailForm {
 }
 
 struct Extras {
-    flash: Option<&'static str>,
+    flash: Option<String>,
     error: Option<String>,
     test: Option<TestOutcome>,
 }
@@ -185,6 +188,7 @@ async fn render(
     };
     let page = PageTemplate {
         layout: user.layout(),
+        t: user.lang,
         form,
         securities,
         log,
@@ -209,7 +213,7 @@ pub async fn show(
             &user,
             view.into(),
             Extras {
-                flash: flash_message(query.msg.as_deref()),
+                flash: flash_message(user.lang, query.msg.as_deref()),
                 error: None,
                 test: None,
             },

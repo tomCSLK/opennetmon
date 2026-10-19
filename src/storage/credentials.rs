@@ -83,7 +83,7 @@ fn secret_or_keep(
     match (submitted, stored) {
         (Some(secret), _) => Ok(secrets.encrypt(secret.expose(), context)?),
         (None, Some(blob)) => Ok(blob.clone()),
-        (None, None) => Err(Error::Invalid(missing_message.to_owned())),
+        (None, None) => Err(Error::invalid(missing_message.to_owned())),
     }
 }
 
@@ -129,9 +129,8 @@ fn resolve(secrets: &SecretBox, input: &ProfileInput, existing: Option<&Row>) ->
                 SecurityLevel::AuthNoPriv => (None, None),
                 SecurityLevel::AuthPriv => {
                     let protocol = priv_protocol.ok_or_else(|| {
-                        Error::Invalid(
-                            "Für authPriv ist ein Verschlüsselungsverfahren erforderlich."
-                                .to_owned(),
+                        Error::invalid(
+                            "Für authPriv ist ein Verschlüsselungsverfahren erforderlich.",
                         )
                     })?;
                     let password = secret_or_keep(
@@ -164,7 +163,7 @@ pub async fn save_profile(
     id: Option<i64>,
     input: &ProfileInput,
 ) -> Result<i64> {
-    input.validate().map_err(|m| Error::Invalid(m.to_owned()))?;
+    input.validate().map_err(|m| Error::invalid(m.to_owned()))?;
 
     let existing = match id {
         Some(id) => Some(fetch_row(pool, id).await?.ok_or(Error::NotFound)?),
@@ -210,8 +209,8 @@ pub async fn save_profile(
             if e.as_database_error()
                 .is_some_and(|d| d.is_unique_violation()) =>
         {
-            Err(Error::Conflict(
-                "Ein Profil mit diesem Namen existiert bereits.".to_owned(),
+            Err(Error::conflict(
+                "Ein Profil mit diesem Namen existiert bereits.",
             ))
         }
         Err(e) => Err(e.into()),
@@ -249,8 +248,8 @@ pub async fn delete_profile(pool: &SqlitePool, id: i64) -> Result<bool> {
         .fetch_one(pool)
         .await?;
     if in_use > 0 {
-        return Err(Error::Conflict(
-            "Das Profil wird noch von Geräten verwendet und kann nicht gelöscht werden.".to_owned(),
+        return Err(Error::conflict(
+            "Das Profil wird noch von Geräten verwendet und kann nicht gelöscht werden.",
         ));
     }
     let done = sqlx::query("DELETE FROM credential_profiles WHERE id = ?")

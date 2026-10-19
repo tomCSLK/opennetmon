@@ -49,11 +49,11 @@ pub async fn get_group(pool: &SqlitePool, id: i64) -> Result<Option<Group>> {
 }
 
 fn invalid(message: &str) -> Error {
-    Error::Invalid(message.to_owned())
+    Error::invalid(message.to_owned())
 }
 
 fn name_taken() -> Error {
-    Error::Conflict("In dieser Ebene gibt es bereits eine Gruppe mit diesem Namen.".to_owned())
+    Error::conflict("In dieser Ebene gibt es bereits eine Gruppe mit diesem Namen.")
 }
 
 /// Creates a group below `parent_id` (or at the top level).
@@ -148,18 +148,14 @@ pub async fn delete_group(pool: &SqlitePool, id: i64) -> Result<()> {
         .fetch_one(pool)
         .await?;
     if children > 0 {
-        return Err(Error::Conflict(
-            "Die Gruppe enthält noch Untergruppen.".to_owned(),
-        ));
+        return Err(Error::conflict("Die Gruppe enthält noch Untergruppen."));
     }
     let members: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE group_id = ?")
         .bind(id)
         .fetch_one(pool)
         .await?;
     if members > 0 {
-        return Err(Error::Conflict(
-            "Die Gruppe enthält noch Geräte.".to_owned(),
-        ));
+        return Err(Error::conflict("Die Gruppe enthält noch Geräte."));
     }
     let done = sqlx::query("DELETE FROM groups WHERE id = ?")
         .bind(id)

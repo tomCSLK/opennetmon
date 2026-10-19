@@ -14,6 +14,7 @@ use serde::Deserialize;
 use crate::devices::Device;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpError, SnmpTarget};
 use crate::storage::templates::{self as store, TemplateRecord};
@@ -72,9 +73,11 @@ struct ListRow {
 #[derive(Template)]
 #[template(path = "templates_list.html")]
 struct ListTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     rows: Vec<ListRow>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -103,8 +106,9 @@ pub async fn list(
         .collect();
     let page = ListTemplate {
         layout: user.layout(),
+        t: user.lang,
         rows,
-        flash: flash_message(query.msg.as_deref()),
+        flash: flash_message(user.lang, query.msg.as_deref()),
     };
     Ok(Html(page.render()?))
 }
@@ -200,20 +204,22 @@ fn items_of(body: &tpl::Body) -> Vec<ItemView> {
 #[derive(Template)]
 #[template(path = "template_detail.html")]
 struct DetailTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     template: TemplateRecord,
     items: Vec<ItemView>,
     name: String,
     object_id: String,
     error: Option<String>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
 }
 
 fn detail_page(
     user: &CurrentUser,
     template: TemplateRecord,
     error: Option<String>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     input: Option<(String, String)>,
 ) -> Result<String> {
     let (name, object_id) = input.unwrap_or_else(|| {
@@ -224,6 +230,7 @@ fn detail_page(
     });
     let page = DetailTemplate {
         layout: user.layout(),
+        t: user.lang,
         items: items_of(&template.body),
         template,
         name,
@@ -246,7 +253,7 @@ pub async fn detail(
         &user,
         template,
         None,
-        flash_message(query.msg.as_deref()),
+        flash_message(user.lang, query.msg.as_deref()),
         None,
     )?))
 }
@@ -277,7 +284,7 @@ pub async fn update(
             let html = detail_page(
                 &user,
                 template,
-                Some(message),
+                Some(user.lang.msg(&message)),
                 None,
                 Some((form.name, form.object_id)),
             )?;
@@ -323,6 +330,8 @@ struct PortGroup {
 #[derive(Template)]
 #[template(path = "template_new.html")]
 struct NewTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     device: Device,
     name: String,
@@ -456,6 +465,7 @@ async fn render_new(
     };
     let page = NewTemplate {
         layout: user.layout(),
+        t: user.lang,
         name,
         object_id,
         sensors: others,
@@ -502,7 +512,7 @@ pub async fn create(
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
     if fields.len() > MAX_FORM_FIELDS {
-        return Err(Error::Invalid("Das Formular ist zu groß.".to_owned()));
+        return Err(Error::invalid("Das Formular ist zu groß."));
     }
     let device = load_device(&state, id).await?;
     let get = |key: &str| fields.get(key).map_or("", String::as_str);
@@ -543,7 +553,7 @@ pub async fn create(
             )
             .await
         }
-        Err(message) => Err(Error::Invalid(message)),
+        Err(message) => Err(Error::invalid(message)),
     };
     match outcome {
         Ok(template) => {
@@ -563,7 +573,7 @@ pub async fn create(
                 get("name").to_owned(),
                 get("object_id").to_owned(),
                 Some((include, traffic, status)),
-                Some(message),
+                Some(user.lang.msg(&message)),
             )
             .await?;
             Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
@@ -584,6 +594,8 @@ pub struct TemplateOption {
 #[derive(Template)]
 #[template(path = "template_apply.html")]
 struct ApplyTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     device: Device,
     options: Vec<TemplateOption>,
@@ -617,6 +629,7 @@ pub async fn apply_form(
         .collect();
     let page = ApplyTemplate {
         layout: user.layout(),
+        t: user.lang,
         options,
         object_id: facts.object_id.clone(),
         detected: detected.map(|t| t.name.clone()),
@@ -629,6 +642,8 @@ pub async fn apply_form(
 #[derive(Template)]
 #[template(path = "template_result.html")]
 struct ResultTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     device: Device,
     heading: String,
@@ -656,6 +671,7 @@ pub async fn apply_and_render(
 ) -> Result<String> {
     let mut page = ResultTemplate {
         layout: user.layout(),
+        t: user.lang,
         heading,
         template_name: None,
         created: Vec::new(),
@@ -738,7 +754,7 @@ pub async fn apply(
         "auto" => Choice::Detect,
         text => Choice::Id(
             text.parse()
-                .map_err(|_| Error::Invalid("Bitte eine Vorlage wählen.".to_owned()))?,
+                .map_err(|_| Error::invalid("Bitte eine Vorlage wählen."))?,
         ),
     };
     let heading = format!("Vorlage angewendet auf {}", device.name);

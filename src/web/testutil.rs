@@ -28,10 +28,10 @@ pub async fn harness(cookie_secure: bool) -> Harness {
     let pool = storage::connect(&dir.path().join("a.db")).await.unwrap();
     storage::migrate(&pool).await.unwrap();
     let hash = auth::hash_password(PASSWORD).unwrap();
-    users::create_user(&pool, "anna", &hash, Role::Admin)
+    users::create_user(&pool, "anna", &hash, Role::Admin, None)
         .await
         .unwrap();
-    users::create_user(&pool, "bert", &hash, Role::Viewer)
+    users::create_user(&pool, "bert", &hash, Role::Viewer, None)
         .await
         .unwrap();
     let config = Config {
@@ -103,6 +103,15 @@ pub fn post(path: &str, cookie: Option<&str>, form: &str) -> Request<Body> {
         b = b.header(header::COOKIE, c);
     }
     b.body(Body::from(form.to_owned())).unwrap()
+}
+
+/// The request as sent by a browser that prefers `languages` (`Accept-Language`).
+pub fn accepting(mut request: Request<Body>, languages: &str) -> Request<Body> {
+    request.headers_mut().insert(
+        header::ACCEPT_LANGUAGE,
+        header::HeaderValue::from_str(languages).unwrap(),
+    );
+    request
 }
 
 /// Loads the login form and returns (cookie pair, csrf token).

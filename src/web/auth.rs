@@ -12,6 +12,7 @@ use serde::Deserialize;
 
 use crate::auth::{self, Role, throttle};
 use crate::error::{Error, Result};
+use crate::i18n::{self, Lang};
 use crate::storage::users::{self, SessionUser};
 use crate::web::{AppState, Layout};
 
@@ -28,6 +29,10 @@ pub struct CurrentUser {
     pub id: i64,
     pub username: String,
     pub role: Role,
+    /// Language of the pages: the user's choice, otherwise the browser's.
+    pub lang: Lang,
+    /// The stored choice (`None`: follow the browser).
+    pub language: Option<Lang>,
     pub csrf_token: String,
 }
 
@@ -56,22 +61,32 @@ impl CurrentUser {
     pub fn layout(&self) -> Layout {
         Layout {
             username: self.username.clone(),
-            role_label: self.role.label(),
+            role_label: self.lang.get(self.role.label_id()),
             csrf_token: self.csrf_token.clone(),
             is_admin: self.role.is_admin(),
         }
     }
 }
 
-impl From<SessionUser> for CurrentUser {
-    fn from(s: SessionUser) -> Self {
+impl CurrentUser {
+    fn from_session(s: SessionUser, headers: &HeaderMap) -> Self {
         Self {
             id: s.user_id,
             username: s.username,
             role: s.role,
+            lang: s.language.unwrap_or_else(|| browser_language(headers)),
+            language: s.language,
             csrf_token: s.csrf_token,
         }
     }
+}
+
+/// The preferred supported language of the browser (`Accept-Language`), German otherwise.
+pub(crate) fn browser_language(headers: &HeaderMap) -> Lang {
+    headers
+        .get(header::ACCEPT_LANGUAGE)
+        .and_then(|v| v.to_str().ok())
+        .map_or_else(Lang::default, Lang::from_accept_language)
 }
 
 impl FromRequestParts<AppState> for CurrentUser {
@@ -85,7 +100,12 @@ impl FromRequestParts<AppState> for CurrentUser {
             return Err(Redirect::to("/login").into_response());
         };
         match users::find_session(&state.pool, &auth::token_hash(&token), auth::now_secs()).await {
-            Ok(Some(session)) => Ok(session.into()),
+            Ok(Some(session)) => {
+                let user = Self::from_session(session, &parts.headers);
+                // Error pages of this request use the user's language as well.
+                i18n::set_current(user.lang);
+                Ok(user)
+            }
             Ok(None) => Err(Redirect::to("/login").into_response()),
             Err(e) => Err(e.into_response()),
         }
@@ -95,8 +115,10 @@ impl FromRequestParts<AppState> for CurrentUser {
 #[derive(Template)]
 #[template(path = "login.html")]
 struct LoginTemplate<'a> {
+    /// Language of the page.
+    t: Lang,
     csrf_token: &'a str,
-    error: Option<&'a str>,
+    error: Option<String>,
 }
 
 /// Deliberately has no `Debug`: the password must never end up in logs.
@@ -115,6 +137,7 @@ pub struct CsrfForm {
 pub async fn login_form(State(state): State<AppState>) -> Result<Response> {
     let csrf = auth::random_token();
     let body = LoginTemplate {
+        t: i18n::current(),
         csrf_token: &csrf,
         error: None,
     }
@@ -129,14 +152,13 @@ pub async fn login_form(State(state): State<AppState>) -> Result<Response> {
 }
 
 /// Human-readable waiting time, e.g. `20 Sekunden` or `3 Minuten`.
-fn wait_text(ms: i64) -> String {
+fn wait_text(t: Lang, ms: i64) -> String {
     let secs = (ms.max(0) + 999) / 1000;
-    let (n, one, many) = if secs < 60 {
-        (secs, "Sekunde", "Sekunden")
+    if secs < 60 {
+        t.get1("login-wait-seconds", "seconds", secs)
     } else {
-        ((secs + 59) / 60, "Minute", "Minuten")
-    };
-    format!("{n} {}", if n == 1 { one } else { many })
+        t.get1("login-wait-minutes", "minutes", (secs + 59) / 60)
+    }
 }
 
 pub async fn login_submit(
@@ -162,12 +184,11 @@ pub async fn login_submit(
     let now_ms = auth::now_secs().saturating_mul(1000);
     if let Err(wait_ms) = state.login_throttle.check(now_ms, &form.username, ip) {
         tracing::warn!(?ip, wait_ms, "login attempt refused (too many failures)");
+        let t = i18n::current();
         let body = LoginTemplate {
+            t,
             csrf_token: &cookie_csrf,
-            error: Some(&format!(
-                "Zu viele fehlgeschlagene Anmeldeversuche. Bitte in {} erneut versuchen.",
-                wait_text(wait_ms)
-            )),
+            error: Some(t.get1("login-throttled", "wait", wait_text(t, wait_ms))),
         }
         .render()?;
         let retry_after = ((wait_ms + 999) / 1000).max(1).to_string();
@@ -204,9 +225,11 @@ pub async fn login_submit(
                 .login_throttle
                 .record_failure(now_ms, &form.username, ip);
             tracing::info!(?ip, "failed login attempt");
+            let t = i18n::current();
             let body = LoginTemplate {
+                t,
                 csrf_token: &cookie_csrf,
-                error: Some("Benutzername oder Passwort ist falsch."),
+                error: Some(t.get("login-failed")),
             }
             .render()?;
             return Ok((StatusCode::UNAUTHORIZED, Html(body)).into_response());
@@ -507,6 +530,8 @@ mod tests {
             id: 1,
             username: "x".to_owned(),
             role,
+            lang: Lang::De,
+            language: None,
             csrf_token: "t".to_owned(),
         };
         assert!(user(Role::Admin).require_admin().is_ok());
@@ -655,11 +680,69 @@ mod tests {
 
     #[test]
     fn waiting_times_are_readable() {
-        assert_eq!(wait_text(1), "1 Sekunde");
-        assert_eq!(wait_text(5_000), "5 Sekunden");
-        assert_eq!(wait_text(59_000), "59 Sekunden");
-        assert_eq!(wait_text(60_000), "1 Minute");
-        assert_eq!(wait_text(61_000), "2 Minuten");
-        assert_eq!(wait_text(900_000), "15 Minuten");
+        assert_eq!(wait_text(Lang::De, 1), "1 Sekunde");
+        assert_eq!(wait_text(Lang::De, 5_000), "5 Sekunden");
+        assert_eq!(wait_text(Lang::De, 59_000), "59 Sekunden");
+        assert_eq!(wait_text(Lang::De, 60_000), "1 Minute");
+        assert_eq!(wait_text(Lang::De, 61_000), "2 Minuten");
+        assert_eq!(wait_text(Lang::De, 900_000), "15 Minuten");
+    }
+
+    #[tokio::test]
+    async fn the_login_page_and_its_errors_follow_the_browser_language() {
+        let h = harness(true).await;
+        let page = send(
+            &h.app,
+            accepting(get("/login", None), "en-GB,en;q=0.8,de;q=0.5"),
+        )
+        .await;
+        assert!(page.body.contains("<html lang=\"en\">"));
+        assert!(page.body.contains("Sign in") && page.body.contains("Source code"));
+        let german = send(&h.app, get("/login", None)).await;
+        assert!(german.body.contains("<html lang=\"de\">") && german.body.contains("Anmelden"));
+
+        let (cookie, csrf) = open_login(&h).await;
+        let form = format!("username=anna&password=falsch-falsch&csrf_token={csrf}");
+        let failed = send(
+            &h.app,
+            accepting(post("/login", Some(&cookie), &form), "en"),
+        )
+        .await;
+        assert_eq!(failed.status, StatusCode::UNAUTHORIZED);
+        assert!(failed.body.contains("Wrong user name or password."));
+        let forged = send(
+            &h.app,
+            accepting(
+                post(
+                    "/login",
+                    Some(&cookie),
+                    "username=anna&password=x&csrf_token=no",
+                ),
+                "en",
+            ),
+        )
+        .await;
+        assert_eq!(forged.status, StatusCode::FORBIDDEN);
+        assert_eq!(forged.body, "Access denied");
+    }
+
+    #[tokio::test]
+    async fn signed_in_users_get_their_own_language_regardless_of_the_browser() {
+        let h = harness(true).await;
+        users::set_language(&h.state.pool, 1, Some(Lang::En))
+            .await
+            .unwrap();
+        let (admin, _) = login(&h, "anna").await;
+        let home = send(&h.app, accepting(get("/", Some(&admin)), "de-DE")).await;
+        assert!(home.body.contains("<html lang=\"en\">") && home.body.contains("Sign out"));
+        let missing = send(&h.app, accepting(get("/users/999", Some(&admin)), "de")).await;
+        assert_eq!(missing.status, StatusCode::NOT_FOUND);
+        assert_eq!(missing.body, "Not found");
+    }
+
+    #[test]
+    fn waiting_times_are_translated() {
+        assert_eq!(wait_text(Lang::En, 1), "1 second");
+        assert_eq!(wait_text(Lang::En, 120_000), "2 minutes");
     }
 }

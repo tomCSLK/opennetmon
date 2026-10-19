@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::devices::Device;
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::sensors::Unit;
 use crate::sensors::format::{channel_label, input_unit, parse_threshold, threshold_input};
 use crate::sensors::spec::SensorSpec;
@@ -82,6 +83,8 @@ struct EventView {
 #[derive(Template)]
 #[template(path = "sensor_detail.html")]
 struct DetailTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     sensor: SensorRecord,
     description: String,
@@ -94,7 +97,7 @@ struct DetailTemplate {
     ranges: Vec<RangeLink>,
     range: &'static str,
     events: Vec<EventView>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     error: Option<String>,
     /// Name field of the rename form (the rejected input after an error).
     new_name: String,
@@ -125,7 +128,7 @@ fn fields_of(t: &Thresholds, unit: Unit) -> [String; 4] {
 /// Variable parts of the page.
 struct View<'a> {
     range: Range,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     error: Option<String>,
     /// Rejected threshold input to echo back (by field name).
     submitted: Option<&'a HashMap<String, String>>,
@@ -202,6 +205,7 @@ async fn render(
         .collect();
     let page = DetailTemplate {
         layout: user.layout(),
+        t: user.lang,
         description: crate::web::sensor_text::describe(&sensor.spec, &mibs),
         status_label: status.label(),
         status_class: status.as_str(),
@@ -306,7 +310,7 @@ pub async fn detail(
             device,
             View {
                 range: query.range(),
-                flash: flash_message(query.msg.as_deref()),
+                flash: flash_message(user.lang, query.msg.as_deref()),
                 error: None,
                 submitted: None,
                 rejected_name: None,
@@ -383,7 +387,7 @@ fn parse_limits(
                 let text = form
                     .get(&format!("{prefix}_{}", c.id))
                     .map_or("", String::as_str);
-                parse_threshold(text, c.unit).map_err(|m| Error::Invalid(m.to_owned()))
+                parse_threshold(text, c.unit).map_err(|m| Error::invalid(m.to_owned()))
             };
             let limits = Thresholds {
                 warn_above: field("wa")?,
@@ -393,7 +397,7 @@ fn parse_limits(
             };
             limits
                 .validate()
-                .map_err(|m| Error::Invalid(format!("{}: {m}", channel_label(&c.key))))?;
+                .map_err(|m| Error::invalid(format!("{}: {m}", channel_label(&c.key))))?;
             Ok((c.id, limits))
         })
         .collect()
@@ -423,7 +427,7 @@ pub async fn save_thresholds(
                 View {
                     range: Range::Day,
                     flash: None,
-                    error: Some(message),
+                    error: Some(user.lang.msg(&message)),
                     submitted: Some(&form),
                     rejected_name: None,
                 },
@@ -447,9 +451,8 @@ pub async fn save_states(
     user.verify_csrf(form.get("csrf_token").map_or("", String::as_str))?;
     let (sensor, _) = load(&state, id).await?;
     let format = ValueFormat::for_sensor(&sensor.spec, &state.mib_index());
-    let channel = rated_channel(&sensor).ok_or_else(|| {
-        Error::Invalid("Dieser Sensor hat keine benannten Statuswerte.".to_owned())
-    })?;
+    let channel = rated_channel(&sensor)
+        .ok_or_else(|| Error::invalid("Dieser Sensor hat keine benannten Statuswerte."))?;
     let states = match form.get("action").map(String::as_str) {
         Some("reset") => Vec::new(),
         Some("save") => named_values(channel, &format)
@@ -460,7 +463,7 @@ pub async fn save_states(
                     Some("warning") => Status::Warning,
                     Some("down") => Status::Down,
                     _ => {
-                        return Err(Error::Invalid(format!(
+                        return Err(Error::invalid(format!(
                             "{label}: Bitte eine Bewertung wählen."
                         )));
                     }
@@ -472,11 +475,11 @@ pub async fn save_states(
                 })
             })
             .collect::<Result<Vec<_>>>()?,
-        _ => return Err(Error::Invalid("Unbekannte Aktion.".to_owned())),
+        _ => return Err(Error::invalid("Unbekannte Aktion.")),
     };
     if states.is_empty() && form.get("action").map(String::as_str) == Some("save") {
-        return Err(Error::Invalid(
-            "Dieser Sensor hat keine benannten Statuswerte.".to_owned(),
+        return Err(Error::invalid(
+            "Dieser Sensor hat keine benannten Statuswerte.",
         ));
     }
     store::set_value_states(&state.pool, id, channel.id, &states).await?;
@@ -518,7 +521,7 @@ pub async fn rename(
                 View {
                     range: Range::Day,
                     flash: None,
-                    error: Some(message),
+                    error: Some(user.lang.msg(&message)),
                     submitted: None,
                     rejected_name: Some(form.name),
                 },

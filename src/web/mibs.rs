@@ -10,6 +10,7 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::mib::{self, MibObject, Origin};
 use crate::storage::mibs::{self as store, NewMibFile};
 use crate::web::auth::{CsrfForm, CurrentUser};
@@ -68,6 +69,8 @@ struct UploadResult {
 #[derive(Template)]
 #[template(path = "mibs.html")]
 struct PageTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     files: Vec<FileView>,
     bundled: Vec<ModuleView>,
@@ -75,7 +78,7 @@ struct PageTemplate {
     total_modules: usize,
     query: String,
     results: Vec<ObjectView>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     upload: Option<UploadResult>,
     error: Option<String>,
 }
@@ -149,7 +152,7 @@ async fn render(
     state: &AppState,
     user: &CurrentUser,
     query: &str,
-    flash: Option<&'static str>,
+    flash: Option<String>,
     upload: Option<UploadResult>,
     error: Option<String>,
 ) -> Result<String> {
@@ -182,6 +185,7 @@ async fn render(
         .collect();
     let page = PageTemplate {
         layout: user.layout(),
+        t: user.lang,
         files,
         bundled,
         total_objects: index.len(),
@@ -207,7 +211,7 @@ pub async fn show(
             &state,
             &user,
             q.trim(),
-            flash_message(query.msg.as_deref()),
+            flash_message(user.lang, query.msg.as_deref()),
             None,
             None,
         )
@@ -241,20 +245,20 @@ pub async fn upload(
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|e| Error::Invalid(format!("Der Upload ist unvollständig oder zu groß: {e}")))?
+        .map_err(|e| Error::invalid(format!("Der Upload ist unvollständig oder zu groß: {e}")))?
     {
         match field.name() {
             Some("csrf_token") => csrf = Some(field.text().await.unwrap_or_default()),
             Some("files") => {
                 let name = clean_file_name(field.file_name().unwrap_or_default());
                 let data = field.bytes().await.map_err(|e| {
-                    Error::Invalid(format!("Die Datei {name} konnte nicht gelesen werden: {e}"))
+                    Error::invalid(format!("Die Datei {name} konnte nicht gelesen werden: {e}"))
                 })?;
                 if data.is_empty() && name == "unbenannt.mib" {
                     continue; // the browser sends an empty part when no file was chosen
                 }
                 if uploads.len() >= MAX_FILES {
-                    return Err(Error::Invalid(format!(
+                    return Err(Error::invalid(format!(
                         "Höchstens {MAX_FILES} Dateien auf einmal."
                     )));
                 }

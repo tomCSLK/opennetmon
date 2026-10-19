@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 use crate::devices::{Device, Group};
 use crate::error::Result;
+use crate::i18n::Lang;
 use crate::status::{Status, device_status};
 use crate::storage::sensors::SensorRecord;
 use crate::storage::{devices, groups, sensors, status};
@@ -164,6 +165,8 @@ impl Counts {
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     ungrouped: Option<Ungrouped>,
     groups: Vec<TopGroup>,
@@ -172,7 +175,7 @@ struct HomeTemplate {
     devices_down: usize,
     /// Groups at the top level; their order is only worth a button when there are several.
     top_groups: usize,
-    flash: Option<&'static str>,
+    flash: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -289,13 +292,14 @@ pub async fn home(
 
     let page = HomeTemplate {
         layout: user.layout(),
+        t: user.lang,
         ungrouped,
         groups: tops,
         totals,
         device_count: devices.len(),
         devices_down,
         top_groups: top.len(),
-        flash: flash_message(query.msg.as_deref()),
+        flash: flash_message(user.lang, query.msg.as_deref()),
     };
     Ok(Html(page.render()?))
 }

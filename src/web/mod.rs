@@ -32,6 +32,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::config::Config;
 use crate::crypto::SecretBox;
+use crate::i18n::Lang;
 use crate::storage;
 
 #[derive(Clone)]
@@ -150,10 +151,12 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/account", get(account::show))
         .route("/account/password", post(account::change_password))
+        .route("/account/language", post(account::set_language))
         .route("/users", get(users::list).post(users::create))
         .route("/users/{id}", get(users::edit))
         .route("/users/{id}/role", post(users::set_role))
         .route("/users/{id}/password", post(users::set_password))
+        .route("/users/{id}/language", post(users::set_language))
         .route("/users/{id}/delete", post(users::delete))
         .route("/templates", get(templates::list))
         .route(
@@ -186,13 +189,60 @@ pub fn router(state: AppState) -> Router {
             header::CONTENT_SECURITY_POLICY,
             "default-src 'self'; frame-ancestors 'none'; form-action 'self'",
         ))
+        .layer(axum::middleware::from_fn(request_language))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
+/// Runs every request in the browser's language; signed-in users switch it to their own (see `CurrentUser`).
+async fn request_language(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let lang = auth::browser_language(request.headers());
+    crate::i18n::scope(lang, next.run(request)).await
+}
+
 fn security_header(name: HeaderName, value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value))
+}
+
+/// An entry of the language selection; `code` is empty for "follow the browser".
+pub struct LanguageOption {
+    pub code: &'static str,
+    pub label: String,
+    pub selected: bool,
+}
+
+/// The choices for a user's language: the browser's first, then every language by its own name.
+pub fn language_options(t: Lang, chosen: Option<Lang>) -> Vec<LanguageOption> {
+    let mut options = vec![LanguageOption {
+        code: "",
+        label: t.get("language-browser"),
+        selected: chosen.is_none(),
+    }];
+    options.extend(Lang::ALL.into_iter().map(|lang| LanguageOption {
+        code: lang.code(),
+        label: lang.native_name().to_owned(),
+        selected: chosen == Some(lang),
+    }));
+    options
+}
+
+/// A submitted language choice: empty for "follow the browser".
+pub fn parse_language_choice(code: &str) -> crate::error::Result<Option<Lang>> {
+    if code.is_empty() {
+        return Ok(None);
+    }
+    Lang::parse(code)
+        .map(Some)
+        .ok_or_else(|| crate::error::Error::invalid(crate::i18n::Msg::new("language-invalid")))
+}
+
+/// How a user's language choice is shown in lists.
+pub fn language_label(t: Lang, chosen: Option<Lang>) -> String {
+    chosen.map_or_else(|| t.get("language-browser"), |l| l.native_name().to_owned())
 }
 
 /// An entry of a `<select>` for groups or profiles.
@@ -209,9 +259,8 @@ pub(crate) async fn snmp_credentials(
     device: &crate::devices::Device,
 ) -> crate::error::Result<crate::credentials::Credentials> {
     let profile = device.profile_id.ok_or_else(|| {
-        crate::error::Error::Invalid(
-            "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping). Ein SNMP-Profil lässt sich unter „Gerät bearbeiten“ wählen."
-                .to_owned(),
+        crate::error::Error::invalid(
+            "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping). Ein SNMP-Profil lässt sich unter „Gerät bearbeiten“ wählen.",
         )
     })?;
     crate::storage::credentials::load_credentials(&state.pool, &state.secrets, profile)
@@ -243,51 +292,46 @@ pub fn group_options(
 }
 
 /// Message shown after a successful action (`?msg=` is mapped to fixed texts, never echoed).
-pub fn flash_message(key: Option<&str>) -> Option<&'static str> {
-    match key? {
-        "group_created" => Some("Gruppe angelegt."),
-        "group_updated" => Some("Gruppe gespeichert."),
-        "group_deleted" => Some("Gruppe gelöscht."),
-        "device_created" => Some("Gerät angelegt."),
-        "device_created_ping" => Some("Gerät ohne SNMP angelegt; der Ping-Sensor ist aktiv."),
-        "device_updated" => Some("Gerät gespeichert."),
-        "device_deleted" => Some("Gerät gelöscht."),
-        "sensor_created" => Some("Sensor angelegt."),
-        "sensors_added" => Some("Sensoren angelegt."),
-        "sensor_deleted" => Some("Sensor gelöscht."),
-        "sensor_paused" => Some("Sensor deaktiviert."),
-        "sensor_resumed" => Some("Sensor aktiviert."),
-        "values_added_inactive" => Some(
-            "Sensoren angelegt – sie sind noch inaktiv, unten unter „Inaktive Sensoren“ aktivieren.",
-        ),
-        "values_added_active" => Some("Sensoren angelegt und aktiviert."),
-        "sensors_activated" => Some("Sensoren aktiviert."),
-        "sensors_deactivated" => Some("Sensoren deaktiviert."),
-        "sensors_deleted" => Some("Sensoren gelöscht."),
-        "thresholds_saved" => Some("Schwellwerte gespeichert."),
-        "sensor_renamed" => Some("Sensor umbenannt."),
-        "states_saved" => {
-            Some("Bewertung der Statuswerte gespeichert. Sie gilt ab der nächsten Abfrage.")
-        }
-        "states_reset" => Some("Bewertung der Statuswerte entfernt."),
-        "order_saved" => Some("Reihenfolge gespeichert."),
-        "template_created" => Some(
-            "Vorlage gespeichert. Sie lässt sich beim Anlegen eines Geräts oder mit „Vorlage anwenden“ nutzen.",
-        ),
-        "template_saved" => Some("Vorlage gespeichert."),
-        "user_created" => Some("Benutzer angelegt."),
-        "account_password_saved" => {
-            Some("Passwort geändert. Deine anderen Sitzungen wurden abgemeldet.")
-        }
-        "user_role_saved" => Some("Rolle gespeichert."),
-        "user_password_saved" => Some("Passwort gesetzt."),
-        "user_deleted" => Some("Benutzer gelöscht."),
-        "template_deleted" => Some("Vorlage gelöscht."),
-        "order_reset" => Some("Reihenfolge zurückgesetzt: wieder automatisch sortiert."),
-        "mail_saved" => Some("E-Mail-Einstellungen gespeichert."),
-        "mib_deleted" => Some("MIB-Datei gelöscht."),
-        _ => None,
-    }
+pub fn flash_message(t: Lang, key: Option<&str>) -> Option<String> {
+    let id = match key? {
+        "group_created" => "flash-group-created",
+        "group_updated" => "flash-group-updated",
+        "group_deleted" => "flash-group-deleted",
+        "device_created" => "flash-device-created",
+        "device_created_ping" => "flash-device-created-ping",
+        "device_updated" => "flash-device-updated",
+        "device_deleted" => "flash-device-deleted",
+        "sensor_created" => "flash-sensor-created",
+        "sensors_added" => "flash-sensors-added",
+        "sensor_deleted" => "flash-sensor-deleted",
+        "sensor_paused" => "flash-sensor-paused",
+        "sensor_resumed" => "flash-sensor-resumed",
+        "values_added_inactive" => "flash-values-added-inactive",
+        "values_added_active" => "flash-values-added-active",
+        "sensors_activated" => "flash-sensors-activated",
+        "sensors_deactivated" => "flash-sensors-deactivated",
+        "sensors_deleted" => "flash-sensors-deleted",
+        "thresholds_saved" => "flash-thresholds-saved",
+        "sensor_renamed" => "flash-sensor-renamed",
+        "states_saved" => "flash-states-saved",
+        "states_reset" => "flash-states-reset",
+        "order_saved" => "flash-order-saved",
+        "template_created" => "flash-template-created",
+        "template_saved" => "flash-template-saved",
+        "user_created" => "flash-user-created",
+        "account_password_saved" => "flash-account-password-saved",
+        "user_role_saved" => "flash-user-role-saved",
+        "user_password_saved" => "flash-user-password-saved",
+        "user_language_saved" => "flash-user-language-saved",
+        "user_deleted" => "flash-user-deleted",
+        "template_deleted" => "flash-template-deleted",
+        "order_reset" => "flash-order-reset",
+        "mail_saved" => "flash-mail-saved",
+        "language_saved" => "flash-language-saved",
+        "mib_deleted" => "flash-mib-deleted",
+        _ => return None,
+    };
+    Some(t.get(id))
 }
 
 /// Civil date and time of Unix milliseconds in UTC: `(year, month, day, hour, minute, second)`.
@@ -346,7 +390,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Data every logged-in page needs for the header (navigation, user, logout form).
 pub struct Layout {
     pub username: String,
-    pub role_label: &'static str,
+    pub role_label: String,
     pub csrf_token: String,
     pub is_admin: bool,
 }

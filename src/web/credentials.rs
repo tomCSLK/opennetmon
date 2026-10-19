@@ -12,6 +12,7 @@ use crate::credentials::{
     SnmpVersion,
 };
 use crate::error::{Error, Result};
+use crate::i18n::Lang;
 use crate::storage::credentials as store;
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout};
@@ -19,9 +20,11 @@ use crate::web::{AppState, Layout};
 #[derive(Template)]
 #[template(path = "credentials_list.html")]
 struct ListTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     profiles: Vec<ProfileView>,
-    flash: Option<&'static str>,
+    flash: Option<String>,
 }
 
 /// Non-secret values that are echoed back into the form.
@@ -74,6 +77,8 @@ impl FormValues {
 #[derive(Template)]
 #[template(path = "credential_form.html")]
 struct FormTemplate {
+    /// Language of the page.
+    t: Lang,
     layout: Layout,
     heading: &'static str,
     action: String,
@@ -90,9 +95,10 @@ struct FormTemplate {
 }
 
 impl FormTemplate {
-    fn new(layout: Layout, form: FormValues, existing: Option<&ProfileView>) -> Self {
+    fn new(user: &CurrentUser, form: FormValues, existing: Option<&ProfileView>) -> Self {
         Self {
-            layout,
+            layout: user.layout(),
+            t: user.lang,
             heading: if existing.is_some() {
                 "Profil bearbeiten"
             } else {
@@ -154,7 +160,7 @@ fn secret(value: &str) -> Option<Secret> {
 }
 
 fn invalid(message: &str) -> Error {
-    Error::Invalid(message.to_owned())
+    Error::invalid(message.to_owned())
 }
 
 impl ProfileForm {
@@ -200,13 +206,14 @@ impl ProfileForm {
     }
 }
 
-fn flash(msg: Option<&str>) -> Option<&'static str> {
-    match msg? {
-        "created" => Some("Profil angelegt."),
-        "updated" => Some("Profil gespeichert."),
-        "deleted" => Some("Profil gelöscht."),
-        _ => None,
-    }
+fn flash(t: Lang, msg: Option<&str>) -> Option<String> {
+    let id = match msg? {
+        "created" => "flash-profile-created",
+        "updated" => "flash-profile-updated",
+        "deleted" => "flash-profile-deleted",
+        _ => return None,
+    };
+    Some(t.get(id))
 }
 
 pub async fn list(
@@ -217,15 +224,16 @@ pub async fn list(
     user.require_admin()?;
     let page = ListTemplate {
         layout: user.layout(),
+        t: user.lang,
         profiles: store::list_profiles(&state.pool).await?,
-        flash: flash(query.msg.as_deref()),
+        flash: flash(user.lang, query.msg.as_deref()),
     };
     Ok(Html(page.render()?))
 }
 
 pub async fn new_form(user: CurrentUser) -> Result<Html<String>> {
     user.require_admin()?;
-    let page = FormTemplate::new(user.layout(), FormValues::default(), None);
+    let page = FormTemplate::new(&user, FormValues::default(), None);
     Ok(Html(page.render()?))
 }
 
@@ -238,7 +246,7 @@ pub async fn edit_form(
     let view = store::get_profile(&state.pool, id)
         .await?
         .ok_or(Error::NotFound)?;
-    let page = FormTemplate::new(user.layout(), FormValues::from_view(&view), Some(&view));
+    let page = FormTemplate::new(&user, FormValues::from_view(&view), Some(&view));
     Ok(Html(page.render()?))
 }
 
@@ -293,8 +301,8 @@ async fn save(
                 ),
                 None => None,
             };
-            let mut page = FormTemplate::new(user.layout(), form.values(), existing.as_ref());
-            page.error = Some(message);
+            let mut page = FormTemplate::new(user, form.values(), existing.as_ref());
+            page.error = Some(user.lang.msg(&message));
             Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(page.render()?)).into_response())
         }
         Err(e) => Err(e),

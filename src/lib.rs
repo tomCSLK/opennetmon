@@ -8,6 +8,7 @@ pub mod crypto;
 pub mod devices;
 pub mod discovery;
 pub mod error;
+pub mod i18n;
 pub mod mail;
 pub mod maintenance;
 pub mod mib;

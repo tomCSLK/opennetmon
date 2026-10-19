@@ -121,14 +121,19 @@ opennetmon/
 6. **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph (1h/24h/7d/30d), Rollups und Retention – **umgesetzt** (`docs/graphen-und-schwellwerte.md`).
 7. **Betrieb:** musl-Release-Build (zuletzt nach den Geräten geprüft: statisch gelinkt, 9,3 MB), `deploy/opennetmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
 8. **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel – **umgesetzt** (`docs/benachrichtigung.md`).
-9. **Als Nächstes: Mehrsprachigkeit** (vor dem Öffentlichmachen des Repos; jede neue Funktion vergrößert den Umbau):
-   - Alle festen Texte (24 Templates, etwa 300 deutsche Texte in rund 40 Rust-Dateien: Meldungen, Fehler, Statusnamen, Mails) in Kataloge je Sprache,
-     eingebettet ins Binary; Deutsch bleibt Ausgangssprache, Englisch als erste weitere Sprache. Ein Test stellt sicher, dass kein Schlüssel fehlt.
-   - Sprache **je Benutzer** (Spalte in `users`): Auswahl beim Anlegen und unter „Mein Konto“, vorbelegt aus `Accept-Language`, sonst Deutsch;
-     die Anmeldeseite folgt dem Browser.
-   - Benachrichtigungs-Mails: **eine** Sprache für alle Empfänger, einstellbar auf der Seite „E-Mail“.
-   - Technik vor dem Umsetzen entscheiden: Fluent (`fluent`/`fluent-templates`, neue Abhängigkeit, Okay des Nutzers nötig) oder eigene schlanke Lösung.
-   - Nicht übersetzt: gespeicherte Namen (Sensoren, Gruppen, Geräte) und die Projektdoku in `docs/` (bleibt Deutsch); README bekommt eine englische Kurzfassung.
+9. **In Arbeit: Mehrsprachigkeit** (vor dem Öffentlichmachen des Repos; jede neue Funktion vergrößert den Umbau):
+   - Technik entschieden (2026-10-19): **Fluent** mit nur `fluent-bundle` 0.16 (eigener Lader über `rust-embed`, ohne `fluent-templates`);
+     Kataloge `locales/<code>/*.ftl`, Deutsch Ausgangssprache, Englisch als erste weitere Sprache (`docs/uebersetzungen.md`).
+   - **Schritt 1 – umgesetzt:** Modul `i18n` (`Lang`, `Msg`, Sprache der Anfrage), Tests (Kataloge fehlerfrei, gleiche Nachrichten und Variablen in
+     allen Sprachen, jede verwendete ID vorhanden, keine unbenutzte), Spalte `users.language` (Migration `0013`, `NULL` = wie im Browser),
+     Auswahl unter „Mein Konto“, beim Anlegen und je Benutzer, `user add --language`; `Error::Invalid`/`Conflict` tragen `Msg`.
+     Übersetzt: Seitenrahmen, Anmeldung, Mein Konto, Benutzerverwaltung, Meldungen nach Aktionen, Fehlerseiten.
+   - **Schritt 2:** übrige Seiten bereichsweise (Übersicht, Gruppen/Geräte, Sensoren und Detailseite, Profile, Vorlagen, MIBs, E-Mail-Einstellungen)
+     samt ihrer Meldungen aus der Fachlogik (bisher als `Msg::Text` auf Deutsch); Statusnamen, Einheiten und Zahlenformat je Sprache
+     (`sensors::format`), Texte in `static/*.js`.
+   - **Schritt 3:** Benachrichtigungs-Mails in **einer** Sprache für alle Empfänger, einstellbar auf der Seite „E-Mail“.
+   - **Schritt 4:** README mit englischer Kurzfassung.
+   - Nicht übersetzt: gespeicherte Namen (Sensoren, Gruppen, Geräte) und die Projektdoku in `docs/` (bleibt Deutsch).
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
