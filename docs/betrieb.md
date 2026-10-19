@@ -19,6 +19,9 @@ cargo build --release --target x86_64-unknown-linux-musl
 scp -r target/x86_64-unknown-linux-musl/release/opennetmon deploy LICENSE THIRD-PARTY-LICENSES.txt user@server:/tmp/opennetmon-install/
 ```
 
+Alternativ das fertige Archiv `opennetmon-<version>-x86_64-linux.tar.gz` samt `SHA256SUMS` aus einem GitHub-Release nehmen (Prüfung mit
+`sha256sum -c SHA256SUMS`, dann entpacken); es enthält Binary, `deploy/`, `docs/` und die Lizenzdateien. Gebaut wird es mit `dev/release.sh`.
+
 Auf dem Server:
 
 ```bash

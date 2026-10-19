@@ -196,8 +196,13 @@ cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv 
 cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
 dev/mib-oracle.sh dev/data/mibs/tplink/*.mib                          # MIB-Auflösung gegen net-snmp (snmptranslate) prüfen
 python3 -I dev/third-party-licenses.py                                 # THIRD-PARTY-LICENSES.txt neu erzeugen (--check: nur prüfen)
+dev/release.sh                                                         # Release bauen und prüfen (Archiv + SHA256SUMS in target/dist/)
+dev/release.sh --publish --notes <datei>                               # zusätzlich Tag vX.Y.Z pushen und GitHub-Release anlegen (nur auf Ansage)
 cargo build --release --target x86_64-unknown-linux-musl
 ```
+
+Releases: Version in `Cargo.toml` erhöhen und committen, dann `dev/release.sh --publish --notes <datei>` (Release-Notizen auf Deutsch; prüft sauberen,
+gepushten Stand, fmt/clippy/Tests, Fremdlizenzen, Installer-Probelauf aus dem Archiv; 0.x als Vorabversion). Bisher: **v0.1.0** (2026-10-19, Repo privat).
 
 `README.md` (GitHub-Startseite, Deutsch) bei Meilensteinen mitpflegen: Status-Tabelle, Konfigurationsbeispiel und Dokumentationsliste müssen zum Code passen.
 
