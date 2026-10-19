@@ -5,7 +5,7 @@
 > `static/favicon-32.png`/`-64.png`, `static/logo-wide.jpg` (Anmeldeseite) und `docs/assets/opennetmon-logo.jpg` (README).
 > „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert und steht in keiner Verbindung zu Paessler.
 > Umbenannt, weil „netmon“ markenrechtlich geschützt ist; für „opennetmon“ hat der Nutzer keine Registereinträge gefunden.
-> Lizenz: **AGPL-3.0-or-later**, Copyright Thomas Cieslik (`LICENSE`, `Cargo.toml` `license`/`repository`/`authors`, README-Abschnitt „Lizenz“).
+> Lizenz: **AGPL-3.0-or-later**, Copyright Thomas Cieslik (`LICENSE`, `Cargo.toml` `license`/`repository`/`authors`, README-Abschnitt „License“).
 
 ## Ziel
 
@@ -98,8 +98,9 @@ Ein Binary, ein Prozess, Module:
 - `config` – TOML-Datei + ENV-Overrides (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
 - `i18n` – Sprachen (`Lang`: `code`, `native_name`, `from_accept_language`, `get`/`get1`/`get2`/`fmt`/`msg`), `Msg` (Katalog-ID mit Variablen oder
   `Msg::Text` unverändert; `Display` = Deutsch für Logs), Sprache der Anfrage als Task-Local (`scope`, `current`, `set_current`; gesetzt von der
-  Middleware `web::request_language` aus `Accept-Language` und vom `CurrentUser`-Extractor aus `users.language`); Tests prüfen die Kataloge
-  gegeneinander und gegen den Code (`docs/uebersetzungen.md`)
+  Middleware `web::request_language` aus `Accept-Language` und vom `CurrentUser`-Extractor aus `users.language`); gespeicherte Meldungen als
+  `Msg::encode` (Zustand, Ereignisse, Sendelog); `js_texts()` liefert die `js-…`-Nachrichten als JSON-Datenblock für `static/*.js`
+  (`T('key')` aus `static/theme.js`, Platzhalter `%1`); Tests prüfen die Kataloge gegeneinander und gegen Code, Templates und JS (`docs/uebersetzungen.md`)
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
 - `snmp` – `SnmpClient` (GET und GETBULK-`walk` mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; `discovery` – Interface-Discovery über IF-MIB-Walks (`merge` ist reine Logik); Poller und Sensoren bauen darauf auf
 - `mib` – MIB-Parser (`mib::lexer`, `mib::parser`, tolerant) und Index (`MibIndex`: Auflösung über Module, Textual Conventions, Tabellen inkl. AUGMENTS,
@@ -174,8 +175,8 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 
 - Code, Bezeichner, Commit-Messages und Code-Kommentare: Englisch
 - UI-Texte: über die Fluent-Kataloge in `locales/` (Deutsch ist Ausgangssprache, Englisch muss mitgepflegt werden; keine festen Texte mehr in Templates
-  oder Rust-Code – Seiten nutzen `t.get("id")`, Fachlogik liefert `Msg`). Die Umstellung läuft bereichsweise (Stand in `PLAN.md`, Phase 9);
-  noch nicht umgestellte Meldungen sind `Msg::Text` auf Deutsch. Projektdokumentation (`docs/`): Deutsch
+  oder Rust-Code – Seiten nutzen `t.get("id")`, Fachlogik liefert `Msg`, JS nutzt `T('key')`). `Msg::Text` nur für fremde Texte (Gerät, SMTP-Server);
+  offen sind noch die Benachrichtigungs-Mails (Stand in `PLAN.md`, Phase 9). Projektdokumentation (`docs/`): Deutsch; `README.md`: Englisch
 - Kein `unwrap()`/`expect()` außerhalb von Tests und Startcode; Fehler über eigenen Error-Typ mit `IntoResponse`
 - Kleine, thematisch abgeschlossene Commits; nach jedem MVP-Schritt lauffähiger Stand
 - Neue Sensortypen nur über den `Sensor`-Trait, keine Sonderfälle im Poller
@@ -212,7 +213,7 @@ cargo build --release --target x86_64-unknown-linux-musl
 Releases: Version in `Cargo.toml` erhöhen und committen, dann `dev/release.sh --publish --notes <datei>` (Release-Notizen auf Deutsch; prüft sauberen,
 gepushten Stand, fmt/clippy/Tests, Fremdlizenzen, Installer-Probelauf aus dem Archiv; 0.x als Vorabversion). Bisher: **v0.1.0** (2026-10-19, Repo privat).
 
-`README.md` (GitHub-Startseite, Deutsch) bei Meilensteinen mitpflegen: Status-Tabelle, Konfigurationsbeispiel und Dokumentationsliste müssen zum Code passen.
+`README.md` (GitHub-Startseite) ist seit 2026-10-19 **nur noch Englisch** und wird nur auf Englisch gepflegt; bei Meilensteinen mitpflegen: Status-Tabelle, Konfigurationsbeispiel und Dokumentationsliste müssen zum Code passen.
 
 **Vor jedem Abschluss einer Aufgabe:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`
 und `cargo test` müssen fehlerfrei durchlaufen.

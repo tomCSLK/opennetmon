@@ -128,11 +128,13 @@ opennetmon/
      allen Sprachen, jede verwendete ID vorhanden, keine unbenutzte), Spalte `users.language` (Migration `0013`, `NULL` = wie im Browser),
      Auswahl unter „Mein Konto“, beim Anlegen und je Benutzer, `user add --language`; `Error::Invalid`/`Conflict` tragen `Msg`.
      Übersetzt: Seitenrahmen, Anmeldung, Mein Konto, Benutzerverwaltung, Meldungen nach Aktionen, Fehlerseiten.
-   - **Schritt 2:** übrige Seiten bereichsweise (Übersicht, Gruppen/Geräte, Sensoren und Detailseite, Profile, Vorlagen, MIBs, E-Mail-Einstellungen)
-     samt ihrer Meldungen aus der Fachlogik (bisher als `Msg::Text` auf Deutsch); Statusnamen, Einheiten und Zahlenformat je Sprache
-     (`sensors::format`), Texte in `static/*.js`.
+   - **Schritt 2 – umgesetzt:** alle übrigen Seiten (Übersicht, Gruppen/Geräte, Sensoren, Discovery und Detailseite, Werte suchen, Reihenfolge,
+     Profile, Vorlagen, MIBs, E-Mail-Einstellungen) samt Meldungen aus der Fachlogik (`Msg` statt deutscher Texte, gespeichert kodiert in
+     Zustand, Ereignislog und Sendelog), Statusnamen, Einheiten und Zahlenformat je Sprache (`sensors::format`), Texte in `static/*.js` über einen
+     JSON-Datenblock (`js.ftl`, `T('…')`). Nebenbei behoben: Geräte ohne SNMP zeigten das Formular „Sensor hinzufügen“ nicht.
    - **Schritt 3:** Benachrichtigungs-Mails in **einer** Sprache für alle Empfänger, einstellbar auf der Seite „E-Mail“.
-   - **Schritt 4:** README mit englischer Kurzfassung.
+   - **Schritt 4 – umgesetzt (vorgezogen):** README komplett auf Englisch (2026-10-19, vor dem Öffentlichmachen) und nur noch englisch gepflegt;
+     `docs/` bleibt Deutsch.
    - Nicht übersetzt: gespeicherte Namen (Sensoren, Gruppen, Geräte) und die Projektdoku in `docs/` (bleibt Deutsch).
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.

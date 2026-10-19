@@ -2,141 +2,140 @@
 
 <p align="center"><img src="docs/assets/opennetmon-logo.jpg" alt="opennetmon – Network Monitoring" width="600"></p>
 
-Agentloses Netzwerk-Monitoring per SNMP mit Weboberfläche, inspiriert vom Bedienkonzept von PRTG.
-Ein einzelnes, statisch gelinktes Binary (Rust) mit SQLite – gedacht für den Betrieb auf einem Ubuntu Server ohne GUI, Bedienung im Browser.
+Agentless network monitoring over SNMP with a web interface, inspired by the way PRTG is operated.
+A single, statically linked binary (Rust) with SQLite – meant to run on a headless Ubuntu server and to be used in the browser.
 
-> „PRTG“ ist eine Marke von Paessler; opennetmon steht in keiner Verbindung zu Paessler.
-> Zielumgebung ist ein privates Netz mit TP-Link Omada (Switches und Access Points per SNMPv3); es funktioniert mit jedem Gerät, das SNMP v2c oder v3 spricht.
+> “PRTG” is a trademark of Paessler; opennetmon is not affiliated with Paessler.
+> The target environment is a private network with TP-Link Omada (switches and access points via SNMPv3); it works with any device that speaks SNMP v2c or v3.
 
-> **Sprache / Language:** opennetmon wird derzeit auf Deutsch entwickelt; die Dokumentation ist deutsch. Die Oberfläche wird gerade zweisprachig
-> (Deutsch/Englisch, Sprache je Benutzer); noch sind nicht alle Seiten übersetzt.
-> *opennetmon is currently developed in German; the documentation is in German. The user interface is becoming bilingual (German/English,
-> language per user); not all pages are translated yet.*
+> **Language:** The user interface is available in German and English (language per user, by default the browser's).
+> The project documentation in [`docs/`](docs/) and the planning files are currently written in German.
 
 ## Status
 
-Funktionierender Stand nach MVP-Schritt 6 von 6. Details und Reihenfolge: [`PLAN.md`](PLAN.md).
+Working state after MVP step 6 of 6. Details and order: [`PLAN.md`](PLAN.md).
 
 | | |
 |---|---|
-| Fertig | Login mit Rollen (Admin/Leser), SNMP-Profile (v2c, v3 authNoPriv/authPriv, verschlüsselt gespeichert), Gruppen und Geräte, Verbindungstest, Sensoren (Ping, Uptime, Interface-Traffic, Interface-Status, eigene OID), Interface-Discovery, Umbenennen von Sensoren, eigene Reihenfolge von Gruppen, Geräten und Sensoren (Ziehen oder ↑/↓), Benutzerverwaltung in der Oberfläche, Geräte ohne SNMP (nur Ping), Bewertung von Statuswerten, Gerätevorlagen (aus einem Gerät erzeugt, beim Anlegen automatisch per Gerätekennung angewendet), MIB-Import mit „Werte suchen“ (Tabellen als zunächst inaktive Sensoren), Poller mit Statuslogik und Ereignislog, Schwellwerte, Graphen (1 h / 24 h / 7 d / 30 d), Rollups und Aufbewahrung, E-Mail-Benachrichtigung (in der Oberfläche einstellbar, Testmail, Sendelog) |
-| In Arbeit | Mehrsprachigkeit: Sprache je Benutzer, Seitenrahmen, Anmeldung, Konto und Benutzerverwaltung auf Englisch; übrige Seiten und Mails folgen |
-| Offen | Installation auf dem echten Server, Test mit dem echten Mailserver, htmx-Feinschliff |
-| Nicht geplant | SNMP-Traps, NetFlow/sFlow, verteilte Probes, Maps, SNMP SET, Omada-Controller-API |
+| Done | Login with roles (admin/reader), SNMP profiles (v2c, v3 authNoPriv/authPriv, stored encrypted), groups and devices, connection test, sensors (ping, uptime, interface traffic, interface status, custom OID), interface discovery, renaming sensors, custom order of groups, devices and sensors (drag or ↑/↓), user management in the UI, devices without SNMP (ping only), rating of status values, device templates (created from a device, applied automatically by device ID when adding a device), MIB import with “Find values” (tables as initially inactive sensors), poller with status logic and event log, thresholds, charts (1 h / 24 h / 7 d / 30 d), rollups and retention, e-mail notifications (configured in the UI, test mail, send log), German and English user interface |
+| In progress | Multi-language support: notification mails in a selectable language |
+| Open | Installation on the real server, test with the real mail server, htmx polish |
+| Not planned | SNMP traps, NetFlow/sFlow, distributed probes, maps, SNMP SET, Omada controller API |
 
-## Funktionen
+## Features
 
-- **Geräte und Gruppen:** hierarchische Gruppen, Geräte mit eigenem Intervall, Timeout und Wiederholungen; Verbindungstest per Klick.
-- **SNMP:** nur lesend. SNMPv2c sowie SNMPv3 (MD5, SHA-1/2; DES, AES) mit wiederverwendbaren Profilen. 64-Bit-Zähler (`ifXTable`) mit automatischem Fallback auf 32 Bit (`ifTable`).
-- **Sensoren:** Ping, Uptime, Interface-Traffic, Interface-Status, benutzerdefinierte OID (Wert oder Zähler, mit Faktor). Interfaces werden per Walk gefunden und per Häkchen übernommen; weitere Werte (PoE je Port, CPU, Speicher, Temperaturen, Lüfter …) findet „Werte suchen“ in den MIB-Tabellen und legt sie **inaktiv** an, bis ein Administrator sie aktiviert.
-- **Zähler richtig gerechnet:** Überlauf und Gerätereboot werden erkannt; dann gibt es **keinen** Messwert statt eines Ausreißers.
-- **Status:** `In Ordnung`, `Warnung`, `Ausfall`, `Unbekannt`, `Inaktiv`. Ein einzelner Messfehler ist nur eine Warnung, erst der zweite in Folge ein Ausfall. Schwellwerte je Kanal (Warnung/Down, über/unter).
-- **Oberfläche:** Seitenleiste, Status-Kacheln und Geräteliste mit Sensor-Statusleiste; Reihenfolge automatisch (Port 2 vor Port 10, Sensoren nach Typ) oder von Hand per Ziehen; helles und dunkles Design (folgt dem System, umschaltbar); auch auf dem Handy bedienbar.
-- **Messwerte-Tabelle:** unter jedem Graphen alle Werte des Zeitraums (neueste oben, bei Traffic mit Volumen) samt Summe, Mittelwert, Minimum und Maximum – wie die Livedaten in PRTG.
-- **Benutzer:** Administratoren und Leser; Verwaltung in der Oberfläche (anlegen, Rolle ändern, Passwort setzen, löschen; der letzte Administrator bleibt geschützt); unter „Mein Konto“ ändert jeder sein eigenes Passwort. Den ersten Administrator legt die Kommandozeile an.
-- **Geräte ohne SNMP:** Router, Drucker oder Kameras ohne SNMP mit „Kein SNMP – nur Ping“ anlegen; der Ping-Sensor kommt automatisch dazu.
-- **Statuswerte:** Benannte Werte (z. B. PoE-Status overload, Lüfter failed, Port down) einzeln als In Ordnung, Warnung oder Ausfall bewerten; neue Sensoren bekommen einen Vorschlag aus den Namen.
-- **Gerätevorlagen:** Die Sensoren eines fertig eingerichteten Geräts als Vorlage speichern (Ports als „aktive“, „alle“ oder „dieselben“) und beim Anlegen weiterer Geräte automatisch anhand der Gerätekennung (`sysObjectID`) anwenden; legt nur Fehlendes an.
-- **MIB-Dateien:** Standard-MIBs eingebaut, Hersteller-MIBs (z. B. TP-Link) per Upload; eigene OID-Sensoren per Name statt Zahlenkette, mit Typ, Einheit und Klartext für Statuswerte aus der MIB.
-- **Graphen:** [uPlot](https://github.com/leeoniya/uPlot), lokal eingebunden (kein CDN), Alle Zeiten (Graphen und Tabellen) in der Zeitzone des Browsers.
-- **Benachrichtigung:** E-Mail bei Ausfall, Warnung und Wiederherstellung; gleichzeitige Wechsel (z. B. ein ausgefallenes Gerät) kommen als eine Mail. SMTP-Server, Anmeldung und Empfänger lassen sich jederzeit in der Oberfläche ändern (Testmail inklusive).
-- **Daten:** SQLite im WAL-Modus; Rohwerte 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt (einstellbar).
+- **Devices and groups:** hierarchical groups, devices with their own interval, timeout and retries; connection test with one click.
+- **SNMP:** read-only. SNMPv2c and SNMPv3 (MD5, SHA-1/2; DES, AES) with reusable profiles. 64-bit counters (`ifXTable`) with automatic fallback to 32 bit (`ifTable`).
+- **Sensors:** ping, uptime, interface traffic, interface status, custom OID (value or counter, with a factor). Interfaces are found by a walk and added by ticking a box; further values (PoE per port, CPU, memory, temperatures, fans …) are found in the MIB tables by “Find values” and created **inactive** until an administrator activates them.
+- **Counters done right:** wraps and device reboots are detected; in that case there is **no** sample instead of a spike.
+- **Status:** `OK`, `Warning`, `Down`, `Unknown`, `Inactive`. A single failed poll is only a warning, the second in a row is down. Thresholds per channel (warning/down, above/below).
+- **User interface:** sidebar, status tiles and device list with a sensor status bar; automatic order (port 2 before port 10, sensors by type) or by hand via drag and drop; light and dark theme (follows the system, switchable); usable on a phone.
+- **Samples table:** below each chart all values of the period (newest first, with volume for traffic) plus sum, average, minimum and maximum – like the live data in PRTG.
+- **Users:** administrators and readers; managed in the UI (create, change role, set password, delete; the last administrator stays protected); under “My account” everyone changes their own password and language. The first administrator is created on the command line.
+- **Devices without SNMP:** add routers, printers or cameras without SNMP as “No SNMP – ping only”; the ping sensor is added automatically.
+- **Status values:** rate named values (e.g. PoE status overload, fan failed, port down) individually as OK, warning or down; new sensors get a suggestion based on the names.
+- **Device templates:** save the sensors of a fully set-up device as a template (ports as “active”, “all” or “the same”) and apply it automatically to further devices by their device ID (`sysObjectID`); only missing sensors are created.
+- **MIB files:** standard MIBs built in, vendor MIBs (e.g. TP-Link) by upload; custom OID sensors by name instead of a string of numbers, with type, unit and plain text for status values from the MIB.
+- **Charts:** [uPlot](https://github.com/leeoniya/uPlot), bundled locally (no CDN); all times (charts and tables) in the browser's time zone.
+- **Notifications:** e-mail on down, warning and recovery; simultaneous changes (e.g. a failed device) arrive as one mail. SMTP server, login and recipients can be changed in the UI at any time (test mail included).
+- **Data:** SQLite in WAL mode; raw values 7 days, hourly values 1 year, daily values forever (configurable).
 
-## Schnellstart (Entwicklung)
+## Quick start (development)
 
-Voraussetzung: aktuelle stabile Rust-Toolchain (Edition 2024).
+Requirement: a current stable Rust toolchain (edition 2024).
 
 ```bash
-cargo run -- --config ./dev/config.toml key generate                    # einmalig: Schlüssel für gespeicherte SNMP-Zugangsdaten
-cargo run -- --config ./dev/config.toml user add admin --role admin     # ersten Administrator anlegen (Passwort wird abgefragt)
-cargo run -- --config ./dev/config.toml                                 # Server starten, http://127.0.0.1:8080
+cargo run -- --config ./dev/config.toml key generate                    # once: key for stored SNMP credentials
+cargo run -- --config ./dev/config.toml user add admin --role admin     # create the first administrator (asks for the password)
+cargo run -- --config ./dev/config.toml                                 # start the server, http://127.0.0.1:8080
 ```
 
-Danach im Browser: **SNMP-Profil** anlegen → **Neues Gerät** → beim Gerät **Interfaces suchen** → Sensoren anlegen. Die Messwerte erscheinen nach dem ersten Abfrageintervall.
-E-Mails lassen sich ohne echten Mailserver mit `python3 dev/smtp_sink.py` ausprobieren (Server `127.0.0.1`, Port `1025`, Verschlüsselung „Keine“); die Mails landen in `dev/data/mail/`.
+Then in the browser: create an **SNMP profile** → **New device** → on the device **Find interfaces** → create sensors. Values appear after the first polling interval.
+E-mails can be tried without a real mail server with `python3 dev/smtp_sink.py` (server `127.0.0.1`, port `1025`, “No encryption”); the mails end up in `dev/data/mail/`.
 
-Tests und Qualität:
+Tests and quality:
 
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
 ```
 
-Die Tests brauchen kein Netz (eingebauter Fake-SNMP-Agent). Optional laufen zusätzlich Tests gegen einen lokalen `snmpd` ([`docs/dev-testagent.md`](docs/dev-testagent.md))
-und manuelle `#[ignore]`-Tests gegen echte Geräte (`tests/omada_manual.rs`).
+The tests need no network (built-in fake SNMP agent). Optionally, further tests run against a local `snmpd` ([`docs/dev-testagent.md`](docs/dev-testagent.md))
+and manual `#[ignore]` tests against real devices (`tests/omada_manual.rs`).
 
-## Konfiguration
+## Configuration
 
-TOML-Datei (`--config`) plus Umgebungsvariablen (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`).
-Beispiel mit allen Schlüsseln und ihren Standardwerten:
+TOML file (`--config`) plus environment variables (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`).
+Example with all keys and their defaults:
 
 ```toml
-listen = "127.0.0.1:8080"                  # TLS übernimmt ein vorgeschalteter Reverse Proxy (Caddy, nginx)
+listen = "127.0.0.1:8080"                  # TLS is handled by a reverse proxy in front (Caddy, nginx)
 database_path = "/var/lib/opennetmon/opennetmon.db"
 log_filter = "info"
-secret_key_file = "/etc/opennetmon/secret.key" # Rechte 0600, sonst startet der Server nicht
-cookie_secure = true                       # nur für Entwicklung ohne TLS auf false setzen
+secret_key_file = "/etc/opennetmon/secret.key" # mode 0600, otherwise the server does not start
+cookie_secure = true                       # set to false only for development without TLS
 session_ttl_hours = 168
 poller_enabled = true
-poll_concurrency = 16                      # Geräte, die gleichzeitig abgefragt werden
+poll_concurrency = 16                      # devices polled at the same time
 retention_raw_days = 7
-retention_hourly_days = 365                # Tageswerte bleiben unbegrenzt
+retention_hourly_days = 365                # daily values are kept forever
 ```
 
-## Betrieb auf dem Server
+## Running on a server
 
 ```bash
 rustup target add x86_64-unknown-linux-musl
-cargo build --release --target x86_64-unknown-linux-musl     # statisches Binary, keine glibc-Abhängigkeit
-sudo deploy/install.sh --binary target/x86_64-unknown-linux-musl/release/opennetmon   # auf dem Server (nach dem Kopieren von Binary und deploy/)
+cargo build --release --target x86_64-unknown-linux-musl     # static binary, no glibc dependency
+sudo deploy/install.sh --binary target/x86_64-unknown-linux-musl/release/opennetmon   # on the server (after copying the binary and deploy/)
 sudo -u opennetmon /usr/local/bin/opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
 sudo systemctl start opennetmon
 ```
 
-Der Installer legt Benutzer, Konfiguration, Schlüssel, gehärtete systemd-Unit, die Ping-Berechtigung und eine tägliche Datenbanksicherung an und lässt vorhandene Konfiguration,
-Schlüssel und Daten bei Updates unberührt. Dazu: Beispiele für Caddy und nginx (nginx zusätzlich mit Begrenzung der Anmeldeversuche) und eine Anleitung zu Update, Rollback,
-Sicherung, Wiederherstellung und Fehlersuche in [`docs/betrieb.md`](docs/betrieb.md).
+The installer creates the user, configuration, key, a hardened systemd unit, the ping permission and a daily database backup, and leaves existing configuration,
+key and data untouched on updates. In addition: examples for Caddy and nginx (nginx also with login rate limiting) and a guide to update, rollback,
+backup, restore and troubleshooting in [`docs/betrieb.md`](docs/betrieb.md).
 
-## Sicherheit
+## Security
 
-- SNMP wird ausschließlich **lesend** genutzt.
-- SNMP-Zugangsdaten liegen mit XChaCha20-Poly1305 verschlüsselt in der Datenbank; der Schlüssel steht in einer separaten Datei. **Diese Datei getrennt von der Datenbank sichern** – ohne sie sind die Profile unbrauchbar.
-- Passwörter mit Argon2id, Sitzungen serverseitig, CSRF-Schutz auf allen Formularen, `HttpOnly`/`SameSite=Strict`-Cookies, strenge Content-Security-Policy (keine Inline-Skripte).
-- Standardmäßig nur auf `127.0.0.1`; für den Zugriff aus dem Netz einen TLS-terminierenden Reverse Proxy davorsetzen.
-- Fehlgeschlagene Anmeldungen werden je Benutzername und je Adresse gebremst (Ablehnung mit Wartezeit, nie dauerhafte Sperre). Hinter einem Proxy `client_ip_header` setzen.
-- Das SMTP-Passwort wird wie die SNMP-Zugangsdaten verschlüsselt gespeichert und nie angezeigt.
-- Geheimnisse gehören nie ins Repository, in Logs oder in HTML-Ausgaben.
+- SNMP is used **read-only**.
+- SNMP credentials are stored in the database encrypted with XChaCha20-Poly1305; the key is in a separate file. **Back up this file separately from the database** – without it the profiles are unusable.
+- Passwords with Argon2id, server-side sessions, CSRF protection on all forms, `HttpOnly`/`SameSite=Strict` cookies, a strict Content Security Policy (no inline scripts).
+- Listens only on `127.0.0.1` by default; for access from the network, put a TLS-terminating reverse proxy in front.
+- Failed logins are slowed down per user name and per address (rejection with a waiting time, never a permanent lock). Behind a proxy, set `client_ip_header`.
+- The SMTP password is stored encrypted like the SNMP credentials and never shown.
+- Secrets never belong in the repository, in logs or in HTML output.
 
-## Dokumentation
+## Documentation
+
+The documentation is in German.
 
 | | |
 |---|---|
-| [`PLAN.md`](PLAN.md) | Phasen, Stand, nächste Schritte |
-| [`CLAUDE.md`](CLAUDE.md) | Architektur, Konventionen, Befehle (Arbeitsanweisungen für die Entwicklung mit Claude Code) |
-| [`docs/benutzer-und-login.md`](docs/benutzer-und-login.md) | Benutzer, Rollen, Sitzungen |
-| [`docs/snmp-profile.md`](docs/snmp-profile.md) | SNMP-Profile und Verschlüsselung |
-| [`docs/geraete-und-gruppen.md`](docs/geraete-und-gruppen.md) | Geräte, Gruppen, Verbindungstest |
-| [`docs/sensoren.md`](docs/sensoren.md) | Sensortypen, Zählerlogik, Discovery |
-| [`docs/poller.md`](docs/poller.md) | Abfrage, Statuslogik, Ereignislog |
-| [`docs/graphen-und-schwellwerte.md`](docs/graphen-und-schwellwerte.md) | Detailseite, Graphen, Schwellwerte, Statuswerte, Rollups |
-| [`docs/betrieb.md`](docs/betrieb.md) | Installation, Proxy, Update, Sicherung, Fehlersuche |
-| [`docs/geraetevorlagen.md`](docs/geraetevorlagen.md) | Gerätevorlagen: aus einem Gerät erzeugen, beim Anlegen oder später anwenden |
-| [`docs/mibs.md`](docs/mibs.md) | MIB-Dateien, eigene OID per Name, Werte suchen |
-| [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-Mail-Einstellungen, Regeln, Test-SMTP-Server |
-| [`docs/uebersetzungen.md`](docs/uebersetzungen.md) | Übersetzungen: Fluent-Kataloge, Regeln, neue Sprache |
-| [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Entscheidung für Rust (Spike-Ergebnisse) |
+| [`PLAN.md`](PLAN.md) | Phases, status, next steps |
+| [`CLAUDE.md`](CLAUDE.md) | Architecture, conventions, commands (working instructions for development with Claude Code) |
+| [`docs/benutzer-und-login.md`](docs/benutzer-und-login.md) | Users, roles, sessions, language |
+| [`docs/snmp-profile.md`](docs/snmp-profile.md) | SNMP profiles and encryption |
+| [`docs/geraete-und-gruppen.md`](docs/geraete-und-gruppen.md) | Devices, groups, connection test |
+| [`docs/sensoren.md`](docs/sensoren.md) | Sensor types, counter logic, discovery |
+| [`docs/poller.md`](docs/poller.md) | Polling, status logic, event log |
+| [`docs/graphen-und-schwellwerte.md`](docs/graphen-und-schwellwerte.md) | Detail page, charts, thresholds, status values, rollups |
+| [`docs/betrieb.md`](docs/betrieb.md) | Installation, proxy, update, backup, troubleshooting |
+| [`docs/geraetevorlagen.md`](docs/geraetevorlagen.md) | Device templates: create from a device, apply when adding a device or later |
+| [`docs/mibs.md`](docs/mibs.md) | MIB files, custom OID by name, finding values |
+| [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-mail settings, rules, test SMTP server |
+| [`docs/uebersetzungen.md`](docs/uebersetzungen.md) | Translations: Fluent catalogs, rules, texts in JavaScript, adding a language |
+| [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Decision for Rust (spike results) |
 
-## Lizenz
+## License
 
 Copyright © 2026 Thomas Cieslik
 
-opennetmon ist freie Software unter der **GNU Affero General Public License, Version 3 oder (nach Wahl) jeder späteren Version**
-(`AGPL-3.0-or-later`, vollständiger und allein maßgeblicher Text in [`LICENSE`](LICENSE)). Es darf genutzt, verändert und weitergegeben
-werden, auch kommerziell – **ohne jede Gewährleistung**.
+opennetmon is free software under the **GNU Affero General Public License, version 3 or (at your option) any later version**
+(`AGPL-3.0-or-later`; the full and solely authoritative text is in [`LICENSE`](LICENSE)). It may be used, modified and redistributed,
+including commercially – **without any warranty**.
 
-Wer eine **veränderte** Fassung anderen über das Netz anbietet, muss ihnen deren Quellcode anbieten (Abschnitt 13). Die Oberfläche
-verlinkt dafür in der Seitenleiste und auf der Anmeldeseite auf `repository` aus `Cargo.toml` – bei einer eigenen Fassung dort die
-Adresse des eigenen Quellcodes eintragen.
+Anyone who offers a **modified** version to others over a network must offer them its source code (section 13). For this, the user interface
+links to `repository` from `Cargo.toml` in the sidebar and on the login page – for your own version, enter the address of your own source code there.
 
-Fremdsoftware im Binary (Rust-Crates, uPlot unter MIT, Standard-MIBs aus IETF-RFCs) mit allen Lizenztexten:
-[`THIRD-PARTY-LICENSES.txt`](THIRD-PARTY-LICENSES.txt), erzeugt mit `python3 -I dev/third-party-licenses.py` (nach Änderungen an
-`Cargo.lock` neu erzeugen; `--check` prüft, ob die Datei aktuell ist).
+Third-party software in the binary (Rust crates, uPlot under MIT, standard MIBs from IETF RFCs) with all license texts:
+[`THIRD-PARTY-LICENSES.txt`](THIRD-PARTY-LICENSES.txt), generated with `python3 -I dev/third-party-licenses.py` (regenerate after changes to
+`Cargo.lock`; `--check` verifies that the file is up to date).
