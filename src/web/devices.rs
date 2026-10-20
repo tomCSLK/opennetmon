@@ -19,7 +19,7 @@ use crate::sensors::spec::SensorSpec;
 use crate::snmp::{self, SnmpTarget, format_uptime};
 use crate::storage::{credentials, devices as store, groups, sensors};
 use crate::web::auth::{CsrfForm, CurrentUser};
-use crate::web::{AppState, Layout, SelectOption, group_options};
+use crate::web::{AppState, Crumb, Layout, SelectOption, group_options, group_trail};
 
 /// The test never blocks a request for long, whatever the device is configured to.
 const TEST_MAX_TIMEOUT_SECS: u32 = 10;
@@ -100,6 +100,8 @@ struct TestTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     profile_summary: String,
     success: Option<ProbeView>,
     failure: Option<String>,
@@ -457,6 +459,7 @@ pub async fn test_connection(
     let page = TestTemplate {
         layout: user.layout(),
         t: user.lang,
+        trail: group_trail(&state.pool, device.group_id).await?,
         device,
         profile_summary,
         success,

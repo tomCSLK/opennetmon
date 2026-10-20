@@ -11,6 +11,10 @@ Geräte ohne Gruppe stehen zuerst unter „Ohne Gruppe" (ohne Gruppen: „Alle G
 Administratoren sehen zusätzlich das SNMP-Profil sowie die Aktionen „Testen" und „Bearbeiten".
 Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden nur auf feste Texte abgebildet.
 
+**Pfad oben auf Geräte- und Sensorseiten:** Übersicht › Gruppe › Untergruppe › Gerät › Sensor, z. B. „Übersicht › Netzwerk › Router › Router ER605 › Ping“
+(`web::group_trail`, Teilvorlage `templates/device_trail.html`). Jede Gruppe führt zur Übersicht mit Sprungmarke `/#group-<id>`; `static/app.js`
+klappt die Gruppe und die Gruppen darüber auf, springt hin und hebt den Gruppenkopf hervor. Geräte ohne Gruppe zeigen nur Übersicht › Gerät.
+
 ## Reihenfolge (nur Administratoren)
 
 - **Automatisch** (Standard): nach Namen, Groß-/Kleinschreibung egal, Zahlen der Größe nach („Switch 2“ vor „Switch 10“).

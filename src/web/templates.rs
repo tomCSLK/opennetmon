@@ -23,7 +23,7 @@ use crate::templates::{
     self as tpl, ApplyError, BasicKind, BuildOptions, PortChoice, PortRule, PortSelection,
 };
 use crate::web::auth::{CsrfForm, CurrentUser};
-use crate::web::{AppState, Layout, flash_message};
+use crate::web::{AppState, Crumb, Layout, flash_message, group_trail};
 
 /// Template work never blocks a request for long, whatever the device is configured to.
 const MAX_TIMEOUT_SECS: u32 = 10;
@@ -351,6 +351,8 @@ struct NewTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     name: String,
     object_id: String,
     sensors: Vec<SourceSensor>,
@@ -497,6 +499,7 @@ async fn render_new(
         notice: facts.failure.clone(),
         interfaces_known: facts.interfaces.is_some(),
         error,
+        trail: group_trail(&state.pool, device.group_id).await?,
         device,
     };
     Ok(page.render()?)
@@ -621,6 +624,8 @@ struct ApplyTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     options: Vec<TemplateOption>,
     object_id: Option<String>,
     detected: Option<String>,
@@ -657,6 +662,7 @@ pub async fn apply_form(
         object_id: facts.object_id.clone(),
         detected: detected.map(|t| t.name.clone()),
         notice: facts.failure,
+        trail: group_trail(&state.pool, device.group_id).await?,
         device,
     };
     Ok(Html(page.render()?))
@@ -669,6 +675,8 @@ struct ResultTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     heading: String,
     template_name: Option<String>,
     created: Vec<String>,
@@ -717,6 +725,7 @@ pub async fn apply_and_render(
         present: 0,
         skipped: Vec::new(),
         failure: None,
+        trail: group_trail(&state.pool, device.group_id).await?,
         device,
     };
     let mut client = match connect(state, &page.device).await? {

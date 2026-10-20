@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("template-apply") }}</span></div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("template-apply") }}</span></div>
     <h1>{{ t.get("template-apply") }}</h1>
     <p class="subtitle">{{ device.name }} · <span class="num">{{ device.host }}</span>{% if let Some(oid) = object_id %} · {{ t.get("template-identification") }} <span class="num">{{ oid }}</span>{% endif %}</p>
   </div>

@@ -24,7 +24,7 @@ use crate::storage::sensors::{self as store, SensorRecord};
 use crate::storage::{devices, status as status_store};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::overview::FlashQuery;
-use crate::web::{AppState, Layout, flash_message, time_html};
+use crate::web::{AppState, Crumb, Layout, flash_message, group_trail, time_html};
 
 /// Discovery never blocks a request for long, whatever the device is configured to.
 const DISCOVERY_MAX_TIMEOUT_SECS: u32 = 10;
@@ -74,6 +74,8 @@ struct SensorsTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     device_status_label: String,
     device_status_class: &'static str,
     /// Active sensors (polled).
@@ -106,6 +108,8 @@ struct DiscoverTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     rows: Vec<DiscoverRowView>,
     failure: Option<String>,
 }
@@ -256,6 +260,7 @@ async fn render_sensors(
         template_name,
         layout: user.layout(),
         t: user.lang,
+        trail: group_trail(&state.pool, device.group_id).await?,
         device,
         device_status_label: user.lang.get(overall.label_id()),
         device_status_class: overall.as_str(),
@@ -395,6 +400,7 @@ pub async fn discover(
     let page = DiscoverTemplate {
         layout: user.layout(),
         t: user.lang,
+        trail: group_trail(&state.pool, device.group_id).await?,
         device,
         rows,
         failure,

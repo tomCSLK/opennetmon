@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("device-test-title") }}</span></div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("device-test-title") }}</span></div>
     <h1>{{ t.get1("device-test-heading", "name", device.name) }}</h1>
     <p class="subtitle"><span class="num">{{ device.host }}:{{ device.polling.port }}</span> · {{ profile_summary }}</p>
   </div>

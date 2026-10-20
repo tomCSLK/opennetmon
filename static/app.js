@@ -68,6 +68,14 @@
       });
     })(groups[g]);
   }
+  // A link to a group (#group-<id>, from the breadcrumbs of device pages) unfolds it and the groups around it.
+  var target = /^#group-\d+$/.test(location.hash) ? document.getElementById(location.hash.slice(1)) : null;
+  if (target) {
+    for (var d = target; d; d = d.parentElement) {
+      if (d.tagName === 'DETAILS') { d.open = true; }
+    }
+    target.scrollIntoView();
+  }
 
   var menu = document.querySelector('.menu-toggle');
   if (menu) {

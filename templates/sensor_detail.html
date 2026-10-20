@@ -10,7 +10,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ sensor.name }}</span></div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ sensor.name }}</span></div>
     <h1>{{ sensor.name }}</h1>
     <p class="subtitle status-line">
       <span class="badge status-{{ status_class }}">{{ status_label }}</span>

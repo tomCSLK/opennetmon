@@ -177,7 +177,7 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .page-head .subtitle { margin: .3rem 0 0; color: var(--muted); }
-.breadcrumb { display: flex; gap: .4rem; align-items: center; margin-bottom: .35rem; font-size: .85rem; color: var(--muted); }
+.breadcrumb { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .35rem; font-size: .85rem; color: var(--muted); }
 .breadcrumb a { color: var(--muted); }
 .breadcrumb a:hover { color: var(--accent); }
 .actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
@@ -449,6 +449,8 @@ details.group-card > summary h2::before, details.subgroup > summary h3::before {
   content: "▾"; display: inline-block; width: 1em; color: var(--muted); transition: transform .15s; }
 details.group-card:not([open]) > summary h2::before, details.subgroup:not([open]) > summary h3::before { transform: rotate(-90deg); }
 details.group-card:not([open]) > summary.group-head { border-bottom: 0; }
+/* Reached from a breadcrumb: mark the group. */
+details[data-group]:target > summary { background: var(--accent-soft); }
 .group-info { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; justify-content: flex-end; }
 .group-count { color: var(--muted); font-size: .84rem; }
 svg.statusbar.group-bar { height: 4px; border-radius: 0; }

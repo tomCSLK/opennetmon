@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("sensors-find-values") }}</span></div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("sensors-find-values") }}</span></div>
     <h1>{{ t.get1("values-heading", "device", device.name.as_str()) }}</h1>
     <p class="subtitle">{% if searched_catalog %}{{ t.get("values-catalog") }}{% else %}{{ t.get1("values-object", "name", object.as_str()) }}{% endif %}
       · <span class="num">{{ device.host }}:{{ device.polling.port }}</span></p>

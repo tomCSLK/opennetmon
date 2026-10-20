@@ -23,7 +23,7 @@ use crate::storage::devices;
 use crate::storage::sensors as store;
 use crate::value_discovery::{self, Group, Target};
 use crate::web::auth::CurrentUser;
-use crate::web::{AppState, Layout};
+use crate::web::{AppState, Crumb, Layout, group_trail};
 
 /// Discovery never blocks a request for long, whatever the device is configured to.
 const MAX_TIMEOUT_SECS: u32 = 10;
@@ -57,6 +57,8 @@ struct PageTemplate {
     t: Lang,
     layout: Layout,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     groups: Vec<GroupView>,
     object: String,
     failure: Option<String>,
@@ -158,9 +160,11 @@ pub async fn discover(
     let device = load_device(&state, id).await?;
     let index = state.mib_index();
     let object = form.object.trim().to_owned();
+    let trail = group_trail(&state.pool, device.group_id).await?;
     let page = |groups, failure, searched_catalog| PageTemplate {
         layout: user.layout(),
         t: user.lang,
+        trail: trail.clone(),
         device: device.clone(),
         groups,
         object: object.clone(),

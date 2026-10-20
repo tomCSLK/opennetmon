@@ -23,7 +23,7 @@ use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
 use crate::storage::status as status_store;
 use crate::web::auth::CurrentUser;
 use crate::web::sensor_text::ValueFormat;
-use crate::web::{AppState, Layout, flash_message, time_html};
+use crate::web::{AppState, Crumb, Layout, flash_message, group_trail, time_html};
 
 const EVENT_LIMIT: u32 = 20;
 
@@ -89,6 +89,8 @@ struct DetailTemplate {
     sensor: SensorRecord,
     description: String,
     device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
     status_label: String,
     status_class: &'static str,
     message: String,
@@ -239,6 +241,7 @@ async fn render(
         states,
         new_name: rejected_name.unwrap_or_else(|| sensor.name.clone()),
         sensor,
+        trail: group_trail(&state.pool, device.group_id).await?,
         device,
     };
     Ok(page.render()?)
@@ -610,6 +613,61 @@ mod tests {
         .await
         .unwrap();
         (sensor, channels)
+    }
+
+    #[tokio::test]
+    async fn the_breadcrumbs_lead_back_through_the_groups() {
+        use crate::storage::groups::create_group;
+        let h = harness(true).await;
+        let (sensor, _) = traffic_sensor(&h).await;
+        let (viewer, _) = login(&h, "bert").await;
+        let crumbs = |body: &str| {
+            let start = body.find("<div class=\"breadcrumb\">").unwrap();
+            body[start..start + body[start..].find("</div>").unwrap()].to_owned()
+        };
+
+        // Without a group: overview, device, sensor.
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&viewer))).await;
+        assert_eq!(
+            crumbs(&page.body),
+            "<div class=\"breadcrumb\"><a href=\"/\">Übersicht</a><span>›</span>\
+             <a href=\"/devices/1/sensors\">Switch</a><span>›</span><span>Traffic Port 1</span>"
+        );
+
+        let network = create_group(&h.state.pool, "Netzwerk", None).await.unwrap();
+        let routers = create_group(&h.state.pool, "Router", Some(network))
+            .await
+            .unwrap();
+        sqlx::query("UPDATE devices SET group_id = ? WHERE id = 1")
+            .bind(routers)
+            .execute(&h.state.pool)
+            .await
+            .unwrap();
+        let groups = format!(
+            "<a href=\"/\">Übersicht</a><span>›</span><a href=\"/#group-{network}\">Netzwerk</a><span>›</span>\
+             <a href=\"/#group-{routers}\">Router</a><span>›</span>"
+        );
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&viewer))).await;
+        assert_eq!(
+            crumbs(&page.body),
+            format!(
+                "<div class=\"breadcrumb\">{groups}<a href=\"/devices/1/sensors\">Switch</a>\
+                 <span>›</span><span>Traffic Port 1</span>"
+            )
+        );
+        let page = send(&h.app, get("/devices/1/sensors", Some(&viewer))).await;
+        assert_eq!(
+            crumbs(&page.body),
+            format!("<div class=\"breadcrumb\">{groups}<span>Switch</span>")
+        );
+        // The links land on the groups of the overview.
+        let page = send(&h.app, get("/", Some(&viewer))).await;
+        for id in [network, routers] {
+            assert!(
+                page.body.contains(&format!("id=\"group-{id}\"")),
+                "group {id}"
+            );
+        }
     }
 
     #[tokio::test]

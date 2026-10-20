@@ -1,0 +1,2 @@
+{# Breadcrumb start of device pages: overview and the device's groups (needs `trail`). -#}
+<a href="/">{{ t.get("nav-overview") }}</a><span>›</span>{% for crumb in trail %}<a href="{{ crumb.href }}">{{ crumb.name }}</a><span>›</span>{% endfor %}

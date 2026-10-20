@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("template-save-as") }}</span></div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("template-save-as") }}</span></div>
     <h1>{{ t.get1("template-from-device", "device", device.name.as_str()) }}</h1>
     <p class="subtitle">{{ t.get("template-new-subtitle") }}</p>
   </div>

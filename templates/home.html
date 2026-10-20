@@ -104,7 +104,7 @@
 {% endif %}
 
 {% for top in groups %}
-<details class="card flush group-card" data-group="{{ top.summary.id }}" open>
+<details class="card flush group-card" id="group-{{ top.summary.id }}" data-group="{{ top.summary.id }}" open>
   <summary class="group-head">
     <h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> {{ top.summary.name }}</h2>
     <div class="group-info">
@@ -125,7 +125,7 @@
   {% for row in top.rows %}
     {% match row %}
     {% when Row::Start with (s) %}
-    <details class="subgroup" data-group="{{ s.id }}" open>
+    <details class="subgroup" id="group-{{ s.id }}" data-group="{{ s.id }}" open>
       <summary class="subgroup-head">
         <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> {{ s.name }}</h3>
         <div class="group-info">

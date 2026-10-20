@@ -268,6 +268,38 @@ pub(crate) async fn snmp_credentials(
         })
 }
 
+/// A group in the breadcrumb trail of a device page, linking to its place on the overview.
+#[derive(Clone)]
+pub struct Crumb {
+    pub name: String,
+    pub href: String,
+}
+
+/// The groups from the top level down to `group_id` (empty for a device without a group).
+pub(crate) async fn group_trail(
+    pool: &SqlitePool,
+    group_id: Option<i64>,
+) -> crate::error::Result<Vec<Crumb>> {
+    let Some(mut id) = group_id else {
+        return Ok(Vec::new());
+    };
+    let groups = storage::groups::list_groups(pool).await?;
+    let mut trail = Vec::new();
+    // Bounded by the number of groups, so a broken parent chain cannot loop.
+    while let Some(group) = groups.iter().find(|g| g.id == id) {
+        trail.push(Crumb {
+            name: group.name.clone(),
+            href: format!("/#group-{}", group.id),
+        });
+        match group.parent_id {
+            Some(parent) if trail.len() < groups.len() => id = parent,
+            _ => break,
+        }
+    }
+    trail.reverse();
+    Ok(trail)
+}
+
 /// Group options in tree order, indented by depth. `exclude` hides groups (e.g. a group and its subtree).
 pub fn group_options(
     groups: &[crate::devices::Group],
