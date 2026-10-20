@@ -299,8 +299,8 @@ th[aria-sort="descending"] a.sort::after { content: " ↓"; }
   border-color: var(--border-strong); }
 .button.secondary:hover, button.secondary:hover, button.link:hover, .button.link:hover { background: var(--surface-2);
   color: var(--text); border-color: var(--border-strong); }
-.button.ghost, button.ghost { color: var(--muted); background: transparent; border-color: transparent; }
-.button.ghost:hover, button.ghost:hover { background: var(--surface-2); color: var(--text); }
+.button.ghost, button.ghost { color: var(--muted); background: transparent; border-color: var(--border); }
+.button.ghost:hover, button.ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
 button.danger, .button.danger { background: var(--down); color: #fff; }
 button.danger:hover, .button.danger:hover { background: #b91c1c; color: #fff; }
 button.small, .button.small { padding: .32rem .6rem; font-size: .82rem; font-weight: 500; }
