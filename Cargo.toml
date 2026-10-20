@@ -46,3 +46,36 @@ tower = { version = "0.5", features = ["util"] }
 opt-level = 3
 [profile.dev.package.blake2]
 opt-level = 3
+
+# Debian package: build it with dev/deb.sh (prepares target/deb-assets/, then runs cargo-deb).
+[package.metadata.deb]
+maintainer = "Thomas Cieslik <m.tomcs@gmail.com>"
+copyright = "2026, Thomas Cieslik"
+license-file = "LICENSE"
+extended-description = """\
+Agentless network monitoring over SNMP (v2c, v3) and ping with a web interface: devices, groups, \
+sensors with thresholds, graphs and e-mail alerts. A single static binary with an SQLite database, \
+run as a hardened systemd service behind a TLS reverse proxy."""
+section = "net"
+priority = "optional"
+depends = "passwd"
+maintainer-scripts = "deploy/deb/"
+assets = [
+    ["target/release/opennetmon", "usr/bin/", "755"],
+    ["target/deb-assets/opennetmon-backup", "usr/sbin/", "755"],
+    ["deploy/config.example.toml", "etc/opennetmon/config.toml", "640"],
+    ["target/deb-assets/opennetmon.service", "usr/lib/systemd/system/", "644"],
+    ["target/deb-assets/opennetmon-backup.service", "usr/lib/systemd/system/", "644"],
+    ["deploy/opennetmon-backup.timer", "usr/lib/systemd/system/", "644"],
+    ["deploy/99-opennetmon-ping.conf", "usr/lib/sysctl.d/", "644"],
+    ["THIRD-PARTY-LICENSES.txt", "usr/share/doc/opennetmon/", "644"],
+    ["README.md", "usr/share/doc/opennetmon/", "644"],
+    ["deploy/Caddyfile.example", "usr/share/doc/opennetmon/examples/", "644"],
+    ["deploy/nginx.conf.example", "usr/share/doc/opennetmon/examples/", "644"],
+]
+# Enabled, but not started on the first installation (there is no administrator yet); restarted on upgrades
+# if running. The backup timer is started by postinst.
+systemd-units = [
+    { unit-name = "opennetmon", enable = true, start = false, restart-after-upgrade = true },
+    { unit-name = "opennetmon-backup", enable = true, start = false, restart-after-upgrade = true },
+]

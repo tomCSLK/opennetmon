@@ -161,6 +161,11 @@ Ein Binary, ein Prozess, Module:
 Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 
 - Release-Build als statisches Binary: Target `x86_64-unknown-linux-musl` (vermeidet glibc-Versionskonflikte zwischen Zorin und dem Server)
+- Debian-Paket (empfohlen für Ubuntu/Debian amd64): `dev/deb.sh` baut mit `cargo-deb` (`[package.metadata.deb]` in `Cargo.toml`) `target/debian/opennetmon_<version>-1_amd64.deb`;
+  wie `install.sh`, aber unter `/usr` (`/usr/bin`, `/usr/sbin/opennetmon-backup`, Units in `/usr/lib/systemd/system`, sysctl in `/usr/lib/sysctl.d`); Units und Sicherungsskript
+  erzeugt `dev/deb.sh` per `sed` aus `deploy/` nach `target/deb-assets/` (`deploy/` bleibt die einzige Quelle); Maintainer-Skripte `deploy/deb/postinst`/`postrm` (Benutzer,
+  `dpkg-statoverride` für `/etc/opennetmon` und `config.toml`, Schlüssel, `/var/backups/opennetmon`, Hinweis auf Reste von `install.sh`; `purge` löscht Konfiguration und Schlüssel,
+  nie Datenbank, Sicherungen oder Benutzer); `opennetmon.service` aktiviert, bei der Erstinstallation nicht gestartet, bei Updates `try-restart`
 - `deploy/install.sh` (wiederholbar; `DESTDIR=… ` für einen Trockenlauf): Systembenutzer `opennetmon`, `/usr/local/bin/opennetmon` (alte Version als `.previous`),
   `/etc/opennetmon/config.toml` und `secret.key` (werden nie überschrieben), Unit, sysctl für Ping, täglicher Backup-Timer
 - `deploy/opennetmon.service`: eigener Benutzer, `StateDirectory=opennetmon` (`/var/lib/opennetmon`), strenges Hardening (`ProtectSystem=strict`, `NoNewPrivileges`, leere Capabilities,
@@ -181,7 +186,8 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 - Kleine, thematisch abgeschlossene Commits; nach jedem MVP-Schritt lauffähiger Stand
 - Neue Sensortypen nur über den `Sensor`-Trait, keine Sonderfälle im Poller
 - AGPL Abschnitt 13: Seitenleiste (`templates/app.html`) und Anmeldeseite verlinken den Quellcode (`web::SOURCE_URL` = `repository` aus `Cargo.toml`)
-  mit Version (`web::VERSION`); diese Links nicht entfernen. Der Installer legt `LICENSE` und `THIRD-PARTY-LICENSES.txt` nach `/usr/local/share/doc/opennetmon/`
+  mit Version (`web::VERSION`); diese Links nicht entfernen. Der Installer legt `LICENSE` und `THIRD-PARTY-LICENSES.txt` nach `/usr/local/share/doc/opennetmon/`,
+  das Paket `copyright` (aus `LICENSE`) und `THIRD-PARTY-LICENSES.txt` nach `/usr/share/doc/opennetmon/`
 
 ## Tests
 
@@ -205,7 +211,8 @@ cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv 
 cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
 dev/mib-oracle.sh dev/data/mibs/tplink/*.mib                          # MIB-Auflösung gegen net-snmp (snmptranslate) prüfen
 python3 -I dev/third-party-licenses.py                                 # THIRD-PARTY-LICENSES.txt neu erzeugen (--check: nur prüfen)
-dev/release.sh                                                         # Release bauen und prüfen (Archiv + SHA256SUMS in target/dist/)
+dev/deb.sh                                                             # Debian-Paket bauen (target/debian/), braucht cargo install cargo-deb --locked
+dev/release.sh                                                         # Release bauen und prüfen (Archiv, .deb und SHA256SUMS in target/dist/)
 dev/release.sh --publish --notes <datei>                               # zusätzlich Tag vX.Y.Z pushen und GitHub-Release anlegen (nur auf Ansage)
 cargo build --release --target x86_64-unknown-linux-musl
 ```

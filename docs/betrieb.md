@@ -9,7 +9,60 @@ Datenbankserver noch Laufzeitumgebungen installiert.
 - Der Server erreicht die überwachten Geräte: **UDP 161** (SNMP) und **ICMP** (Ping), bei E-Mail den SMTP-Server (meist TCP 587/465/25).
 - Ein Reverse Proxy mit TLS (Caddy oder nginx) – opennetmon selbst spricht nur HTTP und lauscht standardmäßig auf `127.0.0.1:8080`.
 
-## Bauen und installieren
+## Installation als Debian-Paket (empfohlen)
+
+Für Ubuntu und Debian (amd64) gibt es ein `.deb`-Paket. Es enthält dasselbe statische Binary und richtet dasselbe ein wie der Installer unten, nur unter `/usr`
+statt `/usr/local`; Updates und Deinstallation laufen über `apt`. Gebaut wird es auf dem Entwicklungsrechner mit `dev/deb.sh` (braucht `cargo install cargo-deb --locked`)
+oder zusammen mit dem Archiv durch `dev/release.sh` (beides landet im GitHub-Release, geprüft mit `sha256sum -c SHA256SUMS`).
+
+```bash
+dev/deb.sh                                                    # -> target/debian/opennetmon_<version>-1_amd64.deb
+scp target/debian/opennetmon_*_amd64.deb user@server:/tmp/
+```
+
+Auf dem Server:
+
+```bash
+sudo apt install /tmp/opennetmon_<version>-1_amd64.deb
+sudo -u opennetmon opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
+sudo systemctl start opennetmon
+curl -s http://127.0.0.1:8080/healthz          # -> ok
+```
+
+| Teil | Ort |
+|---|---|
+| Binary, Sicherungsskript | `/usr/bin/opennetmon`, `/usr/sbin/opennetmon-backup` |
+| Konfiguration | `/etc/opennetmon/config.toml` (Konfigurationsdatei des Pakets: bei Updates bleibt eine geänderte Fassung erhalten, `dpkg` fragt nach), Verzeichnis `root:opennetmon 0750` (per `dpkg-statoverride`) |
+| Schlüssel | `/etc/opennetmon/secret.key`, bei der ersten Installation erzeugt (0600, Besitzer `opennetmon`), nie überschrieben |
+| Units | `/usr/lib/systemd/system/opennetmon.service` (aktiviert, bei der ersten Installation **nicht** gestartet, es gibt noch keinen Administrator), `opennetmon-backup.service`/`.timer` (aktiv) |
+| Ping | `/usr/lib/sysctl.d/99-opennetmon-ping.conf`; abschalten mit einer gleichnamigen Datei in `/etc/sysctl.d/` (z. B. Link auf `/dev/null`) |
+| Lizenzen, Beispiele | `/usr/share/doc/opennetmon/` (`copyright`, `THIRD-PARTY-LICENSES.txt`, `README.md`, `examples/` mit Caddy und nginx) |
+
+Den Schlüssel wie unten beschrieben **sofort getrennt sichern**. Eigene Anpassungen der Units gehören in ein Drop-in (`sudo systemctl edit opennetmon`), nicht in die
+Dateien unter `/usr/lib`, die ein Update ersetzt.
+
+- **Update:** neues Paket mit `sudo apt install ./opennetmon_<neu>_amd64.deb` installieren; ein laufender Dienst wird neu gestartet, Konfiguration, Schlüssel und Daten bleiben.
+- **Rollback:** `sudo dpkg -i opennetmon_<alt>_amd64.deb` (gleiche Einschränkung bei Migrationen wie unter „Update und Rollback“).
+- **Entfernen:** `sudo apt remove opennetmon` stoppt die Dienste und entfernt die Programmdateien; Konfiguration, Schlüssel, Daten, Sicherungen und Benutzer bleiben.
+  `sudo apt purge opennetmon` löscht zusätzlich `/etc/opennetmon` **samt Schlüssel**; Datenbank, Sicherungen und Benutzer bleiben auch dann (endgültig löschen wie unter „Deinstallation“).
+
+### Umstieg vom Installer auf das Paket
+
+Konfiguration, Schlüssel und Daten werden übernommen; nur die Programmdateien des Installers müssen vorher weg, weil Units unter `/etc/systemd/system` die des Pakets verdecken:
+
+```bash
+sudo systemctl disable --now opennetmon opennetmon-backup.timer
+sudo rm /etc/systemd/system/opennetmon.service /etc/systemd/system/opennetmon-backup.* /usr/local/bin/opennetmon* /usr/local/sbin/opennetmon-backup
+sudo rm -r /usr/local/share/doc/opennetmon
+sudo systemctl daemon-reload
+sudo apt install ./opennetmon_<version>-1_amd64.deb     # vorhandene config.toml behalten (Standardantwort von dpkg)
+sudo systemctl enable --now opennetmon opennetmon-backup.timer
+```
+
+Bleiben Dateien des Installers liegen, weist das Paket bei der Installation darauf hin und nennt dieselben Schritte. `enable` ist nötig, wenn das Paket schon vor dem
+Aufräumen installiert war: `systemctl disable` entfernt dann auch seine Aktivierung, und `dpkg` übernimmt diese Entscheidung bei späteren Installationen.
+
+## Installation mit dem Installer-Skript
 
 Auf dem Entwicklungsrechner das statische Binary bauen (keine glibc-Abhängigkeit, läuft auf jedem 64-Bit-Linux):
 

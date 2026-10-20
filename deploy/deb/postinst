@@ -1,0 +1,69 @@
+#!/bin/sh
+# postinst of the opennetmon .deb (dev/deb.sh). Does what deploy/install.sh does besides copying files:
+# service user, owners of /etc/opennetmon, encryption key, backup directory and the ping sysctl.
+# cargo-deb inserts the systemd handling (enable, restart on upgrade) at the marker below.
+set -e
+
+USER_NAME=opennetmon
+CONF_DIR=/etc/opennetmon
+CONFIG=$CONF_DIR/config.toml
+KEY=$CONF_DIR/secret.key
+STATE_DIR=/var/lib/opennetmon
+BACKUP_DIR=/var/backups/opennetmon
+SYSCTL=99-opennetmon-ping.conf
+
+if [ "$1" = configure ]; then
+  if ! getent passwd "$USER_NAME" >/dev/null; then
+    useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin "$USER_NAME"
+  fi
+  # The service reads its config through the group. A stat override keeps these owners on every upgrade.
+  if ! dpkg-statoverride --list "$CONF_DIR" >/dev/null; then
+    dpkg-statoverride --update --add root "$USER_NAME" 0750 "$CONF_DIR"
+  fi
+  if ! dpkg-statoverride --list "$CONFIG" >/dev/null; then
+    dpkg-statoverride --update --add root "$USER_NAME" 0640 "$CONFIG"
+  fi
+  if [ ! -e "$KEY" ]; then
+    OPENNETMON_SECRET_KEY_FILE="$KEY" /usr/bin/opennetmon --config "$CONFIG" key generate >/dev/null
+    chown "$USER_NAME:$USER_NAME" "$KEY"
+    NEW_KEY=yes
+  fi
+  # systemd creates the state directory on the first start; `user add` runs before that.
+  if [ ! -d "$STATE_DIR" ]; then
+    install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$STATE_DIR"
+  fi
+  if [ ! -d "$BACKUP_DIR" ]; then
+    install -d -m 0700 -o "$USER_NAME" -g "$USER_NAME" "$BACKUP_DIR"
+  fi
+  # Unprivileged ICMP sockets for ping sensors, unless an admin overrides the file in /etc/sysctl.d/.
+  if [ ! -e "/etc/sysctl.d/$SYSCTL" ]; then
+    sysctl -q -p "/usr/lib/sysctl.d/$SYSCTL" >/dev/null 2>&1 || true
+  fi
+fi
+
+#DEBHELPER#
+
+if [ "$1" = configure ]; then
+  if [ -d /run/systemd/system ] && systemctl --quiet is-enabled opennetmon-backup.timer 2>/dev/null; then
+    deb-systemd-invoke start opennetmon-backup.timer >/dev/null || true
+  fi
+  # Leftovers of deploy/install.sh: its units in /etc override the packaged ones.
+  if [ -e /etc/systemd/system/opennetmon.service ] || [ -e /usr/local/bin/opennetmon ]; then
+    echo "opennetmon: files of deploy/install.sh are still present; its units in /etc/systemd/system override this package."
+    echo "  Remove them (configuration, key and data stay):"
+    echo "    sudo systemctl disable --now opennetmon opennetmon-backup.timer"
+    echo "    sudo rm /etc/systemd/system/opennetmon.service /etc/systemd/system/opennetmon-backup.* /usr/local/bin/opennetmon*"
+    echo "    sudo rm -r /usr/local/sbin/opennetmon-backup /usr/local/share/doc/opennetmon"
+    echo "    sudo systemctl daemon-reload && sudo systemctl enable --now opennetmon opennetmon-backup.timer"
+  fi
+  if [ "${NEW_KEY:-}" = yes ]; then
+    echo "opennetmon: generated $KEY - back it up separately from the database."
+  fi
+  if [ -z "$2" ] && [ ! -e "$STATE_DIR/opennetmon.db" ]; then
+    echo "opennetmon: next steps:"
+    echo "  sudo -u $USER_NAME opennetmon --config $CONFIG user add admin --role admin"
+    echo "  sudo systemctl start opennetmon"
+  fi
+fi
+
+exit 0

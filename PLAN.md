@@ -138,6 +138,11 @@ opennetmon/
    - **Schritt 4 – umgesetzt (vorgezogen):** README komplett auf Englisch (2026-10-19, vor dem Öffentlichmachen) und nur noch englisch gepflegt;
      `docs/` bleibt Deutsch.
    - Nicht übersetzt: gespeicherte Namen (Sensoren, Gruppen, Geräte) und die Projektdoku in `docs/` (bleibt Deutsch).
+10. **Debian-Paket – umgesetzt (2026-10-20):** `.deb` für amd64 mit `cargo-deb` (MIT, nur auf dem Entwicklungsrechner) aus dem statischen musl-Binary,
+    gebaut von `dev/deb.sh` und von `dev/release.sh` mit ins Release gelegt. Gleiche Einrichtung wie `deploy/install.sh`, aber unter `/usr`:
+    Benutzer, `dpkg-statoverride` für `/etc/opennetmon`, Schlüssel und Sicherungsverzeichnis in `deploy/deb/postinst`, `config.toml` als Konfigurationsdatei,
+    systemd-Handling von cargo-deb (aktiviert, erst nach dem ersten Admin gestartet, bei Updates neu gestartet); `purge` löscht Konfiguration und Schlüssel,
+    nie Daten (`docs/betrieb.md`). Später: arm64, ein apt-Repository erst nach dem Öffentlichmachen.
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**

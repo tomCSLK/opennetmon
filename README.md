@@ -81,6 +81,16 @@ retention_hourly_days = 365                # daily values are kept forever
 
 ## Running on a server
 
+On Ubuntu or Debian (amd64), install the `.deb` package (built with `dev/deb.sh`, which needs `cargo install cargo-deb --locked`):
+
+```bash
+sudo apt install ./opennetmon_<version>-1_amd64.deb
+sudo -u opennetmon opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
+sudo systemctl start opennetmon
+```
+
+Elsewhere, or without the package, use the installer script:
+
 ```bash
 rustup target add x86_64-unknown-linux-musl
 cargo build --release --target x86_64-unknown-linux-musl     # static binary, no glibc dependency
@@ -89,8 +99,8 @@ sudo -u opennetmon /usr/local/bin/opennetmon --config /etc/opennetmon/config.tom
 sudo systemctl start opennetmon
 ```
 
-The installer creates the user, configuration, key, a hardened systemd unit, the ping permission and a daily database backup, and leaves existing configuration,
-key and data untouched on updates. In addition: examples for Caddy and nginx (nginx also with login rate limiting) and a guide to update, rollback,
+Both create the user, configuration, key, a hardened systemd unit, the ping permission and a daily database backup, and leave existing configuration,
+key and data untouched on updates (the package installs to `/usr`, the script to `/usr/local`). In addition: examples for Caddy and nginx (nginx also with login rate limiting) and a guide to update, rollback,
 backup, restore and troubleshooting in [`docs/betrieb.md`](docs/betrieb.md).
 
 ## Security

@@ -8,7 +8,7 @@ listen = "127.0.0.1:8080"
 database_path = "/var/lib/opennetmon/opennetmon.db"
 log_filter = "info"                         # journalctl -u opennetmon; e.g. "info,opennetmon=debug"
 
-# 64 hex characters, mode 0600, owned by the service user. Created by deploy/install.sh.
+# 64 hex characters, mode 0600, owned by the service user. Created by deploy/install.sh or the .deb package.
 # BACK IT UP SEPARATELY from the database: without it the stored SNMP/SMTP passwords are unreadable.
 secret_key_file = "/etc/opennetmon/secret.key"
 

@@ -1,0 +1,20 @@
+#!/bin/sh
+# postrm of the opennetmon .deb (dev/deb.sh). Purge removes the configuration and the encryption key;
+# the database, the backups and the service user stay.
+set -e
+
+#DEBHELPER#
+
+if [ "$1" = purge ]; then
+  rm -f /etc/opennetmon/secret.key
+  for path in /etc/opennetmon/config.toml /etc/opennetmon; do
+    if dpkg-statoverride --list "$path" >/dev/null; then
+      dpkg-statoverride --remove "$path"
+    fi
+  done
+  rmdir /etc/opennetmon 2>/dev/null || true
+  echo "opennetmon: kept the database (/var/lib/opennetmon), the backups (/var/backups/opennetmon) and the user opennetmon."
+  echo "  The encryption key was removed: without your own copy of it the stored SNMP/SMTP passwords are lost."
+fi
+
+exit 0

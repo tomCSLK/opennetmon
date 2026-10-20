@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Builds, checks and (optionally) publishes a GitHub release of opennetmon.
+# Builds, checks and (optionally) publishes a GitHub release of opennetmon: a tar.gz archive and a .deb package.
 #
 #   dev/release.sh                                  # build and check only; result in target/dist/
 #   dev/release.sh --publish --notes notes.md       # additionally tag vX.Y.Z, push the tag, create the release
 #
 # The version comes from Cargo.toml (bump it there and commit first). Before anything is published the script
 # requires a clean work tree on main that matches origin/main, a version without an existing tag, passing
-# fmt/clippy/tests, an up-to-date THIRD-PARTY-LICENSES.txt and a successful installer dry run from the archive.
+# fmt/clippy/tests, an up-to-date THIRD-PARTY-LICENSES.txt, a successful installer dry run from the archive and the
+# expected files in the .deb (built with dev/deb.sh, needs cargo-deb).
 # 0.x versions are marked as pre-release.
 set -euo pipefail
 
@@ -29,6 +30,7 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 VERSION=$(cargo metadata --format-version 1 --no-deps | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
 TAG="v$VERSION"
 NAME="opennetmon-$VERSION-x86_64-linux"
+DEB="opennetmon_$VERSION-1_amd64.deb"
 DIST="target/dist"
 
 step "checking the repository for $TAG"
@@ -59,7 +61,19 @@ step "packaging $DIST/$NAME.tar.gz"
 rm -rf "$DIST" && mkdir -p "$DIST/$NAME"
 cp "$BINARY" LICENSE THIRD-PARTY-LICENSES.txt README.md "$DIST/$NAME/"
 git archive HEAD deploy docs | tar -x -C "$DIST/$NAME"
-(cd "$DIST" && tar --owner=0 --group=0 -czf "$NAME.tar.gz" "$NAME" && sha256sum "$NAME.tar.gz" > SHA256SUMS)
+(cd "$DIST" && tar --owner=0 --group=0 -czf "$NAME.tar.gz" "$NAME")
+
+step "packaging $DIST/$DEB"
+dev/deb.sh --no-build --quiet >/dev/null
+cp "target/debian/$DEB" "$DIST/"
+CONTENTS=$(dpkg-deb --contents "$DIST/$DEB")
+for f in usr/bin/opennetmon usr/sbin/opennetmon-backup etc/opennetmon/config.toml usr/lib/systemd/system/opennetmon.service \
+         usr/lib/systemd/system/opennetmon-backup.timer usr/share/doc/opennetmon/copyright \
+         usr/share/doc/opennetmon/THIRD-PARTY-LICENSES.txt; do
+  grep -q " \./$f\$" <<<"$CONTENTS" || fail "$DEB does not contain /$f"
+done
+[ "$(dpkg-deb --field "$DIST/$DEB" Version)" = "$VERSION-1" ] || fail "$DEB has the wrong version"
+(cd "$DIST" && sha256sum "$NAME.tar.gz" "$DEB" > SHA256SUMS)
 
 step "installer dry run from the unpacked archive"
 CHECK="$DIST/check"
@@ -83,7 +97,7 @@ case "$VERSION" in 0.*) PRERELEASE=(--prerelease) ;; esac
 git tag -a "$TAG" -m "opennetmon $VERSION"
 git push -q origin "$TAG"
 gh release create "$TAG" --verify-tag "${PRERELEASE[@]}" --title "opennetmon $VERSION" --notes-file "$NOTES" \
-  "$DIST/$NAME.tar.gz" "$DIST/SHA256SUMS"
+  "$DIST/$NAME.tar.gz" "$DIST/$DEB" "$DIST/SHA256SUMS"
 
 step "verifying the uploaded files"
 VERIFY=$(mktemp -d)
