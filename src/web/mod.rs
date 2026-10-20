@@ -14,6 +14,7 @@ pub mod sensor_detail;
 pub mod sensor_text;
 pub mod sensor_values;
 pub mod sensors;
+pub mod sparkline;
 pub mod templates;
 #[cfg(test)]
 pub(crate) mod testutil;

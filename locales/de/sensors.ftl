@@ -146,3 +146,5 @@ sensor-name-taken = Ein Sensor mit diesem Namen existiert an diesem Gerät berei
 sensor-device-missing = Das gewählte Gerät existiert nicht.
 states-rating-invalid = Ungültige Bewertung.
 states-label-invalid = Ungültiger Name eines Statuswerts.
+sensors-current = Aktuell
+sensors-trend-of = Verlauf der letzten Stunde: { $name }

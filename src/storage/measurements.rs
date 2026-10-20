@@ -163,6 +163,38 @@ pub async fn chart_data(
     Ok(ChartData { ts, series })
 }
 
+/// Averages of one channel in `count` equal buckets of `bucket_ms` starting at `from_ms`; `None`
+/// for a bucket without samples. For the small charts of the sensor list.
+pub async fn bucket_averages(
+    pool: &SqlitePool,
+    channel_id: i64,
+    from_ms: i64,
+    bucket_ms: i64,
+    count: usize,
+) -> Result<Vec<Option<f64>>> {
+    let mut out = vec![None; count];
+    if bucket_ms <= 0 {
+        return Ok(out);
+    }
+    let end = from_ms + bucket_ms * i64::try_from(count).unwrap_or(0);
+    let rows: Vec<(i64, f64)> = sqlx::query_as(
+        "SELECT (ts - ?1) / ?2, AVG(value) FROM samples \
+         WHERE channel_id = ?3 AND ts >= ?1 AND ts < ?4 GROUP BY 1",
+    )
+    .bind(from_ms)
+    .bind(bucket_ms)
+    .bind(channel_id)
+    .bind(end)
+    .fetch_all(pool)
+    .await?;
+    for (bucket, value) in rows {
+        if let Some(slot) = usize::try_from(bucket).ok().and_then(|b| out.get_mut(b)) {
+            *slot = Some(value);
+        }
+    }
+    Ok(out)
+}
+
 /// The newest raw sample per channel: `channel_id -> (ts_ms, value)`.
 pub async fn latest_values(
     pool: &SqlitePool,
@@ -258,6 +290,30 @@ mod tests {
         // The wider range includes the older sample.
         let day = chart_data(&pool, &ch, Range::Day, now).await.unwrap();
         assert_eq!(day.ts.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn bucket_averages_leave_gaps_empty() {
+        let (_dir, pool, ch) = setup(&SensorSpec::Ping).await;
+        let from = 1_000_000;
+        insert_samples(
+            &pool,
+            &[
+                sample(ch[0].id, from - 1, 99.0),     // before the window
+                sample(ch[0].id, from, 2.0),          // bucket 0
+                sample(ch[0].id, from + 500, 4.0),    // bucket 0
+                sample(ch[0].id, from + 2_100, 7.0),  // bucket 2
+                sample(ch[0].id, from + 3_000, 99.0), // after the window
+            ],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            bucket_averages(&pool, ch[0].id, from, 1_000, 3)
+                .await
+                .unwrap(),
+            [Some(3.0), None, Some(7.0)]
+        );
     }
 
     #[tokio::test]

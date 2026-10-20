@@ -52,7 +52,17 @@ Manuell gegen die echte Hardware: `cargo test --test omada_manual sensors_work -
 ## Oberfläche (`src/web/sensors.rs`)
 
 - **Übersicht** (`/`): je Gerät Status (schlechtester Sensorstatus), Link auf die Sensorseite und Anzahl der Sensoren.
-- **Sensorseite** (`/devices/<id>/sensors`, alle angemeldeten Benutzer): Tabelle mit Name, Typ, Status, letzter Meldung und letzter Abfrage (UTC).
+- **Sensorseite** (`/devices/<id>/sensors`, alle angemeldeten Benutzer): Tabelle mit Name, Typ, Status, letzter Meldung, aktuellem Wert
+  (je Kanal eine Zeile ohne Umbruch, z. B. Traffic ein/aus untereinander, Kanalnamen als Tooltip; nur wenn der letzte Wert höchstens drei Intervalle plus eine Minute alt ist) und einem
+  **Mini-Graphen der letzten Stunde** (`src/web/sparkline.rs`, als SVG vom Server, ohne Skript; Klick führt zur Detailseite):
+  - Messwerte (Ping, Traffic, eigene OID): eine Linie je Kanal in den Farben der großen Graphen, gemeinsame Skala ab 0, Mittelwerte in
+    Abschnitten von mindestens 1 Minute und mindestens zwei Abfrageintervallen (bei 60 s also 30 Abschnitte zu 2 Minuten;
+    `storage::measurements::bucket_averages`);
+    Abschnitte ohne Wert unterbrechen die Linie.
+  - Statuswerte, Interface-Status und Uptime: ein Statusband (grün/gelb/rot) aus dem Ereignislog (`storage::status::status_history`),
+    weil eine Kurve dort nichts aussagt.
+  - Inaktive Sensoren haben keinen Graphen; auf schmalen Bildschirmen (unter 560 px) ist die Spalte ausgeblendet.
+  Die Zeit der letzten Abfrage steht auf der Detailseite.
   Administratoren sehen zusätzlich „Deaktivieren“, „Löschen“, „Interfaces suchen“, „Werte suchen“ (`docs/mibs.md`) und das Formular „Sensor hinzufügen“ (Ping, Uptime, eigene OID mit
   Modus Wert/Zähler und Faktor; Dezimalkomma wird akzeptiert). Fehler erscheinen auf derselben Seite, Eingaben bleiben erhalten.
 - **Reihenfolge**: automatisch nach Typ (Ping, Uptime, Traffic, Interface-Status, dann eigene Werte), innerhalb eines Typs nach Namen

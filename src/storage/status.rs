@@ -193,6 +193,35 @@ pub async fn events_of_sensor(pool: &SqlitePool, sensor_id: i64, limit: u32) -> 
     .collect()
 }
 
+/// The status of a sensor since `from_ms`: the status at `from_ms` (`None` if it had none yet) and
+/// the changes after it as `(ts_ms, status)`, oldest first.
+pub async fn status_history(
+    pool: &SqlitePool,
+    sensor_id: i64,
+    from_ms: i64,
+) -> Result<(Option<Status>, Vec<(i64, Status)>)> {
+    let before: Option<String> = sqlx::query_scalar(
+        "SELECT to_status FROM events WHERE sensor_id = ? AND ts_ms <= ? \
+         ORDER BY ts_ms DESC, id DESC LIMIT 1",
+    )
+    .bind(sensor_id)
+    .bind(from_ms)
+    .fetch_optional(pool)
+    .await?;
+    let rows: Vec<(i64, String)> = sqlx::query_as(
+        "SELECT ts_ms, to_status FROM events WHERE sensor_id = ? AND ts_ms > ? ORDER BY ts_ms, id",
+    )
+    .bind(sensor_id)
+    .bind(from_ms)
+    .fetch_all(pool)
+    .await?;
+    let changes = rows
+        .into_iter()
+        .map(|(ts, s)| Ok((ts, parse_status(&s)?)))
+        .collect::<Result<_>>()?;
+    Ok((before.as_deref().map(parse_status).transpose()?, changes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,6 +316,39 @@ mod tests {
             [Status::Up, Status::Down, Status::Warning, Status::Up]
         );
         assert_eq!(recent_events(&pool, 2).await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn the_status_history_starts_with_the_status_at_the_window_start() {
+        let (_dir, pool, sensor) = setup().await;
+        assert_eq!(
+            status_history(&pool, sensor, 0).await.unwrap(),
+            (None, Vec::new())
+        );
+        record_poll(&pool, sensor, 1_000, &[], &ok()).await.unwrap();
+        record_poll(&pool, sensor, 2_000, &[], &fail())
+            .await
+            .unwrap();
+        record_poll(&pool, sensor, 3_000, &[], &fail())
+            .await
+            .unwrap();
+        record_poll(&pool, sensor, 5_000, &[], &ok()).await.unwrap();
+        assert_eq!(
+            status_history(&pool, sensor, 500).await.unwrap(),
+            (
+                None,
+                vec![
+                    (1_000, Status::Up),
+                    (2_000, Status::Warning),
+                    (3_000, Status::Down),
+                    (5_000, Status::Up)
+                ]
+            )
+        );
+        assert_eq!(
+            status_history(&pool, sensor, 4_000).await.unwrap(),
+            (Some(Status::Down), vec![(5_000, Status::Up)])
+        );
     }
 
     #[tokio::test]

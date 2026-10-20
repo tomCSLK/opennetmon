@@ -150,7 +150,6 @@ inactive = inaktiv
 status = Status
 sensor = Sensor
 message = Meldung
-last-poll = Letzte Abfrage
 actions = Aktionen
 
 active = aktiv

@@ -16,15 +16,20 @@ use crate::discovery::discover_interfaces;
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::mib::MibIndex;
+use crate::sensors::Unit;
+use crate::sensors::format::channel_label;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpTarget};
 use crate::status::{Status, device_status};
+use crate::storage::measurements::{bucket_averages, latest_values};
 use crate::storage::sensors::{self as store, SensorRecord};
 use crate::storage::{devices, status as status_store};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::overview::FlashQuery;
-use crate::web::{AppState, Crumb, Layout, flash_message, group_trail, time_html};
+use crate::web::sensor_text::ValueFormat;
+use crate::web::sparkline::{self, Trend};
+use crate::web::{AppState, Crumb, Layout, flash_message, group_trail};
 
 /// Discovery never blocks a request for long, whatever the device is configured to.
 const DISCOVERY_MAX_TIMEOUT_SECS: u32 = 10;
@@ -40,8 +45,12 @@ struct SensorRowView {
     status_label: String,
     status_class: &'static str,
     message: String,
-    last_poll: String,
-    enabled: bool,
+    /// Latest value per channel (traffic: in, out); empty when there is no recent one.
+    values: Vec<String>,
+    /// The values with their channel names, as a tooltip.
+    value_title: String,
+    /// The last hour (only for active sensors).
+    trend: Trend,
 }
 
 #[derive(Clone)]
@@ -210,6 +219,63 @@ async fn load_device(state: &AppState, id: i64) -> Result<Device> {
         .ok_or(Error::NotFound)
 }
 
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+}
+
+/// The last hour of an active sensor and its latest values (shown, and with channel names as
+/// a tooltip). Status values and uptime show their status over time, measured values a line per
+/// channel.
+async fn recent(
+    pool: &sqlx::SqlitePool,
+    sensor: &SensorRecord,
+    device: &Device,
+    mibs: &MibIndex,
+    t: Lang,
+    now: i64,
+) -> Result<(Trend, Vec<String>, String)> {
+    let as_band = matches!(
+        sensor.spec,
+        SensorSpec::InterfaceStatus { .. } | SensorSpec::Uptime
+    ) || sensor.channels.iter().any(|c| c.unit == Unit::State);
+    let trend = if as_band {
+        let from = now - sparkline::WINDOW_MS;
+        let (start, changes) = status_store::status_history(pool, sensor.id, from).await?;
+        match sparkline::band(start, &changes, from, now) {
+            band if band.is_empty() => Trend::Empty,
+            band => Trend::Band(band),
+        }
+    } else {
+        let (bucket, count) = sparkline::buckets(device.polling.interval_secs);
+        let from = now - bucket * i64::try_from(count).unwrap_or(0);
+        let mut series = Vec::new();
+        for channel in &sensor.channels {
+            series.push(bucket_averages(pool, channel.id, from, bucket, count).await?);
+        }
+        match sparkline::lines(&series) {
+            lines if lines.is_empty() => Trend::Empty,
+            lines => Trend::Lines(lines),
+        }
+    };
+    // Only a recent value is shown: an old one (sensor failing for a while) would mislead.
+    let fresh_from = now - 3_000 * i64::from(device.polling.interval_secs) - 60_000;
+    let latest = latest_values(pool, &sensor.channels).await?;
+    let format = ValueFormat::for_sensor(&sensor.spec, mibs);
+    let (mut values, mut titled) = (Vec::new(), Vec::new());
+    for channel in &sensor.channels {
+        if let Some((ts, value)) = latest.get(&channel.id)
+            && *ts >= fresh_from
+        {
+            let shown = format.format(t, channel.unit, *value);
+            titled.push(format!("{}: {shown}", t.msg(&channel_label(&channel.key))));
+            values.push(shown);
+        }
+    }
+    Ok((trend, values, titled.join(", ")))
+}
+
 async fn render_sensors(
     state: &AppState,
     user: &CurrentUser,
@@ -226,29 +292,41 @@ async fn render_sensors(
             .iter()
             .map(|r| (r.enabled, states.get(&r.id).map(|s| s.status))),
     );
-    let (rows, inactive): (Vec<SensorRowView>, Vec<SensorRowView>) = records
-        .iter()
-        .map(|r| {
-            let state = states.get(&r.id);
-            let status = if r.enabled {
-                state.map_or(Status::Unknown, |s| s.status)
-            } else {
-                Status::Paused
-            };
-            SensorRowView {
-                id: r.id,
-                name: r.name.clone(),
-                description: crate::web::sensor_text::describe(user.lang, &r.spec, &mibs),
-                status_label: user.lang.get(status.label_id()),
-                status_class: status.as_str(),
-                message: state
-                    .map(|s| crate::status::shown(user.lang, &s.message))
-                    .unwrap_or_default(),
-                last_poll: state.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
-                enabled: r.enabled,
-            }
-        })
-        .partition(|row| row.enabled);
+    let pool = &state.pool;
+    let now = now_ms();
+    let mut rows = Vec::new();
+    let mut inactive = Vec::new();
+    for r in &records {
+        let state = states.get(&r.id);
+        let status = if r.enabled {
+            state.map_or(Status::Unknown, |s| s.status)
+        } else {
+            Status::Paused
+        };
+        let (trend, values, value_title) = if r.enabled {
+            recent(pool, r, &device, &mibs, user.lang, now).await?
+        } else {
+            (Trend::Empty, Vec::new(), String::new())
+        };
+        let row = SensorRowView {
+            id: r.id,
+            name: r.name.clone(),
+            description: crate::web::sensor_text::describe(user.lang, &r.spec, &mibs),
+            status_label: user.lang.get(status.label_id()),
+            status_class: status.as_str(),
+            message: state
+                .map(|s| crate::status::shown(user.lang, &s.message))
+                .unwrap_or_default(),
+            values,
+            value_title,
+            trend,
+        };
+        if r.enabled {
+            rows.push(row);
+        } else {
+            inactive.push(row);
+        }
+    }
     let template_name =
         match crate::storage::templates::template_of_device(&state.pool, device.id).await? {
             Some(id) => crate::storage::templates::get_template(&state.pool, id)
@@ -1119,7 +1197,99 @@ mod tests {
             get(&format!("/devices/{device}/sensors"), Some(&admin)),
         )
         .await;
-        assert!(page.body.contains("weg") && page.body.contains("1970-01-01 00:00:02 UTC"));
+        // The failure is long past: no current value, and nothing within the last hour.
+        assert!(page.body.contains("weg"));
+        assert!(!page.body.contains("class=\"sparkline\""));
+    }
+
+    #[tokio::test]
+    async fn active_sensors_show_their_value_and_the_last_hour() {
+        use crate::storage::sensors::{Sample, insert_samples};
+        let h = harness(true).await;
+        let device = device_on(&h, 161).await;
+        let (viewer, _) = login(&h, "bert").await;
+        let now = now_ms();
+        let ping = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let rtt = store::get_sensor(&h.state.pool, ping)
+            .await
+            .unwrap()
+            .unwrap()
+            .channels[0]
+            .id;
+        let samples: Vec<Sample> = [(2 * 3_600_000, 99.0), (50 * 60_000, 20.0), (30_000, 54.41)]
+            .into_iter()
+            .map(|(age, value)| Sample {
+                channel_id: rtt,
+                ts_ms: now - age,
+                value,
+            })
+            .collect();
+        insert_samples(&h.state.pool, &samples).await.unwrap();
+        let uptime = store::create_sensor(&h.state.pool, device, "Uptime", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        for (age, assessment) in [
+            (
+                2 * 3_600_000,
+                crate::status::Assessment::Healthy("OK".into()),
+            ),
+            (30 * 60_000, crate::status::Assessment::Failed("weg".into())),
+        ] {
+            crate::storage::status::record_poll(&h.state.pool, uptime, now - age, &[], &assessment)
+                .await
+                .unwrap();
+        }
+        let inactive = store::create_sensor(&h.state.pool, device, "Leer", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        store::set_enabled(&h.state.pool, inactive, false)
+            .await
+            .unwrap();
+
+        let page = send(
+            &h.app,
+            get(&format!("/devices/{device}/sensors"), Some(&viewer)),
+        )
+        .await;
+        assert!(page.body.contains("<th class=\"col-trend\">1 Stunde</th>"));
+        // Ping: the latest value, its channel as tooltip, a line linking to the detail page.
+        assert!(
+            page.body
+                .contains("title=\"Antwortzeit: 54,41 ms\"><span>54,41 ms</span></td>"),
+            "{}",
+            page.body
+        );
+        assert!(
+            page.body
+                .contains(&format!("<a class=\"trend\" href=\"/sensors/{ping}\""))
+        );
+        assert_eq!(
+            page.body.matches("<path class=\"spark-1\" d=\"M").count(),
+            1
+        );
+        // Uptime: up, then a warning half an hour ago.
+        assert!(page.body.contains("class=\"statusbar spark-band\""));
+        assert!(
+            page.body.contains("<rect class=\"seg-up\"")
+                && page.body.contains("<rect class=\"seg-warning\"")
+        );
+        // Inactive sensors get no chart.
+        assert_eq!(page.body.matches("class=\"trend\"").count(), 2);
+
+        let english = crate::storage::users::set_language(&h.state.pool, 2, Some(Lang::En));
+        english.await.unwrap();
+        let page = send(
+            &h.app,
+            get(&format!("/devices/{device}/sensors"), Some(&viewer)),
+        )
+        .await;
+        assert!(
+            page.body
+                .contains("title=\"Response time: 54.41 ms\"><span>54.41 ms</span></td>")
+        );
+        assert!(page.body.contains("aria-label=\"Last hour: Ping\""));
     }
 
     #[tokio::test]

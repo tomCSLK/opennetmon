@@ -466,3 +466,15 @@ details.subgroup .device { padding-left: 1rem; }
 
 a.user { border-radius: var(--radius-sm); padding: .35rem .4rem; text-decoration: none; }
 a.user:hover, a.user[aria-current="page"] { background: var(--sidebar-active); text-decoration: none; }
+
+/* Sensor list: the last hour as a small chart or status band, linking to the detail page. */
+a.trend { display: block; width: 120px; }
+td.current-values span { display: block; white-space: nowrap; }
+svg.sparkline { display: block; width: 120px; height: 28px; overflow: visible; }
+svg.sparkline path { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+svg.sparkline .spark-1 { stroke: var(--accent); }
+svg.sparkline .spark-2 { stroke: var(--ok); }
+svg.sparkline .spark-3 { stroke: #a855f7; }
+svg.sparkline .spark-4 { stroke: var(--warn); }
+svg.statusbar.spark-band { width: 120px; height: 10px; }
+@media (max-width: 560px) { .col-trend { display: none; } }

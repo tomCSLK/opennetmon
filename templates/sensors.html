@@ -58,7 +58,7 @@
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>{{ t.get("status") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("message") }}</th><th>{{ t.get("last-poll") }}</th>{% if layout.is_admin %}<th class="right"><span class="muted">{{ t.get("actions") }}</span></th>{% endif %}</tr>
+      <tr><th>{{ t.get("status") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("message") }}</th><th class="right">{{ t.get("sensors-current") }}</th><th class="col-trend">{{ t.get("range-hour") }}</th>{% if layout.is_admin %}<th class="right"><span class="muted">{{ t.get("actions") }}</span></th>{% endif %}</tr>
     </thead>
     <tbody>
     {% for row in rows %}
@@ -66,7 +66,20 @@
         <td><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
         <td><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
         <td class="wrap muted">{{ row.message }}</td>
-        <td class="num">{% if row.last_poll.is_empty() %}–{% else %}{{ row.last_poll|safe }}{% endif %}</td>
+        <td class="num right current-values"{% if !row.value_title.is_empty() %} title="{{ row.value_title }}"{% endif %}>{% for value in row.values %}<span>{{ value }}</span>{% else %}–{% endfor %}</td>
+        <td class="col-trend">
+          {% match row.trend %}
+          {% when Trend::Lines with (lines) %}
+          <a class="trend" href="/sensors/{{ row.id }}" aria-label="{{ t.get1("sensors-trend-of", "name", row.name.as_str()) }}">
+            <svg class="sparkline" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">{% for line in lines %}<path class="{{ line.class }}" d="{{ line.d }}"></path>{% endfor %}</svg>
+          </a>
+          {% when Trend::Band with (segments) %}
+          <a class="trend" href="/sensors/{{ row.id }}" aria-label="{{ t.get1("sensors-trend-of", "name", row.name.as_str()) }}">
+            <svg class="statusbar spark-band" aria-hidden="true">{% for seg in segments %}<rect class="{{ seg.class }}" x="{{ seg.x }}" width="{{ seg.width }}"></rect>{% endfor %}</svg>
+          </a>
+          {% when Trend::Empty %}<span class="muted">–</span>
+          {% endmatch %}
+        </td>
         {% if layout.is_admin %}
         <td>
           <div class="row-actions">
