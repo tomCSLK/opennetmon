@@ -214,6 +214,8 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 a.tile { display: block; color: var(--text); text-decoration: none; transition: border-color .12s; }
 a.tile:hover { border-color: var(--border-strong); color: var(--text); text-decoration: none; }
 a.tile:hover .tile-label { color: var(--text); }
+/* The list being shown: a ring that does not change the size. */
+a.tile[aria-current="page"] { box-shadow: 0 0 0 2px var(--accent); }
 a.tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- status ---------- */
@@ -345,8 +347,6 @@ form.inline-note .muted { font-size: .85rem; }
 .ranges a { padding: .35rem .8rem; border-radius: 7px; color: var(--muted); font-size: .86rem; font-weight: 600; }
 .ranges a:hover { color: var(--text); text-decoration: none; }
 .ranges a[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
-.status-filters { flex-wrap: wrap; margin-bottom: 1rem; }
-.status-filters .num { color: var(--faint); font-weight: 500; margin-left: .2rem; }
 .values { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .9rem; }
 .value-tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
   padding: .95rem 1.1rem; }

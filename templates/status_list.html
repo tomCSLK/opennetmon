@@ -9,11 +9,7 @@
   </div>
 </div>
 
-<nav class="ranges status-filters" aria-label="{{ t.get("status-list-filter") }}">
-  {% for f in filters %}
-  <a href="{{ f.href }}"{% if f.current %} aria-current="page"{% endif %}>{{ f.label }} <span class="num">{{ f.count }}</span></a>
-  {% endfor %}
-</nav>
+{% include "status_tiles.html" %}
 
 <section class="card flush">
   {% if rows.is_empty() %}

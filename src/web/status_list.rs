@@ -271,11 +271,50 @@ fn group_paths(groups: &[Group]) -> HashMap<i64, String> {
         .collect()
 }
 
-pub struct FilterLink {
+/// One status tile; the overview and the lists show the same tiles.
+pub struct Tile {
     pub label: String,
     pub count: usize,
     pub href: String,
+    /// Status colour, plus `active` for warnings and failures that are there.
+    pub class: String,
+    /// The list being shown (never on the overview).
     pub current: bool,
+}
+
+impl Tile {
+    fn class(filter: Filter, count: usize) -> String {
+        match filter {
+            Filter::All => String::new(),
+            Filter::Up => " status-up".to_owned(),
+            Filter::Warning | Filter::Down if count > 0 => {
+                format!(" status-{} active", filter.as_str())
+            }
+            Filter::Warning | Filter::Down => format!(" status-{}", filter.as_str()),
+            Filter::Inactive => " status-paused".to_owned(),
+        }
+    }
+}
+
+/// The tiles for sensor counts in the order of [`Filter::ALL`] (all, up, warning, down,
+/// inactive/unknown), each linking to its list.
+pub fn tiles(t: Lang, counts: [usize; 5], current: Option<Filter>) -> Vec<Tile> {
+    Filter::ALL
+        .into_iter()
+        .zip(counts)
+        .map(|(f, count)| Tile {
+            // The first tile is "Sensoren" as on the overview; the page title says "Alle Sensoren".
+            label: t.get(if f == Filter::All {
+                "sensors"
+            } else {
+                f.label_id()
+            }),
+            count,
+            href: format!("/status/{}", f.as_str()),
+            class: Tile::class(f, count),
+            current: current == Some(f),
+        })
+        .collect()
 }
 
 pub struct Column {
@@ -294,7 +333,7 @@ struct StatusListTemplate {
     t: Lang,
     layout: Layout,
     title: String,
-    filters: Vec<FilterLink>,
+    tiles: Vec<Tile>,
     columns: Vec<Column>,
     rows: Vec<Row>,
 }
@@ -402,16 +441,7 @@ pub async fn list(
     }
     sort_rows(&mut rows, key, dir);
 
-    let filters = Filter::ALL
-        .into_iter()
-        .zip(counts)
-        .map(|(f, count)| FilterLink {
-            label: t.get(f.label_id()),
-            count,
-            href: format!("/status/{}", f.as_str()),
-            current: f == filter,
-        })
-        .collect();
+    let tiles = tiles(t, counts, Some(filter));
     let mut columns: Vec<Column> = SortKey::ALL
         .into_iter()
         .map(|k| {
@@ -446,7 +476,7 @@ pub async fn list(
     let page = StatusListTemplate {
         layout: user.layout(),
         title: t.get(filter.label_id()),
-        filters,
+        tiles,
         columns,
         rows,
         t,
@@ -616,10 +646,17 @@ mod tests {
         assert!(page.body.contains(
             "aria-sort=\"descending\"><a class=\"sort\" href=\"/status/down?sort=since&#38;dir=asc\">Seit</a>"
         ));
-        assert!(page.body.contains(">Ausfall <span class=\"num\">1</span>"));
+        // The same tiles as on the overview, the shown list marked.
+        assert!(page.body.contains(
+            "<a class=\"tile status-down active\" href=\"/status/down\" aria-current=\"page\"><div class=\"tile-value\">1</div><div class=\"tile-label\">Ausfall</div></a>"
+        ));
+        assert!(page.body.contains(
+            "href=\"/status/inactive\"><div class=\"tile-value\">1</div><div class=\"tile-label\">Inaktiv / unbekannt</div>"
+        ));
         assert!(
-            page.body
-                .contains(">Inaktiv / unbekannt <span class=\"num\">1</span>")
+            !home
+                .body
+                .contains("aria-current=\"page\"><div class=\"tile-value")
         );
 
         let all = send(

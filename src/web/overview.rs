@@ -49,6 +49,17 @@ impl Counts {
         self.paused += other.paused;
     }
 
+    /// The numbers of the status tiles: all, up, warning, down, inactive/unknown.
+    fn tile_counts(&self) -> [usize; 5] {
+        [
+            self.total(),
+            self.up,
+            self.warning,
+            self.down,
+            self.paused + self.unknown,
+        ]
+    }
+
     /// Active sensors (inactive ones are not polled).
     pub fn active(&self) -> usize {
         self.total() - self.paused
@@ -171,6 +182,7 @@ struct HomeTemplate {
     ungrouped: Option<Ungrouped>,
     groups: Vec<TopGroup>,
     totals: Counts,
+    tiles: Vec<crate::web::status_list::Tile>,
     device_count: usize,
     devices_down: usize,
     /// Groups at the top level; their order is only worth a button when there are several.
@@ -302,6 +314,7 @@ pub async fn home(
         t: user.lang,
         ungrouped,
         groups: tops,
+        tiles: crate::web::status_list::tiles(user.lang, totals.tile_counts(), None),
         totals,
         device_count: devices.len(),
         devices_down,
