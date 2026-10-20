@@ -38,7 +38,7 @@ Der Installer ist wiederholbar und tut Folgendes:
 | Lizenzen | `/usr/local/share/doc/opennetmon/` (`LICENSE`, `THIRD-PARTY-LICENSES.txt`) |
 | Konfiguration | `/etc/opennetmon/config.toml` (aus `deploy/config.example.toml`, **nie überschrieben**), Verzeichnis `root:opennetmon 0750` |
 | Schlüssel | `/etc/opennetmon/secret.key` (neu erzeugt, Modus 0600, Besitzer `opennetmon`; **nie überschrieben**) |
-| Dienst | `/etc/systemd/system/opennetmon.service`, aktiviert; Daten unter `/var/lib/opennetmon` (legt systemd an) |
+| Dienst | `/etc/systemd/system/opennetmon.service`, aktiviert; Daten unter `/var/lib/opennetmon` (0750, Besitzer `opennetmon`) |
 | Ping | `/etc/sysctl.d/99-opennetmon-ping.conf` (erlaubt unprivilegierte ICMP-Sockets; mit `--no-sysctl` überspringen) |
 | Sicherung | täglich 03:30 (`opennetmon-backup.timer`), 14 Kopien in `/var/backups/opennetmon` (mit `--no-backup` überspringen) |
 

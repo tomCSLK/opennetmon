@@ -33,6 +33,7 @@ UNIT_DIR="$DESTDIR/etc/systemd/system"
 SYSCTL_DIR="$DESTDIR/etc/sysctl.d"
 SBIN_DIR="$DESTDIR/usr/local/sbin"
 DOC_DIR="$DESTDIR/usr/local/share/doc/opennetmon"
+STATE_DIR="$DESTDIR/var/lib/opennetmon"
 BACKUP_DIR="$DESTDIR/var/backups/opennetmon"
 CONFIG="$CONF_DIR/config.toml"
 KEY="$CONF_DIR/secret.key"
@@ -92,6 +93,12 @@ if [ ! -e "$KEY" ]; then
 else
   step "keeping the existing key $KEY"
   KEY_IS_NEW=no
+fi
+
+# Database directory: systemd creates it on the first start, but `user add` (next steps) runs before that.
+if [ ! -d "$STATE_DIR" ]; then
+  install -d -m 0750 "$STATE_DIR"
+  [ "$REAL" = yes ] && chown "$USER_NAME":"$USER_NAME" "$STATE_DIR"
 fi
 
 # 4. systemd unit and the ping sysctl.

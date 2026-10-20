@@ -23,4 +23,8 @@ RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=yes
 LockPersonality=yes
 SystemCallArchitectures=native
+# Blocking setuid lets systemd apply the filters before switching to the user; otherwise it needs to keep CAP_SYS_ADMIN,
+# which containers (LXC, rootless Podman) refuse ("Failed to keep CAP_SYS_ADMIN").
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
 CapabilityBoundingSet=
