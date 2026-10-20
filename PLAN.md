@@ -184,4 +184,4 @@ Begrenzung der Anmeldeversuche: umgesetzt (`auth::throttle`, `docs/benutzer-und-
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - uPlot ist eingebunden; htmx ist noch nicht eingebunden (dafür braucht es dein Okay zum Herunterladen)
 - Repo öffentlich machen (Historie am 2026-10-19 geprüft: keine Secrets); Regel für fremde Beiträge (CLA/DCO) festlegen.
-  Erstes Release **v0.1.0** (Vorabversion, x86_64) ist am 2026-10-19 auf GitHub erschienen, **v0.2.0** (Mehrsprachigkeit, .deb-Paket) und **v0.3.0** (eingebautes HTTPS) am 2026-10-20; weitere mit `dev/release.sh`
+  Erstes Release **v0.1.0** (Vorabversion, x86_64) ist am 2026-10-19 auf GitHub erschienen, **v0.2.0** (Mehrsprachigkeit, .deb-Paket) **v0.3.0** (eingebautes HTTPS) und **v0.3.1** (Statuslisten hinter den Kacheln) am 2026-10-20; weitere mit `dev/release.sh`
