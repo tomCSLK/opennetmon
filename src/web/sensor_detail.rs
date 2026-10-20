@@ -759,7 +759,7 @@ mod tests {
             get(&format!("/sensors/{sensor}/data?range=7d"), Some(&viewer)),
         )
         .await;
-        assert!(week.body.contains("\"step_secs\":600"), "{}", week.body);
+        assert!(week.body.contains("\"step_secs\":10080"), "{}", week.body);
 
         assert_eq!(
             send(&h.app, get(&format!("/sensors/{sensor}/data"), None))

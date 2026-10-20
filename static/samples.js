@@ -50,6 +50,14 @@
     return out;
   }
 
+  // Bucket length as whole hours and minutes, e.g. "2 Std. 48 Min.".
+  function stepText(secs) {
+    var h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60), parts = [];
+    if (h) { parts.push(h + ' ' + T('unit-hours')); }
+    if (m || !h) { parts.push(m + ' ' + T('unit-minutes')); }
+    return parts.join(' ');
+  }
+
   // Column definitions: traffic channels get a volume and a speed column, like PRTG.
   function columns(d, dur) {
     var cols = [];
@@ -98,8 +106,7 @@
       if (count > limit) { text = T('samples-newest', limit, count); }
       else { text = count === 1 ? T('samples-one') : T('samples-many', count); }
       if (data.step_secs) {
-        text += ' · ' + T('samples-averages', data.step_secs >= 3600 ?
-          (data.step_secs / 3600) + ' ' + T('unit-hours') : (data.step_secs / 60) + ' ' + T('unit-minutes'));
+        text += ' · ' + T('samples-averages', stepText(data.step_secs));
       }
       info.textContent = text;
     }
@@ -142,5 +149,19 @@
     box.appendChild(table);
   }
 
-  window.addEventListener('opennetmon:data', function (e) { data = e.detail; render(); });
+  // Averaged ranges list empty buckets too (gaps in the chart); the table leaves them out.
+  function withValues(d) {
+    var keep = [];
+    for (var i = 0; i < d.ts.length; i++) {
+      if (d.series.some(function (s) { return s.values[i] !== null; })) { keep.push(i); }
+    }
+    if (keep.length === d.ts.length) { return d; }
+    var pick = function (a) { return keep.map(function (i) { return a[i]; }); };
+    return Object.assign({}, d, {
+      ts: pick(d.ts),
+      series: d.series.map(function (s) { return Object.assign({}, s, { values: pick(s.values) }); })
+    });
+  }
+
+  window.addEventListener('opennetmon:data', function (e) { data = withValues(e.detail); render(); });
 })();

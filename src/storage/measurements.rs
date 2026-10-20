@@ -11,6 +11,8 @@ use crate::storage::sensors::ChannelRecord;
 const HOUR_MS: i64 = 3_600_000;
 /// Safety bound per channel; the buckets below keep real queries far under it.
 const MAX_POINTS: i64 = 20_000;
+/// Points of an averaged chart (24 hours, 7 days, 30 days).
+const CHART_POINTS: i64 = 60;
 
 /// Time range of a chart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,14 +49,20 @@ impl Range {
         }
     }
 
-    /// Length of one aggregated point in seconds; `None` for raw samples (1 hour, 24 hours).
-    /// Must match the bucketing in [`points`].
+    /// Length of one aggregated point in seconds: the range split into [`CHART_POINTS`] buckets;
+    /// `None` for raw samples (1 hour). Must match the bucketing in [`points`].
     pub fn step_secs(self) -> Option<i64> {
         match self {
-            Self::Hour | Self::Day => None,
-            Self::Week => Some(600),
-            Self::Month => Some(3_600),
+            Self::Hour => None,
+            _ => Some(self.duration_ms() / 1000 / CHART_POINTS),
         }
+    }
+
+    /// Start and length of the first of the [`CHART_POINTS`] buckets ending with the one that holds
+    /// `now_ms`, both in ms; `None` for raw samples.
+    fn buckets(self, now_ms: i64) -> Option<(i64, i64)> {
+        let step = self.step_secs()? * 1000;
+        Some(((now_ms.div_euclid(step) + 1 - CHART_POINTS) * step, step))
     }
 
     fn duration_ms(self) -> i64 {
@@ -82,59 +90,54 @@ pub struct ChartData {
     pub series: Vec<ChartSeries>,
 }
 
-/// Points of one channel as `(ts_ms, value)`. Raw samples for up to 24 hours, 10-minute averages
-/// for 7 days and the hourly rollup for 30 days (raw hourly averages if no rollup exists yet).
+/// Points of one channel as `(ts_ms, value)`. Raw samples for 1 hour; otherwise averages in
+/// [`CHART_POINTS`] buckets of [`Range::step_secs`], aligned to multiples of the step so they stay
+/// put between reloads (the newest bucket is still filling up). 24 hours and 7 days average the raw
+/// samples, 30 days the hourly rollup (the raw samples if no rollup exists yet).
 async fn points(
     pool: &SqlitePool,
     channel_id: i64,
     range: Range,
     now_ms: i64,
 ) -> Result<Vec<(i64, f64)>> {
-    let from = now_ms - range.duration_ms();
-    let raw = "SELECT ts, value FROM samples WHERE channel_id = ? AND ts >= ? AND ts <= ? ORDER BY ts LIMIT ?";
-    let bucketed = "SELECT (ts / ?) * ?, AVG(value) FROM samples WHERE channel_id = ? AND ts >= ? AND ts <= ? \
-                    GROUP BY ts / ? ORDER BY 1 LIMIT ?";
-    let bucket = |size: i64| {
-        sqlx::query_as::<_, (i64, f64)>(bucketed)
-            .bind(size)
-            .bind(size)
+    let Some((from, step)) = range.buckets(now_ms) else {
+        return Ok(sqlx::query_as(
+            "SELECT ts, value FROM samples WHERE channel_id = ? AND ts >= ? AND ts <= ? ORDER BY ts LIMIT ?",
+        )
+        .bind(channel_id)
+        .bind(now_ms - range.duration_ms())
+        .bind(now_ms)
+        .bind(MAX_POINTS)
+        .fetch_all(pool)
+        .await?);
+    };
+    let bucketed = |table: &str, column: &str| {
+        format!(
+            "SELECT (ts / ?1) * ?1, AVG({column}) FROM {table} WHERE channel_id = ?2 AND ts >= ?3 AND ts <= ?4 \
+             GROUP BY ts / ?1 ORDER BY 1 LIMIT ?5"
+        )
+    };
+    let query = |sql: String| async move {
+        sqlx::query_as::<_, (i64, f64)>(&sql)
+            .bind(step)
             .bind(channel_id)
             .bind(from)
             .bind(now_ms)
-            .bind(size)
-            .bind(MAX_POINTS)
-    };
-    Ok(match range {
-        Range::Hour | Range::Day => {
-            sqlx::query_as(raw)
-                .bind(channel_id)
-                .bind(from)
-                .bind(now_ms)
-                .bind(MAX_POINTS)
-                .fetch_all(pool)
-                .await?
-        }
-        Range::Week => bucket(600_000).fetch_all(pool).await?,
-        Range::Month => {
-            let hourly: Vec<(i64, f64)> = sqlx::query_as(
-                "SELECT ts, avg FROM samples_1h WHERE channel_id = ? AND ts >= ? AND ts <= ? ORDER BY ts LIMIT ?",
-            )
-            .bind(channel_id)
-            .bind(from - HOUR_MS)
-            .bind(now_ms)
-            .bind(MAX_POINTS)
+            .bind(CHART_POINTS)
             .fetch_all(pool)
-            .await?;
-            if hourly.is_empty() {
-                bucket(HOUR_MS).fetch_all(pool).await?
-            } else {
-                hourly
-            }
+            .await
+    };
+    if range == Range::Month {
+        let hourly = query(bucketed("samples_1h", "avg")).await?;
+        if !hourly.is_empty() {
+            return Ok(hourly);
         }
-    })
+    }
+    Ok(query(bucketed("samples", "value")).await?)
 }
 
-/// The chart data of all `channels` over `range`, ending at `now_ms`.
+/// The chart data of all `channels` over `range`, ending at `now_ms`. Averaged ranges list every
+/// bucket, empty ones as `None`, so the chart shows a gap instead of a line across it.
 pub async fn chart_data(
     pool: &SqlitePool,
     channels: &[ChannelRecord],
@@ -148,6 +151,12 @@ pub async fn chart_data(
                 .entry(ts_ms.div_euclid(1000))
                 .or_insert_with(|| vec![None; channels.len()]);
             row[i] = Some(value);
+        }
+    }
+    if let (Some((from, step)), false) = (range.buckets(now_ms), rows.is_empty()) {
+        for k in 0..CHART_POINTS {
+            rows.entry((from + k * step).div_euclid(1000))
+                .or_insert_with(|| vec![None; channels.len()]);
         }
     }
     let ts = rows.keys().copied().collect();
@@ -250,12 +259,21 @@ mod tests {
         }
     }
 
+    /// `(ts, value)` of the buckets of the first series that have a value.
+    fn filled(data: &ChartData) -> Vec<(i64, f64)> {
+        data.ts
+            .iter()
+            .zip(&data.series[0].values)
+            .filter_map(|(&ts, v)| v.map(|v| (ts, v)))
+            .collect()
+    }
+
     #[test]
     fn steps_match_the_point_resolution() {
         assert_eq!(Range::Hour.step_secs(), None);
-        assert_eq!(Range::Day.step_secs(), None);
-        assert_eq!(Range::Week.step_secs(), Some(600));
-        assert_eq!(Range::Month.step_secs(), Some(3_600));
+        assert_eq!(Range::Day.step_secs(), Some(24 * 60));
+        assert_eq!(Range::Week.step_secs(), Some(168 * 60));
+        assert_eq!(Range::Month.step_secs(), Some(12 * 3_600));
     }
 
     #[test]
@@ -287,9 +305,16 @@ mod tests {
         assert_eq!(data.series[0].key, "in");
         assert_eq!(data.series[0].values, [Some(1.0), Some(3.0)]);
         assert_eq!(data.series[1].values, [Some(2.0), None]);
-        // The wider range includes the older sample.
+        // The wider range includes the older sample, averaged with its neighbours per bucket.
+        // Buckets of 24 minutes, the last one starting at `now`: the older sample lands in bucket 54,
+        // the newer ones in bucket 58.
         let day = chart_data(&pool, &ch, Range::Day, now).await.unwrap();
-        assert_eq!(day.ts.len(), 3);
+        assert_eq!(day.ts.len(), 60);
+        let filled: Vec<_> = (0..60)
+            .filter(|&k| day.series[0].values[k].is_some())
+            .map(|k| (k, day.series[0].values[k], day.series[1].values[k]))
+            .collect();
+        assert_eq!(filled, [(54, Some(9.0), None), (58, Some(2.0), Some(2.0))]);
     }
 
     #[tokio::test]
@@ -317,31 +342,62 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_week_is_averaged_into_ten_minute_buckets() {
+    async fn a_week_is_averaged_into_buckets_of_168_minutes() {
         let (_dir, pool, ch) = setup(&SensorSpec::Uptime).await;
-        let now = 100 * 24 * HOUR_MS;
+        let step = 168 * 60_000;
+        let now = 1_000 * step + 5_000;
         let bucket = now - 3 * 24 * HOUR_MS;
-        let bucket = (bucket / 600_000) * 600_000;
+        let bucket = (bucket / step) * step;
         insert_samples(
             &pool,
             &[
                 sample(ch[0].id, bucket + 1_000, 10.0),
-                sample(ch[0].id, bucket + 60_000, 20.0),
-                sample(ch[0].id, bucket + 600_000, 5.0),
+                sample(ch[0].id, bucket + step - 1, 20.0),
+                sample(ch[0].id, bucket + step, 5.0),
             ],
         )
         .await
         .unwrap();
         let data = chart_data(&pool, &ch, Range::Week, now).await.unwrap();
-        assert_eq!(data.ts, [bucket / 1000, (bucket + 600_000) / 1000]);
-        assert_eq!(data.series[0].values, [Some(15.0), Some(5.0)]);
+        assert_eq!(
+            filled(&data),
+            [(bucket / 1000, 15.0), ((bucket + step) / 1000, 5.0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn averaged_ranges_show_sixty_points() {
+        let (_dir, pool, ch) = setup(&SensorSpec::Ping).await;
+        let now = 400 * 24 * HOUR_MS + 1_234_567;
+        // One sample per minute over the last 31 days, so every range is covered with room to spare.
+        let samples: Vec<Sample> = (0..31 * 24 * 60)
+            .map(|i| sample(ch[0].id, now - i * 60_000, 1.0))
+            .collect();
+        insert_samples(&pool, &samples).await.unwrap();
+        for range in [Range::Day, Range::Week, Range::Month] {
+            let data = chart_data(&pool, &ch, range, now).await.unwrap();
+            let step = range.step_secs().unwrap();
+            assert_eq!(data.ts.len(), 60, "{range:?}");
+            assert!(
+                data.series[0].values.iter().all(Option::is_some),
+                "{range:?}"
+            );
+            assert!(data.ts.windows(2).all(|w| w[1] - w[0] == step), "{range:?}");
+            assert!(
+                data.ts[59] * 1000 <= now && now < (data.ts[59] + step) * 1000,
+                "{range:?}"
+            );
+        }
+        let hour = chart_data(&pool, &ch, Range::Hour, now).await.unwrap();
+        assert_eq!(hour.ts.len(), 61, "1 hour keeps the raw samples");
     }
 
     #[tokio::test]
     async fn a_month_uses_hourly_rollups_and_falls_back_to_raw_data() {
         let (_dir, pool, ch) = setup(&SensorSpec::Uptime).await;
         let now = 100 * 24 * HOUR_MS;
-        let hour = ((now - 5 * 24 * HOUR_MS) / HOUR_MS) * HOUR_MS;
+        let hour = ((now - 5 * 24 * HOUR_MS) / HOUR_MS) * HOUR_MS + 3 * HOUR_MS;
+        let bucket = (hour / (12 * HOUR_MS)) * 12 * HOUR_MS;
         insert_samples(
             &pool,
             &[
@@ -352,12 +408,9 @@ mod tests {
         .await
         .unwrap();
 
-        // No rollup yet: hourly averages straight from the raw data.
+        // No rollup yet: 12-hour averages straight from the raw data.
         let fallback = chart_data(&pool, &ch, Range::Month, now).await.unwrap();
-        assert_eq!(
-            (fallback.ts.clone(), fallback.series[0].values.clone()),
-            (vec![hour / 1000], vec![Some(3.0)])
-        );
+        assert_eq!(filled(&fallback), [(bucket / 1000, 3.0)]);
 
         rollup(&pool, now).await.unwrap();
         sqlx::query("DELETE FROM samples")
@@ -365,10 +418,7 @@ mod tests {
             .await
             .unwrap();
         let rolled = chart_data(&pool, &ch, Range::Month, now).await.unwrap();
-        assert_eq!(
-            (rolled.ts, rolled.series[0].values.clone()),
-            (vec![hour / 1000], vec![Some(3.0)])
-        );
+        assert_eq!(filled(&rolled), [(bucket / 1000, 3.0)]);
     }
 
     #[tokio::test]
