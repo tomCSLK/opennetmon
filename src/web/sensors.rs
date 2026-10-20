@@ -219,7 +219,7 @@ async fn load_device(state: &AppState, id: i64) -> Result<Device> {
         .ok_or(Error::NotFound)
 }
 
-fn now_ms() -> i64 {
+pub(crate) fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
@@ -259,21 +259,49 @@ async fn recent(
             lines => Trend::Lines(lines),
         }
     };
-    // Only a recent value is shown: an old one (sensor failing for a while) would mislead.
+    let latest = fresh_values(pool, sensor, device, mibs, t, now).await?;
+    Ok((trend, latest.shown, latest.title))
+}
+
+/// The latest values of a sensor, if they are recent.
+pub(crate) struct FreshValues {
+    /// Formatted, one per channel (traffic: in, out).
+    pub shown: Vec<String>,
+    /// The values with their channel names, as a tooltip.
+    pub title: String,
+    /// Sum of the raw values (traffic: in + out), for sorting.
+    pub total: Option<f64>,
+}
+
+/// The latest value per channel. Only a recent value counts: an old one (sensor failing for a
+/// while) would mislead.
+pub(crate) async fn fresh_values(
+    pool: &sqlx::SqlitePool,
+    sensor: &SensorRecord,
+    device: &Device,
+    mibs: &MibIndex,
+    t: Lang,
+    now: i64,
+) -> Result<FreshValues> {
     let fresh_from = now - 3_000 * i64::from(device.polling.interval_secs) - 60_000;
     let latest = latest_values(pool, &sensor.channels).await?;
     let format = ValueFormat::for_sensor(&sensor.spec, mibs);
-    let (mut values, mut titled) = (Vec::new(), Vec::new());
+    let (mut shown, mut titled, mut total) = (Vec::new(), Vec::new(), None);
     for channel in &sensor.channels {
         if let Some((ts, value)) = latest.get(&channel.id)
             && *ts >= fresh_from
         {
-            let shown = format.format(t, channel.unit, *value);
-            titled.push(format!("{}: {shown}", t.msg(&channel_label(&channel.key))));
-            values.push(shown);
+            let text = format.format(t, channel.unit, *value);
+            titled.push(format!("{}: {text}", t.msg(&channel_label(&channel.key))));
+            shown.push(text);
+            total = Some(total.unwrap_or(0.0) + value);
         }
     }
-    Ok((trend, values, titled.join(", ")))
+    Ok(FreshValues {
+        shown,
+        title: titled.join(", "),
+        total,
+    })
 }
 
 async fn render_sensors(

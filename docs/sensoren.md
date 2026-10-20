@@ -52,6 +52,14 @@ Manuell gegen die echte Hardware: `cargo test --test omada_manual sensors_work -
 ## Oberfläche (`src/web/sensors.rs`)
 
 - **Übersicht** (`/`): je Gerät Status (schlechtester Sensorstatus), Link auf die Sensorseite und Anzahl der Sensoren.
+- **Statuslisten** (`/status/<filter>`, `src/web/status_list.rs`, alle angemeldeten Benutzer): Jede Kachel der Übersicht ist ein Link auf die Liste
+  ihrer Sensoren über alle Geräte – `all` (Sensoren), `up` (In Ordnung), `warning`, `down` und `inactive` (Inaktiv / unbekannt). Oben wechselt eine
+  Leiste mit Anzahlen zwischen den Listen. Spalten: Status, Sensor, Gerät mit Gruppenpfad, Meldung, aktueller Wert (wie auf der Sensorseite) und
+  „Seit“ (Zeitpunkt des letzten Statuswechsels und Dauer; leer bei inaktiven und noch nie abgefragten Sensoren).
+  Sortiert wird per Klick auf die Spaltenköpfe (`?sort=status|sensor|device|value|since&dir=asc|desc`, ohne Skript, erneuter Klick dreht um).
+  Standard: Warnung und Ausfall neueste Wechsel zuerst, „Sensoren“ schlechtester Status zuerst, sonst nach Gerät. Beim Wert bleiben Sensoren gleicher Einheit
+  zusammen (Traffic zuerst, dann Raten, ms, %, Anzahl, Laufzeit, Statuswerte), sortiert wird innerhalb der Einheit nach der Summe der Kanäle
+  (Traffic: ein + aus). Zeilen ohne Wert oder Zeitpunkt stehen immer am Ende; Gleichstände bleiben je Gerät in der Sensorreihenfolge.
 - **Sensorseite** (`/devices/<id>/sensors`, alle angemeldeten Benutzer): Tabelle mit Name, Typ, Status, letzter Meldung, aktuellem Wert
   (je Kanal eine Zeile ohne Umbruch, z. B. Traffic ein/aus untereinander, Kanalnamen als Tooltip; nur wenn der letzte Wert höchstens drei Intervalle plus eine Minute alt ist) und einem
   **Mini-Graphen der letzten Stunde** (`src/web/sparkline.rs`, als SVG vom Server, ohne Skript; Klick führt zur Detailseite):

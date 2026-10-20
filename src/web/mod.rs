@@ -15,6 +15,7 @@ pub mod sensor_text;
 pub mod sensor_values;
 pub mod sensors;
 pub mod sparkline;
+pub mod status_list;
 pub mod templates;
 #[cfg(test)]
 pub(crate) mod testutil;
@@ -138,6 +139,7 @@ pub fn router(state: AppState) -> Router {
             "/devices/{id}/sensors/interfaces",
             post(sensors::create_interfaces),
         )
+        .route("/status/{filter}", get(status_list::list))
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))
         .route(

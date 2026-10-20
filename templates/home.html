@@ -75,11 +75,11 @@
 {% endif %}
 
 <section class="tiles" aria-label="{{ t.get("overview-sensor-status") }}">
-  <div class="tile"><div class="tile-value">{{ totals.total() }}</div><div class="tile-label">{{ t.get("sensors") }}</div></div>
-  <div class="tile status-up"><div class="tile-value">{{ totals.up }}</div><div class="tile-label">{{ t.get("status-up") }}</div></div>
-  <div class="tile status-warning{% if totals.warning > 0 %} active{% endif %}"><div class="tile-value">{{ totals.warning }}</div><div class="tile-label">{{ t.get("status-warning") }}</div></div>
-  <div class="tile status-down{% if totals.down > 0 %} active{% endif %}"><div class="tile-value">{{ totals.down }}</div><div class="tile-label">{{ t.get("status-down") }}</div></div>
-  <div class="tile status-paused"><div class="tile-value">{{ totals.paused + totals.unknown }}</div><div class="tile-label">{{ t.get("overview-paused-unknown") }}</div></div>
+  <a class="tile" href="/status/all"><div class="tile-value">{{ totals.total() }}</div><div class="tile-label">{{ t.get("sensors") }}</div></a>
+  <a class="tile status-up" href="/status/up"><div class="tile-value">{{ totals.up }}</div><div class="tile-label">{{ t.get("status-up") }}</div></a>
+  <a class="tile status-warning{% if totals.warning > 0 %} active{% endif %}" href="/status/warning"><div class="tile-value">{{ totals.warning }}</div><div class="tile-label">{{ t.get("status-warning") }}</div></a>
+  <a class="tile status-down{% if totals.down > 0 %} active{% endif %}" href="/status/down"><div class="tile-value">{{ totals.down }}</div><div class="tile-label">{{ t.get("status-down") }}</div></a>
+  <a class="tile status-paused" href="/status/inactive"><div class="tile-value">{{ totals.paused + totals.unknown }}</div><div class="tile-label">{{ t.get("overview-paused-unknown") }}</div></a>
 </section>
 
 {% if ungrouped.is_none() && groups.is_empty() %}

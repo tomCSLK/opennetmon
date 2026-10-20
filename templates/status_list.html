@@ -1,0 +1,47 @@
+{% extends "app.html" %}
+{% block title %}{{ title }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><span>{{ title }}</span></div>
+    <h1>{{ title }}</h1>
+    <p class="subtitle">{{ t.get1("count-sensors", "count", rows.len()) }}</p>
+  </div>
+</div>
+
+<nav class="ranges status-filters" aria-label="{{ t.get("status-list-filter") }}">
+  {% for f in filters %}
+  <a href="{{ f.href }}"{% if f.current %} aria-current="page"{% endif %}>{{ f.label }} <span class="num">{{ f.count }}</span></a>
+  {% endfor %}
+</nav>
+
+<section class="card flush">
+  {% if rows.is_empty() %}
+  <div class="empty"><strong>{{ t.get("status-list-empty") }}</strong></div>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        {% for c in columns %}
+        <th{% if c.right %} class="right"{% endif %}{% if !c.aria_sort.is_empty() %} aria-sort="{{ c.aria_sort }}"{% endif %}>{% if let Some(href) = c.href %}<a class="sort" href="{{ href }}">{{ c.label }}</a>{% else %}{{ c.label }}{% endif %}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td><span class="badge status-{{ row.status.as_str() }}">{{ row.status_label }}</span></td>
+        <td><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
+        <td class="nowrap"><a href="/devices/{{ row.device_id }}/sensors">{{ row.device_name }}</a>{% if !row.group.is_empty() %}<span class="sub">{{ row.group }}</span>{% endif %}</td>
+        <td class="wrap muted">{{ row.message }}</td>
+        <td class="num right current-values"{% if !row.value_title.is_empty() %} title="{{ row.value_title }}"{% endif %}>{% for value in row.values %}<span>{{ value }}</span>{% else %}–{% endfor %}</td>
+        <td class="nowrap">{% if row.since.is_empty() %}<span class="muted">–</span>{% else %}{{ row.since|safe }}<span class="sub">{{ row.duration }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
