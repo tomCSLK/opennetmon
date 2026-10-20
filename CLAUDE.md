@@ -218,7 +218,7 @@ cargo build --release --target x86_64-unknown-linux-musl
 ```
 
 Releases: Version in `Cargo.toml` erhöhen und committen, dann `dev/release.sh --publish --notes <datei>` (Release-Notizen auf Deutsch; prüft sauberen,
-gepushten Stand, fmt/clippy/Tests, Fremdlizenzen, Installer-Probelauf aus dem Archiv; 0.x als Vorabversion). Bisher: **v0.1.0** (2026-10-19, Repo privat).
+gepushten Stand, fmt/clippy/Tests, Fremdlizenzen, Installer-Probelauf aus dem Archiv, Inhalt des .deb; 0.x als Vorabversion). Bisher: **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, erstmals mit .deb; Repo privat).
 
 `README.md` (GitHub-Startseite) ist seit 2026-10-19 **nur noch Englisch** und wird nur auf Englisch gepflegt; bei Meilensteinen mitpflegen: Status-Tabelle, Konfigurationsbeispiel und Dokumentationsliste müssen zum Code passen.
 
