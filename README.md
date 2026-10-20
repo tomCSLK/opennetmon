@@ -17,7 +17,7 @@ Working state after MVP step 6 of 6. Details and order: [`PLAN.md`](PLAN.md).
 
 | | |
 |---|---|
-| Done | Login with roles (admin/reader), SNMP profiles (v2c, v3 authNoPriv/authPriv, stored encrypted), groups and devices, connection test, sensors (ping, uptime, interface traffic, interface status, custom OID), interface discovery, renaming sensors, custom order of groups, devices and sensors (drag or ↑/↓), user management in the UI, devices without SNMP (ping only), rating of status values, device templates (created from a device, applied automatically by device ID when adding a device), MIB import with “Find values” (tables as initially inactive sensors), poller with status logic and event log, thresholds, charts (1 h / 24 h / 7 d / 30 d), rollups and retention, e-mail notifications (configured in the UI, test mail, send log), German and English (user interface per user, notification mails in one selectable language) |
+| Done | Login with roles (admin/reader), SNMP profiles (v2c, v3 authNoPriv/authPriv, stored encrypted), groups and devices, connection test, sensors (ping, uptime, interface traffic, interface status, custom OID), interface discovery, renaming sensors, custom order of groups, devices and sensors (drag or ↑/↓), user management in the UI, devices without SNMP (ping only), rating of status values, device templates (created from a device, applied automatically by device ID when adding a device), MIB import with “Find values” (tables as initially inactive sensors), poller with status logic and event log, thresholds, charts (1 h / 24 h / 7 d / 30 d), rollups and retention, e-mail notifications (configured in the UI, test mail, send log), German and English (user interface per user, notification mails in one selectable language), sensor list with current values and a chart of the last hour, built-in HTTPS with a generated certificate, Debian package |
 | Open | Installation on the real server, test with the real mail server, htmx polish |
 | Not planned | SNMP traps, NetFlow/sFlow, distributed probes, maps, SNMP SET, Omada controller API |
 
@@ -64,13 +64,15 @@ and manual `#[ignore]` tests against real devices (`tests/omada_manual.rs`).
 ## Configuration
 
 TOML file (`--config`) plus environment variables (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`).
-Example with all keys and their defaults:
+Example with all keys and their defaults (the installed `/etc/opennetmon/config.toml` instead uses `listen = "0.0.0.0:8443"` with the two `tls_` keys, see below):
 
 ```toml
-listen = "127.0.0.1:8080"                  # TLS is handled by a reverse proxy in front (Caddy, nginx)
+listen = "127.0.0.1:8080"                  # plain HTTP, e.g. behind a reverse proxy; with tls_* any address, HTTPS only
 database_path = "/var/lib/opennetmon/opennetmon.db"
 log_filter = "info"
 secret_key_file = "/etc/opennetmon/secret.key" # mode 0600, otherwise the server does not start
+# tls_cert_file = "/etc/opennetmon/tls-cert.pem" # built-in HTTPS: certificate chain (PEM)
+# tls_key_file = "/etc/opennetmon/tls-key.pem"   # and its key (mode 0600)
 cookie_secure = true                       # set to false only for development without TLS
 session_ttl_hours = 168
 poller_enabled = true
@@ -99,16 +101,20 @@ sudo -u opennetmon /usr/local/bin/opennetmon --config /etc/opennetmon/config.tom
 sudo systemctl start opennetmon
 ```
 
-Both create the user, configuration, key, a hardened systemd unit, the ping permission and a daily database backup, and leave existing configuration,
-key and data untouched on updates (the package installs to `/usr`, the script to `/usr/local`). In addition: examples for Caddy and nginx (nginx also with login rate limiting) and a guide to update, rollback,
-backup, restore and troubleshooting in [`docs/betrieb.md`](docs/betrieb.md).
+Then open **`https://<server address>:8443`** from any computer in the network (allow port 8443 in the firewall if one is active).
+
+Both create the user, configuration, key, a self-signed HTTPS certificate for the server's host name and addresses, a hardened systemd unit, the ping
+permission and a daily database backup, and leave existing configuration, key, certificate and data untouched on updates (the package installs to `/usr`,
+the script to `/usr/local`). The browser warns about the self-signed certificate once; compare the SHA-256 fingerprint printed on installation (and logged on
+every start) before accepting it, or use your own certificate. [`docs/betrieb.md`](docs/betrieb.md) covers your own certificate (including a small private CA
+and Let's Encrypt), port 443, running behind Caddy or nginx instead, update, rollback, backup, restore and troubleshooting.
 
 ## Security
 
 - SNMP is used **read-only**.
 - SNMP credentials are stored in the database encrypted with XChaCha20-Poly1305; the key is in a separate file. **Back up this file separately from the database** – without it the profiles are unusable.
 - Passwords with Argon2id, server-side sessions, CSRF protection on all forms, `HttpOnly`/`SameSite=Strict` cookies, a strict Content Security Policy (no inline scripts).
-- Listens only on `127.0.0.1` by default; for access from the network, put a TLS-terminating reverse proxy in front.
+- Built-in HTTPS (rustls, TLS 1.2/1.3): when configured, the port speaks only HTTPS, and plain HTTP gets nothing but a redirect. Without TLS settings it listens on `127.0.0.1` only, for a reverse proxy in front.
 - Failed logins are slowed down per user name and per address (rejection with a waiting time, never a permanent lock). Behind a proxy, set `client_ip_header`.
 - The SMTP password is stored encrypted like the SNMP credentials and never shown.
 - Secrets never belong in the repository, in logs or in HTML output.

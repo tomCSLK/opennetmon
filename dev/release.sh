@@ -80,7 +80,7 @@ CHECK="$DIST/check"
 mkdir -p "$CHECK" && tar -xzf "$DIST/$NAME.tar.gz" -C "$CHECK"
 (cd "$CHECK/$NAME" && DESTDIR="$PWD/../root" ./deploy/install.sh --binary ./opennetmon >/dev/null)
 for f in usr/local/bin/opennetmon etc/systemd/system/opennetmon.service usr/local/share/doc/opennetmon/LICENSE \
-         usr/local/share/doc/opennetmon/THIRD-PARTY-LICENSES.txt; do
+         usr/local/share/doc/opennetmon/THIRD-PARTY-LICENSES.txt etc/opennetmon/tls-cert.pem etc/opennetmon/tls-key.pem; do
   [ -e "$CHECK/root/$f" ] || fail "dry run did not install /$f"
 done
 rm -rf "$CHECK" "$DIST/$NAME"

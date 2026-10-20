@@ -1,12 +1,12 @@
 #!/bin/sh
-# postrm of the opennetmon .deb (dev/deb.sh). Purge removes the configuration and the encryption key;
+# postrm of the opennetmon .deb (dev/deb.sh). Purge removes the configuration, the encryption key and the certificate;
 # the database, the backups and the service user stay.
 set -e
 
 #DEBHELPER#
 
 if [ "$1" = purge ]; then
-  rm -f /etc/opennetmon/secret.key
+  rm -f /etc/opennetmon/secret.key /etc/opennetmon/tls-cert.pem /etc/opennetmon/tls-key.pem
   for path in /etc/opennetmon/config.toml /etc/opennetmon; do
     if dpkg-statoverride --list "$path" >/dev/null; then
       dpkg-statoverride --remove "$path"

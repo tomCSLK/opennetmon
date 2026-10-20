@@ -1,6 +1,6 @@
 #!/bin/sh
 # postinst of the opennetmon .deb (dev/deb.sh). Does what deploy/install.sh does besides copying files:
-# service user, owners of /etc/opennetmon, encryption key, backup directory and the ping sysctl.
+# service user, owners of /etc/opennetmon, encryption key, HTTPS certificate, data and backup directories and the ping sysctl.
 # cargo-deb inserts the systemd handling (enable, restart on upgrade) at the marker below.
 set -e
 
@@ -8,6 +8,8 @@ USER_NAME=opennetmon
 CONF_DIR=/etc/opennetmon
 CONFIG=$CONF_DIR/config.toml
 KEY=$CONF_DIR/secret.key
+TLS_CERT=$CONF_DIR/tls-cert.pem
+TLS_KEY=$CONF_DIR/tls-key.pem
 STATE_DIR=/var/lib/opennetmon
 BACKUP_DIR=/var/backups/opennetmon
 SYSCTL=99-opennetmon-ping.conf
@@ -27,6 +29,19 @@ if [ "$1" = configure ]; then
     OPENNETMON_SECRET_KEY_FILE="$KEY" /usr/bin/opennetmon --config "$CONFIG" key generate >/dev/null
     chown "$USER_NAME:$USER_NAME" "$KEY"
     NEW_KEY=yes
+  fi
+  # Self-signed certificate for the host name and every address of the server (replaceable, see docs/betrieb.md).
+  if [ ! -e "$TLS_CERT" ] && [ ! -e "$TLS_KEY" ]; then
+    NAMES=""
+    for name in $(hostname -f 2>/dev/null) $(hostname -I 2>/dev/null); do
+      NAMES="$NAMES --name $name"
+    done
+    # shellcheck disable=SC2086 # one --name per word
+    if /usr/bin/opennetmon --config "$CONFIG" tls generate --cert "$TLS_CERT" --key "$TLS_KEY" $NAMES; then
+      chown "$USER_NAME:$USER_NAME" "$TLS_KEY"
+    else
+      echo "opennetmon: could not create the HTTPS certificate; create one with 'opennetmon tls generate' (docs/betrieb.md)."
+    fi
   fi
   # systemd creates the state directory on the first start; `user add` runs before that.
   if [ ! -d "$STATE_DIR" ]; then
@@ -63,6 +78,7 @@ if [ "$1" = configure ]; then
     echo "opennetmon: next steps:"
     echo "  sudo -u $USER_NAME opennetmon --config $CONFIG user add admin --role admin"
     echo "  sudo systemctl start opennetmon"
+    echo "  then open https://<address of this server>:8443 (allow port 8443 in the firewall if one is active)"
   fi
 fi
 

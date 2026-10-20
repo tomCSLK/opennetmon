@@ -37,6 +37,8 @@ STATE_DIR="$DESTDIR/var/lib/opennetmon"
 BACKUP_DIR="$DESTDIR/var/backups/opennetmon"
 CONFIG="$CONF_DIR/config.toml"
 KEY="$CONF_DIR/secret.key"
+TLS_CERT="$CONF_DIR/tls-cert.pem"
+TLS_KEY="$CONF_DIR/tls-key.pem"
 REAL=yes
 [ -n "$DESTDIR" ] && REAL=no
 
@@ -94,6 +96,18 @@ else
   step "keeping the existing key $KEY"
   KEY_IS_NEW=no
 fi
+# Self-signed HTTPS certificate for the host name and every address of the server (replaceable, see docs/betrieb.md).
+if [ ! -e "$TLS_CERT" ] && [ ! -e "$TLS_KEY" ]; then
+  step "generating the HTTPS certificate $TLS_CERT"
+  NAMES=()
+  for name in $(hostname -f 2>/dev/null) $(hostname -I 2>/dev/null); do
+    NAMES+=(--name "$name")
+  done
+  "$BIN_DIR/opennetmon" --config "$CONFIG" tls generate --cert "$TLS_CERT" --key "$TLS_KEY" "${NAMES[@]}" | sed 's/^/    /'
+  [ "$REAL" = yes ] && chown "$USER_NAME":"$USER_NAME" "$TLS_KEY"
+else
+  step "keeping the existing certificate $TLS_CERT"
+fi
 
 # Database directory: systemd creates it on the first start, but `user add` (next steps) runs before that.
 if [ ! -d "$STATE_DIR" ]; then
@@ -146,8 +160,9 @@ if [ "$REAL" = yes ]; then
     echo "  1. Create the first administrator:"
     echo "       sudo -u $USER_NAME $BIN_DIR/opennetmon --config $CONFIG user add admin --role admin"
     echo "  2. Start the service:   sudo systemctl start opennetmon"
-    echo "  3. Put a TLS reverse proxy in front (deploy/Caddyfile.example, deploy/nginx.conf.example)."
-    echo "  4. Check:               systemctl status opennetmon; journalctl -u opennetmon -e; curl -s http://127.0.0.1:8080/healthz"
+    echo "  3. Open https://<address of this server>:8443 (allow port 8443 in the firewall if one is active)."
+    echo "     The certificate is self-signed: compare the fingerprint above before accepting it."
+    echo "  4. Check:               systemctl status opennetmon; journalctl -u opennetmon -e; curl -sk https://127.0.0.1:8443/healthz"
   fi
 else
   echo "(dry run into $DESTDIR: no user, ownership, systemctl or sysctl changes)"

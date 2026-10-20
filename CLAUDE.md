@@ -49,6 +49,9 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - `serde_json` für die Regeln der Gerätevorlagen (war über axum schon im Build)
 - Übersetzungen: `fluent-bundle` 0.16 (Fluent, Kataloge `locales/<code>/*.ftl` per `rust-embed`; nebenläufige Bundles, Isolationszeichen aus,
   Dezimalkomma per Formatter im deutschen Bundle) und `unic-langid` (Sprachkennung, war über fluent schon im Build)
+- HTTPS: `tokio-rustls` 0.26 (`rustls` mit `ring`, ohne OpenSSL; war über lettre schon im Build), `hyper`/`hyper-util` (eigene Accept-Schleife mit
+  `GracefulShutdown`, weil `axum::serve` kein TLS kann), `tower` (`map_request` für `ConnectInfo`), `rcgen` 0.14 (selbst signiertes Zertifikat, Features `crypto`,
+  `pem`, `ring`) und `time` (Gültigkeit; kam mit rcgen)
 - Mail: `lettre` 0.11 (Features `builder`, `smtp-transport`, `tokio1`, `tokio1-rustls-tls`; ohne native-tls/OpenSSL, damit der musl-Build statisch bleibt)
 - Sonstiges: `serde`, `toml` (Config), `clap` (CLI), `tracing` + `tracing-subscriber`,
   `thiserror` (Lib-Fehler) / `anyhow` (nur in `main`), `argon2` (Passwörter, API ab 0.6: `hash_password`
@@ -101,6 +104,10 @@ Ein Binary, ein Prozess, Module:
   Middleware `web::request_language` aus `Accept-Language` und vom `CurrentUser`-Extractor aus `users.language`); gespeicherte Meldungen als
   `Msg::encode` (Zustand, Ereignisse, Sendelog); `js_texts()` liefert die `js-…`-Nachrichten als JSON-Datenblock für `static/*.js`
   (`T('key')` aus `static/theme.js`, Platzhalter `%1`); Tests prüfen die Kataloge gegeneinander und gegen Code, Templates und JS (`docs/uebersetzungen.md`)
+- `tls` – eingebautes HTTPS: `generate` (ECDSA P-256, zehn Jahre, SAN aus `certificate_names`: `--name`-Werte, Hostname, localhost, Loopback; ungültige Namen
+  vom System überspringt die CLI), `load` (PEM-Kette + Schlüssel PKCS#8/PKCS#1/SEC1, Schlüssel 0600 Pflicht, Fingerabdruck), `serve` (ein Port, nur HTTPS: erstes Byte
+  `0x16` → TLS, sonst `301` auf `https://` mit Host/Pfad aus der Anfrage bzw. `400`; Handshake- und Header-Timeouts); Config `tls_cert_file`/`tls_key_file`
+  (beide oder keins), CLI `opennetmon tls generate [--name …] [--cert] [--key]`; ausgelieferte Config: `0.0.0.0:8443` mit HTTPS, Code-Standard ohne TLS `127.0.0.1:8080`
 - `auth` – Rollen, Argon2-Hashing, Session-/CSRF-Tokens, Validierung von Benutzername und Passwort
 - `snmp` – `SnmpClient` (GET und GETBULK-`walk` mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; `discovery` – Interface-Discovery über IF-MIB-Walks (`merge` ist reine Logik); Poller und Sensoren bauen darauf auf
 - `mib` – MIB-Parser (`mib::lexer`, `mib::parser`, tolerant) und Index (`MibIndex`: Auflösung über Module, Textual Conventions, Tabellen inkl. AUGMENTS,
@@ -153,7 +160,10 @@ Ein Binary, ein Prozess, Module:
 - Sicherheits-Header auf allen Antworten (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`)
 - Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/benutzer-und-login.md`)
 - Omada-SNMP ist nur authNoPriv/MD5 (keine Verschlüsselung, schwacher Hash): nur im privaten Netz, Passwort lang und einzigartig wählen
-- Standard-Bind `127.0.0.1:8080`; TLS über vorgeschalteten Reverse Proxy (Caddy oder nginx)
+- Ausgelieferte Config (Paket, `install.sh`): `listen = "0.0.0.0:8443"` mit eingebautem HTTPS (seit 0.3.0, Wunsch des Nutzers: direkter Zugriff per IP und Port, zwingend HTTPS);
+  Zertifikat `/etc/opennetmon/tls-cert.pem`/`tls-key.pem` bei der Installation selbst signiert erzeugt (`hostname -f`, `hostname -I`), ersetzbar durch ein eigenes
+  (`docs/betrieb.md`, „HTTPS“: eigene CA mit openssl, Let's Encrypt, Port 443 per Drop-in mit `CAP_NET_BIND_SERVICE`). Ohne `tls_*` Standard-Bind `127.0.0.1:8080`
+  für einen Reverse Proxy (Caddy oder nginx); kein HSTS (gälte für alle Ports des Hosts)
 - Eingaben (IP, OID, Intervalle) serverseitig validieren
 
 ## Betrieb auf Ubuntu Server
@@ -164,7 +174,7 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 - Debian-Paket (empfohlen für Ubuntu/Debian amd64): `dev/deb.sh` baut mit `cargo-deb` (`[package.metadata.deb]` in `Cargo.toml`) `target/debian/opennetmon_<version>-1_amd64.deb`;
   wie `install.sh`, aber unter `/usr` (`/usr/bin`, `/usr/sbin/opennetmon-backup`, Units in `/usr/lib/systemd/system`, sysctl in `/usr/lib/sysctl.d`); Units und Sicherungsskript
   erzeugt `dev/deb.sh` per `sed` aus `deploy/` nach `target/deb-assets/` (`deploy/` bleibt die einzige Quelle); Maintainer-Skripte `deploy/deb/postinst`/`postrm` (Benutzer,
-  `dpkg-statoverride` für `/etc/opennetmon` und `config.toml`, Schlüssel, `/var/backups/opennetmon`, Hinweis auf Reste von `install.sh`; `purge` löscht Konfiguration und Schlüssel,
+  `dpkg-statoverride` für `/etc/opennetmon` und `config.toml`, Schlüssel, HTTPS-Zertifikat, `/var/lib/opennetmon`, `/var/backups/opennetmon`, Hinweis auf Reste von `install.sh`; `purge` löscht Konfiguration, Schlüssel und Zertifikat,
   nie Datenbank, Sicherungen oder Benutzer); `opennetmon.service` aktiviert, bei der Erstinstallation nicht gestartet, bei Updates `try-restart`
 - `deploy/install.sh` (wiederholbar; `DESTDIR=… ` für einen Trockenlauf): Systembenutzer `opennetmon`, `/usr/local/bin/opennetmon` (alte Version als `.previous`),
   `/etc/opennetmon/config.toml` und `secret.key` (werden nie überschrieben), Unit, sysctl für Ping, täglicher Backup-Timer
@@ -174,7 +184,8 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 - Ping über `net.ipv4.ping_group_range` (`deploy/99-opennetmon-ping.conf`); Alternative `CAP_NET_RAW` (Hinweis in der Unit); der Poller warnt beim Start, wenn keine ICMP-Sockets möglich sind
 - `opennetmon backup <datei>` (SQLite `VACUUM INTO`, Modus 0600, überschreibt nie, ohne Schlüssel) und `deploy/opennetmon-backup.sh` + `.timer` (täglich, 14 Kopien)
 - Reverse-Proxy-Beispiele: `deploy/Caddyfile.example`, `deploy/nginx.conf.example` (mit Login-Begrenzung)
-- Health-Endpoint `/healthz` (ohne Auth, ohne interne Details)
+- Health-Endpoint `/healthz` (ohne Auth, ohne interne Details; `curl -sk https://127.0.0.1:8443/healthz`)
+- Paket getestet im Podman-Container (Image `opennetmon-debtest`, Ubuntu 24.04 mit systemd; `/usr/sbin/policy-rc.d` darin löschen): Installation, Update, remove, purge, Umstieg
 
 ## Konventionen
 
@@ -207,6 +218,7 @@ cargo run -- --config ./dev/config.toml
 cargo run -- --config ./dev/config.toml key generate                    # einmalig, vor dem ersten Serverstart
 cargo run -- --config ./dev/config.toml user add <name> --role admin    # auch: user passwd, user list
 cargo run -- --config ./dev/config.toml backup ./dev/data/backup.db      # konsistente Kopie der Datenbank
+cargo run -- --config ./dev/config.toml tls generate --cert ./dev/data/tls-cert.pem --key ./dev/data/tls-key.pem   # Zertifikat zum Testen von HTTPS
 cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv --auth md5   # Passwörter nur per Umgebung
 cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
 dev/mib-oracle.sh dev/data/mibs/tplink/*.mib                          # MIB-Auflösung gegen net-snmp (snmptranslate) prüfen

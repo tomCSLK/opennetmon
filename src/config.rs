@@ -33,7 +33,8 @@ pub enum ConfigError {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    /// Address the web server binds to. Default is loopback only; TLS is done by a reverse proxy.
+    /// Address the web server binds to. Default is loopback only (plain HTTP behind a TLS reverse proxy);
+    /// with `tls_cert_file`/`tls_key_file` it may be any address, e.g. `0.0.0.0:8443`.
     pub listen: SocketAddr,
     /// Path of the SQLite database file.
     pub database_path: PathBuf,
@@ -42,6 +43,11 @@ pub struct Config {
     /// File with the 256-bit key (64 hex characters, mode 0600) that encrypts stored SNMP secrets.
     /// Create it with `opennetmon key generate`; losing it makes stored secrets unreadable.
     pub secret_key_file: PathBuf,
+    /// Certificate chain for built-in HTTPS (PEM, server certificate first, then intermediates). Together
+    /// with `tls_key_file` the server speaks only HTTPS on `listen`; plain HTTP there gets a redirect.
+    pub tls_cert_file: Option<PathBuf>,
+    /// Private key of that certificate (PEM, mode 0600, readable by the service user).
+    pub tls_key_file: Option<PathBuf>,
     /// Mark session cookies `Secure`. Keep `true` behind a TLS reverse proxy; only plain-HTTP development needs `false`.
     pub cookie_secure: bool,
     /// Absolute session lifetime in hours.
@@ -67,6 +73,8 @@ impl Default for Config {
             database_path: PathBuf::from("/var/lib/opennetmon/opennetmon.db"),
             log_filter: "info".to_owned(),
             secret_key_file: PathBuf::from("/etc/opennetmon/secret.key"),
+            tls_cert_file: None,
+            tls_key_file: None,
             cookie_secure: true,
             session_ttl_hours: 168,
             client_ip_header: None,
@@ -126,12 +134,35 @@ impl Config {
         Ok(config)
     }
 
+    /// Certificate and key file when built-in HTTPS is configured.
+    pub fn tls_files(&self) -> Option<(&Path, &Path)> {
+        Some((
+            self.tls_cert_file.as_deref()?,
+            self.tls_key_file.as_deref()?,
+        ))
+    }
+
     fn validate(&self) -> Result<(), ConfigError> {
         if self.database_path.as_os_str().is_empty() {
             return Err(ConfigError::Invalid("database_path must not be empty"));
         }
         if self.secret_key_file.as_os_str().is_empty() {
             return Err(ConfigError::Invalid("secret_key_file must not be empty"));
+        }
+        match (&self.tls_cert_file, &self.tls_key_file) {
+            (Some(cert), Some(key))
+                if cert.as_os_str().is_empty() || key.as_os_str().is_empty() =>
+            {
+                return Err(ConfigError::Invalid(
+                    "tls_cert_file and tls_key_file must not be empty",
+                ));
+            }
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(ConfigError::Invalid(
+                    "set both tls_cert_file and tls_key_file, or neither",
+                ));
+            }
+            _ => {}
         }
         if self.log_filter.trim().is_empty() {
             return Err(ConfigError::Invalid("log_filter must not be empty"));
@@ -181,6 +212,33 @@ mod tests {
         for bad in ["poll_concurrency = 0", "poll_concurrency = 257"] {
             assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn tls_needs_both_files() {
+        let config = Config::from_sources(None, no_env).unwrap();
+        assert_eq!(config.tls_files(), None);
+        let both = "listen = \"0.0.0.0:8443\"\ntls_cert_file = \"/etc/c.pem\"\ntls_key_file = \"/etc/k.pem\"";
+        let config = Config::from_sources(Some(both), no_env).unwrap();
+        assert_eq!(
+            config.tls_files(),
+            Some((Path::new("/etc/c.pem"), Path::new("/etc/k.pem")))
+        );
+        for bad in [
+            "tls_cert_file = \"/etc/c.pem\"",
+            "tls_key_file = \"/etc/k.pem\"",
+            "tls_cert_file = \"\"\ntls_key_file = \"/etc/k.pem\"",
+        ] {
+            assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_shipped_example_config_is_valid() {
+        let text = include_str!("../deploy/config.example.toml");
+        let config = Config::from_sources(Some(text), no_env).unwrap();
+        assert!(config.tls_files().is_some());
+        assert_eq!(config.listen, "0.0.0.0:8443".parse().unwrap());
     }
 
     #[test]

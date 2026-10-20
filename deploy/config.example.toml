@@ -1,9 +1,17 @@
 # /etc/opennetmon/config.toml - production configuration (all keys shown with their defaults).
 # Changes need `systemctl restart opennetmon`; the e-mail settings are edited in the web interface instead.
 
-# Where the web interface listens. Keep it on loopback and put a TLS reverse proxy in front
-# (deploy/Caddyfile.example, deploy/nginx.conf.example).
-listen = "127.0.0.1:8080"
+# Where the web interface listens: every IPv4 address of the server, port 8443, HTTPS only (open it with
+# https://<server address>:8443; plain HTTP on the port is redirected). Open the port in the firewall if one is
+# active (`sudo ufw allow 8443/tcp`). "[::]:8443" also accepts IPv6. Behind a reverse proxy instead
+# (deploy/Caddyfile.example, deploy/nginx.conf.example): listen = "127.0.0.1:8080" and remove the two tls_ lines.
+listen = "0.0.0.0:8443"
+
+# Certificate for HTTPS. Created on installation by `opennetmon tls generate` (self-signed, valid for the
+# host name and the IP addresses of the server, ten years). To use your own certificate, point these to it
+# (PEM, server certificate first; key mode 0600, owned by opennetmon) - see docs/betrieb.md, "HTTPS".
+tls_cert_file = "/etc/opennetmon/tls-cert.pem"
+tls_key_file = "/etc/opennetmon/tls-key.pem"
 
 database_path = "/var/lib/opennetmon/opennetmon.db"
 log_filter = "info"                         # journalctl -u opennetmon; e.g. "info,opennetmon=debug"
@@ -12,11 +20,12 @@ log_filter = "info"                         # journalctl -u opennetmon; e.g. "in
 # BACK IT UP SEPARATELY from the database: without it the stored SNMP/SMTP passwords are unreadable.
 secret_key_file = "/etc/opennetmon/secret.key"
 
-cookie_secure = true                        # keep true behind HTTPS; false only for plain-HTTP testing
+cookie_secure = true                        # keep true with HTTPS; false only for plain-HTTP testing
 session_ttl_hours = 168
 
-# Behind the reverse proxy, tell the login throttling where the real client address is: "x-forwarded-for" (the last
-# entry, appended by Caddy/nginx) or "x-real-ip". Only set it when the service is reachable through the proxy only.
+# Only behind a reverse proxy: tell the login throttling where the real client address is: "x-forwarded-for" (the last
+# entry, appended by Caddy/nginx) or "x-real-ip". Only set it when the service is reachable through the proxy only;
+# with built-in HTTPS the server sees the client address itself.
 # client_ip_header = "x-forwarded-for"
 
 poller_enabled = true

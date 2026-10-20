@@ -16,8 +16,11 @@ axum = { version = "0.8", features = ["multipart"] }
 chacha20poly1305 = "0.11.0"
 clap = { version = "4", features = ["derive"] }
 fluent-bundle = "0.16"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["http1", "server", "server-graceful", "service", "tokio"] }
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
 rand = "0.9"
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "ring"] }
 rpassword = "7.5.4"
 rust-embed = { version = "8.13.0", features = ["mime-guess"] }
 serde = { version = "1", features = ["derive"] }
@@ -28,8 +31,11 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 subtle = "2.6.1"
 surge-ping = "0.9.1"
 thiserror = "2.0.21"
+time = { version = "0.3", default-features = false, features = ["std"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "signal", "sync"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "ring", "tls12"] }
 toml = "1.1.8"
+tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["trace", "compression-gzip", "set-header"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
@@ -39,7 +45,7 @@ unic-langid = "0.9"
 base64 = "0.23.1"
 http-body-util = "0.1.5"
 tempfile = "3.27.0"
-tower = { version = "0.5", features = ["util"] }
+tokio = { version = "1", features = ["io-util"] }
 
 # Argon2 is far too slow unoptimized; keep debug builds and tests usable.
 [profile.dev.package.argon2]

@@ -26,7 +26,7 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 | Auth | Lokale Benutzer, Rollen Admin/Leser, argon2, serverseitige Sitzungen, CSRF – umgesetzt |
 | Secrets | SNMP-Passwörter mit XChaCha20-Poly1305 verschlüsselt, Schlüsseldatei 0600 (`opennetmon key generate`) – umgesetzt |
 | Lizenz | **AGPL-3.0-or-later**, Copyright Thomas Cieslik; Quellcode-Link in der Oberfläche (Abschnitt 13), Fremdlizenzen in `THIRD-PARTY-LICENSES.txt` (`dev/third-party-licenses.py`) |
-| Betrieb | Statisches musl-Binary, systemd-Unit, Reverse Proxy (Caddy/nginx) für TLS, Standard-Bind `127.0.0.1:8080` |
+| Betrieb | Statisches musl-Binary, systemd-Unit, .deb-Paket; eingebautes HTTPS auf `0.0.0.0:8443` (ausgelieferte Config, seit 0.3.0), alternativ Reverse Proxy (Caddy/nginx) vor `127.0.0.1:8080` |
 
 ## PRTG-Funktionsprinzip, das nachgebaut wird
 
@@ -143,6 +143,11 @@ opennetmon/
     Benutzer, `dpkg-statoverride` für `/etc/opennetmon`, Schlüssel und Sicherungsverzeichnis in `deploy/deb/postinst`, `config.toml` als Konfigurationsdatei,
     systemd-Handling von cargo-deb (aktiviert, erst nach dem ersten Admin gestartet, bei Updates neu gestartet); `purge` löscht Konfiguration und Schlüssel,
     nie Daten (`docs/betrieb.md`). Später: arm64, ein apt-Repository erst nach dem Öffentlichmachen.
+11. **Eingebautes HTTPS – umgesetzt (2026-10-20, für 0.3.0):** Wunsch des Nutzers: ohne Proxy direkt per IP und Port erreichbar, zwingend verschlüsselt.
+    Modul `tls` (rustls mit ring, Zertifikat mit rcgen), Config `tls_cert_file`/`tls_key_file`, CLI `tls generate`; Paket und Installer erzeugen ein selbst
+    signiertes Zertifikat für Hostname und IP-Adressen und liefern `listen = "0.0.0.0:8443"` aus; Klartext-HTTP auf dem Port bekommt nur eine Weiterleitung.
+    Doku zu eigenem Zertifikat (eigene CA mit openssl, Let's Encrypt), Port 443 und Umstellung bestehender Installationen in `docs/betrieb.md`.
+    Im Container getestet: Erstinstallation, Login über HTTPS, eigene CA (EC und RSA, Kette), Port 443, Update von 0.2.0 mit und ohne geänderte Config.
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
@@ -168,7 +173,7 @@ Zurückgestellt gegenüber früheren Ideen: CPU/RAM/Disk-Sensoren (HOST-RESOURCE
 
 SNMP nur lesend; Secrets verschlüsselt in der DB (Schlüsseldatei 0600, Rechteprüfung beim Start), nie in Logs oder HTML; argon2;
 `HttpOnly`/`SameSite=Strict`-Cookies, `Secure` per Config; CSRF-Schutz für alle POST-Formulare; serverseitige Validierung
-von IP, OID, Intervallen; Bind nur auf `127.0.0.1`, TLS über Reverse Proxy.
+von IP, OID, Intervallen; nur HTTPS (eingebaut, Klartext-HTTP nur Weiterleitung) oder Bind auf `127.0.0.1` hinter einem TLS-Proxy.
 Begrenzung der Anmeldeversuche: umgesetzt (`auth::throttle`, `docs/benutzer-und-login.md`).
 
 ## Offene Punkte (vom Nutzer zu klären)

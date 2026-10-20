@@ -11,6 +11,7 @@ use opennetmon::i18n::Lang;
 use opennetmon::maintenance::Retention;
 use opennetmon::poller::Poller;
 use opennetmon::storage::{self, users};
+use opennetmon::tls;
 use opennetmon::web::{self, AppState};
 use sqlx::SqlitePool;
 use tracing_subscriber::EnvFilter;
@@ -35,6 +36,9 @@ enum Command {
     /// Manage the key that encrypts stored SNMP secrets
     #[command(subcommand)]
     Key(KeyCommand),
+    /// Manage the certificate for built-in HTTPS
+    #[command(subcommand)]
+    Tls(TlsCommand),
     /// Write a consistent copy of the database (safe while the server runs; never overwrites)
     Backup {
         /// Target file; created with mode 0600
@@ -46,6 +50,23 @@ enum Command {
 enum KeyCommand {
     /// Create a new random key file (mode 0600); never overwrites an existing file
     Generate,
+}
+
+#[derive(Subcommand)]
+enum TlsCommand {
+    /// Create a self-signed certificate (ECDSA P-256, ten years) for this server; never overwrites existing files.
+    /// It covers the host name, localhost and the loopback addresses, plus every --name.
+    Generate {
+        /// Host name or IP address clients use to reach the server (repeatable)
+        #[arg(long = "name")]
+        names: Vec<String>,
+        /// Certificate file (default: tls_cert_file from the config)
+        #[arg(long)]
+        cert: Option<PathBuf>,
+        /// Key file, created with mode 0600 (default: tls_key_file from the config)
+        #[arg(long)]
+        key: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -110,6 +131,35 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if let Command::Tls(TlsCommand::Generate { names, cert, key }) = &command {
+        let cert = cert.clone().or_else(|| config.tls_cert_file.clone());
+        let key = key.clone().or_else(|| config.tls_key_file.clone());
+        let (Some(cert), Some(key)) = (cert, key) else {
+            bail!(
+                "no certificate files: set tls_cert_file and tls_key_file in the config, or pass --cert and --key"
+            );
+        };
+        // Names found on the system (e.g. a host name with "_") must not make the installation fail.
+        let (valid, skipped): (Vec<_>, Vec<_>) = tls::certificate_names(names)
+            .into_iter()
+            .partition(|name| tls::is_valid_name(name));
+        for name in &skipped {
+            eprintln!("Skipping '{name}': not a valid host name or IP address.");
+        }
+        let generated = tls::generate(&cert, &key, &valid).context("creating the certificate")?;
+        println!(
+            "Certificate created: {} (key: {})",
+            cert.display(),
+            key.display()
+        );
+        println!("Valid for: {}", generated.names.join(", "));
+        println!("SHA-256 fingerprint: {}", generated.fingerprint);
+        println!(
+            "It is self-signed: browsers warn on the first visit; compare the fingerprint before accepting it."
+        );
+        return Ok(());
+    }
+
     if let Command::Backup { target } = &command {
         let pool = storage::connect(&config.database_path)
             .await
@@ -135,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
     match command {
         Command::Serve => serve(config, pool).await,
         Command::User(cmd) => manage_users(&pool, cmd).await,
-        Command::Key(_) | Command::Backup { .. } => Ok(()),
+        Command::Key(_) | Command::Tls(_) | Command::Backup { .. } => Ok(()),
     }
 }
 
@@ -151,18 +201,45 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
             "no users exist yet; create an admin with `opennetmon user add <name> --role admin`"
         );
     }
-    if !config.listen.ip().is_loopback() {
+    let tls = match config.tls_files() {
+        Some((cert, key)) => {
+            let loaded = tls::load(cert, key).with_context(|| {
+                format!(
+                    "loading the HTTPS certificate (create one with `opennetmon tls generate`; config keys tls_cert_file = {}, tls_key_file = {})",
+                    cert.display(),
+                    key.display()
+                )
+            })?;
+            Some(loaded)
+        }
+        None => None,
+    };
+    if tls.is_none() && !config.listen.ip().is_loopback() {
         tracing::warn!(
             listen = %config.listen,
-            "listening on a non-loopback address; put a TLS-terminating reverse proxy in front"
+            "serving plain HTTP on a non-loopback address; set tls_cert_file and tls_key_file or put a TLS-terminating reverse proxy in front"
         );
     }
     if !config.cookie_secure {
-        tracing::warn!("cookie_secure is disabled; only use this for plain-HTTP development");
+        if tls.is_some() {
+            tracing::warn!("cookie_secure is disabled although HTTPS is on; set it to true");
+        } else {
+            tracing::warn!("cookie_secure is disabled; only use this for plain-HTTP development");
+        }
     }
     let listener = tokio::net::TcpListener::bind(config.listen)
         .await
-        .with_context(|| format!("binding {}", config.listen))?;
+        .with_context(|| {
+            let hint = if config.listen.port() < 1024 {
+                " (ports below 1024 need CAP_NET_BIND_SERVICE, see docs/betrieb.md)"
+            } else {
+                ""
+            };
+            format!("binding {}{hint}", config.listen)
+        })?;
+    if let Some(tls) = &tls {
+        tracing::info!(fingerprint = %tls.fingerprint, "HTTPS only; plain HTTP is redirected");
+    }
     tracing::info!(listen = %config.listen, db = %config.database_path.display(), "opennetmon started");
 
     let secrets = Arc::new(secrets);
@@ -189,11 +266,20 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         modules = mibs.reports().len(),
         "MIBs loaded"
     );
-    let app = web::router(state).into_make_service_with_connect_info::<std::net::SocketAddr>();
-    let served = axum::serve(listener, app)
+    let app = web::router(state);
+    let served = match tls {
+        Some(tls) => {
+            tls::serve(listener, app, tls.config, shutdown_signal()).await;
+            Ok(())
+        }
+        None => axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .context("serving");
+        .context("serving"),
+    };
     if let Some(poller) = poller {
         poller.stop().await;
     }

@@ -1,4 +1,5 @@
-# nginx: TLS termination, plus an optional rate limit for the login (opennetmon throttles failed logins itself; set
+# nginx: only needed instead of opennetmon's built-in HTTPS (then set listen = "127.0.0.1:8080" and remove the tls_ lines).
+# TLS termination, plus an optional rate limit for the login (opennetmon throttles failed logins itself; set
 # client_ip_header = "x-forwarded-for" in its config so that it sees the real client address).
 # Put the limit_req_zone line in the http {} context (e.g. /etc/nginx/conf.d/opennetmon-limits.conf).
 limit_req_zone $binary_remote_addr zone=opennetmon_login:10m rate=10r/m;
