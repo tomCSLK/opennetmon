@@ -44,6 +44,7 @@ pub async fn connect(path: &Path) -> Result<SqlitePool> {
 pub async fn migrate(pool: &SqlitePool) -> Result<()> {
     sqlx::migrate!("./migrations").run(pool).await?;
     allow_devices_without_profile(pool).await?;
+    allow_local_sensors(pool).await?;
     Ok(())
 }
 
@@ -63,55 +64,143 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
     const COLUMNS: &str = "id, name, host, port, group_id, profile_id, interval_secs, timeout_secs, \
                            retries, created_at, updated_at, position, template_id, kind, \
                            paused, pause_until_ms, pause_reason";
+    rebuild_without_foreign_keys(pool, "devices", |tx| {
+        Box::pin(async move {
+            sqlx::query(
+                "CREATE TABLE devices_new (
+                    id            INTEGER PRIMARY KEY,
+                    name          TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    host          TEXT NOT NULL,
+                    port          INTEGER NOT NULL DEFAULT 161 CHECK (port BETWEEN 1 AND 65535),
+                    group_id      INTEGER REFERENCES groups (id) ON DELETE RESTRICT,
+                    -- NULL = no SNMP (ping only)
+                    profile_id    INTEGER REFERENCES credential_profiles (id) ON DELETE RESTRICT,
+                    interval_secs INTEGER NOT NULL DEFAULT 60 CHECK (interval_secs BETWEEN 10 AND 3600),
+                    timeout_secs  INTEGER NOT NULL DEFAULT 5 CHECK (timeout_secs BETWEEN 1 AND 60),
+                    retries       INTEGER NOT NULL DEFAULT 1 CHECK (retries BETWEEN 0 AND 5),
+                    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                    updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                    position      INTEGER CHECK (position IS NULL OR position > 0),
+                    template_id   INTEGER REFERENCES device_templates (id) ON DELETE SET NULL,
+                    kind          TEXT NOT NULL DEFAULT 'generic',
+                    paused        INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+                    pause_until_ms INTEGER,
+                    pause_reason  TEXT NOT NULL DEFAULT ''
+                ) STRICT",
+            )
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(&format!(
+                "INSERT INTO devices_new ({COLUMNS}) SELECT {COLUMNS} FROM devices"
+            ))
+            .execute(&mut **tx)
+            .await?;
+            for statement in [
+                "DROP TABLE devices",
+                "ALTER TABLE devices_new RENAME TO devices",
+                "CREATE INDEX devices_group_id ON devices (group_id)",
+                "CREATE INDEX devices_profile_id ON devices (profile_id)",
+            ] {
+                sqlx::query(statement).execute(&mut **tx).await?;
+            }
+            Ok(())
+        })
+    })
+    .await
+}
+
+/// Sensors of the machine opennetmon runs on (kind `local`, measured value in the new column
+/// `target`, e.g. `disk:/var`) do not fit the kind check of migration 0005. Like
+/// [`allow_devices_without_profile`], the check only changes by rebuilding the table outside a
+/// migration transaction; it runs once. Later migrations that add columns to `sensors` must add
+/// them here as well.
+async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
+    let has_target: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('sensors') WHERE name = 'target'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if has_target > 0 {
+        return Ok(());
+    }
+    const COLUMNS: &str = "id, device_id, name, kind, if_index, oid, oid_mode, scale, enabled, \
+                           created_at, unit_label, position, pause_until_ms, pause_reason";
+    rebuild_without_foreign_keys(pool, "sensors", |tx| {
+        Box::pin(async move {
+            sqlx::query(
+                "CREATE TABLE sensors_new (
+                    id             INTEGER PRIMARY KEY,
+                    device_id      INTEGER NOT NULL REFERENCES devices (id) ON DELETE CASCADE,
+                    name           TEXT NOT NULL COLLATE NOCASE,
+                    kind           TEXT NOT NULL CHECK (kind IN ('ping', 'uptime', 'if_traffic', 'if_status', 'oid', 'local')),
+                    if_index       INTEGER,
+                    oid            TEXT,
+                    oid_mode       TEXT CHECK (oid_mode IN ('gauge', 'counter')),
+                    scale          REAL,
+                    enabled        INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+                    created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                    unit_label     TEXT,
+                    position       INTEGER CHECK (position IS NULL OR position > 0),
+                    pause_until_ms INTEGER,
+                    pause_reason   TEXT NOT NULL DEFAULT '',
+                    -- what a local sensor measures, e.g. 'cpu' or 'disk:/var'
+                    target         TEXT,
+                    UNIQUE (device_id, name),
+                    -- Exactly the columns that belong to the kind are set.
+                    CHECK (
+                        CASE kind
+                            WHEN 'if_traffic' THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
+                            WHEN 'if_status'  THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
+                            WHEN 'oid'        THEN if_index IS NULL AND oid IS NOT NULL AND oid_mode IS NOT NULL AND scale IS NOT NULL AND target IS NULL
+                            WHEN 'local'      THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NOT NULL
+                            ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
+                        END
+                    )
+                ) STRICT",
+            )
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(&format!(
+                "INSERT INTO sensors_new ({COLUMNS}) SELECT {COLUMNS} FROM sensors"
+            ))
+            .execute(&mut **tx)
+            .await?;
+            for statement in [
+                "DROP TABLE sensors",
+                "ALTER TABLE sensors_new RENAME TO sensors",
+                "CREATE INDEX sensors_device_id ON sensors (device_id)",
+            ] {
+                sqlx::query(statement).execute(&mut **tx).await?;
+            }
+            Ok(())
+        })
+    })
+    .await
+}
+
+/// Runs `rebuild` in a transaction with foreign keys switched off (so dropping the old table
+/// does not cascade), then checks that every foreign key still holds before committing.
+async fn rebuild_without_foreign_keys<F>(pool: &SqlitePool, table: &str, rebuild: F) -> Result<()>
+where
+    F: for<'t> FnOnce(
+        &'t mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<()>> + Send + 't>,
+    >,
+{
     let mut conn = pool.acquire().await?;
     sqlx::query("PRAGMA foreign_keys = OFF")
         .execute(&mut *conn)
         .await?;
     let rebuilt = async {
         let mut tx = sqlx::Connection::begin(&mut *conn).await?;
-        sqlx::query(
-            "CREATE TABLE devices_new (
-                id            INTEGER PRIMARY KEY,
-                name          TEXT NOT NULL COLLATE NOCASE UNIQUE,
-                host          TEXT NOT NULL,
-                port          INTEGER NOT NULL DEFAULT 161 CHECK (port BETWEEN 1 AND 65535),
-                group_id      INTEGER REFERENCES groups (id) ON DELETE RESTRICT,
-                -- NULL = no SNMP (ping only)
-                profile_id    INTEGER REFERENCES credential_profiles (id) ON DELETE RESTRICT,
-                interval_secs INTEGER NOT NULL DEFAULT 60 CHECK (interval_secs BETWEEN 10 AND 3600),
-                timeout_secs  INTEGER NOT NULL DEFAULT 5 CHECK (timeout_secs BETWEEN 1 AND 60),
-                retries       INTEGER NOT NULL DEFAULT 1 CHECK (retries BETWEEN 0 AND 5),
-                created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                position      INTEGER CHECK (position IS NULL OR position > 0),
-                template_id   INTEGER REFERENCES device_templates (id) ON DELETE SET NULL,
-                kind          TEXT NOT NULL DEFAULT 'generic',
-                paused        INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
-                pause_until_ms INTEGER,
-                pause_reason  TEXT NOT NULL DEFAULT ''
-            ) STRICT",
-        )
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query(&format!(
-            "INSERT INTO devices_new ({COLUMNS}) SELECT {COLUMNS} FROM devices"
-        ))
-        .execute(&mut *tx)
-        .await?;
-        for statement in [
-            "DROP TABLE devices",
-            "ALTER TABLE devices_new RENAME TO devices",
-            "CREATE INDEX devices_group_id ON devices (group_id)",
-            "CREATE INDEX devices_profile_id ON devices (profile_id)",
-        ] {
-            sqlx::query(statement).execute(&mut *tx).await?;
-        }
+        rebuild(&mut tx).await?;
         let broken = sqlx::query("PRAGMA foreign_key_check")
             .fetch_all(&mut *tx)
             .await?;
         if !broken.is_empty() {
             return Err(crate::error::Error::Internal(format!(
-                "rebuilding devices would break {} foreign key(s); nothing changed",
+                "rebuilding {table} would break {} foreign key(s); nothing changed",
                 broken.len()
             )));
         }
@@ -298,6 +387,63 @@ mod tests {
             .unwrap();
         assert!(created.ends_with('Z'));
         ping(&pool).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_sensors_table_is_rebuilt_once_for_local_sensors_without_losing_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = connect(&dir.path().join("old.db")).await.unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        for statement in [
+            "INSERT INTO credential_profiles (name, version, community_enc) VALUES ('p', 'v2c', x'01')",
+            "INSERT INTO devices (name, host, profile_id) VALUES ('srv', '127.0.0.1', 1)",
+            "INSERT INTO sensors (device_id, name, kind, position, unit_label, pause_reason) \
+             VALUES (1, 'Ping', 'ping', 2, NULL, 'Umbau')",
+            "INSERT INTO channels (sensor_id, key, unit, warn_above) VALUES (1, 'rtt', 'ms', 50)",
+            "INSERT INTO samples (channel_id, ts, value) VALUES (1, 1000, 2.5)",
+            "INSERT INTO sensor_status (sensor_id, status, message, since_ms, last_poll_ms, consecutive_failures) \
+             VALUES (1, 'up', '', 1000, 1000, 0)",
+        ] {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+        let local =
+            "INSERT INTO sensors (device_id, name, kind, target) VALUES (1, 'CPU', 'local', 'cpu')";
+        assert!(sqlx::query(local).execute(&pool).await.is_err());
+
+        migrate(&pool).await.unwrap();
+        migrate(&pool).await.unwrap(); // a second start changes nothing
+        let kept: (String, Option<i64>, String) =
+            sqlx::query_as("SELECT name, position, pause_reason FROM sensors WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(kept, ("Ping".to_owned(), Some(2), "Umbau".to_owned()));
+        let rows: (i64, i64, Option<f64>) = sqlx::query_as(
+            "SELECT (SELECT COUNT(*) FROM samples), (SELECT COUNT(*) FROM sensor_status), \
+             (SELECT warn_above FROM channels WHERE id = 1)",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rows, (1, 1, Some(50.0)));
+        sqlx::query(local).execute(&pool).await.unwrap();
+        assert!(
+            sqlx::query("INSERT INTO sensors (device_id, name, kind) VALUES (1, 'x', 'local')")
+                .execute(&pool)
+                .await
+                .is_err(),
+            "a local sensor needs its target"
+        );
+        sqlx::query("DELETE FROM devices WHERE id = 1")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let left: (i64, i64) =
+            sqlx::query_as("SELECT (SELECT COUNT(*) FROM sensors), (SELECT COUNT(*) FROM samples)")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(left, (0, 0), "cascade");
     }
 
     #[tokio::test]

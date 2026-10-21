@@ -16,6 +16,7 @@ pub mod sensor_detail;
 pub mod sensor_text;
 pub mod sensor_values;
 pub mod sensors;
+pub mod server_values;
 pub mod sparkline;
 pub mod status_list;
 pub mod templates;
@@ -131,6 +132,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/devices/{id}/discover", post(sensors::discover))
         .route("/devices/{id}/values", post(sensor_values::discover))
+        .route(
+            "/devices/{id}/server",
+            get(server_values::page).post(server_values::create),
+        )
         .route("/devices/{id}/values/create", post(sensor_values::create))
         .route("/devices/{id}/sensors/bulk", post(sensors::bulk))
         .route(

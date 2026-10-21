@@ -6,8 +6,8 @@
 ## Stand (2026-10-21, Release v0.4.0)
 
 Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. Als Nächstes: **Installation auf dem echten Server**,
-Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest und Feinschliff. Geplant sind außerdem **Sensoren für den Server
-selbst** und eine **Update-Möglichkeit** (Zeitpunkt offen).
+Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest und Feinschliff. Geplant ist außerdem eine
+**Update-Möglichkeit** (Zeitpunkt offen). Seit v0.4.0 neu (noch nicht veröffentlicht): Sensoren „Dieser Server“.
 
 Umgesetzt (Details in `docs/`):
 
@@ -16,6 +16,9 @@ Umgesetzt (Details in `docs/`):
 - **SNMP-Profile:** v2c und v3 authNoPriv/authPriv, Secrets verschlüsselt (`docs/snmp-profile.md`)
 - **Sensoren:** Ping, Uptime, Interface-Traffic (64 Bit mit Fallback auf 32 Bit), Interface-Status, OID (Gauge/Counter); Interface-Discovery per Walk,
   Umbenennen, Mini-Graphen der letzten Stunde (`docs/sensoren.md`)
+- **Dieser Server:** CPU-Last, Load, Arbeitsspeicher und Swap, Laufzeit, Dateisysteme, Temperaturen (hwmon) und Netzwerk-Traffic des Rechners, auf
+  dem opennetmon läuft, direkt aus `/proc`, `/sys` und `statvfs` (kein snmpd, keine Zugangsdaten); Auswahl per Häkchen, Grenzen für Speicher,
+  Dateisysteme und Temperaturen beim Anlegen (`docs/sensoren.md`, „Dieser Server“)
 - **MIBs:** Import mit Parser und Standard-MIBs, OID per Name; „Werte suchen“ (PoE je Port, CPU, Speicher, Temperaturen, Lüfter; neue Sensoren pausiert)
   (`docs/mibs.md`, getestet am SG2008P)
 - **Gerätevorlagen:** aus einem eingerichteten Gerät speichern, beim Anlegen automatisch per `sysObjectID` oder später per Knopf anwenden, nur Fehlendes
@@ -92,10 +95,10 @@ Ein Binary, ein Prozess. Module und ihre Regeln stehen in `CLAUDE.md` (Abschnitt
 
 ### Datenmodell
 
-Migrations `0001`–`0016`: `meta`, `users`, `sessions`, `credential_profiles` (Secrets verschlüsselt), `groups` (hierarchisch, höchstens 8 Ebenen),
+Migrations `0001`–`0016` (dazu einmalige Neuaufbauten von `devices` und `sensors` in `storage::migrate`): `meta`, `users`, `sessions`, `credential_profiles` (Secrets verschlüsselt), `groups` (hierarchisch, höchstens 8 Ebenen),
 `devices` (Profil optional für Geräte ohne SNMP, Gerätetyp `kind`), `sensors`, `channels` (Einheit, Schwellwerte), `value_states` (Bewertung von
 Aufzählungswerten), `samples`, `samples_1h`, `samples_1d`, `sensor_status`, `events`, `mail_settings`, `notifications`, `mib_files`,
-`device_templates`, `pause_log`; Pausen als Spalten an `groups`/`devices` (`paused`, `pause_until_ms`, `pause_reason`), Spalte `position` für die Handordnung.
+`device_templates`, `pause_log`; `sensors.target` für die Sensoren „Dieser Server“; Pausen als Spalten an `groups`/`devices` (`paused`, `pause_until_ms`, `pause_reason`), Spalte `position` für die Handordnung.
 
 Retention (konfigurierbar): Rohdaten 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt.
 Counter → Rate per Differenz/Zeitdelta; bei Wrap oder Reset (z. B. `sysUpTime` kleiner) wird **kein** Wert geschrieben.
@@ -120,7 +123,7 @@ opennetmon/
     templates.rs        # Gerätevorlagen
     ordering.rs         # Anzeigereihenfolge
     pause.rs            # Pausen und ihre Vererbung
-    sensors/            # Trait Sensor, ping, snmp, spec, counter, format
+    sensors/            # Trait Sensor, ping, snmp, local (Dieser Server), spec, counter, format
     status.rs           # Schwellwerte, Bewertungen, Zustandsautomat
     poller.rs           # Supervisor, eine Aufgabe je Gerät
     maintenance.rs      # Rollups, Retention
@@ -155,20 +158,15 @@ opennetmon/
 10. ✔ **Betrieb:** musl-Binary, systemd-Unit mit Hardening, Installer, Backup, Proxy-Beispiele, `.deb`-Paket (im Podman-Container getestet).
 11. ✔ **Eingebautes HTTPS** (0.3.0): rustls, selbst signiertes Zertifikat bei der Installation, Klartext-HTTP nur Weiterleitung.
 12. ✔ **Statuslisten, Gerätebaum, Gerätetypen, Pausieren, Protokoll** (0.3.1 und 0.4.0).
+12a. ✔ **Sensoren „Dieser Server“** (2026-10-21, nach 0.4.0): eingebauter Sensortyp statt snmpd auf dem Server.
 13. **Offen:**
     - Installation auf dem echten Ubuntu Server (Paket), `/healthz` und Login über HTTPS prüfen, die sieben Omada-Geräte einrichten
     - Benachrichtigung mit dem echten Mailserver des Nutzers testen
     - Integrationstest Ende zu Ende gegen den lokalen `snmpd`: Gerät anlegen → Discovery → Messwerte nach 1–2 Intervallen → Agent stoppen → `Down`
       → Agent starten → `Up`
     - Feinschliff nach den ersten Tagen im Betrieb
-    - **Sensoren für den Server selbst** (Wunsch 2026-10-21): CPU-Last, Load, Arbeitsspeicher, Swap, Belegung der Dateisysteme, Temperaturen,
-      Netzwerk-Traffic, Uptime; denkbar auch ausstehende Updates, Neustart nötig, Zustand wichtiger systemd-Dienste. Zwei Wege:
-      - heute schon möglich: `snmpd` (net-snmp) auf dem Server installieren, den Server als SNMP-Gerät anlegen und „Werte suchen“ nutzen
-        (HOST-RESOURCES: CPU je Kern, Speicher und Dateisysteme; Interfaces per Discovery). Kostet einen weiteren Dienst und ein weiteres Passwort,
-        Load, Temperaturen und Dienste fehlen ohne UCD-MIB
-      - eingebaut: neuer Sensortyp „Dieser Server“ über den `Sensor`-Trait, der `/proc`, `statvfs` und `/sys/class/hwmon` direkt liest (kein snmpd,
-        keine Zugangsdaten; verträgt sich mit dem Hardening der Unit, nur lesend). Empfehlung, vor der Umsetzung festzulegen: welche Werte, und ob
-        systemd-Dienste/Updates dazugehören (bräuchte D-Bus bzw. apt-Daten und lockerere Rechte)
+    - Sensoren „Dieser Server“ erweitern, wenn gewünscht: ausstehende Updates, „Neustart nötig“, Zustand wichtiger systemd-Dienste (bräuchte
+      D-Bus bzw. apt-Daten und lockerere Rechte der Unit; bewusst noch nicht umgesetzt)
     - **Update-Möglichkeit** (Wunsch 2026-10-21, Zeitpunkt offen): heute per neuem `.deb` mit `apt install ./…deb` (Daten und Config bleiben).
       Später z. B. ein apt-Repository (Updates mit `apt upgrade`, setzt ein öffentliches Repo oder eigenen Paket-Server voraus) und/oder ein Hinweis
       in der Oberfläche, wenn auf GitHub eine neue Version erschienen ist. Ein Selbst-Update aus der Oberfläche heraus passt nicht zum Hardening
@@ -208,7 +206,6 @@ Begrenzung der Anmeldeversuche (`auth::throttle`).
 - ER605: läuft als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - Repo öffentlich machen (Historie am 2026-10-19 geprüft: keine Secrets); Regel für fremde Beiträge (CLA/DCO) festlegen
-- Sensoren für den Server: welche Werte, eingebaut oder über snmpd (siehe Phase 13)
 - Update-Möglichkeit: Weg und Zeitpunkt
 
 Geklärt: Der Server hat Internetzugang und betreibt weitere Programme (2026-10-21).

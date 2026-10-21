@@ -463,7 +463,10 @@ pub fn build(
                 enabled: s.enabled,
                 limits,
             }),
-            SensorSpec::InterfaceTraffic { .. } | SensorSpec::InterfaceStatus { .. } => {}
+            // Interfaces follow the port rules; local sensors belong to one machine.
+            SensorSpec::InterfaceTraffic { .. }
+            | SensorSpec::InterfaceStatus { .. }
+            | SensorSpec::Local(_) => {}
         }
     }
     if body.is_empty() {

@@ -19,6 +19,7 @@ use crate::mib::MibIndex;
 use crate::pause::{Source, Target};
 use crate::sensors::Unit;
 use crate::sensors::format::channel_label;
+use crate::sensors::local::LocalMetric;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpTarget};
@@ -104,6 +105,8 @@ struct SensorsTemplate {
     form: SensorFormValues,
     /// The device template this device was set up with.
     template_name: Option<String>,
+    /// Offer "Werte dieses Servers" (`web::server_values`).
+    offer_server_values: bool,
 }
 
 struct DiscoverRowView {
@@ -246,7 +249,9 @@ async fn recent(
 ) -> Result<(Trend, Vec<String>, String)> {
     let as_band = matches!(
         sensor.spec,
-        SensorSpec::InterfaceStatus { .. } | SensorSpec::Uptime
+        SensorSpec::InterfaceStatus { .. }
+            | SensorSpec::Uptime
+            | SensorSpec::Local(LocalMetric::Uptime)
     ) || sensor.channels.iter().any(|c| c.unit == Unit::State);
     let trend = if as_band {
         let from = now - sparkline::WINDOW_MS;
@@ -372,7 +377,11 @@ async fn render_sensors(
                 .map(|t| t.name),
             None => None,
         };
+    let has_local = records
+        .iter()
+        .any(|r| matches!(r.spec, SensorSpec::Local(_)));
     let page = SensorsTemplate {
+        offer_server_values: crate::web::server_values::offered(&device, has_local),
         template_name,
         layout: user.layout(),
         t: user.lang,
@@ -420,6 +429,10 @@ pub async fn create(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let device = load_device(&state, id).await?;
+    // The values of this server are picked on a page of their own.
+    if form.kind == "server" {
+        return Ok(Redirect::to(&format!("/devices/{}/server", device.id)).into_response());
+    }
     let mibs = state.mib_index();
     let outcome = match form.to_spec(&mibs) {
         Ok((_, spec)) if spec.uses_snmp() && !device.has_snmp() => {

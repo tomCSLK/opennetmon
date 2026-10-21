@@ -28,6 +28,8 @@
         if (a >= 60) { return num(v / 60, 1) + ' ' + T('unit-minutes'); }
         return num(v, 0) + ' s';
       case 'percent': return num(v, 1) + ' %';
+      case 'bytes': return bytes(v);
+      case 'celsius': return num(v, 1) + ' °C';
       case 'per_second': return num(v, 3) + ' /s';
       case 'state':
         if (key === 'oper_status' && OPER_STATUS[Math.round(v)]) { return OPER_STATUS[Math.round(v)]; }

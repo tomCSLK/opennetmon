@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use crate::i18n::Msg;
 use crate::ordering::{natural_cmp, position_cmp};
 use crate::sensors::Unit;
+use crate::sensors::local::LocalMetric;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
 use crate::status::{Status, Thresholds, ValueState};
@@ -50,6 +51,7 @@ struct SensorRow {
     oid_mode: Option<String>,
     scale: Option<f64>,
     unit_label: Option<String>,
+    target: Option<String>,
     enabled: i64,
     position: Option<i64>,
 }
@@ -95,11 +97,17 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
             scale: r.scale.ok_or_else(|| corrupt("scale"))?,
             unit: r.unit_label.clone(),
         },
+        "local" => SensorSpec::Local(
+            r.target
+                .as_deref()
+                .and_then(LocalMetric::parse)
+                .ok_or_else(|| corrupt("target"))?,
+        ),
         _ => return Err(corrupt("kind")),
     })
 }
 
-const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, enabled, position FROM sensors";
+const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, enabled, position FROM sensors";
 
 /// Automatic order of sensor kinds: reachability first, then ports, then everything else.
 fn kind_rank(kind: &str) -> u8 {
@@ -279,13 +287,19 @@ pub async fn create_sensor_with_state(
             Some(*scale),
             unit.as_deref().map(str::trim),
         ),
-        SensorSpec::Ping | SensorSpec::Uptime => (None, None, None, None, None),
+        SensorSpec::Ping | SensorSpec::Uptime | SensorSpec::Local(_) => {
+            (None, None, None, None, None)
+        }
+    };
+    let target = match spec {
+        SensorSpec::Local(metric) => Some(metric.target()),
+        _ => None,
     };
 
     let mut tx = pool.begin().await?;
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, enabled) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, enabled) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(device_id)
     .bind(name)
@@ -295,6 +309,7 @@ pub async fn create_sensor_with_state(
     .bind(oid_mode)
     .bind(scale)
     .bind(unit_label)
+    .bind(target)
     .bind(i64::from(enabled))
     .fetch_one(&mut *tx)
     .await
@@ -525,12 +540,19 @@ mod tests {
             ),
             ("Status 1", SensorSpec::InterfaceStatus { if_index: 3 }),
             ("Custom", oid_spec()),
+            ("CPU", SensorSpec::Local(LocalMetric::Cpu)),
+            (
+                "Daten",
+                SensorSpec::Local(LocalMetric::Disk {
+                    mount: "/srv/daten".to_owned(),
+                }),
+            ),
         ];
         for (name, spec) in &specs {
             create_sensor(&pool, device, name, spec).await.unwrap();
         }
         let stored = list_sensors(&pool, device).await.unwrap();
-        assert_eq!(stored.len(), 5);
+        assert_eq!(stored.len(), 7);
         for (name, spec) in &specs {
             let record = stored.iter().find(|s| s.name == *name).unwrap();
             assert_eq!(&record.spec, spec);

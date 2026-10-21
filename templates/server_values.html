@@ -1,0 +1,48 @@
+{% extends "app.html" %}
+{% block title %}{{ t.get("local-heading") }} {{ device.name }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><span>{{ t.get("local-heading") }}</span></div>
+    <h1>{{ t.get("local-heading") }}</h1>
+    <p class="subtitle">{{ t.get1("local-subtitle", "device", device.name.as_str()) }}</p>
+  </div>
+</div>
+<p class="notice" role="status">{{ t.get1("local-source", "host", hostname.as_str()) }}</p>
+{% if sections.is_empty() %}
+<div class="card"><div class="empty"><strong>{{ t.get("local-none") }}</strong>
+  <a href="/devices/{{ device.id }}/sensors">{{ t.get("back-to-sensors") }}</a></div></div>
+{% else %}
+<form method="post" action="/devices/{{ device.id }}/server" class="sections">
+  <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+  {% for section in sections %}
+  <section class="card flush">
+    <div class="card-head"><h2>{{ section.title }}</h2></div>
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th></th><th>{{ t.get("sensor") }}</th><th>{{ t.get("description") }}</th><th class="right">{{ t.get("sensors-current") }}</th></tr>
+      </thead>
+      <tbody>
+      {% for c in section.candidates %}
+        <tr>
+          <td><input type="checkbox" name="target" value="{{ c.target }}" aria-label="{{ t.get1("select-named", "name", c.name.as_str()) }}"
+            {% if c.exists %}disabled checked{% else if c.selected %}checked{% endif %}></td>
+          <td><strong>{{ c.name }}</strong>{% if c.exists %}<span class="sub">{{ t.get("local-exists") }}</span>{% endif %}</td>
+          <td class="wrap muted">{{ c.detail }}</td>
+          <td class="num right">{{ c.value }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endfor %}
+  <p class="hint">{{ t.get("local-limits-hint") }}</p>
+  <div class="form-actions">
+    <button type="submit">{{ t.get("discover-create") }}</button>
+    <a class="button secondary" href="/devices/{{ device.id }}/sensors">{{ t.get("cancel") }}</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

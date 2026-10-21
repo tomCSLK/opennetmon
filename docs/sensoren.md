@@ -10,8 +10,44 @@ Alle Sensortypen implementieren das Trait `Sensor` (`src/sensors/mod.rs`); der P
 | Interface-Traffic (`if_traffic`) | `in`, `out` (bit/s) | `ifHCInOctets`/`ifHCOutOctets` (64 Bit), sonst `ifInOctets`/`ifOutOctets` (32 Bit) |
 | Interface-Status (`if_status`) | `oper_status` (Code) | `ifOperStatus` (1 = up, 2 = down, 3 = testing, 5 = dormant, 7 = lowerLayerDown) |
 | OID (`oid`) | `value` | beliebige numerische OID, Modus *Gauge* (Wert × Faktor) oder *Counter* (Rate/s × Faktor) |
+| Dieser Server (`local`) | je nach Wert, siehe „Dieser Server“ | liest den Rechner, auf dem opennetmon läuft, direkt (kein SNMP) |
 
 Die Traffic-Raten sind Bit/s (Oktette × 8). Eine Abfrage braucht je Sensor genau ein SNMP-GET; Zähler holen zusätzlich `sysUpTime`.
+
+## Dieser Server (`src/sensors/local.rs`, Seite `web::server_values`)
+
+Sensoren für den Rechner, auf dem opennetmon selbst läuft – ohne `snmpd`, ohne Zugangsdaten, nur lesend. Was gemessen wird, steht in der Spalte
+`sensors.target`:
+
+| Wert (`target`) | Kanäle | Quelle | Grenzen beim Anlegen |
+|---|---|---|---|
+| CPU-Last (`cpu`) | `total`, `iowait` (%) | `/proc/stat`, Differenz zweier Abfragen (die erste liefert noch keinen Wert) | keine (kurze Spitzen sind normal) |
+| Load (`load`) | `load1`, `load5`, `load15` | `/proc/loadavg` | keine |
+| Arbeitsspeicher (`memory`) | `used` (%, ohne Puffer/Cache), `available` (Bytes), `swap_used` (%; ohne Swap 0) | `/proc/meminfo` (`MemAvailable`) | `used`: Warnung über 90 %, Ausfall über 95 % |
+| Laufzeit (`uptime`) | `uptime` (s) | `/proc/uptime` | keine |
+| Dateisystem (`disk:<Einhängepunkt>`) | `used` (%), `free` (Bytes) | `statvfs` (wie `df`: reservierte Blöcke zählen als belegt), höchstens 5 s | `used`: Warnung über 85 %, Ausfall über 95 % |
+| Temperatur (`temp:<Chip>/<Bezeichnung>`) | `temperature` (°C) | `/sys/class/hwmon/*/temp*_input` | Warnung über `temp*_max`, Ausfall über `temp*_crit` (wenn die Hardware sie meldet) |
+| Netzwerk-Traffic (`net:<Interface>`) | `in`, `out` (bit/s) | `/sys/class/net/<Interface>/statistics/rx_bytes`/`tx_bytes` (64 Bit) | keine |
+
+- **Anlegen:** Auf der Sensorseite jedes Geräts unter „Sensor hinzufügen“ den Typ „Dieser Server (CPU, Speicher, Dateisysteme …)“ wählen, oder oben
+  der Knopf „Werte dieses Servers“ (nur für Administratoren). Der Knopf erscheint bei Geräten vom Typ **Server**, bei Geräten mit der Adresse
+  `127.x.x.x`, `::1` oder `localhost` und bei Geräten, die schon solche Sensoren haben. Die Seite listet, was der Rechner gerade
+  meldet, mit aktuellem Wert; Allgemeines, lokale Dateisysteme und aktive Netzwerkkarten sind vorausgewählt, Temperaturen und Netzlaufwerke nicht.
+  Vorhandene Werte sind abgehakt und gesperrt; angelegt wird nur, was der Rechner in dem Moment anbietet.
+- **Empfehlung:** Den Server als eigenes Gerät anlegen (Typ „Server“, ohne SNMP, mit seiner LAN-Adresse für den Ping). Die Werte stammen aber immer vom Rechner,
+  auf dem opennetmon läuft – auch wenn sie an einem anderen Gerät angelegt werden.
+- **Dateisysteme:** Nur echte Dateisysteme (ext4, xfs, btrfs, zfs, vfat, NFS, CIFS …); Pseudo-Dateisysteme und Snap-Images (squashfs) fehlen. Jedes Gerät
+  erscheint einmal (Bind-Mounts wie systemds schreibgeschützte Sicht auf `/` zählen nicht). Unter der Härtung der Unit ist `/home` nicht sichtbar
+  (`ProtectHome=yes`); liegt `/home` auf einem eigenen Dateisystem, fehlt es in der Liste.
+- **Temperaturen:** Die hwmon-Nummern ändern sich zwischen Neustarts, darum besteht der Schlüssel aus Chipname und Bezeichnung (`coretemp/Package id 0`);
+  ein zweiter Chip gleichen Namens heißt `nvme#2`. Fehlt der Sensor nach einem Hardwaretausch, meldet der Sensor „Unbrauchbarer Messwert“.
+- **Netzwerk:** alle Interfaces außer `lo`; „Netzwerkkarte“ heißt, dass ein Gerät dahintersteht (`/sys/class/net/<Interface>/device`), sonst „Virtuell“
+  (Bridge, VPN, Container). Ein verschwundenes Interface meldet einen Fehler.
+- **Unit:** Die Sensoren brauchen die Systemdateien in `/proc`; `deploy/opennetmon.service` setzt deshalb kein `ProcSubset=pid` mehr
+  (`systemd-analyze security` bleibt bei 1,3). Alles andere an der Härtung bleibt.
+- **Vorlagen:** Gerätevorlagen übernehmen diese Sensoren nicht, sie gehören zu genau einem Rechner.
+- **Datenbank:** Neuer Typ `local` und Spalte `target`. Der `CHECK` der Tabelle lässt sich in SQLite nur durch Neuaufbau ändern; das macht
+  `storage::migrate` einmalig beim ersten Start mit abgeschalteten Fremdschlüsseln (`allow_local_sensors`, wie bei den Geräten ohne SNMP).
 
 ## Zähler und Raten (`src/sensors/counter.rs`)
 

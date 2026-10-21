@@ -45,7 +45,7 @@ Betroffen: letzte Abfrage und Meldungen der Sensoren, Statuswechsel und Sendever
 ## Schwellwerte
 
 Je Kanal (nicht bei Statuskanälen) vier optionale Grenzen: **Warnung über / unter** und **Ausfall über / unter**. Eingabe in der Anzeigeeinheit
-(Verkehr in Mbit/s, Dezimalkomma erlaubt), gespeichert in der Basiseinheit (`channels.warn_above` usw., Migration `0007`).
+(Verkehr in Mbit/s, Datenmengen in GB, Temperaturen in °C, Dezimalkomma erlaubt), gespeichert in der Basiseinheit (`channels.warn_above` usw., Migration `0007`).
 
 - Ein Wert löst aus, wenn er die Grenze **strikt über- bzw. unterschreitet**; Ausfall hat Vorrang vor Warnung.
 - Warnung → Sensorstatus `Warning`, Ausfallgrenze → `Down`, jeweils **sofort ohne Entprellung** (anders als Messfehler, siehe `docs/poller.md`);

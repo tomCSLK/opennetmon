@@ -197,6 +197,9 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 .card-head h2 { margin: 0; }
 .card-body { padding: 1.1rem 1.35rem; }
 .card + .card { margin-top: 0; }
+/* A form holding several cards keeps the page's spacing between them. */
+form.sections { display: flex; flex-direction: column; gap: 1.25rem; }
+form.sections > .hint, form.sections > .form-actions { margin-top: 0; }
 .empty { padding: 2.2rem 1rem; text-align: center; color: var(--muted); }
 .empty strong { display: block; color: var(--text); margin-bottom: .3rem; }
 

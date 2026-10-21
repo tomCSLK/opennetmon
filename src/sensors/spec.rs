@@ -1,6 +1,7 @@
 //! Sensor configuration: what the user chose, validation, channel layout and construction.
 //! Messages are user-facing (German).
 
+use super::local::{LocalMetric, LocalSensor, Paths};
 use super::ping::PingSensor;
 use super::snmp::{
     InterfaceStatusSensor, InterfaceTrafficSensor, OidMode, OidSensor, UptimeSensor,
@@ -29,6 +30,8 @@ pub enum SensorSpec {
         /// Unit shown with the value, e.g. from the MIB's UNITS clause (`°C`, `KBytes`).
         unit: Option<String>,
     },
+    /// A value of the machine opennetmon runs on ("Dieser Server").
+    Local(LocalMetric),
 }
 
 /// Longest accepted unit label of a custom OID sensor.
@@ -51,6 +54,8 @@ impl Unit {
             Self::Count => "count",
             Self::PerSecond => "per_second",
             Self::State => "state",
+            Self::Bytes => "bytes",
+            Self::Celsius => "celsius",
         }
     }
 
@@ -63,6 +68,8 @@ impl Unit {
             "count" => Self::Count,
             "per_second" => Self::PerSecond,
             "state" => Self::State,
+            "bytes" => Self::Bytes,
+            "celsius" => Self::Celsius,
             _ => return None,
         })
     }
@@ -77,6 +84,7 @@ impl SensorSpec {
             Self::InterfaceTraffic { .. } => "if_traffic",
             Self::InterfaceStatus { .. } => "if_status",
             Self::Oid { .. } => "oid",
+            Self::Local(_) => "local",
         }
     }
 
@@ -92,6 +100,19 @@ impl SensorSpec {
                 t.get1("sensor-describe-status", "index", *if_index)
             }
             Self::Oid { oid, .. } => format!("OID {} ({})", format_oid(oid), self.oid_details(t)),
+            Self::Local(metric) => match metric {
+                LocalMetric::Cpu => t.get("local-describe-cpu"),
+                LocalMetric::Load => t.get("local-describe-load"),
+                LocalMetric::Memory => t.get("local-describe-memory"),
+                LocalMetric::Uptime => t.get("local-describe-uptime"),
+                LocalMetric::Disk { mount } => t.get1("local-describe-disk", "mount", mount),
+                LocalMetric::Temperature { sensor } => {
+                    t.get1("local-describe-temperature", "sensor", sensor)
+                }
+                LocalMetric::Traffic { interface } => {
+                    t.get1("local-describe-traffic", "interface", interface)
+                }
+            },
         }
     }
 
@@ -140,12 +161,13 @@ impl SensorSpec {
                 mode: OidMode::Counter,
                 ..
             } => one("value", Unit::PerSecond),
+            Self::Local(metric) => metric.channels(),
         }
     }
 
-    /// Whether the sensor needs an SNMP session (ping does not).
+    /// Whether the sensor needs an SNMP session (ping and local sensors do not).
     pub fn uses_snmp(&self) -> bool {
-        !matches!(self, Self::Ping)
+        !matches!(self, Self::Ping | Self::Local(_))
     }
 
     pub fn validate(&self) -> Result<(), Msg> {
@@ -171,6 +193,7 @@ impl SensorSpec {
                 }
                 Ok(())
             }
+            Self::Local(metric) => metric.validate(),
             _ => Ok(()),
         }
     }
@@ -185,6 +208,7 @@ impl SensorSpec {
             Self::Oid {
                 oid, mode, scale, ..
             } => Box::new(OidSensor::new(oid.clone(), *mode, *scale)),
+            Self::Local(metric) => Box::new(LocalSensor::new(metric.clone(), Paths::default())),
         }
     }
 }
@@ -313,6 +337,9 @@ mod tests {
         assert_eq!(SensorSpec::Uptime.kind(), "uptime");
         assert!(!SensorSpec::Ping.uses_snmp());
         assert!(SensorSpec::Uptime.uses_snmp());
+        let disk = SensorSpec::Local(LocalMetric::Disk { mount: "/".into() });
+        assert_eq!((disk.kind(), disk.uses_snmp()), ("local", false));
+        assert_eq!(keys(disk), ["used", "free"]);
     }
 
     #[test]
@@ -325,6 +352,8 @@ mod tests {
             Unit::Count,
             Unit::PerSecond,
             Unit::State,
+            Unit::Bytes,
+            Unit::Celsius,
         ] {
             assert_eq!(Unit::parse(unit.as_str()), Some(unit));
         }

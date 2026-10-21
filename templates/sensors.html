@@ -26,6 +26,9 @@
     {% else %}
     <a class="button ghost" href="/pause/device/{{ device.id }}?back=device">{{ t.get("pause") }}</a>
     {% endif %}
+    {% if offer_server_values %}
+    <a class="button secondary" href="/devices/{{ device.id }}/server">{{ t.get("local-find-values") }}</a>
+    {% endif %}
     {% if device.has_snmp() %}
     <form method="post" action="/devices/{{ device.id }}/test">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
@@ -174,6 +177,7 @@
           <option value="uptime"{% if form.kind == "uptime" %} selected{% endif %}>Uptime (sysUpTime)</option>
           <option value="oid"{% if form.kind == "oid" %} selected{% endif %}>{{ t.get("sensors-type-oid") }}</option>
           {% endif %}
+          <option value="server">{{ t.get("sensors-type-server") }}</option>
         </select>
       </div>
       <div>

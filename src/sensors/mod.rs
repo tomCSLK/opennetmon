@@ -4,6 +4,7 @@
 
 pub mod counter;
 pub mod format;
+pub mod local;
 pub mod ping;
 pub mod snmp;
 pub mod spec;
@@ -26,6 +27,10 @@ pub enum Unit {
     PerSecond,
     /// Status code, e.g. `ifOperStatus` (1 = up).
     State,
+    /// Data volume, e.g. free disk space.
+    Bytes,
+    /// Degrees Celsius.
+    Celsius,
 }
 
 /// One channel value of a poll. `value: None` means "nothing to store" (first poll of a

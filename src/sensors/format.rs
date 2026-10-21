@@ -61,6 +61,23 @@ pub fn format_value(t: Lang, unit: Unit, value: f64) -> String {
         Unit::Count => num(t, value, 3),
         Unit::PerSecond => format!("{} /s", num(t, value, 3)),
         Unit::State => num(t, value, 0),
+        Unit::Bytes => bytes(t, value),
+        Unit::Celsius => format!("{} °C", num(t, value, 1)),
+    }
+}
+
+/// Data volume in decimal units, as the charts show it (1 GB = 1 000 000 000 bytes).
+fn bytes(t: Lang, value: f64) -> String {
+    let abs = value.abs();
+    for (factor, unit) in [(1e12, "TB"), (1e9, "GB"), (1e6, "MB")] {
+        if abs >= factor {
+            return format!("{} {unit}", num(t, value / factor, 2));
+        }
+    }
+    if abs >= 1e3 {
+        format!("{} KB", num(t, value / 1e3, 1))
+    } else {
+        format!("{} B", num(t, value, 0))
     }
 }
 
@@ -72,6 +89,8 @@ pub fn input_unit(unit: Unit) -> &'static str {
         Unit::Seconds => "s",
         Unit::Percent => "%",
         Unit::PerSecond => "/s",
+        Unit::Bytes => "GB",
+        Unit::Celsius => "°C",
         Unit::Count | Unit::State => "",
     }
 }
@@ -80,6 +99,7 @@ pub fn input_unit(unit: Unit) -> &'static str {
 pub fn input_factor(unit: Unit) -> f64 {
     match unit {
         Unit::BitsPerSecond => 1e6,
+        Unit::Bytes => 1e9,
         _ => 1.0,
     }
 }
@@ -93,6 +113,16 @@ pub fn channel_label(key: &str) -> Msg {
         "uptime" => Msg::new("channel-uptime"),
         "oper_status" => Msg::new("channel-oper-status"),
         "value" => Msg::new("channel-value"),
+        "total" => Msg::new("channel-total"),
+        "iowait" => Msg::new("channel-iowait"),
+        "load1" => Msg::new("channel-load1"),
+        "load5" => Msg::new("channel-load5"),
+        "load15" => Msg::new("channel-load15"),
+        "used" => Msg::new("channel-used"),
+        "available" => Msg::new("channel-available"),
+        "swap_used" => Msg::new("channel-swap-used"),
+        "free" => Msg::new("channel-free"),
+        "temperature" => Msg::new("channel-temperature"),
         other => Msg::Text(other.to_owned()),
     }
 }
@@ -154,6 +184,14 @@ mod tests {
         assert_eq!(format_value(Lang::De, Unit::Count, 21.5), "21,5");
         assert_eq!(format_value(Lang::De, Unit::PerSecond, 100.0), "100 /s");
         assert_eq!(format_value(Lang::De, Unit::State, 1.0), "1");
+        assert_eq!(format_value(Lang::De, Unit::Celsius, 45.25), "45,2 °C");
+        assert_eq!(format_value(Lang::De, Unit::Bytes, 512.0), "512 B");
+        assert_eq!(format_value(Lang::De, Unit::Bytes, 12_345.0), "12,3 KB");
+        assert_eq!(
+            format_value(Lang::De, Unit::Bytes, 250_000_000_000.0),
+            "250 GB"
+        );
+        assert_eq!(parse_threshold("20", Unit::Bytes), Ok(Some(20e9)));
         assert_eq!(format_value(Lang::De, Unit::Seconds, 45.0), "45 s");
         assert_eq!(format_value(Lang::De, Unit::Seconds, 125.0), "2 Min. 5 s");
         assert_eq!(
