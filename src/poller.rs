@@ -836,13 +836,9 @@ mod tests {
         crate::storage::mail::save(&env.pool, &env.secrets, &input.check().unwrap())
             .await
             .unwrap();
-        for name in ["Uptime", "Ping"] {
-            let spec = if name == "Ping" {
-                SensorSpec::Ping
-            } else {
-                SensorSpec::Uptime
-            };
-            create_sensor(&env.pool, env.device, name, &spec)
+        // SNMP only: a ping sensor would fail on hosts without ICMP sockets (CI) and send its own mail.
+        for name in ["Uptime", "Uptime 2"] {
+            create_sensor(&env.pool, env.device, name, &SensorSpec::Uptime)
                 .await
                 .unwrap();
         }
