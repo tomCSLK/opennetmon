@@ -65,53 +65,58 @@ impl Counts {
         self.total() - self.paused
     }
 
-    /// Segments of the stacked status bar, worst first; `x`/`width` in percent. Inactive sensors
-    /// are left out, so prepared but unused sensors do not grey out a healthy device.
-    fn segments(&self) -> Vec<Segment> {
-        let total = self.active();
-        if total == 0 {
-            return Vec::new();
-        }
-        let mut x = 0.0;
-        [
-            (self.down, "seg-down"),
-            (self.warning, "seg-warning"),
-            (self.unknown, "seg-unknown"),
-            (self.up, "seg-up"),
+    /// The status labels of a tree row, worst first: one per status with its count, inactive sensors
+    /// last. A lone active status (or only inactive sensors) reads "N Sensoren" like in PRTG.
+    fn pills(&self, t: Lang) -> Vec<Pill> {
+        let active: Vec<_> = [
+            (self.down, "down", "✕", "count-down"),
+            (self.warning, "warning", "!", "count-warning"),
+            (self.unknown, "unknown", "?", "count-unknown"),
+            (self.up, "up", "✓", "count-up"),
         ]
         .into_iter()
-        .filter(|(n, _)| *n > 0)
-        .map(|(n, class)| {
-            let width = n as f64 * 100.0 / total as f64;
-            let segment = Segment {
-                x: format!("{x:.3}%"),
-                width: format!("{width:.3}%"),
+        .filter(|(n, ..)| *n > 0)
+        .collect();
+        // "N Sensoren" for a lone active status, or for inactive sensors when nothing else is there.
+        let lone_active = active.len() == 1;
+        let lone_paused = active.is_empty();
+        let paused = (self.paused > 0).then_some((self.paused, "paused", "‖", "count-inactive"));
+        active
+            .into_iter()
+            .map(|k| (k, lone_active))
+            .chain(paused.map(|k| (k, lone_paused)))
+            .map(|((n, class, glyph, title), lone)| Pill {
                 class,
-            };
-            x += width;
-            segment
-        })
-        .collect()
+                glyph,
+                text: if lone {
+                    t.get1("count-sensors", "count", n)
+                } else {
+                    n.to_string()
+                },
+                title: t.get1(title, "count", n),
+            })
+            .collect()
     }
 }
 
-pub struct Segment {
-    pub x: String,
-    pub width: String,
+/// A status label of a tree row (`text` is the count, or "N Sensoren" when it stands alone).
+pub struct Pill {
     pub class: &'static str,
+    pub glyph: &'static str,
+    pub text: String,
+    pub title: String,
 }
 
 pub struct DeviceCard {
     pub device: Device,
-    pub status_label: String,
-    pub status_class: &'static str,
     pub counts: Counts,
-    pub segments: Vec<Segment>,
+    pub pills: Vec<Pill>,
 }
 
 /// The devices without a group (`Ohne Gruppe`, or `Alle Geräte` when there are no groups).
 pub struct Ungrouped {
-    pub name: String,
+    /// Id 0, like the order page of this level.
+    pub summary: Summary,
     pub devices: Vec<DeviceCard>,
 }
 
@@ -132,8 +137,7 @@ pub struct Summary {
     /// Devices in the group and all its subgroups.
     pub devices: usize,
     pub counts: Counts,
-    pub segments: Vec<Segment>,
-    pub status_label: String,
+    pub pills: Vec<Pill>,
     pub status_class: &'static str,
 }
 
@@ -144,15 +148,14 @@ impl Summary {
             id,
             name,
             devices,
-            segments: counts.segments(),
-            status_label: t.get(status.map_or("no-sensors", Status::label_id)),
+            pills: counts.pills(t),
             status_class: status.map_or("unknown", Status::as_str),
             counts,
         }
     }
 }
 
-/// A top-level group: one card with its own devices first, then its subgroups.
+/// A top-level group: its own devices first, then its subgroups.
 pub struct TopGroup {
     pub summary: Summary,
     pub rows: Vec<Row>,
@@ -277,24 +280,25 @@ pub async fn home(
         }
         cards.entry(d.group_id).or_default().push(DeviceCard {
             device: d.clone(),
-            status_label: user.lang.get(if own.is_empty() {
-                "no-sensors"
-            } else {
-                overall.label_id()
-            }),
-            status_class: overall.as_str(),
-            segments: counts.segments(),
+            pills: counts.pills(user.lang),
             counts,
         });
     }
 
-    let ungrouped = cards.remove(&None).map(|devices| Ungrouped {
-        name: user.lang.get(if groups.is_empty() {
+    let ungrouped = cards.remove(&None).map(|devices| {
+        let mut counts = Counts::default();
+        for card in &devices {
+            counts.merge(&card.counts);
+        }
+        let name = user.lang.get(if groups.is_empty() {
             "overview-all-devices"
         } else {
             "overview-ungrouped"
-        }),
-        devices,
+        });
+        Ungrouped {
+            summary: Summary::new(user.lang, 0, name, devices.len(), counts),
+            devices,
+        }
     });
     let top: Vec<&Group> = groups.iter().filter(|g| g.parent_id.is_none()).collect();
     let tops = top
@@ -329,35 +333,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn segments_are_worst_first_and_add_up_to_the_whole_bar() {
-        let counts = Counts {
+    fn pills_count_each_status_worst_first_and_inactive_last() {
+        let text = |counts: Counts| -> Vec<String> {
+            counts
+                .pills(Lang::De)
+                .iter()
+                .map(|p| format!("{} {} {} ({})", p.class, p.glyph, p.text, p.title))
+                .collect()
+        };
+        let mixed = Counts {
             up: 8,
             warning: 1,
-            down: 1,
+            down: 2,
             unknown: 0,
             paused: 5,
         };
-        let segments = counts.segments();
-        let classes: Vec<_> = segments.iter().map(|s| s.class).collect();
         assert_eq!(
-            classes,
-            ["seg-down", "seg-warning", "seg-up"],
-            "inactive sensors are not in the bar"
+            text(mixed),
+            [
+                "down ✕ 2 (2 Ausfall)",
+                "warning ! 1 (1 Warnung)",
+                "up ✓ 8 (8 in Ordnung)",
+                "paused ‖ 5 (5 inaktiv)"
+            ]
         );
-        assert_eq!(segments[0].x, "0.000%");
-        assert_eq!(segments[0].width, "10.000%");
-        assert_eq!(segments[2].x, "20.000%");
-        assert_eq!(segments[2].width, "80.000%");
-        assert_eq!((counts.total(), counts.active()), (15, 10));
-        assert!(
-            Counts {
-                paused: 3,
-                ..Counts::default()
-            }
-            .segments()
-            .is_empty()
+        assert_eq!((mixed.total(), mixed.active()), (16, 11));
+        let healthy = Counts {
+            up: 9,
+            paused: 2,
+            ..Counts::default()
+        };
+        assert_eq!(
+            text(healthy),
+            ["up ✓ 9 Sensoren (9 in Ordnung)", "paused ‖ 2 (2 inaktiv)"]
         );
-        assert!(Counts::default().segments().is_empty());
+        let prepared = Counts {
+            paused: 1,
+            ..Counts::default()
+        };
+        assert_eq!(text(prepared), ["paused ‖ 1 Sensor (1 inaktiv)"]);
+        assert!(Counts::default().pills(Lang::De).is_empty());
     }
 
     fn g(id: i64, name: &str, parent: Option<i64>) -> Group {
@@ -379,9 +394,7 @@ mod tests {
                 profile_name: None,
                 polling: crate::devices::Polling::default(),
             },
-            status_label: String::new(),
-            status_class: "",
-            segments: Vec::new(),
+            pills: Vec::new(),
             counts,
         }
     }

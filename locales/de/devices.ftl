@@ -5,7 +5,6 @@ overview-devices-down =
         [one] { $count } Gerät mit Ausfall
        *[other] { $count } Geräte mit Ausfall
     }
-overview-only-inactive = nur inaktive Sensoren ({ $count })
 overview-order-groups = Gruppen anordnen
 overview-sensor-status = Sensorstatus
 overview-paused-unknown = Inaktiv / unbekannt

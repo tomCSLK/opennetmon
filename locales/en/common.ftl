@@ -118,6 +118,8 @@ count-sensors =
         [one] { $count } sensor
        *[other] { $count } sensors
     }
+count-up = { $count } OK
+count-unknown = { $count } unknown
 count-inactive = { $count } inactive
 count-warning = { $count } warning
 count-down = { $count } down

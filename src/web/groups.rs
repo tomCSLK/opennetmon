@@ -244,9 +244,9 @@ mod tests {
                 .unwrap_or_else(|| panic!("{needle} missing"))
         };
         assert!(pos("Anderes") < pos("Zuhause") && pos("Zuhause") < pos("Keller"));
-        // Keller is nested inside the Zuhause card, not a card of its own.
+        // Keller is nested inside the Zuhause node.
         let zuhause = pos("data-group=\"1\"");
-        let keller = pos("<details class=\"subgroup\" id=\"group-2\" data-group=\"2\"");
+        let keller = pos("<details class=\"node\" id=\"group-2\" data-group=\"2\"");
         assert!(zuhause < keller);
         assert!(home.body.contains("Keine Geräte in dieser Gruppe."));
         assert!(home.body.contains("/groups/1/edit"));

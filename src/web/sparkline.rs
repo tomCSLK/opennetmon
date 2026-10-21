@@ -4,7 +4,6 @@
 use std::fmt::Write;
 
 use crate::status::Status;
-use crate::web::overview::Segment;
 
 /// Size of the drawing area; the SVG stretches it to its CSS size.
 pub const WIDTH: f64 = 120.0;
@@ -21,13 +20,20 @@ pub struct Line {
     pub class: &'static str,
 }
 
+/// A stretch of the status band; `x`/`width` in percent.
+pub struct Segment {
+    pub x: String,
+    pub width: String,
+    pub class: &'static str,
+}
+
 /// What the sensor list shows for the last hour.
 pub enum Trend {
     /// Nothing measured yet.
     Empty,
     /// Measured values, one line per channel.
     Lines(Vec<Line>),
-    /// Status over time (status values, uptime): coloured like the status bars of the overview.
+    /// Status over time (status values, uptime): coloured by status.
     Band(Vec<Segment>),
 }
 

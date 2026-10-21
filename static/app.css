@@ -224,11 +224,6 @@ a.tile[aria-current="page"] { box-shadow: 0 0 0 2px var(--accent); }
 a.tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- status ---------- */
-.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--unknown); }
-.dot.status-up { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
-.dot.status-warning { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
-.dot.status-down { background: var(--down); box-shadow: 0 0 0 3px var(--down-soft); }
-.dot.status-paused { background: var(--paused); }
 .badge { display: inline-flex; align-items: center; gap: .4rem; padding: .15rem .6rem .15rem .5rem; border-radius: 999px;
   font-size: .8rem; font-weight: 600; white-space: nowrap; background: var(--neutral-soft); color: var(--muted); }
 .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -246,30 +241,52 @@ svg.statusbar .seg-down { fill: var(--down); }
 svg.statusbar .seg-unknown { fill: var(--unknown); }
 svg.statusbar .seg-paused { fill: var(--paused); opacity: .55; }
 
-/* ---------- device list ---------- */
-.group-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
-  padding: .8rem 1.35rem; background: var(--surface-2); border-bottom: 1px solid var(--border); }
-.group-head h2 { margin: 0; font-size: .95rem; display: flex; align-items: center; gap: .5rem; }
-.group-head h2 svg.icon { color: var(--muted); }
-.group-path { color: var(--muted); font-weight: 500; }
-.group-head.indent-2, .group-head.indent-3, .group-head.indent-4, .group-head.indent-5,
-.group-head.indent-6, .group-head.indent-7, .group-head.indent-8 { padding-left: 2rem; }
-.devices { list-style: none; margin: 0; padding: 0; }
-.device { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.3fr) 15.5rem; gap: 1.25rem; align-items: center;
-  padding: .85rem 1.35rem; border-bottom: 1px solid var(--border); }
-.devices .device:last-child { border-bottom: 0; }
-.device:hover { background: var(--surface-hover); }
-.device-main { display: flex; align-items: center; gap: .8rem; min-width: 0; }
-.device-text { min-width: 0; }
-.device-name { display: block; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---------- overview tree (like the PRTG device tree; groups fold, see app.js) ---------- */
+.tree { --row: 2.4rem; padding: .35rem 0; }
+.tree-row { display: flex; align-items: center; gap: .55rem; min-height: var(--row); padding: 0 1rem 0 .9rem;
+  border-bottom: 1px solid var(--border); }
+.tree-row:hover { background: var(--surface-hover); }
+.tree > .node:last-child > .tree-row, .tree > details.node:last-child:not([open]) > summary { border-bottom: 0; }
+summary.tree-row { cursor: pointer; list-style: none; }
+summary.tree-row::-webkit-details-marker { display: none; }
+/* The box with minus/plus, as in a classic tree. */
+.tree-toggle { position: relative; width: 11px; height: 11px; flex: none; border: 1px solid var(--muted); border-radius: 2px;
+  background: var(--surface); }
+.tree-toggle::before, .tree-toggle::after { content: ""; position: absolute; background: var(--muted); }
+.tree-toggle::before { left: 2px; right: 2px; top: 4px; height: 1px; }
+.tree-toggle::after { top: 2px; bottom: 2px; left: 4px; width: 1px; }
+details[open] > summary .tree-toggle::after { display: none; }
+.tree-icon { color: var(--muted); width: 17px; height: 17px; }
+.tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-name strong { font-weight: 650; }
+.device-name { color: var(--text); font-weight: 500; }
 .device-name:hover { color: var(--accent); }
-.device-meta { color: var(--muted); font-size: .84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.device-health { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
-.device-health .legend { display: flex; gap: .8rem; font-size: .8rem; color: var(--muted); flex-wrap: wrap; }
-.device-health .legend .c-warning { color: var(--warn); font-weight: 600; }
-.device-health .legend .c-down { color: var(--down); font-weight: 600; }
-.device-actions { display: flex; gap: .35rem; align-items: center; justify-content: flex-end; }
-.device-actions form { margin: 0; }
+.tree-meta { margin-left: .5rem; color: var(--faint); font-size: .82rem; }
+.pills { display: flex; gap: .25rem; width: 14rem; flex: none; }
+a.pills:hover { text-decoration: none; }
+.pill { display: inline-flex; align-items: center; gap: .3rem; padding: .1rem .5rem; border-radius: 3px; font-size: .8rem;
+  font-weight: 650; line-height: 1.5; white-space: nowrap; font-variant-numeric: tabular-nums; color: #fff; background: var(--unknown); }
+.pill.status-up { background: var(--ok); }
+.pill.status-warning { background: var(--warn); color: #1f1300; }
+.pill.status-down { background: var(--down); }
+.pill.status-paused { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border-strong); }
+a.pills:hover .pill { filter: brightness(1.08); }
+.tree-actions { display: flex; gap: .25rem; width: 4.6rem; flex: none; justify-content: flex-end; }
+.tree-actions form { margin: 0; }
+.tree-actions .icon-only { padding: .25rem; }
+.tree-actions svg.icon { width: 16px; height: 16px; }
+.tree-empty { margin: 0; display: flex; align-items: center; min-height: var(--row); padding: 0 1rem 0 .9rem; color: var(--muted);
+  font-size: .85rem; border-bottom: 1px solid var(--border); }
+/* Children hang off the toggle box of their group with dotted lines. */
+.children { margin-left: calc(.9rem + 5px); }
+.children > .node { position: relative; }
+.children > .node > .tree-row, .children > .tree-empty { padding-left: 1.1rem; }
+.children > .node::before, .children > .tree-empty::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  border-left: 1px dotted var(--faint); }
+.children > :last-child::before { bottom: auto; height: calc(var(--row) / 2); }
+.children > .node::after, .children > .tree-empty::after { content: ""; position: absolute; left: 0; top: calc(var(--row) / 2);
+  width: .85rem; border-top: 1px dotted var(--faint); }
+.children > .tree-empty { position: relative; }
 
 /* ---------- tables ---------- */
 .table-wrap { overflow-x: auto; }
@@ -408,15 +425,13 @@ a.button.secondary { color: var(--text); }
   .sidebar.open .nav, .sidebar.open .sidebar-foot { display: flex; }
   .sidebar-foot { margin-top: 0; }
   .content { padding: 1.1rem 1rem 2.5rem; }
-  .device { grid-template-columns: minmax(0, 1fr) auto; }
-  .device-health { grid-column: 1 / -1; grid-row: 2; }
   .form-grid, .threshold-grid { grid-template-columns: 1fr; }
+  .pills { width: 11rem; }
 }
 @media (max-width: 560px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .device { grid-template-columns: minmax(0, 1fr); gap: .7rem; }
-  .device-health { grid-column: auto; grid-row: auto; }
-  .device-actions { justify-content: flex-start; }
+  .tree-meta { display: none; }
+  .pills { width: auto; }
   .page-head .actions { width: 100%; }
   h1 { font-size: 1.3rem; }
 }
@@ -461,27 +476,8 @@ form.inline-form input[type=text] { flex: 1; min-width: 14rem; max-width: 32rem;
 .split p { margin: 0; }
 .choices label.inline { margin: .35rem 0; font-weight: 400; }
 
-/* Overview: a card per top-level group, subgroups nested inside (collapsible, see app.js) */
-details.group-card > summary, details.subgroup > summary { cursor: pointer; list-style: none; }
-details.group-card > summary::-webkit-details-marker, details.subgroup > summary::-webkit-details-marker { display: none; }
-details.group-card > summary h2::before, details.subgroup > summary h3::before {
-  content: "▾"; display: inline-block; width: 1em; color: var(--muted); transition: transform .15s; }
-details.group-card:not([open]) > summary h2::before, details.subgroup:not([open]) > summary h3::before { transform: rotate(-90deg); }
-details.group-card:not([open]) > summary.group-head { border-bottom: 0; }
 /* Reached from a breadcrumb: mark the group. */
 details[data-group]:target > summary { background: var(--accent-soft); }
-.group-info { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; justify-content: flex-end; }
-.group-count { color: var(--muted); font-size: .84rem; }
-svg.statusbar.group-bar { height: 4px; border-radius: 0; }
-details.subgroup { margin-left: 1.35rem; border-left: 2px solid var(--border-strong); }
-details.subgroup details.subgroup { margin-left: 1rem; }
-.subgroup-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
-  padding: .65rem 1.35rem .65rem 1rem; border-bottom: 1px solid var(--border); }
-.subgroup-head h3 { margin: 0; font-size: .9rem; display: flex; align-items: center; gap: .45rem; }
-.subgroup-head h3 svg.icon { color: var(--muted); }
-details.subgroup .device { padding-left: 1rem; }
-.subgroup-empty { margin: 0; padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
-.group-card .devices > details.subgroup:last-child, .group-card .devices > .device:last-child { border-bottom: 0; }
 
 a.user { border-radius: var(--radius-sm); padding: .35rem .4rem; text-decoration: none; }
 a.user:hover, a.user[aria-current="page"] { background: var(--sidebar-active); text-decoration: none; }

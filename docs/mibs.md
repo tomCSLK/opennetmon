@@ -65,7 +65,7 @@ Auf der Sensorseite eines Geräts öffnet **Werte suchen** eine Liste aller Mess
   Wer sie gleich abfragen will, setzt das Häkchen „Sofort aktivieren“. Bereits überwachte OIDs sind als „vorhanden“ gesperrt; gleiche Namen werden durchnummeriert.
 - **Aktivieren**: Auf der Sensorseite stehen inaktive Sensoren in einem eigenen, aufklappbaren Bereich „Inaktive Sensoren (n)“ mit
   „Ausgewählte aktivieren“, „Alle aktivieren“ und „Ausgewählte löschen“ (`POST /devices/<id>/sensors/bulk`). Aktive Sensoren lassen sich einzeln wieder deaktivieren.
-  Inaktive Sensoren zählen nicht in der Statusleiste der Übersicht.
+  Inaktive Sensoren stehen in der Übersicht als eigene, umrandete Plakette und bestimmen den Status nicht mit.
 - Grenzen: Timeout höchstens 10 s, eine Wiederholung; höchstens 3000 Zeilen je Spalte und 500 Werte je Suche.
 - Gemessen am SG2008P (.252): 4 PoE-Ports (Port 1: 6,3 W, 119 mA, 52,9 V, Klasse 4), Gesamtverbrauch 6,5 W bei 62 W Budget, CPU 5 %, Speicher 53 %.
   Die SG2008 liefern CPU und Speicher, aber weder HOST-RESOURCES- noch ENTITY-Tabellen.

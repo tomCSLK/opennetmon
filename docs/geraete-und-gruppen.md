@@ -2,13 +2,17 @@
 
 ## Übersicht (Startseite)
 
-Die Startseite zeigt je **oberster Gruppe eine Karte**. Im Kopf stehen die Zahl aller Geräte der Gruppe samt Untergruppen, der schlechteste
-Status, Ausfälle und Warnungen sowie eine gemeinsame Statusleiste. In der Karte folgen zuerst die eigenen Geräte der Gruppe, dann die
-**Untergruppen eingerückt mit Führungslinie**, jede mit eigener Zusammenfassung, beliebig tief. „Keine Geräte in dieser Gruppe“ erscheint nur bei
-wirklich leeren Gruppen. Gruppen und Untergruppen lassen sich **auf- und zuklappen**; der Zustand wird im Browser gemerkt (`localStorage`,
-ohne Speicher sind alle offen). Reihenfolge wie unten beschrieben.
+Die Startseite zeigt unter den Kacheln einen **Baum wie in PRTG**: Gruppen mit Kästchen ⊟/⊞ zum Auf- und Zuklappen, darunter zuerst die eigenen
+Geräte der Gruppe, dann die Untergruppen, beliebig tief und mit gepunkteten Linien verbunden. Jeder Eintrag ist eine kompakte Zeile; rechts steht in einer
+festen Spalte die **Sensorplakette**: Sind alle aktiven Sensoren im selben Zustand, eine Plakette wie „✓ 9 Sensoren“ (grün in Ordnung, gelb Warnung,
+rot Ausfall, grau unbekannt), sonst je Zustand eine Plakette mit der Anzahl, schlechtester zuerst (✕ Ausfall, ! Warnung, ? unbekannt, ✓ in Ordnung).
+Inaktive Sensoren stehen als umrandete Plakette ‖ am Ende; der Tooltip nennt jeweils Anzahl und Zustand. Gruppen zeigen die Summe ihres ganzen
+Teilbaums (auch zugeklappt) und die Zahl der Geräte. Bei Geräten führen Name und Plaketten zur Sensorseite. Der Zustand der Gruppen (auf/zu) wird im
+Browser gemerkt (`localStorage`, ohne Speicher sind alle offen). „Keine Geräte in dieser Gruppe“ erscheint nur bei wirklich leeren Gruppen.
+Reihenfolge wie unten beschrieben.
 Geräte ohne Gruppe stehen zuerst unter „Ohne Gruppe" (ohne Gruppen: „Alle Geräte“). Leser sehen Name, Adresse und Intervall;
-Administratoren sehen zusätzlich das SNMP-Profil sowie die Aktionen „Testen" und „Bearbeiten".
+Administratoren sehen zusätzlich das SNMP-Profil sowie als Symbole „Testen" (nur mit SNMP) und „Bearbeiten", an Gruppen „Reihenfolge“ und
+„Gruppe bearbeiten“. Auf schmalen Bildschirmen (unter 560 px) entfallen Adresse und Intervall.
 Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden nur auf feste Texte abgebildet.
 
 **Aktualisieren:** Übersicht, Statuslisten, Sensorseite eines Geräts und Sensor-Detailseite haben oben rechts den Knopf **„Aktualisieren“** (nur das Symbol ↻, Name als Tooltip; lädt die
