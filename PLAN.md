@@ -3,11 +3,11 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-10-21, Release v0.4.0)
+## Stand (2026-10-21, Release v0.4.1)
 
 Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. Als Nächstes: **Installation auf dem echten Server**,
 Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest und Feinschliff. Geplant ist außerdem eine
-**Update-Möglichkeit** (Zeitpunkt offen). Seit v0.4.0 neu (noch nicht veröffentlicht): Sensoren „Dieser Server“.
+**Update-Möglichkeit** (Zeitpunkt offen).
 
 Umgesetzt (Details in `docs/`):
 
@@ -41,7 +41,8 @@ Umgesetzt (Details in `docs/`):
   (`docs/betrieb.md`)
 
 Releases (alle Vorabversionen, x86_64): **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, Mehrsprachigkeit, .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS),
-**v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen).
+**v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen),
+**v0.4.1** (2026-10-21, Sensoren „Dieser Server“).
 
 ## Kontext
 
@@ -158,7 +159,7 @@ opennetmon/
 10. ✔ **Betrieb:** musl-Binary, systemd-Unit mit Hardening, Installer, Backup, Proxy-Beispiele, `.deb`-Paket (im Podman-Container getestet).
 11. ✔ **Eingebautes HTTPS** (0.3.0): rustls, selbst signiertes Zertifikat bei der Installation, Klartext-HTTP nur Weiterleitung.
 12. ✔ **Statuslisten, Gerätebaum, Gerätetypen, Pausieren, Protokoll** (0.3.1 und 0.4.0).
-12a. ✔ **Sensoren „Dieser Server“** (2026-10-21, nach 0.4.0): eingebauter Sensortyp statt snmpd auf dem Server.
+12a. ✔ **Sensoren „Dieser Server“** (0.4.1): eingebauter Sensortyp statt snmpd auf dem Server.
 13. **Offen:**
     - Installation auf dem echten Ubuntu Server (Paket), `/healthz` und Login über HTTPS prüfen, die sieben Omada-Geräte einrichten
     - Benachrichtigung mit dem echten Mailserver des Nutzers testen
