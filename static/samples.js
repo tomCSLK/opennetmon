@@ -50,7 +50,7 @@
     return out;
   }
 
-  // Bucket length as whole hours and minutes, e.g. "2 Std. 48 Min.".
+  // Bucket length as whole hours and minutes, e.g. "1 Std. 24 Min.".
   function stepText(secs) {
     var h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60), parts = [];
     if (h) { parts.push(h + ' ' + T('unit-hours')); }

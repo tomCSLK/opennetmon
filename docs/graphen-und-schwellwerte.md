@@ -14,8 +14,8 @@ Die Sensorliste eines Geräts (`/devices/<id>/sensors`) verlinkt jeden Sensor do
   Alle Kanäle teilen die Zeitachse; fehlt ein Wert, ist er `null` (Lücke im Graph, keine Linie).
 - Je Einheit ein Diagramm (Eingehend und Ausgehend teilen sich eines). Anzeige in der **Zeitzone des Browsers** (`static/chart.js`), 24-Stunden-Uhr, deutsche Zahlen und Einheiten
   (bit/s, kbit/s, Mbit/s, Gbit/s). Der Graph lädt alle 30 s nach.
-- Herkunft der Punkte: 1 h Rohwerte (jede Abfrage); 24 h, 7 d und 30 d je **60 Mittelwerte** in gleich langen Blöcken – 24 Minuten, 2 Std. 48 Min.
-  und 12 Stunden. 24 h und 7 d mitteln die Rohwerte, 30 d die Stundenwerte aus `samples_1h` (solange noch keine Rollups existieren, direkt die Rohdaten).
+- Herkunft der Punkte: 1 h Rohwerte (jede Abfrage); 24 h, 7 d und 30 d je **120 Mittelwerte** in gleich langen Blöcken – 12 Minuten, 1 Std. 24 Min.
+  und 6 Stunden. 24 h und 7 d mitteln die Rohwerte, 30 d die Stundenwerte aus `samples_1h` (solange noch keine Rollups existieren, direkt die Rohdaten).
   Die Blöcke beginnen bei Vielfachen ihrer Länge (UTC), damit sie beim Nachladen nicht wandern; der neueste Block füllt sich noch.
   Bei Statuskanälen ist ein Mittel ein Zwischenwert (z. B. 1,5 zwischen „up“ und „down“). Höchstens 20 000 Rohwerte je Kanal in der 1-Stunden-Ansicht.
 - Statische Dateien haben `Cache-Control: no-cache` und ein ETag (Inhalts-Hash): Der Browser fragt bei jedem Laden kurz nach und bekommt `304 Nicht geändert`,
@@ -24,7 +24,7 @@ Die Sensorliste eines Geräts (`/devices/<id>/sensors`) verlinkt jeden Sensor do
 ## Tabelle „Messwerte“
 
 Unter dem Graphen steht – wie die „Livedaten“-Tabelle von PRTG – eine Zeile je Messwert, **neueste oben**, für den gewählten Zeitraum
-(1 Std.: jede Abfrage; 24 Std., 7 Tage und 30 Tage: die 60 Blockmittel des Graphen, Spalte „Zeitraum ab“).
+(1 Std.: jede Abfrage; 24 Std., 7 Tage und 30 Tage: die 120 Blockmittel des Graphen, Spalte „Zeitraum ab“).
 
 - Traffic-Kanäle haben je Richtung zwei Spalten: **Volumen** (Datenmenge im Abschnitt, dezimal: 1 MB = 1 000 000 Byte) und **Geschwindigkeit**.
   Das Volumen ist Rate × Dauer; bei Rohwerten ist die Dauer der Abstand zur vorigen Abfrage, höchstens ein Abfrageintervall

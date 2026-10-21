@@ -12,7 +12,7 @@ const HOUR_MS: i64 = 3_600_000;
 /// Safety bound per channel; the buckets below keep real queries far under it.
 const MAX_POINTS: i64 = 20_000;
 /// Points of an averaged chart (24 hours, 7 days, 30 days).
-const CHART_POINTS: i64 = 60;
+const CHART_POINTS: i64 = 120;
 
 /// Time range of a chart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -271,9 +271,9 @@ mod tests {
     #[test]
     fn steps_match_the_point_resolution() {
         assert_eq!(Range::Hour.step_secs(), None);
-        assert_eq!(Range::Day.step_secs(), Some(24 * 60));
-        assert_eq!(Range::Week.step_secs(), Some(168 * 60));
-        assert_eq!(Range::Month.step_secs(), Some(12 * 3_600));
+        assert_eq!(Range::Day.step_secs(), Some(12 * 60));
+        assert_eq!(Range::Week.step_secs(), Some(84 * 60));
+        assert_eq!(Range::Month.step_secs(), Some(6 * 3_600));
     }
 
     #[test]
@@ -306,15 +306,18 @@ mod tests {
         assert_eq!(data.series[0].values, [Some(1.0), Some(3.0)]);
         assert_eq!(data.series[1].values, [Some(2.0), None]);
         // The wider range includes the older sample, averaged with its neighbours per bucket.
-        // Buckets of 24 minutes, the last one starting at `now`: the older sample lands in bucket 54,
-        // the newer ones in bucket 58.
+        // Buckets of 12 minutes, the last one starting at `now`: the older sample lands in bucket 109,
+        // the newer ones in bucket 118.
         let day = chart_data(&pool, &ch, Range::Day, now).await.unwrap();
-        assert_eq!(day.ts.len(), 60);
-        let filled: Vec<_> = (0..60)
+        assert_eq!(day.ts.len(), 120);
+        let filled: Vec<_> = (0..120)
             .filter(|&k| day.series[0].values[k].is_some())
             .map(|k| (k, day.series[0].values[k], day.series[1].values[k]))
             .collect();
-        assert_eq!(filled, [(54, Some(9.0), None), (58, Some(2.0), Some(2.0))]);
+        assert_eq!(
+            filled,
+            [(109, Some(9.0), None), (118, Some(2.0), Some(2.0))]
+        );
     }
 
     #[tokio::test]
@@ -342,9 +345,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_week_is_averaged_into_buckets_of_168_minutes() {
+    async fn a_week_is_averaged_into_buckets_of_84_minutes() {
         let (_dir, pool, ch) = setup(&SensorSpec::Uptime).await;
-        let step = 168 * 60_000;
+        let step = 84 * 60_000;
         let now = 1_000 * step + 5_000;
         let bucket = now - 3 * 24 * HOUR_MS;
         let bucket = (bucket / step) * step;
@@ -366,7 +369,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn averaged_ranges_show_sixty_points() {
+    async fn averaged_ranges_show_120_points() {
         let (_dir, pool, ch) = setup(&SensorSpec::Ping).await;
         let now = 400 * 24 * HOUR_MS + 1_234_567;
         // One sample per minute over the last 31 days, so every range is covered with room to spare.
@@ -377,14 +380,14 @@ mod tests {
         for range in [Range::Day, Range::Week, Range::Month] {
             let data = chart_data(&pool, &ch, range, now).await.unwrap();
             let step = range.step_secs().unwrap();
-            assert_eq!(data.ts.len(), 60, "{range:?}");
+            assert_eq!(data.ts.len(), 120, "{range:?}");
             assert!(
                 data.series[0].values.iter().all(Option::is_some),
                 "{range:?}"
             );
             assert!(data.ts.windows(2).all(|w| w[1] - w[0] == step), "{range:?}");
             assert!(
-                data.ts[59] * 1000 <= now && now < (data.ts[59] + step) * 1000,
+                data.ts[119] * 1000 <= now && now < (data.ts[119] + step) * 1000,
                 "{range:?}"
             );
         }
@@ -397,7 +400,7 @@ mod tests {
         let (_dir, pool, ch) = setup(&SensorSpec::Uptime).await;
         let now = 100 * 24 * HOUR_MS;
         let hour = ((now - 5 * 24 * HOUR_MS) / HOUR_MS) * HOUR_MS + 3 * HOUR_MS;
-        let bucket = (hour / (12 * HOUR_MS)) * 12 * HOUR_MS;
+        let bucket = (hour / (6 * HOUR_MS)) * 6 * HOUR_MS;
         insert_samples(
             &pool,
             &[
@@ -408,7 +411,7 @@ mod tests {
         .await
         .unwrap();
 
-        // No rollup yet: 12-hour averages straight from the raw data.
+        // No rollup yet: 6-hour averages straight from the raw data.
         let fallback = chart_data(&pool, &ch, Range::Month, now).await.unwrap();
         assert_eq!(filled(&fallback), [(bucket / 1000, 3.0)]);
 
