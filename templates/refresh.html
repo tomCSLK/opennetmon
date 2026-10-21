@@ -1,0 +1,7 @@
+{# Refresh control of pages with live status (static/refresh.js): reload now, or every 60 s. -#}
+<div class="refresh" data-refresh>
+  <label class="refresh-auto" title="{{ t.get("refresh-auto-title") }}" hidden><input type="checkbox" data-refresh-auto> {{ t.get("refresh-auto") }}<span class="refresh-left" data-refresh-left></span></label>
+  <a class="button secondary icon-only" href="" data-refresh-now title="{{ t.get("refresh") }}" aria-label="{{ t.get("refresh") }}">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 4 20 9 15 9"/></svg>
+  </a>
+</div>

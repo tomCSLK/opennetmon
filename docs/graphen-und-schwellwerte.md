@@ -13,7 +13,8 @@ Die Sensorliste eines Geräts (`/devices/<id>/sensors`) verlinkt jeden Sensor do
 - Daten kommen als JSON von `/sensors/<id>/data?range=…`: `{"range","step_secs","interval_secs","ts":[Sekunden…],"series":[{"key","label","unit","values":[…|null]}]}`.
   Alle Kanäle teilen die Zeitachse; fehlt ein Wert, ist er `null` (Lücke im Graph, keine Linie).
 - Je Einheit ein Diagramm (Eingehend und Ausgehend teilen sich eines). Anzeige in der **Zeitzone des Browsers** (`static/chart.js`), 24-Stunden-Uhr, deutsche Zahlen und Einheiten
-  (bit/s, kbit/s, Mbit/s, Gbit/s). Der Graph lädt alle 30 s nach.
+  (bit/s, kbit/s, Mbit/s, Gbit/s). Der Graph lädt alle 30 s nach; Kopf und Wert-Kacheln
+  aktualisiert „Automatisch“ (alle 60 s, siehe `docs/geraete-und-gruppen.md`).
 - Herkunft der Punkte: 1 h Rohwerte (jede Abfrage); 24 h, 7 d und 30 d je **120 Mittelwerte** in gleich langen Blöcken – 12 Minuten, 1 Std. 24 Min.
   und 6 Stunden. 24 h und 7 d mitteln die Rohwerte, 30 d die Stundenwerte aus `samples_1h` (solange noch keine Rollups existieren, direkt die Rohdaten).
   Die Blöcke beginnen bei Vielfachen ihrer Länge (UTC), damit sie beim Nachladen nicht wandern; der neueste Block füllt sich noch.

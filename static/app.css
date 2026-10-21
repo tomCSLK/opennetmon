@@ -182,6 +182,11 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 .breadcrumb a:hover { color: var(--accent); }
 .actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 .actions form { margin: 0; }
+.refresh { display: inline-flex; align-items: center; gap: .6rem; }
+.refresh-auto { display: inline-flex; align-items: center; gap: .35rem; margin: 0; color: var(--muted); font-size: .86rem;
+  font-weight: 500; white-space: nowrap; cursor: pointer; }
+.refresh-auto[hidden] { display: none; }
+.refresh-left { font-variant-numeric: tabular-nums; }
 
 /* ---------- surfaces ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -303,6 +308,7 @@ th[aria-sort="descending"] a.sort::after { content: " ↓"; }
 .button.ghost:hover, button.ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
 button.danger, .button.danger { background: var(--down); color: #fff; }
 button.danger:hover, .button.danger:hover { background: #b91c1c; color: #fff; }
+.button.icon-only, button.icon-only { padding: .55rem; }
 button.small, .button.small { padding: .32rem .6rem; font-size: .82rem; font-weight: 500; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 

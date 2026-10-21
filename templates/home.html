@@ -55,8 +55,8 @@
     <h1>{{ t.get("nav-overview") }}</h1>
     <p class="subtitle">{{ t.get1("count-devices", "count", device_count) }} · {{ t.get1("count-sensors", "count", totals.total()) }}{% if devices_down > 0 %} · <strong class="c-down">{{ t.get1("overview-devices-down", "count", devices_down) }}</strong>{% endif %}</p>
   </div>
-  {% if layout.is_admin %}
   <div class="actions">
+    {% if layout.is_admin %}
     {% if top_groups > 1 %}<a class="button ghost" href="/groups/0/order">{{ t.get("overview-order-groups") }}</a>{% endif %}
     <a class="button secondary" href="/groups/new">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
@@ -66,8 +66,9 @@
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       {{ t.get("device-new") }}
     </a>
+    {% endif %}
+    {% include "refresh.html" %}
   </div>
-  {% endif %}
 </div>
 
 {% if let Some(message) = flash %}

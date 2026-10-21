@@ -13,8 +13,8 @@
       <span class="num">{{ device.host }}{% if device.has_snmp() %}:{{ device.polling.port }}{% endif %}</span> · <span>{{ t.get1("every-seconds", "seconds", device.polling.interval_secs) }}</span>{% if !device.has_snmp() %} · <span>{{ t.get("sensors-ping-only") }}</span>{% endif %}
     </p>
   </div>
-  {% if layout.is_admin %}
   <div class="actions">
+    {% if layout.is_admin %}
     <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
     {% if device.has_snmp() %}
     <form method="post" action="/devices/{{ device.id }}/test">
@@ -33,8 +33,9 @@
       </button>
     </form>
     {% endif %}
+    {% endif %}
+    {% include "refresh.html" %}
   </div>
-  {% endif %}
 </div>
 
 {% if let Some(message) = flash %}

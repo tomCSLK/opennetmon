@@ -19,11 +19,14 @@
       {% if !last_poll.is_empty() %}<span>· {{ t.get("detail-last-poll") }} {{ last_poll|safe }}</span>{% endif %}
     </p>
   </div>
-  <nav class="ranges" aria-label="{{ t.get("detail-range") }}">
-    {% for r in ranges %}
-    <a href="/sensors/{{ sensor.id }}?range={{ r.value }}"{% if r.current %} aria-current="page"{% endif %}>{{ r.label }}</a>
-    {% endfor %}
-  </nav>
+  <div class="actions">
+    <nav class="ranges" aria-label="{{ t.get("detail-range") }}">
+      {% for r in ranges %}
+      <a href="/sensors/{{ sensor.id }}?range={{ r.value }}"{% if r.current %} aria-current="page"{% endif %}>{{ r.label }}</a>
+      {% endfor %}
+    </nav>
+    {% include "refresh.html" %}
+  </div>
 </div>
 
 {% if let Some(message) = flash %}

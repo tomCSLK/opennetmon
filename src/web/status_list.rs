@@ -636,6 +636,10 @@ mod tests {
 
         let page = send(&h.app, get("/status/down", Some(&viewer))).await;
         assert_eq!(page.status, axum::http::StatusCode::OK);
+        // Overview and status lists can be refreshed, also by viewers.
+        for body in [&home.body, &page.body] {
+            assert!(body.contains("data-refresh-now title=\"Aktualisieren\""));
+        }
         assert!(page.body.contains(&format!("href=\"/sensors/{down}\"")));
         assert!(!page.body.contains(&format!("href=\"/sensors/{ok}\"")));
         assert!(page.body.contains("weg") && page.body.contains("Switch &#60;1&#62;"));
