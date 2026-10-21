@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use askama::Template;
 use axum::Form;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
@@ -85,6 +85,51 @@ struct FormTemplate {
     no_snmp: bool,
     /// Device templates to apply right after creating (empty when editing or without templates).
     templates: Vec<crate::web::templates::TemplateOption>,
+    /// Groups of the edited device for the breadcrumb (empty when creating).
+    trail: Vec<Crumb>,
+    /// The edited device, linked to its sensor page (`None` when creating).
+    device: Option<Crumb>,
+    /// Where cancelling and saving lead back to.
+    back: Back,
+    cancel_href: String,
+}
+
+/// The page an edit was opened from; cancelling and saving return there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Back {
+    Overview,
+    /// The sensor page of the device.
+    #[default]
+    Device,
+}
+
+impl Back {
+    fn parse(s: &str) -> Self {
+        match s {
+            "overview" => Self::Overview,
+            _ => Self::Device,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Overview => "overview",
+            Self::Device => "device",
+        }
+    }
+
+    fn href(self, device_id: i64) -> String {
+        match self {
+            Self::Overview => "/".to_owned(),
+            Self::Device => format!("/devices/{device_id}/sensors"),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct BackQuery {
+    #[serde(default)]
+    back: String,
 }
 
 pub struct ProbeView {
@@ -123,6 +168,9 @@ pub struct DeviceForm {
     retries: String,
     #[serde(default)]
     template: String,
+    /// [`Back`] of the edit page.
+    #[serde(default)]
+    back: String,
 }
 
 #[derive(Deserialize)]
@@ -205,16 +253,23 @@ async fn profile_options(
         .collect())
 }
 
+/// `editing` is the device being edited and the page to return to; `None` when creating.
 async fn render_form(
     state: &AppState,
     user: &CurrentUser,
-    existing: Option<&Device>,
+    editing: Option<(&Device, Back)>,
     form: FormValues,
     selected_group: Option<i64>,
     selected_profile: Option<i64>,
     error: Option<String>,
 ) -> Result<String> {
+    let existing = editing.map(|(d, _)| d);
+    let back = editing.map_or(Back::Overview, |(_, b)| b);
     let all_groups = groups::list_groups(&state.pool).await?;
+    let trail = match existing {
+        Some(d) => group_trail(&state.pool, d.group_id).await?,
+        None => Vec::new(),
+    };
     let templates = if existing.is_none() {
         crate::web::templates::device_form_options(state, user.lang, &form.template).await?
     } else {
@@ -237,6 +292,13 @@ async fn render_form(
         form,
         groups: group_options(&all_groups, selected_group, &[]),
         profiles: profile_options(state, user, selected_profile).await?,
+        trail,
+        device: existing.map(|d| Crumb {
+            name: d.name.clone(),
+            href: format!("/devices/{}/sensors", d.id),
+        }),
+        back,
+        cancel_href: existing.map_or_else(|| "/".to_owned(), |d| back.href(d.id)),
     };
     Ok(page.render()?)
 }
@@ -265,6 +327,7 @@ pub async fn edit_form(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(id): Path<i64>,
+    Query(query): Query<BackQuery>,
 ) -> Result<Html<String>> {
     user.require_admin()?;
     let device = store::get_device(&state.pool, id)
@@ -275,7 +338,7 @@ pub async fn edit_form(
         render_form(
             &state,
             &user,
-            Some(&device),
+            Some((&device, Back::parse(&query.back))),
             values,
             device.group_id,
             device.profile_id,
@@ -347,12 +410,14 @@ async fn save(
                         .await?;
                 return Ok(Html(html).into_response());
             }
-            let msg = if id.is_some() {
-                "device_updated"
-            } else {
-                "device_created"
+            let target = match id {
+                Some(id) if Back::parse(&form.back) == Back::Device => {
+                    format!("/devices/{id}/sensors?msg=device_updated")
+                }
+                Some(_) => "/?msg=device_updated".to_owned(),
+                None => "/?msg=device_created".to_owned(),
             };
-            Ok(Redirect::to(&format!("/?msg={msg}")).into_response())
+            Ok(Redirect::to(&target).into_response())
         }
         Err(Error::Invalid(message) | Error::Conflict(message)) => {
             let existing = match id {
@@ -366,7 +431,7 @@ async fn save(
             let html = render_form(
                 state,
                 user,
-                existing.as_ref(),
+                existing.as_ref().map(|d| (d, Back::parse(&form.back))),
                 form.values(),
                 form.selected_group(),
                 form.selected_profile(),
@@ -716,6 +781,26 @@ mod tests {
         let edit = send(&h.app, get("/devices/1/edit", Some(&admin))).await;
         assert!(edit.body.contains("value=\"Alt\"") && edit.body.contains("value=\"10.0.0.1\""));
         assert!(edit.body.contains("Verbindung testen"));
+        // Opened from the device page: the breadcrumb and "Abbrechen" lead back to it.
+        assert!(
+            edit.body.contains(
+                "<a href=\"/devices/1/sensors\">Alt</a><span>›</span><span>Gerät bearbeiten</span>"
+            ),
+            "{}",
+            edit.body
+        );
+        assert!(
+            edit.body
+                .contains("href=\"/devices/1/sensors\">Abbrechen</a>")
+        );
+        assert!(edit.body.contains("name=\"back\" value=\"device\""));
+        let from_overview = send(&h.app, get("/devices/1/edit?back=overview", Some(&admin))).await;
+        assert!(from_overview.body.contains("href=\"/\">Abbrechen</a>"));
+        assert!(
+            from_overview
+                .body
+                .contains("name=\"back\" value=\"overview\"")
+        );
 
         let bad = send(
             &h.app,
@@ -736,7 +821,20 @@ mod tests {
             ),
         )
         .await;
-        assert_eq!(ok.location(), "/?msg=device_updated");
+        assert_eq!(ok.location(), "/devices/1/sensors?msg=device_updated");
+        let to_overview = send(
+            &h.app,
+            post(
+                "/devices/1",
+                Some(&admin),
+                &format!(
+                    "{}&back=overview",
+                    simple(&csrf, "Neu", "10.0.0.2", profile)
+                ),
+            ),
+        )
+        .await;
+        assert_eq!(to_overview.location(), "/?msg=device_updated");
         let d = store::get_device(&h.state.pool, 1).await.unwrap().unwrap();
         assert_eq!((d.name.as_str(), d.host.as_str()), ("Neu", "10.0.0.2"));
         assert_eq!(

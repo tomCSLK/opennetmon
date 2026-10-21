@@ -36,7 +36,7 @@
       <button type="submit" class="ghost small">{{ t.get("device-test") }}</button>
     </form>
     {% endif %}
-    <a class="button ghost small" href="/devices/{{ card.device.id }}/edit" aria-label="{{ t.get1("edit-named", "name", card.device.name) }}">{{ t.get("edit") }}</a>
+    <a class="button ghost small" href="/devices/{{ card.device.id }}/edit?back=overview" aria-label="{{ t.get1("edit-named", "name", card.device.name) }}">{{ t.get("edit") }}</a>
     {% endif %}
   </div>
 </div>

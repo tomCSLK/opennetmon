@@ -52,6 +52,9 @@ klappt die Gruppe und die Gruppen darüber auf, springt hin und hebt den Gruppen
 Zusätzlich muss **Timeout × (Wiederholungen + 1) ≤ Intervall** gelten, damit sich Abfragen eines Geräts nie überlappen.
 Alle Prüfungen laufen serverseitig; bei einem Fehler bleiben die eingegebenen Werte im Formular erhalten (Passwörter gibt es hier nicht).
 
+„Gerät bearbeiten“ zeigt in der Pfadleiste die Gruppen und das Gerät (Link auf seine Sensorseite). „Abbrechen“ und „Speichern“ führen zurück zur Seite,
+von der aus das Formular geöffnet wurde: zur Übersicht (Link dort mit `?back=overview`) oder sonst zur Sensorseite des Geräts.
+
 ## Geräte ohne SNMP (nur Ping)
 
 Für Geräte, die kein SNMP sprechen (z. B. der ER605, Drucker, Kameras), im Feld SNMP-Profil **„Kein SNMP – nur Ping“** wählen. Das geht auch,
