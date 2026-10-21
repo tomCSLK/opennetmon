@@ -2,14 +2,14 @@
 
 use sqlx::{FromRow, SqlitePool};
 
-use crate::devices::{Device, DeviceInput, Polling};
+use crate::devices::{Device, DeviceInput, DeviceKind, Polling};
 use crate::error::{Error, Result};
 use crate::i18n::Msg;
 use crate::ordering::{natural_cmp, position_cmp};
 use crate::storage::{OrderScope, write_positions};
 
 const SELECT: &str = "SELECT d.id, d.name, d.host, d.port, d.group_id, d.profile_id, p.name AS profile_name, \
-                      d.interval_secs, d.timeout_secs, d.retries, d.position \
+                      d.interval_secs, d.timeout_secs, d.retries, d.position, d.kind \
                       FROM devices d LEFT JOIN credential_profiles p ON p.id = d.profile_id";
 
 #[derive(FromRow)]
@@ -25,6 +25,7 @@ struct Row {
     timeout_secs: i64,
     retries: i64,
     position: Option<i64>,
+    kind: String,
 }
 
 fn narrow<T: TryFrom<i64>>(value: i64, what: &str) -> Result<T> {
@@ -48,6 +49,7 @@ impl TryFrom<Row> for Device {
                 timeout_secs: narrow(r.timeout_secs, "timeout")?,
                 retries: narrow(r.retries, "retries")?,
             },
+            kind: DeviceKind::parse(&r.kind).unwrap_or_default(),
         })
     }
 }
@@ -94,14 +96,14 @@ pub async fn save_device(pool: &SqlitePool, id: Option<i64>, input: DeviceInput)
     }
     let sql = match id {
         None => {
-            "INSERT INTO devices (name, host, port, group_id, profile_id, interval_secs, timeout_secs, retries) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO devices (name, host, port, group_id, profile_id, interval_secs, timeout_secs, retries, kind) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         }
         Some(_) => {
             // A device moved to another group loses its manual place there (the CASE sees the old row).
             "UPDATE devices SET position = CASE WHEN group_id IS ?4 THEN position ELSE NULL END, \
              name = ?1, host = ?2, port = ?3, group_id = ?4, profile_id = ?5, interval_secs = ?6, \
-             timeout_secs = ?7, retries = ?8, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?9"
+             timeout_secs = ?7, retries = ?8, kind = ?9, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?10"
         }
     };
     let query = sqlx::query(sql)
@@ -112,7 +114,8 @@ pub async fn save_device(pool: &SqlitePool, id: Option<i64>, input: DeviceInput)
         .bind(input.profile_id)
         .bind(i64::from(input.polling.interval_secs))
         .bind(i64::from(input.polling.timeout_secs))
-        .bind(i64::from(input.polling.retries));
+        .bind(i64::from(input.polling.retries))
+        .bind(input.kind.as_str());
     let query = match id {
         Some(id) => query.bind(id),
         None => query,
@@ -161,6 +164,7 @@ mod tests {
 
     fn input(name: &str, host: &str, group: Option<i64>, profile: i64) -> DeviceInput {
         DeviceInput {
+            kind: Default::default(),
             name: name.to_owned(),
             host: host.to_owned(),
             group_id: group,

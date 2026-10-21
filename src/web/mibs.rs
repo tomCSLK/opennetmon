@@ -668,6 +668,7 @@ END
             &h.state.pool,
             None,
             DeviceInput {
+                kind: Default::default(),
                 name: "Switch".to_owned(),
                 host: "192.0.2.1".to_owned(),
                 group_id: None,

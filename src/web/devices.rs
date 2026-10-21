@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::devices::{
     DEFAULT_INTERVAL_SECS, DEFAULT_PORT, DEFAULT_RETRIES, DEFAULT_TIMEOUT_SECS, Device,
-    DeviceInput, Polling,
+    DeviceInput, DeviceKind, Polling,
 };
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
@@ -34,6 +34,8 @@ struct FormValues {
     interval_secs: String,
     timeout_secs: String,
     retries: String,
+    /// [`DeviceKind::as_str`].
+    kind: String,
     /// Template choice when creating: empty, `auto` or a template id.
     template: String,
 }
@@ -47,6 +49,7 @@ impl Default for FormValues {
             interval_secs: DEFAULT_INTERVAL_SECS.to_string(),
             timeout_secs: DEFAULT_TIMEOUT_SECS.to_string(),
             retries: DEFAULT_RETRIES.to_string(),
+            kind: DeviceKind::default().as_str().to_owned(),
             template: "auto".to_owned(),
         }
     }
@@ -61,6 +64,7 @@ impl FormValues {
             interval_secs: d.polling.interval_secs.to_string(),
             timeout_secs: d.polling.timeout_secs.to_string(),
             retries: d.polling.retries.to_string(),
+            kind: d.kind.as_str().to_owned(),
             template: String::new(),
         }
     }
@@ -81,6 +85,7 @@ struct FormTemplate {
     form: FormValues,
     groups: Vec<SelectOption>,
     profiles: Vec<SelectOption>,
+    kinds: Vec<KindOption>,
     /// "Kein SNMP – nur Ping" is selected.
     no_snmp: bool,
     /// Device templates to apply right after creating (empty when editing or without templates).
@@ -92,6 +97,12 @@ struct FormTemplate {
     /// Where cancelling and saving lead back to.
     back: Back,
     cancel_href: String,
+}
+
+struct KindOption {
+    value: &'static str,
+    label: String,
+    selected: bool,
 }
 
 /// The page an edit was opened from; cancelling and saving return there.
@@ -166,6 +177,9 @@ pub struct DeviceForm {
     interval_secs: String,
     timeout_secs: String,
     retries: String,
+    /// Missing or empty = generic.
+    #[serde(default)]
+    kind: String,
     #[serde(default)]
     template: String,
     /// [`Back`] of the edit page.
@@ -195,6 +209,7 @@ impl DeviceForm {
             interval_secs: self.interval_secs.clone(),
             timeout_secs: self.timeout_secs.clone(),
             retries: self.retries.clone(),
+            kind: self.kind.clone(),
             template: self.template.clone(),
         }
     }
@@ -232,6 +247,11 @@ impl DeviceForm {
                 interval_secs: number(&self.interval_secs, "polling-interval-not-number")?,
                 timeout_secs: number(&self.timeout_secs, "polling-timeout-not-number")?,
                 retries: number(&self.retries, "polling-retries-not-number")?,
+            },
+            kind: match self.kind.trim() {
+                "" => DeviceKind::default(),
+                text => DeviceKind::parse(text)
+                    .ok_or_else(|| Error::invalid(Msg::new("device-kind-invalid")))?,
             },
         })
     }
@@ -275,6 +295,14 @@ async fn render_form(
     } else {
         Vec::new()
     };
+    let kinds = DeviceKind::ALL
+        .into_iter()
+        .map(|k| KindOption {
+            value: k.as_str(),
+            label: user.lang.get(k.label_id()),
+            selected: k.as_str() == form.kind,
+        })
+        .collect();
     let page = FormTemplate {
         no_snmp: selected_profile.is_none(),
         templates,
@@ -292,6 +320,7 @@ async fn render_form(
         form,
         groups: group_options(&all_groups, selected_group, &[]),
         profiles: profile_options(state, user, selected_profile).await?,
+        kinds,
         trail,
         device: existing.map(|d| Crumb {
             name: d.name.clone(),
@@ -1086,6 +1115,50 @@ mod tests {
             "csrf_token={csrf}&name={name}&host={host}&group_id=&profile_id=none&port=161\
              &interval_secs=60&timeout_secs=5&retries=1&template=auto"
         )
+    }
+
+    #[tokio::test]
+    async fn the_device_kind_is_saved_and_chooses_the_overview_icon() {
+        let h = harness(true).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let form = send(&h.app, get("/devices/new", Some(&admin))).await;
+        assert!(
+            form.body
+                .contains("<option value=\"generic\" selected>Allgemein</option>")
+        );
+        let body = format!("{}&kind=router", ping_only(&csrf, "Router", "10.0.0.1"));
+        let reply = send(&h.app, post("/devices", Some(&admin), &body)).await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER, "{}", reply.body);
+        let device = store::get_device(&h.state.pool, 1).await.unwrap().unwrap();
+        assert_eq!(device.kind, DeviceKind::Router);
+        let edit = send(&h.app, get("/devices/1/edit", Some(&admin))).await;
+        assert!(
+            edit.body
+                .contains("<option value=\"router\" selected>Router</option>")
+        );
+        let home = send(&h.app, get("/", Some(&admin))).await;
+        assert!(
+            home.body
+                .contains("aria-label=\"Router\"><title>Router</title>")
+        );
+
+        let tampered = format!("{}&kind=toaster", ping_only(&csrf, "Toaster", "10.0.0.2"));
+        let reply = send(&h.app, post("/devices", Some(&admin), &tampered)).await;
+        assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(reply.body.contains("Unbekannter Gerätetyp."));
+        // Without the field (older forms, scripts) the device is generic.
+        let reply = send(
+            &h.app,
+            post(
+                "/devices",
+                Some(&admin),
+                &ping_only(&csrf, "Ding", "10.0.0.3"),
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER, "{}", reply.body);
+        let device = store::get_device(&h.state.pool, 2).await.unwrap().unwrap();
+        assert_eq!(device.kind, DeviceKind::Generic);
     }
 
     #[tokio::test]

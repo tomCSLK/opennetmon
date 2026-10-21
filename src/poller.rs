@@ -483,6 +483,7 @@ mod tests {
             &pool,
             None,
             DeviceInput {
+                kind: Default::default(),
                 name: "dev".to_owned(),
                 host: "127.0.0.1".to_owned(),
                 group_id: None,

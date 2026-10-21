@@ -732,6 +732,7 @@ mod tests {
             &h.state.pool,
             None,
             DeviceInput {
+                kind: Default::default(),
                 name: "Switch".to_owned(),
                 host: "127.0.0.1".to_owned(),
                 group_id: None,
@@ -1328,6 +1329,7 @@ mod tests {
             &h.state.pool,
             None,
             DeviceInput {
+                kind: Default::default(),
                 name: "Anderes".to_owned(),
                 host: "127.0.0.2".to_owned(),
                 group_id: None,
@@ -1517,6 +1519,7 @@ mod tests {
             &h.state.pool,
             None,
             DeviceInput {
+                kind: Default::default(),
                 name: "Printer".to_owned(),
                 host: "192.0.2.9".to_owned(),
                 group_id: None,

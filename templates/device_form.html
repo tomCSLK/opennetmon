@@ -30,6 +30,15 @@
         <input id="name" name="name" type="text" value="{{ form.name }}" required maxlength="64" autofocus>
       </div>
       <div>
+        <label for="kind">{{ t.get("device-kind") }}</label>
+        <select id="kind" name="kind">
+          {% for o in kinds %}
+          <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>
+          {% endfor %}
+        </select>
+        <p class="hint">{{ t.get("device-kind-hint") }}</p>
+      </div>
+      <div>
         <label for="host">{{ t.get("device-host") }}</label>
         <input id="host" name="host" type="text" value="{{ form.host }}" required maxlength="253" autocapitalize="off" spellcheck="false">
       </div>

@@ -60,7 +60,7 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
         return Ok(());
     }
     const COLUMNS: &str = "id, name, host, port, group_id, profile_id, interval_secs, timeout_secs, \
-                           retries, created_at, updated_at, position, template_id";
+                           retries, created_at, updated_at, position, template_id, kind";
     let mut conn = pool.acquire().await?;
     sqlx::query("PRAGMA foreign_keys = OFF")
         .execute(&mut *conn)
@@ -82,7 +82,8 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
                 created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 position      INTEGER CHECK (position IS NULL OR position > 0),
-                template_id   INTEGER REFERENCES device_templates (id) ON DELETE SET NULL
+                template_id   INTEGER REFERENCES device_templates (id) ON DELETE SET NULL,
+                kind          TEXT NOT NULL DEFAULT 'generic'
             ) STRICT",
         )
         .execute(&mut *tx)

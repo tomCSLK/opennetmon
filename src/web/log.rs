@@ -132,6 +132,7 @@ mod tests {
             pool,
             None,
             DeviceInput {
+                kind: Default::default(),
                 name: "Switch <1>".to_owned(),
                 host: "192.0.2.1".to_owned(),
                 group_id: Some(group),

@@ -176,6 +176,7 @@ async fn poller_cycle_against_real_devices() {
             &pool,
             None,
             DeviceInput {
+                kind: Default::default(),
                 name: name.to_owned(),
                 host: host.to_owned(),
                 group_id: None,

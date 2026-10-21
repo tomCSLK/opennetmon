@@ -106,6 +106,81 @@ impl Polling {
     }
 }
 
+/// What a device is; it only chooses the icon in the overview. Stored as [`DeviceKind::as_str`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DeviceKind {
+    #[default]
+    Generic,
+    Router,
+    Switch,
+    AccessPoint,
+    Firewall,
+    Server,
+    Storage,
+    Computer,
+    Printer,
+    Camera,
+    SmartHome,
+    Internet,
+}
+
+impl DeviceKind {
+    /// In the order of the form.
+    pub const ALL: [Self; 12] = [
+        Self::Generic,
+        Self::Router,
+        Self::Switch,
+        Self::AccessPoint,
+        Self::Firewall,
+        Self::Server,
+        Self::Storage,
+        Self::Computer,
+        Self::Printer,
+        Self::Camera,
+        Self::SmartHome,
+        Self::Internet,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Generic => "generic",
+            Self::Router => "router",
+            Self::Switch => "switch",
+            Self::AccessPoint => "access_point",
+            Self::Firewall => "firewall",
+            Self::Server => "server",
+            Self::Storage => "storage",
+            Self::Computer => "computer",
+            Self::Printer => "printer",
+            Self::Camera => "camera",
+            Self::SmartHome => "smart_home",
+            Self::Internet => "internet",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|k| k.as_str() == s)
+    }
+
+    /// Catalog id of the name.
+    pub fn label_id(self) -> &'static str {
+        match self {
+            Self::Generic => "device-kind-generic",
+            Self::Router => "device-kind-router",
+            Self::Switch => "device-kind-switch",
+            Self::AccessPoint => "device-kind-access-point",
+            Self::Firewall => "device-kind-firewall",
+            Self::Server => "device-kind-server",
+            Self::Storage => "device-kind-storage",
+            Self::Computer => "device-kind-computer",
+            Self::Printer => "device-kind-printer",
+            Self::Camera => "device-kind-camera",
+            Self::SmartHome => "device-kind-smart-home",
+            Self::Internet => "device-kind-internet",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DeviceInput {
     pub name: String,
@@ -114,6 +189,7 @@ pub struct DeviceInput {
     /// SNMP credentials; `None` = no SNMP, the device is only pinged.
     pub profile_id: Option<i64>,
     pub polling: Polling,
+    pub kind: DeviceKind,
 }
 
 impl DeviceInput {
@@ -136,6 +212,7 @@ pub struct Device {
     pub profile_id: Option<i64>,
     pub profile_name: Option<String>,
     pub polling: Polling,
+    pub kind: DeviceKind,
 }
 
 impl Device {
@@ -238,6 +315,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn device_kinds_round_trip() {
+        for kind in DeviceKind::ALL {
+            assert_eq!(DeviceKind::parse(kind.as_str()), Some(kind));
+        }
+        assert_eq!(DeviceKind::parse("toaster"), None);
+        assert_eq!(DeviceKind::default(), DeviceKind::Generic);
+    }
+
+    #[test]
     fn hosts_are_validated_and_normalized() {
         for ok in [
             "192.168.178.253",
@@ -301,6 +387,7 @@ mod tests {
     #[test]
     fn device_input_is_normalized() {
         let input = DeviceInput {
+            kind: Default::default(),
             name: "  Switch Keller ".to_owned(),
             host: "SW-Keller.LAN".to_owned(),
             group_id: None,

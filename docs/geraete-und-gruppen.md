@@ -3,7 +3,7 @@
 ## Übersicht (Startseite)
 
 Die Startseite zeigt unter den Kacheln einen **Baum wie in PRTG**: Gruppen mit Kästchen ⊟/⊞ zum Auf- und Zuklappen, darunter zuerst die eigenen
-Geräte der Gruppe, dann die Untergruppen, beliebig tief und mit gepunkteten Linien verbunden. Jeder Eintrag ist eine kompakte Zeile; rechts steht in einer
+Geräte der Gruppe, dann die Untergruppen, beliebig tief und mit gepunkteten Linien verbunden. Jeder Eintrag ist eine kompakte Zeile mit dem Symbol seines Gerätetyps (Tooltip: Typ); rechts steht in einer
 festen Spalte die **Sensorplakette**: Sind alle aktiven Sensoren im selben Zustand, eine Plakette wie „✓ 9 Sensoren“ (grün in Ordnung, gelb Warnung,
 rot Ausfall, grau unbekannt), sonst je Zustand eine Plakette mit der Anzahl, schlechtester zuerst (✕ Ausfall, ! Warnung, ? unbekannt, ✓ in Ordnung).
 Inaktive Sensoren stehen als umrandete Plakette ‖ am Ende; der Tooltip nennt jeweils Anzahl und Zustand. Gruppen zeigen die Summe ihres ganzen
@@ -51,6 +51,7 @@ klappt die Gruppe und die Gruppen darüber auf, springt hin und hebt den Gruppen
 | Feld | Regel |
 |---|---|
 | Name | 1–64 Zeichen, eindeutig (Groß-/Kleinschreibung egal) |
+| Gerätetyp | Allgemein (Standard), Router, Switch, Access Point, Firewall, Server, NAS / Speicher, PC, Drucker, Kamera, Smart Home / IoT, Internetdienst; bestimmt nur das Symbol in der Übersicht |
 | Adresse | IPv4/IPv6 oder Hostname nach RFC 1123 (wird kleingeschrieben); `0.0.0.0`, `::`, Multicast und Broadcast sind nicht erlaubt; `localhost` ist erlaubt |
 | Gruppe | optional |
 | SNMP-Profil | ein Profil oder **„Kein SNMP – nur Ping“**; ein von Geräten verwendetes Profil lässt sich nicht löschen (Meldung statt Fehler) |
@@ -99,6 +100,8 @@ Passwörter erscheinen weder auf der Ergebnisseite noch im Log (das Log nennt nu
 ## Technik
 
 - Tabellen `groups` und `devices` (Migration `0004`), Fremdschlüssel mit `ON DELETE RESTRICT` für Gruppe und Profil.
+- Gerätetyp: Spalte `devices.kind` (Migration `0015`, Text ohne `CHECK`, damit neue Typen keinen Tabellenneubau brauchen; unbekannte Werte gelten als
+  „Allgemein“), im Code `devices::DeviceKind`; die Symbole stehen im Makro `device_icon` in `templates/home.html`. Formulare ohne das Feld ergeben „Allgemein“.
 - SNMP-Client `src/snmp/mod.rs`: `SnmpClient::connect` (inkl. SNMPv3-Engine-Discovery), `get` mit Timeout, Wiederholungen bei Zeitüberschreitung und
   einmaliger Wiederholung nach einem v3-Kontext-Update. Der Poller nutzt später denselben Client.
 - `snmp2` mit Feature `heap_buffers`: ohne dieses Feature liegt ein 64-KB-Puffer auf dem Stack, was in Tokio-Threads (2 MB Stack) im Debug-Build überläuft.

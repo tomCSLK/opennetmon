@@ -393,6 +393,7 @@ mod tests {
                 profile_id: None,
                 profile_name: None,
                 polling: crate::devices::Polling::default(),
+                kind: Default::default(),
             },
             pills: Vec::new(),
             counts,
