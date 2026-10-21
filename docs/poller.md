@@ -3,8 +3,8 @@
 ## Ablauf (`src/poller.rs`)
 
 Beim Serverstart läuft ein **Supervisor**, der alle 15 s die Geräteliste liest und für jedes Gerät eine Aufgabe (Task) startet.
-Jede Geräte-Aufgabe lädt in **jedem Zyklus** Gerät, aktivierte Sensoren und SNMP-Profil neu aus der Datenbank. Änderungen (Intervall,
-Adresse, Zugangsdaten, neue oder deaktivierte Sensoren) wirken daher ohne Neustart; wird das Gerät gelöscht, endet die Aufgabe.
+Jede Geräte-Aufgabe lädt in **jedem Zyklus** Gerät, nicht pausierte Sensoren (auch Pausen von Gerät und Gruppen, `storage::pauses::load`) und SNMP-Profil neu
+aus der Datenbank. Änderungen (Intervall, Adresse, Zugangsdaten, neue oder pausierte Sensoren) wirken daher ohne Neustart; wird das Gerät gelöscht, endet die Aufgabe.
 
 - **Startzeitpunkte** sind je Gerät deterministisch über das Intervall verteilt (höchstens 30 s Versatz): kein Burst zur vollen Minute.
   Die ersten Messwerte erscheinen deshalb bis zu 30 s nach dem Start.
@@ -33,8 +33,8 @@ Sensorstatus: `Up`, `Warning`, `Down`, `Unknown`, `Paused`.
 | nach einem Fehler wieder eine gelungene Messung | `Up` (sofort) |
 
 Ein einzelnes verlorenes UDP-Paket löst so keinen Down-Alarm aus. Schwellwerte je Kanal (Warning/Down) kommen mit MVP-Schritt 4 in `assess`.
-Gerätestatus = schlechtester Status der aktiven Sensoren (`Down` > `Warning` > `Unknown` > `Up`); deaktivierte Sensoren (`Paused`) zählen nicht,
-nur deaktivierte ergeben `Paused`, keine Sensoren oder noch keine Abfrage ergeben `Unknown`.
+Gerätestatus = schlechtester Status der aktiven Sensoren (`Down` > `Warning` > `Unknown` > `Up`); pausierte Sensoren (`Paused`) zählen nicht,
+nur pausierte ergeben `Paused`, keine Sensoren oder noch keine Abfrage ergeben `Unknown`.
 
 ## Datenbank (Migration `0006`)
 
@@ -47,15 +47,17 @@ nur deaktivierte ergeben `Paused`, keine Sensoren oder noch keine Abfrage ergebe
 ## Protokoll (`/log`)
 
 Menüpunkt **„Protokoll“** unter Monitoring, für alle Benutzer: Warnungen und Ausfälle sowie ihr Ende (Wechsel von Warnung/Ausfall nach „In Ordnung“)
-über alle Sensoren, **neueste zuerst** (`web::log`, `storage::status::problem_log`). Spalten: Zeitpunkt, Status mit dem Status davor, Sensor, Gerät mit
+über alle Sensoren, dazu **Pausen** (`storage::pauses::log_entries`: „Pausiert“ von wem, mit Grund und geplantem Ende, Dauer bis zum Fortsetzen bzw.
+„dauert an“; „Fortgesetzt“ von wem; „Pause abgelaufen“ zum geplanten Ende; bei Geräten und Gruppen steht statt des Sensors „ganzes Gerät“/„ganze Gruppe“),
+beides zusammen **neueste zuerst** (`web::log`, `storage::status::problem_log`). Spalten: Zeitpunkt, Status mit dem Status davor, Sensor, Gerät mit
 Gruppenpfad, Meldung, Dauer. Die Dauer ist bei Warnung/Ausfall die Zeit bis zum nächsten Wechsel bzw. „dauert an“ mit der bisherigen Zeit, bei einer
 Erholung „nach …“ die Dauer des Problems davor (aus `LAG`/`LEAD` über die Wechsel desselben Sensors). Erstabfragen, Pausieren und „Unbekannt“ stehen
-nicht im Protokoll, zählen aber zu den 500 gespeicherten Wechseln. Oben rechts „Aktualisieren“ mit „Automatisch“.
+nicht im Protokoll, zählen aber zu den 500 gespeicherten Wechseln. Vom Pausenprotokoll (`pause_log`) bleiben ebenfalls die neuesten 500 Einträge. Oben rechts „Aktualisieren“ mit „Automatisch“.
 - `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignis in **einer Transaktion** und liefert den `StatusChange` zurück
   (die spätere Benachrichtigung hängt sich dort an; ein Wechsel `NULL → Up` ist kein Alarmgrund).
 
 ## Tests
 
 Unit-Tests für die Statuslogik und `storage::status`; Poller-Tests gegen den Fake-Agenten (Messwerte, Warning → Down → Up, Fail-fast, Rate nach
-dem zweiten Zyklus, deaktivierte/gelöschte Sensoren, Start und Stopp). Manuell gegen die echte Hardware:
+dem zweiten Zyklus, pausierte/gelöschte Sensoren, Start und Stopp). Manuell gegen die echte Hardware:
 `cargo test --test omada_manual poller_cycle -- --ignored --nocapture` (temporäre Datenbank, Switch und AP, zwei Zyklen).

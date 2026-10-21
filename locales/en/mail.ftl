@@ -57,7 +57,7 @@ alert-subject-down = Down
 alert-subject-warning = Warning
 alert-subject-up = OK again
 alert-subject-unknown = Unknown
-alert-subject-paused = Inactive
+alert-subject-paused = Paused
 alert-subject-many =
     { $count } status changes: { $parts }
 alert-count-down = { $count } down

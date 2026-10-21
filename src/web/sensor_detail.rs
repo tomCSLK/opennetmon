@@ -94,6 +94,10 @@ struct DetailTemplate {
     status_label: String,
     status_class: &'static str,
     message: String,
+    /// Why the sensor is paused, instead of the message.
+    pause: Option<crate::web::pause::PauseNote>,
+    /// Paused by itself, so it can be resumed here.
+    paused_itself: bool,
     last_poll: String,
     channels: Vec<ChannelView>,
     ranges: Vec<RangeLink>,
@@ -189,11 +193,10 @@ async fn render(
         })
         .collect();
     let state_row = status_store::get_state(&state.pool, sensor.id).await?;
-    let status = if sensor.enabled {
-        state_row.as_ref().map_or(Status::Unknown, |s| s.status)
-    } else {
-        Status::Paused
-    };
+    let why = crate::storage::pauses::load_all(&state.pool, now_ms())
+        .await?
+        .sensor(sensor.id, device.id);
+    let status = crate::status::shown_status(why.is_some(), state_row.as_ref().map(|s| s.status));
     let events = status_store::events_of_sensor(&state.pool, sensor.id, EVENT_LIMIT)
         .await?
         .into_iter()
@@ -221,8 +224,13 @@ async fn render(
         status_class: status.as_str(),
         message: state_row
             .as_ref()
+            .filter(|_| why.is_none())
             .map(|s| crate::status::shown(user.lang, &s.message))
             .unwrap_or_default(),
+        paused_itself: why
+            .as_ref()
+            .is_some_and(|w| w.source == crate::pause::Source::Own),
+        pause: why.as_ref().map(|w| crate::web::pause::note(user.lang, w)),
         last_poll: state_row.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
         channels,
         ranges: Range::ALL

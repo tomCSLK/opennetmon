@@ -1,4 +1,5 @@
 {% extends "app.html" %}
+{% import "pause_note.html" as pause %}
 {% block title %}{{ t.get("sensors") }} {{ device.name }} – opennetmon{% endblock %}
 {% block head %}
   <script src="/static/oid-help.js?v=2" defer></script>
@@ -16,6 +17,15 @@
   <div class="actions">
     {% if layout.is_admin %}
     <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
+    {% if device_paused_itself %}
+    <form method="post" action="/resume/device/{{ device.id }}">
+      <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+      <input type="hidden" name="back" value="device">
+      <button type="submit" class="secondary">{{ t.get("resume") }}</button>
+    </form>
+    {% else %}
+    <a class="button ghost" href="/pause/device/{{ device.id }}?back=device">{{ t.get("pause") }}</a>
+    {% endif %}
     {% if device.has_snmp() %}
     <form method="post" action="/devices/{{ device.id }}/test">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
@@ -44,10 +54,13 @@
 {% if let Some(message) = error %}
 <p class="error" role="alert">{{ message }}</p>
 {% endif %}
+{% if let Some(n) = device_pause %}
+<p class="notice" role="status">{% call pause::note(n, t) %}{% endcall %}. {{ t.get("pause-device-notice") }}</p>
+{% endif %}
 
 <section class="card flush">
   <div class="card-head"><h2>{{ t.get("sensors") }}</h2>
-    <div class="actions"><span class="muted small">{{ t.get1("count-active", "count", rows.len()) }}{% if !inactive.is_empty() %} · {{ t.get1("count-inactive", "count", inactive.len()) }}{% endif %}</span>
+    <div class="actions"><span class="muted small">{% if device_pause.is_some() %}{{ t.get1("count-sensors", "count", rows.len() + inactive.len()) }}{% else %}{{ t.get1("count-active", "count", rows.len()) }}{% endif %}{% if !inactive.is_empty() %} · {{ t.get1("count-inactive", "count", inactive.len()) }}{% endif %}</span>
       {% if layout.is_admin && rows.len() + inactive.len() > 1 %}<a class="button ghost small" href="/devices/{{ device.id }}/sensors/order">{{ t.get("order-change") }}</a>{% endif %}</div>
   </div>
   {% if rows.is_empty() %}
@@ -66,7 +79,7 @@
       <tr>
         <td><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
         <td><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
-        <td class="wrap muted">{{ row.message }}</td>
+        <td class="wrap muted">{% if let Some(n) = row.pause %}{% call pause::note(n, t) %}{% endcall %}{% else %}{{ row.message }}{% endif %}</td>
         <td class="num right current-values"{% if !row.value_title.is_empty() %} title="{{ row.value_title }}"{% endif %}>{% for value in row.values %}<span>{{ value }}</span>{% else %}–{% endfor %}</td>
         <td class="col-trend">
           {% match row.trend %}
@@ -84,10 +97,7 @@
         {% if layout.is_admin %}
         <td>
           <div class="row-actions">
-            <form method="post" action="/sensors/{{ row.id }}/toggle">
-              <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-              <button type="submit" class="ghost small">{{ t.get("sensors-deactivate") }}</button>
-            </form>
+            <a class="button ghost small" href="/pause/sensor/{{ row.id }}?back=device">{{ t.get("pause") }}</a>
             <form method="post" action="/sensors/{{ row.id }}/delete">
               <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
               <button type="submit" class="ghost small">{{ t.get("delete") }}</button>
@@ -111,13 +121,14 @@
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <div class="table-wrap">
     <table>
-      <thead><tr>{% if layout.is_admin %}<th></th>{% endif %}<th>{{ t.get("sensor") }}</th><th>{{ t.get("status") }}</th></tr></thead>
+      <thead><tr>{% if layout.is_admin %}<th></th>{% endif %}<th>{{ t.get("sensor") }}</th><th>{{ t.get("status") }}</th><th>{{ t.get("message") }}</th></tr></thead>
       <tbody>
       {% for row in inactive %}
         <tr>
           {% if layout.is_admin %}<td><input type="checkbox" name="s_{{ row.id }}" value="on" aria-label="{{ t.get1("select-named", "name", row.name.as_str()) }}"></td>{% endif %}
           <td><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
           <td><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
+          <td class="wrap muted">{% if let Some(n) = row.pause %}{% call pause::note(n, t) %}{% endcall %}{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

@@ -160,6 +160,11 @@ async fn supervise(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             }
             Err(e) => tracing::error!(error = %e, "listing devices failed"),
         }
+        match crate::storage::pauses::expire(&shared.pool, now_ms()).await {
+            Ok(0) => {}
+            Ok(ended) => tracing::info!(ended, "timed pauses ended"),
+            Err(e) => tracing::error!(error = %e, "ending timed pauses failed"),
+        }
         tokio::select! {
             _ = tokio::time::sleep(RESCAN_INTERVAL) => {}
             _ = shutdown.changed() => break,
@@ -299,7 +304,8 @@ fn device_level(error: &SensorError) -> bool {
     )
 }
 
-/// Polls all enabled sensors of one device once and stores the results.
+/// Polls all sensors of one device that are not paused (by themselves, the device or a group) once
+/// and stores the results.
 /// Returns `None` if the device no longer exists, otherwise the status changes of this cycle.
 pub async fn poll_device_once(
     pool: &SqlitePool,
@@ -311,10 +317,11 @@ pub async fn poll_device_once(
     let Some(device) = get_device(pool, device_id).await? else {
         return Ok(None);
     };
+    let pauses = crate::storage::pauses::load_all(pool, now_ms()).await?;
     let records: Vec<SensorRecord> = list_sensors(pool, device_id)
         .await?
         .into_iter()
-        .filter(|r| r.enabled)
+        .filter(|r| pauses.sensor(r.id, device_id).is_none())
         .collect();
     state.reconcile(&records);
     if records.is_empty() {

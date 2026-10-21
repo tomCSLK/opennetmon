@@ -409,29 +409,6 @@ pub async fn set_enabled(pool: &SqlitePool, id: i64, enabled: bool) -> Result<()
     Ok(())
 }
 
-/// Activates or deactivates several sensors of one device; ids of other devices are ignored.
-/// Returns how many sensors were changed.
-pub async fn set_enabled_many(
-    pool: &SqlitePool,
-    device_id: i64,
-    ids: &[i64],
-    enabled: bool,
-) -> Result<u64> {
-    let mut tx = pool.begin().await?;
-    let mut changed = 0;
-    for id in ids {
-        changed += sqlx::query("UPDATE sensors SET enabled = ? WHERE id = ? AND device_id = ?")
-            .bind(i64::from(enabled))
-            .bind(id)
-            .bind(device_id)
-            .execute(&mut *tx)
-            .await?
-            .rows_affected();
-    }
-    tx.commit().await?;
-    Ok(changed)
-}
-
 /// Deletes several sensors of one device (with channels and samples); other devices' ids are ignored.
 pub async fn delete_many(pool: &SqlitePool, device_id: i64, ids: &[i64]) -> Result<u64> {
     let mut tx = pool.begin().await?;
@@ -656,7 +633,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sensors_can_start_inactive_and_be_switched_in_bulk_per_device() {
+    async fn sensors_can_start_inactive_and_be_deleted_in_bulk_per_device() {
         let (_dir, pool, device) = setup().await;
         let other: i64 = sqlx::query_scalar(
             "INSERT INTO devices (name, host, profile_id) VALUES ('ap', '192.0.2.2', 1) RETURNING id",
@@ -678,17 +655,8 @@ mod tests {
             "inactive sensors are not polled"
         );
 
-        assert_eq!(
-            set_enabled_many(&pool, device, &[a, b, foreign], true)
-                .await
-                .unwrap(),
-            2
-        );
-        assert_eq!(list_enabled_sensors(&pool).await.unwrap().len(), 2);
-        assert!(
-            !get_sensor(&pool, foreign).await.unwrap().unwrap().enabled,
-            "other devices are untouched"
-        );
+        set_enabled(&pool, b, true).await.unwrap();
+        assert_eq!(list_enabled_sensors(&pool).await.unwrap().len(), 1);
 
         assert_eq!(delete_many(&pool, device, &[a, foreign]).await.unwrap(), 1);
         assert!(get_sensor(&pool, a).await.unwrap().is_none());

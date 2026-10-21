@@ -16,17 +16,19 @@ use crate::discovery::discover_interfaces;
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::mib::MibIndex;
+use crate::pause::{Source, Target};
 use crate::sensors::Unit;
 use crate::sensors::format::channel_label;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpTarget};
-use crate::status::{Status, device_status};
+use crate::status::{device_status, shown_status};
 use crate::storage::measurements::{bucket_averages, latest_values};
 use crate::storage::sensors::{self as store, SensorRecord};
-use crate::storage::{devices, status as status_store};
+use crate::storage::{devices, pauses, status as status_store};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::overview::FlashQuery;
+use crate::web::pause::{PauseNote, note};
 use crate::web::sensor_text::ValueFormat;
 use crate::web::sparkline::{self, Trend};
 use crate::web::{AppState, Crumb, Layout, flash_message, group_trail};
@@ -45,6 +47,8 @@ struct SensorRowView {
     status_label: String,
     status_class: &'static str,
     message: String,
+    /// Shown instead of the message while the sensor is paused.
+    pause: Option<PauseNote>,
     /// Latest value per channel (traffic: in, out); empty when there is no recent one.
     values: Vec<String>,
     /// The values with their channel names, as a tooltip.
@@ -87,9 +91,13 @@ struct SensorsTemplate {
     trail: Vec<Crumb>,
     device_status_label: String,
     device_status_class: &'static str,
-    /// Active sensors (polled).
+    /// Why the device is paused (by itself or a group).
+    device_pause: Option<PauseNote>,
+    /// The device is paused by itself (so it can be resumed here).
+    device_paused_itself: bool,
+    /// Sensors not paused by themselves (polled unless the device or a group is paused).
     rows: Vec<SensorRowView>,
-    /// Inactive sensors (not polled until activated).
+    /// Sensors paused by themselves.
     inactive: Vec<SensorRowView>,
     flash: Option<String>,
     error: Option<String>,
@@ -315,23 +323,23 @@ async fn render_sensors(
     let mibs = state.mib_index();
     let records = store::list_sensors(&state.pool, device.id).await?;
     let states = status_store::list_states(&state.pool).await?;
-    let overall = device_status(
-        records
-            .iter()
-            .map(|r| (r.enabled, states.get(&r.id).map(|s| s.status))),
-    );
     let pool = &state.pool;
     let now = now_ms();
+    let paused = pauses::load_all(pool, now).await?;
+    let overall = device_status(records.iter().map(|r| {
+        (
+            paused.sensor(r.id, device.id).is_none(),
+            states.get(&r.id).map(|s| s.status),
+        )
+    }));
+    let device_why = paused.device(device.id);
     let mut rows = Vec::new();
     let mut inactive = Vec::new();
     for r in &records {
         let state = states.get(&r.id);
-        let status = if r.enabled {
-            state.map_or(Status::Unknown, |s| s.status)
-        } else {
-            Status::Paused
-        };
-        let (trend, values, value_title) = if r.enabled {
+        let why = paused.sensor(r.id, device.id);
+        let status = shown_status(why.is_some(), state.map(|s| s.status));
+        let (trend, values, value_title) = if why.is_none() {
             recent(pool, r, &device, &mibs, user.lang, now).await?
         } else {
             (Trend::Empty, Vec::new(), String::new())
@@ -343,16 +351,18 @@ async fn render_sensors(
             status_label: user.lang.get(status.label_id()),
             status_class: status.as_str(),
             message: state
+                .filter(|_| why.is_none())
                 .map(|s| crate::status::shown(user.lang, &s.message))
                 .unwrap_or_default(),
+            pause: why.as_ref().map(|w| note(user.lang, w)),
             values,
             value_title,
             trend,
         };
-        if r.enabled {
-            rows.push(row);
-        } else {
+        if why.is_some_and(|w| w.source == Source::Own) {
             inactive.push(row);
+        } else {
+            rows.push(row);
         }
     }
     let template_name =
@@ -370,6 +380,8 @@ async fn render_sensors(
         device,
         device_status_label: user.lang.get(overall.label_id()),
         device_status_class: overall.as_str(),
+        device_paused_itself: device_why.as_ref().is_some_and(|w| w.source == Source::Own),
+        device_pause: device_why.as_ref().map(|w| note(user.lang, w)),
         rows,
         inactive,
         flash,
@@ -626,7 +638,8 @@ async fn find_sensor(state: &AppState, id: i64) -> Result<SensorRecord> {
         .ok_or(Error::NotFound)
 }
 
-/// Activates, deactivates or deletes the ticked sensors of a device (fields `s_<id>=on`).
+/// Resumes or deletes the ticked sensors of a device (fields `s_<id>=on`), or resumes all its
+/// sensors paused by themselves (`activate_all`).
 pub async fn bulk(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -636,36 +649,34 @@ pub async fn bulk(
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
     load_device(&state, id).await?;
-    let ids: Vec<i64> = fields
-        .iter()
-        .filter(|(k, v)| k.starts_with("s_") && v.as_str() == "on")
-        .filter_map(|(k, _)| k[2..].parse().ok())
-        .take(MAX_FORM_FIELDS)
-        .collect();
+    let own = store::list_sensors(&state.pool, id).await?;
     let action = fields.get("action").map_or("", String::as_str);
-    let all_inactive = action == "activate_all";
-    let ids = if all_inactive {
-        store::list_sensors(&state.pool, id)
-            .await?
-            .into_iter()
-            .filter(|s| !s.enabled)
-            .map(|s| s.id)
-            .collect()
+    let ids: Vec<i64> = if action == "activate_all" {
+        own.iter().filter(|s| !s.enabled).map(|s| s.id).collect()
     } else {
-        ids
+        fields
+            .iter()
+            .filter(|(k, v)| k.starts_with("s_") && v.as_str() == "on")
+            .filter_map(|(k, _)| k[2..].parse().ok())
+            .filter(|ticked| own.iter().any(|s| s.id == *ticked))
+            .take(MAX_FORM_FIELDS)
+            .collect()
     };
     if ids.is_empty() {
         return Err(Error::invalid(Msg::new("sensors-select-sensor")));
     }
     let (changed, msg) = match action {
-        "activate" | "activate_all" => (
-            store::set_enabled_many(&state.pool, id, &ids, true).await?,
-            "sensors_activated",
-        ),
-        "deactivate" => (
-            store::set_enabled_many(&state.pool, id, &ids, false).await?,
-            "sensors_deactivated",
-        ),
+        "activate" | "activate_all" => {
+            let now = now_ms();
+            let mut resumed = 0u64;
+            for sensor in &ids {
+                if pauses::resume(&state.pool, Target::Sensor(*sensor), &user.username, now).await?
+                {
+                    resumed += 1;
+                }
+            }
+            (resumed, "sensors_activated")
+        }
         "delete" => (
             store::delete_many(&state.pool, id, &ids).await?,
             "sensors_deleted",
@@ -674,25 +685,6 @@ pub async fn bulk(
     };
     tracing::info!(user = %user.username, device = id, action, changed, "bulk sensor change");
     Ok(Redirect::to(&format!("/devices/{id}/sensors?msg={msg}")).into_response())
-}
-
-pub async fn toggle(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    Path(id): Path<i64>,
-    Form(form): Form<CsrfForm>,
-) -> Result<Response> {
-    user.require_admin()?;
-    user.verify_csrf(&form.csrf_token)?;
-    let sensor = find_sensor(&state, id).await?;
-    store::set_enabled(&state.pool, id, !sensor.enabled).await?;
-    tracing::info!(user = %user.username, sensor = id, enabled = !sensor.enabled, "sensor toggled");
-    let msg = if sensor.enabled {
-        "sensor_paused"
-    } else {
-        "sensor_resumed"
-    };
-    Ok(Redirect::to(&format!("/devices/{}/sensors?msg={msg}", sensor.device_id)).into_response())
 }
 
 pub async fn delete(
@@ -793,7 +785,7 @@ mod tests {
         let page = send(&h.app, get(&path, Some(&viewer))).await;
         assert_eq!(page.status, StatusCode::OK);
         assert!(page.body.contains("Ping"));
-        assert!(!page.body.contains("Sensor hinzufügen") && !page.body.contains("/toggle"));
+        assert!(!page.body.contains("Sensor hinzufügen") && !page.body.contains("/pause/"));
 
         for (target, body) in [
             (path.clone(), format!("csrf_token={vcsrf}&kind=ping")),
@@ -802,7 +794,15 @@ mod tests {
                 format!("/devices/{device}/sensors/interfaces"),
                 format!("csrf_token={vcsrf}&t_1=on"),
             ),
-            ("/sensors/1/toggle".to_owned(), csrf_only(&vcsrf)),
+            (
+                "/pause/sensor/1".to_owned(),
+                format!("csrf_token={vcsrf}&duration=0"),
+            ),
+            (
+                format!("/pause/device/{device}"),
+                format!("csrf_token={vcsrf}&duration=0"),
+            ),
+            ("/resume/sensor/1".to_owned(), csrf_only(&vcsrf)),
             ("/sensors/1/delete".to_owned(), csrf_only(&vcsrf)),
         ] {
             assert_eq!(
@@ -1133,20 +1133,29 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn toggle_and_delete_work_and_paused_sensors_are_shown_as_paused() {
+    async fn pause_resume_and_delete_work_and_paused_sensors_are_listed_apart() {
         let h = harness(true).await;
         let device = device_on(&h, 161).await;
         let (admin, csrf) = login(&h, "anna").await;
         let id = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
             .await
             .unwrap();
+        let page = send(
+            &h.app,
+            get(&format!("/devices/{device}/sensors"), Some(&admin)),
+        )
+        .await;
+        assert!(
+            page.body
+                .contains(&format!("/pause/sensor/{id}?back=device"))
+        );
 
         let reply = send(
             &h.app,
             post(
-                &format!("/sensors/{id}/toggle"),
+                &format!("/pause/sensor/{id}"),
                 Some(&admin),
-                &csrf_only(&csrf),
+                &format!("csrf_token={csrf}&duration=60&reason=Firmware&back=device"),
             ),
         )
         .await;
@@ -1159,17 +1168,29 @@ mod tests {
             get(&format!("/devices/{device}/sensors"), Some(&admin)),
         )
         .await;
-        assert!(page.body.contains("Inaktiv") && page.body.contains("Inaktive Sensoren (1)"));
+        assert!(
+            page.body.contains("Pausierte Sensoren (1)"),
+            "{}",
+            page.body
+        );
+        assert!(page.body.contains("Pausiert bis") && page.body.contains("Firmware"));
         let reply = send(
             &h.app,
             post(
-                &format!("/sensors/{id}/toggle"),
+                &format!("/resume/sensor/{id}"),
                 Some(&admin),
-                &csrf_only(&csrf),
+                &format!("csrf_token={csrf}&back=device"),
             ),
         )
         .await;
         assert!(reply.location().ends_with("msg=sensor_resumed"));
+        assert!(
+            store::get_sensor(&h.state.pool, id)
+                .await
+                .unwrap()
+                .unwrap()
+                .enabled
+        );
 
         let reply = send(
             &h.app,
@@ -1381,7 +1402,7 @@ mod tests {
             get(&format!("/devices/{device}/sensors"), Some(&admin)),
         )
         .await;
-        assert!(page.body.contains("Inaktive Sensoren (3)"));
+        assert!(page.body.contains("Pausierte Sensoren (3)"));
 
         // The sensor of the other device is ignored even when named.
         let reply = send(
@@ -1413,9 +1434,9 @@ mod tests {
         send(
             &h.app,
             post(
-                &path,
+                &format!("/pause/sensor/{}", ids[1]),
                 Some(&admin),
-                &format!("csrf_token={csrf}&action=deactivate&s_{}=on", ids[1]),
+                &format!("csrf_token={csrf}&duration=0&back=device"),
             ),
         )
         .await;

@@ -6,6 +6,7 @@ pub mod groups;
 pub mod mail;
 pub mod measurements;
 pub mod mibs;
+pub mod pauses;
 pub mod sensors;
 pub mod status;
 pub mod templates;
@@ -60,7 +61,8 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
         return Ok(());
     }
     const COLUMNS: &str = "id, name, host, port, group_id, profile_id, interval_secs, timeout_secs, \
-                           retries, created_at, updated_at, position, template_id, kind";
+                           retries, created_at, updated_at, position, template_id, kind, \
+                           paused, pause_until_ms, pause_reason";
     let mut conn = pool.acquire().await?;
     sqlx::query("PRAGMA foreign_keys = OFF")
         .execute(&mut *conn)
@@ -83,7 +85,10 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
                 updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 position      INTEGER CHECK (position IS NULL OR position > 0),
                 template_id   INTEGER REFERENCES device_templates (id) ON DELETE SET NULL,
-                kind          TEXT NOT NULL DEFAULT 'generic'
+                kind          TEXT NOT NULL DEFAULT 'generic',
+                paused        INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+                pause_until_ms INTEGER,
+                pause_reason  TEXT NOT NULL DEFAULT ''
             ) STRICT",
         )
         .execute(&mut *tx)

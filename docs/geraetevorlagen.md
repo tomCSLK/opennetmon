@@ -15,7 +15,7 @@ Gerätekennung (`sysObjectID`) und die Interfaces.
 | Traffic, Interface-Status | **alle aktiven Ports** des Zielgeräts, **alle Ports** (auch inaktive), **dieselben Ports** (nach Portname, mit den Sensornamen dieses Geräts) oder nicht übernehmen |
 | Weitere Sensoren | Ping, Uptime und eigene Werte (z. B. PoE, CPU, Speicher) einzeln per Häkchen |
 
-- Übernommen werden Name, Zustand (aktiv/inaktiv), Faktor, Einheit, Schwellwerte und die Bewertung von Statuswerten. Bei „aktiven/allen Ports“ gelten die Schwellwerte nur,
+- Übernommen werden Name, Zustand (aktiv/pausiert), Faktor, Einheit, Schwellwerte und die Bewertung von Statuswerten. Bei „aktiven/allen Ports“ gelten die Schwellwerte nur,
   wenn alle Interface-Sensoren dieser Art am Quellgerät dieselben haben; aktiv werden die neuen Sensoren, wenn mindestens einer am Quellgerät aktiv ist.
 - „Ports“ sind Interfaces der Typen Ethernet und WLAN – dieselbe Auswahl wie die Vorauswahl bei „Interfaces suchen“
   (bei TP-Link zählt dazu auch `Vlan-interface1`).

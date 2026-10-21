@@ -401,18 +401,28 @@ pub fn advance(prev: Option<&SensorState>, assessment: &Assessment, now_ms: i64)
     }
 }
 
-/// Device status from its sensors, given as `(enabled, state)`. Paused (disabled) sensors are
-/// ignored; a device with only paused sensors is `Paused`, one without sensors or without any
-/// poll yet is `Unknown`. The worst status wins.
+/// The status to show for a sensor: `Paused` while it is paused (by itself, its device or a group);
+/// after a pause its stored "paused" means `Unknown` until the next poll.
+pub fn shown_status(paused: bool, stored: Option<Status>) -> Status {
+    match stored {
+        _ if paused => Status::Paused,
+        None | Some(Status::Paused) => Status::Unknown,
+        Some(status) => status,
+    }
+}
+
+/// Device status from its sensors, given as `(active, stored state)` (active = not paused). Paused
+/// sensors are ignored; a device with only paused sensors is `Paused`, one without sensors or
+/// without any poll yet is `Unknown`. The worst status wins.
 pub fn device_status(sensors: impl IntoIterator<Item = (bool, Option<Status>)>) -> Status {
     let mut any = false;
     let mut worst: Option<Status> = None;
-    for (enabled, state) in sensors {
+    for (active, state) in sensors {
         any = true;
-        if !enabled {
+        if !active {
             continue;
         }
-        let state = state.unwrap_or(Status::Unknown);
+        let state = shown_status(false, state);
         if worst.is_none_or(|w| state.severity() > w.severity()) {
             worst = Some(state);
         }

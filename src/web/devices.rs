@@ -1322,7 +1322,7 @@ mod tests {
             "every 60 s",
             "no SNMP",
             "All devices",
-            "Inactive / unknown",
+            "Paused / unknown",
         ] {
             assert!(home.body.contains(text), "{text}");
         }

@@ -1,0 +1,2 @@
+{# "Pausiert mit dem Gerät bis <time> · Grund" (`web::pause::PauseNote`). #}
+{% macro note(n, t) %}{{ n.text }}{% if let Some(until) = n.until %} {{ t.get("pause-until") }} {{ until|safe }}{% endif %}{% if !n.reason.is_empty() %} · {{ n.reason }}{% endif %}{% endmacro %}

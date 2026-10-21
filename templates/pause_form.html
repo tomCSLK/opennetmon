@@ -1,0 +1,40 @@
+{% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
+{% block title %}{{ heading }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb">{% for c in trail %}<a href="{{ c.href }}">{{ c.name }}</a><span>›</span>{% endfor %}<span>{{ t.get("pause") }}</span></div>
+    <h1>{{ heading }}</h1>
+  </div>
+</div>
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+<section class="card">
+  <form method="post" action="{{ action }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <input type="hidden" name="back" value="{{ back }}">
+    <p class="muted">{{ t.get("pause-intro") }}{% if !hint.is_empty() %} {{ hint }}{% endif %}</p>
+    <div class="form-grid">
+      <div>
+        <label for="duration">{{ t.get("pause-duration") }}</label>
+        <select id="duration" name="duration">
+          {% for o in durations %}
+          <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="reason">{{ t.get("pause-reason") }}</label>
+        <input id="reason" name="reason" type="text" maxlength="200" value="{{ reason }}" autofocus>
+        <p class="hint">{{ t.get("pause-reason-hint") }}</p>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit">{{ t.get("pause") }}</button>
+      <a class="button secondary" href="{{ cancel_href }}">{{ t.get("cancel") }}</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

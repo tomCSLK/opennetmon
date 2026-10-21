@@ -196,6 +196,8 @@ struct Row {
     status: Status,
     status_label: String,
     message: String,
+    /// Why the sensor is paused, instead of the message.
+    pause: Option<crate::web::pause::PauseNote>,
     /// When the sensor entered its status (not for inactive or never polled sensors).
     since_ms: Option<i64>,
     since: String,
@@ -377,6 +379,7 @@ pub async fn list(
         .collect();
     let states = status::list_states(&state.pool).await?;
     let now = now_ms();
+    let pauses = crate::storage::pauses::load_all(&state.pool, now).await?;
 
     let mut counts = [0usize; Filter::ALL.len()];
     let mut rows = Vec::new();
@@ -385,11 +388,9 @@ pub async fn list(
             continue;
         };
         let sensor_state = states.get(&sensor.id);
-        let current = if sensor.enabled {
-            sensor_state.map_or(Status::Unknown, |s| s.status)
-        } else {
-            Status::Paused
-        };
+        let why = pauses.sensor(sensor.id, device.id);
+        let active = why.is_none();
+        let current = crate::status::shown_status(!active, sensor_state.map(|s| s.status));
         for (n, f) in counts.iter_mut().zip(Filter::ALL) {
             if f.matches(current) {
                 *n += 1;
@@ -398,9 +399,11 @@ pub async fn list(
         if !filter.matches(current) {
             continue;
         }
-        // Since when a polled sensor is in its status; an inactive one has no current status.
-        let since_ms = sensor_state.filter(|_| sensor.enabled).map(|s| s.since_ms);
-        let fresh = if sensor.enabled {
+        // Since when a polled sensor is in its status; a paused one has no current status.
+        let since_ms = sensor_state
+            .filter(|s| active && s.status != Status::Paused)
+            .map(|s| s.since_ms);
+        let fresh = if active {
             Some(fresh_values(&state.pool, &sensor, device, &mibs, t, now).await?)
         } else {
             None
@@ -426,9 +429,10 @@ pub async fn list(
             status: current,
             status_label: t.get(current.label_id()),
             message: sensor_state
-                .filter(|_| sensor.enabled)
+                .filter(|_| active)
                 .map(|s| crate::status::shown(t, &s.message))
                 .unwrap_or_default(),
+            pause: why.as_ref().map(|w| crate::web::pause::note(t, w)),
             since: since_ms.map(time_html).unwrap_or_default(),
             duration: since_ms
                 .map(|ms| format_value(t, Unit::Seconds, ((now - ms) / 1_000) as f64))
@@ -506,6 +510,7 @@ mod tests {
             status,
             status_label: String::new(),
             message: String::new(),
+            pause: None,
             since_ms: since,
             since: String::new(),
             duration: String::new(),
@@ -656,7 +661,7 @@ mod tests {
             "<a class=\"tile status-down active\" href=\"/status/down\" aria-current=\"page\"><div class=\"tile-value\">1</div><div class=\"tile-label\">Ausfall</div></a>"
         ));
         assert!(page.body.contains(
-            "href=\"/status/inactive\"><div class=\"tile-value\">1</div><div class=\"tile-label\">Inaktiv / unbekannt</div>"
+            "href=\"/status/inactive\"><div class=\"tile-value\">1</div><div class=\"tile-label\">Pausiert / unbekannt</div>"
         ));
         assert!(
             !home

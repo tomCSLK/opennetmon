@@ -7,7 +7,7 @@ overview-devices-down =
     }
 overview-order-groups = Gruppen anordnen
 overview-sensor-status = Sensorstatus
-overview-paused-unknown = Inaktiv / unbekannt
+overview-paused-unknown = Pausiert / unbekannt
 overview-empty = Noch keine Geräte angelegt.
 overview-empty-hint = Lege ein Gerät an – mit SNMP-Profil oder „Kein SNMP – nur Ping“:
 group-new = Neue Gruppe

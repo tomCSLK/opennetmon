@@ -6,13 +6,14 @@ Die Startseite zeigt unter den Kacheln einen **Baum wie in PRTG**: Gruppen mit K
 Geräte der Gruppe, dann die Untergruppen, beliebig tief und mit gepunkteten Linien verbunden. Jeder Eintrag ist eine kompakte Zeile mit dem Symbol seines Gerätetyps (Tooltip: Typ); rechts steht in einer
 festen Spalte die **Sensorplakette**: Sind alle aktiven Sensoren im selben Zustand, eine Plakette wie „✓ 9 Sensoren“ (grün in Ordnung, gelb Warnung,
 rot Ausfall, grau unbekannt), sonst je Zustand eine Plakette mit der Anzahl, schlechtester zuerst (✕ Ausfall, ! Warnung, ? unbekannt, ✓ in Ordnung).
-Inaktive Sensoren stehen als umrandete Plakette ‖ am Ende; der Tooltip nennt jeweils Anzahl und Zustand. Gruppen zeigen die Summe ihres ganzen
+Pausierte Sensoren stehen als umrandete Plakette ‖ am Ende; der Tooltip nennt jeweils Anzahl und Zustand. Gruppen zeigen die Summe ihres ganzen
 Teilbaums (auch zugeklappt) und die Zahl der Geräte. Bei Geräten führen Name und Plaketten zur Sensorseite. Der Zustand der Gruppen (auf/zu) wird im
 Browser gemerkt (`localStorage`, ohne Speicher sind alle offen). „Keine Geräte in dieser Gruppe“ erscheint nur bei wirklich leeren Gruppen.
 Reihenfolge wie unten beschrieben.
 Geräte ohne Gruppe stehen zuerst unter „Ohne Gruppe" (ohne Gruppen: „Alle Geräte“). Leser sehen Name, Adresse und Intervall;
 Administratoren sehen zusätzlich das SNMP-Profil sowie als Symbole „Testen" (nur mit SNMP) und „Bearbeiten", an Gruppen „Reihenfolge“ und
-„Gruppe bearbeiten“. Auf schmalen Bildschirmen (unter 560 px) entfallen Adresse und Intervall.
+„Gruppe bearbeiten“ sowie an Geräten und Gruppen „Pausieren“ ‖ bzw. „Fortsetzen“ ▶ (siehe unten). Pausierte Zeilen sind abgeblendet und nennen
+die Pause („Pausiert bis …“, „Pausiert mit der Gruppe „Netzwerk““, Grund). Auf schmalen Bildschirmen (unter 560 px) entfallen Adresse und Intervall.
 Die Aktionsmeldungen („Gerät angelegt." usw.) kommen über `?msg=` und werden nur auf feste Texte abgebildet.
 
 **Aktualisieren:** Übersicht, Statuslisten, Sensorseite eines Geräts und Sensor-Detailseite haben oben rechts den Knopf **„Aktualisieren“** (nur das Symbol ↻, Name als Tooltip; lädt die
@@ -24,6 +25,28 @@ gemerkt (`localStorage`). Ohne JavaScript bleibt „Aktualisieren“ ein normale
 **Pfad oben auf Geräte- und Sensorseiten:** Übersicht › Gruppe › Untergruppe › Gerät › Sensor, z. B. „Übersicht › Netzwerk › Router › Router ER605 › Ping“
 (`web::group_trail`, Teilvorlage `templates/device_trail.html`). Jede Gruppe führt zur Übersicht mit Sprungmarke `/#group-<id>`; `static/app.js`
 klappt die Gruppe und die Gruppen darüber auf, springt hin und hebt den Gruppenkopf hervor. Geräte ohne Gruppe zeigen nur Übersicht › Gerät.
+
+## Pausieren (nur Administratoren)
+
+Wie in PRTG lassen sich **Gruppen, Geräte und einzelne Sensoren pausieren** (`src/pause.rs`, `storage::pauses`, Seiten `web::pause`):
+
+- **Formular** `/pause/<group|device|sensor>/<id>` (Symbol ‖ in der Übersicht, Knopf auf der Sensorseite eines Geräts und auf der Detailseite):
+  Dauer **bis zum Fortsetzen**, 15 Minuten, 1 Stunde, 3 Stunden, 1 Tag oder 1 Woche, dazu ein optionaler **Grund** (höchstens 200 Zeichen, z. B.
+  „Firmware-Update“). Nach dem Speichern geht es zurück zur aufrufenden Seite (`back=overview|device|sensor`).
+- **Vererbung:** Eine pausierte Gruppe pausiert alle Untergruppen, Geräte und Sensoren darunter, ein pausiertes Gerät alle seine Sensoren. Angezeigt
+  wird die nächstliegende Pause: zuerst die eigene, dann die des Geräts, dann die der Gruppen von unten nach oben. Die eigenen Pausen darunter bleiben
+  erhalten und gelten wieder, wenn die äußere endet.
+- **Wirkung:** Pausierte Sensoren werden nicht abgefragt, lösen keine Mail aus und zählen nicht zum Gerätestatus; sie stehen als „Pausiert“ in Übersicht,
+  Statuslisten (Kachel „Pausiert / unbekannt“) und auf der Sensorseite. Beim Pausieren wird ihr Zustand sofort auf „Pausiert“ gesetzt; ein laufender
+  Ausfall endet damit im Protokoll, und beim Fortsetzen gibt es **keine** nachträgliche „Wieder in Ordnung“-Mail (die erste Abfrage danach ist ein Neustart
+  ohne alten Zustand).
+- **Fortsetzen** (`POST /resume/<kind>/<id>`) geht nur an dem Objekt, das selbst pausiert ist; ein Gerät, das nur mit seiner Gruppe pausiert ist,
+  zeigt den Hinweis und wird über die Gruppe fortgesetzt. **Zeitlich begrenzte Pausen** enden von selbst: Der Poller prüft alle 15 s
+  (`pauses::expire`); schon vorher gilt eine abgelaufene Pause nicht mehr.
+- **Protokoll:** Pausieren (mit Benutzer, Grund und geplantem Ende), Fortsetzen und automatisches Ende stehen im Protokoll `/log`
+  (Tabelle `pause_log`, die neuesten 500 Einträge, `pauses::LOG_KEPT`; siehe `docs/poller.md`).
+- **Datenbank** (Migration `0016`): `groups`/`devices` haben `paused`, `pause_until_ms`, `pause_reason`; bei Sensoren bleibt die eigene Pause
+  `enabled = 0` (dazu `pause_until_ms`, `pause_reason`). Sensoren, die vorher „deaktiviert“ waren, sind seitdem unbefristet pausiert.
 
 ## Reihenfolge (nur Administratoren)
 

@@ -53,9 +53,9 @@ Manuell gegen die echte Hardware: `cargo test --test omada_manual sensors_work -
 
 - **Übersicht** (`/`): je Gerät Status (schlechtester Sensorstatus), Link auf die Sensorseite und Anzahl der Sensoren.
 - **Statuslisten** (`/status/<filter>`, `src/web/status_list.rs`, alle angemeldeten Benutzer): Jede Kachel der Übersicht ist ein Link auf die Liste
-  ihrer Sensoren über alle Geräte – `all` (Sensoren), `up` (In Ordnung), `warning`, `down` und `inactive` (Inaktiv / unbekannt). Oben stehen dieselben
+  ihrer Sensoren über alle Geräte – `all` (Sensoren), `up` (In Ordnung), `warning`, `down` und `inactive` (Pausiert / unbekannt). Oben stehen dieselben
   Kacheln wie auf der Übersicht (gemeinsames Template `templates/status_tiles.html`, `status_list::tiles`); die gezeigte Liste hat einen blauen Ring. Spalten: Status, Sensor, Gerät mit Gruppenpfad, Meldung, aktueller Wert (wie auf der Sensorseite) und
-  „Seit“ (Zeitpunkt des letzten Statuswechsels und Dauer; leer bei inaktiven und noch nie abgefragten Sensoren).
+  „Seit“ (Zeitpunkt des letzten Statuswechsels und Dauer; leer bei pausierten und noch nie abgefragten Sensoren; bei pausierten steht in der Meldung die Pause).
   Sortiert wird per Klick auf die Spaltenköpfe (`?sort=status|sensor|device|value|since&dir=asc|desc`, ohne Skript, erneuter Klick dreht um).
   Standard: Warnung und Ausfall neueste Wechsel zuerst, „Sensoren“ schlechtester Status zuerst, sonst nach Gerät. Beim Wert bleiben Sensoren gleicher Einheit
   zusammen (Traffic zuerst, dann Raten, ms, %, Anzahl, Laufzeit, Statuswerte), sortiert wird innerhalb der Einheit nach der Summe der Kanäle
@@ -69,9 +69,9 @@ Manuell gegen die echte Hardware: `cargo test --test omada_manual sensors_work -
     Abschnitte ohne Wert unterbrechen die Linie.
   - Statuswerte, Interface-Status und Uptime: ein Statusband (grün/gelb/rot) aus dem Ereignislog (`storage::status::status_history`),
     weil eine Kurve dort nichts aussagt.
-  - Inaktive Sensoren haben keinen Graphen; auf schmalen Bildschirmen (unter 560 px) ist die Spalte ausgeblendet.
+  - Pausierte Sensoren haben keinen Graphen; auf schmalen Bildschirmen (unter 560 px) ist die Spalte ausgeblendet.
   Die Zeit der letzten Abfrage steht auf der Detailseite.
-  Administratoren sehen zusätzlich „Deaktivieren“, „Löschen“, „Interfaces suchen“, „Werte suchen“ (`docs/mibs.md`) und das Formular „Sensor hinzufügen“ (Ping, Uptime, eigene OID mit
+  Administratoren sehen zusätzlich je Sensor „Pausieren“ und „Löschen“, oben „Gerät pausieren“ bzw. „Fortsetzen“ (`docs/geraete-und-gruppen.md`, „Pausieren“), „Interfaces suchen“, „Werte suchen“ (`docs/mibs.md`) und das Formular „Sensor hinzufügen“ (Ping, Uptime, eigene OID mit
   Modus Wert/Zähler und Faktor; Dezimalkomma wird akzeptiert). Fehler erscheinen auf derselben Seite, Eingaben bleiben erhalten.
 - **Reihenfolge**: automatisch nach Typ (Ping, Uptime, Traffic, Interface-Status, dann eigene Werte), innerhalb eines Typs nach Namen
   mit Zahlen der Größe nach (Port 2 vor Port 10). „Reihenfolge ändern“ (`/devices/<id>/sensors/order`, nur Administratoren) ordnet von Hand
@@ -83,8 +83,9 @@ Manuell gegen die echte Hardware: `cargo test --test omada_manual sensors_work -
   (Access Points haben keine `ifXTable`), sonst „Interface N“. Die Seite zeigt je Interface zwei Häkchen (Traffic, Status). **Vorausgewählt** ist Traffic bei
   aktiven Ports der Typen Ethernet/WLAN; vorhandene Sensoren sind gesperrt. Der Test begrenzt wie der Verbindungstest auf 10 s Timeout und 1 Wiederholung,
   höchstens 2000 Zeilen je Tabelle.
-- **Inaktive Sensoren** (`enabled = false`, Status „Inaktiv“) werden nicht abgefragt und stehen in einem eigenen aufklappbaren Bereich
-  mit Sammelaktionen (aktivieren, alle aktivieren, löschen; `POST /devices/<id>/sensors/bulk`, nur Sensoren dieses Geräts).
+- **Pausierte Sensoren** (selbst pausiert: `enabled = false`, Status „Pausiert“) werden nicht abgefragt und stehen in einem eigenen aufklappbaren Bereich
+  „Pausierte Sensoren (n)“ mit der Pause in der Spalte „Meldung“ und Sammelaktionen (fortsetzen, alle fortsetzen, löschen; `POST /devices/<id>/sensors/bulk`,
+  nur Sensoren dieses Geräts). Ist das ganze Gerät oder seine Gruppe pausiert, steht darüber ein Hinweis und alle Sensoren gelten als pausiert.
 - **Anlegen** (`POST /devices/<id>/sensors/interfaces`): Felder `t_<ifIndex>`, `s_<ifIndex>` und `n_<ifIndex>` (Anzeigename). Sensornamen „Traffic <Name>“ bzw.
   „Status <Name>“ (höchstens 64 Zeichen); bei gleichem Namen wird „ #<Index>“ angehängt. Bereits vorhandene Interface-Sensoren werden nie doppelt angelegt.
 - Gemessen an der echten Hardware: Switch (9 Interfaces, Indizes 1 und 49153–49160, `ifName` z. B. „gigabitEthernet 1/0/1“, Alias „Port1“) und AP (13 Interfaces,

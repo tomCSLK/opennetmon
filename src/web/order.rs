@@ -144,7 +144,7 @@ pub async fn sensor_page(
             let mut sub = crate::web::sensor_text::describe(user.lang, &s.spec, &mibs);
             if !s.enabled {
                 sub.push_str(" · ");
-                sub.push_str(&user.lang.get("inactive"));
+                sub.push_str(&user.lang.get("status-paused"));
             }
             (s.id, s.name, sub)
         })

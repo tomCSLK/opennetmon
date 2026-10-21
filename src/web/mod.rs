@@ -11,6 +11,7 @@ pub mod mail_settings;
 pub mod mibs;
 pub mod order;
 pub mod overview;
+pub mod pause;
 pub mod sensor_detail;
 pub mod sensor_text;
 pub mod sensor_values;
@@ -171,7 +172,8 @@ pub fn router(state: AppState) -> Router {
         .route("/templates/{id}/delete", post(templates::delete))
         .route("/sensors/{id}/rename", post(sensor_detail::rename))
         .route("/sensors/{id}/states", post(sensor_detail::save_states))
-        .route("/sensors/{id}/toggle", post(sensors::toggle))
+        .route("/pause/{kind}/{id}", get(pause::form).post(pause::pause))
+        .route("/resume/{kind}/{id}", post(pause::resume))
         .route("/sensors/{id}/delete", post(sensors::delete))
         .route(
             "/settings/mail",
@@ -341,10 +343,13 @@ pub fn flash_message(t: Lang, key: Option<&str>) -> Option<String> {
         "sensor_deleted" => "flash-sensor-deleted",
         "sensor_paused" => "flash-sensor-paused",
         "sensor_resumed" => "flash-sensor-resumed",
+        "device_paused" => "flash-device-paused",
+        "device_resumed" => "flash-device-resumed",
+        "group_paused" => "flash-group-paused",
+        "group_resumed" => "flash-group-resumed",
         "values_added_inactive" => "flash-values-added-inactive",
         "values_added_active" => "flash-values-added-active",
         "sensors_activated" => "flash-sensors-activated",
-        "sensors_deactivated" => "flash-sensors-deactivated",
         "sensors_deleted" => "flash-sensors-deleted",
         "thresholds_saved" => "flash-thresholds-saved",
         "sensor_renamed" => "flash-sensor-renamed",

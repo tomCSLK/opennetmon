@@ -112,7 +112,9 @@ pub async fn record_poll(
         .map(<(i64, SensorState)>::try_from)
         .transpose()?
         .map(|(_, s)| s);
-    let next = advance(prev.as_ref(), assessment, ts_ms);
+    // After a pause the sensor starts afresh: no failure count, no stale "recovered" from before.
+    let basis = prev.as_ref().filter(|p| p.status != Status::Paused);
+    let next = advance(basis, assessment, ts_ms);
     sqlx::query(
         "INSERT INTO sensor_status (sensor_id, status, since_ms, last_poll_ms, message, consecutive_failures) \
          VALUES (?, ?, ?, ?, ?, ?) \
@@ -148,15 +150,53 @@ pub async fn record_poll(
         .bind(change.message.encode())
         .execute(&mut *tx)
         .await?;
-        sqlx::query(
-            "DELETE FROM events WHERE id <= (SELECT id FROM events ORDER BY id DESC LIMIT 1 OFFSET ?)",
-        )
-        .bind(EVENTS_KEPT)
-        .execute(&mut *tx)
-        .await?;
+        trim_events(&mut tx).await?;
     }
     tx.commit().await?;
     Ok(change)
+}
+
+async fn trim_events(conn: &mut sqlx::SqliteConnection) -> Result<()> {
+    sqlx::query(
+        "DELETE FROM events WHERE id <= (SELECT id FROM events ORDER BY id DESC LIMIT 1 OFFSET ?)",
+    )
+    .bind(EVENTS_KEPT)
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// Marks the stored state of a sensor as paused (keeping its last poll time) and logs the change.
+/// Ends a running outage in the log at the moment of pausing and makes the first poll after
+/// resuming start afresh (see [`record_poll`]).
+pub(crate) async fn mark_paused(
+    conn: &mut sqlx::SqliteConnection,
+    sensor_id: i64,
+    from: Option<Status>,
+    ts_ms: i64,
+) -> Result<()> {
+    let message = Msg::new("status-paused").encode();
+    sqlx::query(
+        "INSERT INTO sensor_status (sensor_id, status, since_ms, last_poll_ms, message, consecutive_failures) \
+         VALUES (?1, 'paused', ?2, ?2, ?3, 0) \
+         ON CONFLICT (sensor_id) DO UPDATE SET status = 'paused', since_ms = excluded.since_ms, \
+         message = excluded.message, consecutive_failures = 0",
+    )
+    .bind(sensor_id)
+    .bind(ts_ms)
+    .bind(&message)
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query(
+        "INSERT INTO events (ts_ms, sensor_id, from_status, to_status, message) VALUES (?, ?, ?, 'paused', ?)",
+    )
+    .bind(ts_ms)
+    .bind(sensor_id)
+    .bind(from.map(Status::as_str))
+    .bind(&message)
+    .execute(&mut *conn)
+    .await?;
+    trim_events(conn).await
 }
 
 type EventRow = (i64, i64, i64, Option<String>, String, String);

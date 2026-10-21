@@ -10,10 +10,12 @@ use serde::Deserialize;
 use crate::devices::{Device, Group};
 use crate::error::Result;
 use crate::i18n::Lang;
-use crate::status::{Status, device_status};
+use crate::pause::{Pauses, Source, Why};
+use crate::status::{Status, device_status, shown_status};
 use crate::storage::sensors::SensorRecord;
-use crate::storage::{devices, groups, sensors, status};
+use crate::storage::{devices, groups, pauses, sensors, status};
 use crate::web::auth::CurrentUser;
+use crate::web::pause::{PauseNote, note};
 use crate::web::{AppState, Layout, flash_message};
 
 /// Number of sensors per effective status (disabled sensors count as paused).
@@ -111,6 +113,9 @@ pub struct DeviceCard {
     pub device: Device,
     pub counts: Counts,
     pub pills: Vec<Pill>,
+    pub pause: Option<PauseNote>,
+    /// Paused by itself, so it can be resumed here (not only through a group).
+    pub paused_itself: bool,
 }
 
 /// The devices without a group (`Ohne Gruppe`, or `Alle Geräte` when there are no groups).
@@ -139,12 +144,23 @@ pub struct Summary {
     pub counts: Counts,
     pub pills: Vec<Pill>,
     pub status_class: &'static str,
+    pub pause: Option<PauseNote>,
+    pub paused_itself: bool,
 }
 
 impl Summary {
-    fn new(t: Lang, id: i64, name: String, devices: usize, counts: Counts) -> Self {
+    fn new(
+        t: Lang,
+        id: i64,
+        name: String,
+        devices: usize,
+        counts: Counts,
+        why: Option<Why>,
+    ) -> Self {
         let status = counts.status();
         Self {
+            paused_itself: why.as_ref().is_some_and(|w| w.source == Source::Own),
+            pause: why.as_ref().map(|w| note(t, w)),
             id,
             name,
             devices,
@@ -198,18 +214,24 @@ pub struct FlashQuery {
     pub msg: Option<String>,
 }
 
-/// Effective status of a sensor: paused when disabled, unknown before the first poll.
-fn effective(sensor: &SensorRecord, states: &HashMap<i64, crate::status::SensorState>) -> Status {
-    if !sensor.enabled {
-        return Status::Paused;
-    }
-    states.get(&sensor.id).map_or(Status::Unknown, |s| s.status)
+/// Effective status of a sensor: paused when it, its device or a group is paused, unknown before
+/// the first poll.
+fn effective(
+    sensor: &SensorRecord,
+    states: &HashMap<i64, crate::status::SensorState>,
+    pauses: &Pauses,
+) -> Status {
+    shown_status(
+        pauses.sensor(sensor.id, sensor.device_id).is_some(),
+        states.get(&sensor.id).map(|s| s.status),
+    )
 }
 
 /// Appends the rows of `group`'s subtree (its devices, then each subgroup wrapped in Start/End)
 /// and returns the subtree's device count and sensor counts.
 fn subtree(
     t: Lang,
+    pauses: &Pauses,
     group: Option<i64>,
     groups: &[Group],
     cards: &mut HashMap<Option<i64>, Vec<DeviceCard>>,
@@ -231,7 +253,15 @@ fn subtree(
         .filter(|g| g.parent_id == group && Some(g.id) != group)
     {
         let mut inner = Vec::new();
-        let (n, c) = subtree(t, Some(child.id), groups, cards, depth + 1, &mut inner);
+        let (n, c) = subtree(
+            t,
+            pauses,
+            Some(child.id),
+            groups,
+            cards,
+            depth + 1,
+            &mut inner,
+        );
         if inner.is_empty() {
             inner.push(Row::Empty);
         }
@@ -241,6 +271,7 @@ fn subtree(
             child.name.clone(),
             n,
             c,
+            pauses.group(child.id),
         )));
         rows.extend(inner);
         rows.push(Row::End);
@@ -259,6 +290,7 @@ pub async fn home(
     let devices = devices::list_devices(&state.pool).await?;
     let all_sensors = sensors::list_all_sensors(&state.pool).await?;
     let states = status::list_states(&state.pool).await?;
+    let pauses = pauses::load_all(&state.pool, crate::web::sensors::now_ms()).await?;
 
     let mut totals = Counts::default();
     let mut devices_down = 0;
@@ -268,19 +300,24 @@ pub async fn home(
         let own: Vec<&SensorRecord> = all_sensors.iter().filter(|s| s.device_id == d.id).collect();
         let mut counts = Counts::default();
         for s in &own {
-            counts.add(effective(s, &states));
+            counts.add(effective(s, &states, &pauses));
         }
         totals.merge(&counts);
-        let overall = device_status(
-            own.iter()
-                .map(|s| (s.enabled, states.get(&s.id).map(|st| st.status))),
-        );
+        let overall = device_status(own.iter().map(|s| {
+            (
+                pauses.sensor(s.id, d.id).is_none(),
+                states.get(&s.id).map(|st| st.status),
+            )
+        }));
+        let why = pauses.device(d.id);
         if overall == Status::Down {
             devices_down += 1;
         }
         cards.entry(d.group_id).or_default().push(DeviceCard {
             device: d.clone(),
             pills: counts.pills(user.lang),
+            paused_itself: why.as_ref().is_some_and(|w| w.source == Source::Own),
+            pause: why.as_ref().map(|w| note(user.lang, w)),
             counts,
         });
     }
@@ -296,7 +333,7 @@ pub async fn home(
             "overview-ungrouped"
         });
         Ungrouped {
-            summary: Summary::new(user.lang, 0, name, devices.len(), counts),
+            summary: Summary::new(user.lang, 0, name, devices.len(), counts, None),
             devices,
         }
     });
@@ -305,9 +342,24 @@ pub async fn home(
         .iter()
         .map(|g| {
             let mut rows = Vec::new();
-            let (n, counts) = subtree(user.lang, Some(g.id), &groups, &mut cards, 1, &mut rows);
+            let (n, counts) = subtree(
+                user.lang,
+                &pauses,
+                Some(g.id),
+                &groups,
+                &mut cards,
+                1,
+                &mut rows,
+            );
             TopGroup {
-                summary: Summary::new(user.lang, g.id, g.name.clone(), n, counts),
+                summary: Summary::new(
+                    user.lang,
+                    g.id,
+                    g.name.clone(),
+                    n,
+                    counts,
+                    pauses.group(g.id),
+                ),
                 rows,
             }
         })
@@ -354,7 +406,7 @@ mod tests {
                 "down ✕ 2 (2 Ausfall)",
                 "warning ! 1 (1 Warnung)",
                 "up ✓ 8 (8 in Ordnung)",
-                "paused ‖ 5 (5 inaktiv)"
+                "paused ‖ 5 (5 pausiert)"
             ]
         );
         assert_eq!((mixed.total(), mixed.active()), (16, 11));
@@ -365,13 +417,13 @@ mod tests {
         };
         assert_eq!(
             text(healthy),
-            ["up ✓ 9 Sensoren (9 in Ordnung)", "paused ‖ 2 (2 inaktiv)"]
+            ["up ✓ 9 Sensoren (9 in Ordnung)", "paused ‖ 2 (2 pausiert)"]
         );
         let prepared = Counts {
             paused: 1,
             ..Counts::default()
         };
-        assert_eq!(text(prepared), ["paused ‖ 1 Sensor (1 inaktiv)"]);
+        assert_eq!(text(prepared), ["paused ‖ 1 Sensor (1 pausiert)"]);
         assert!(Counts::default().pills(Lang::De).is_empty());
     }
 
@@ -396,6 +448,8 @@ mod tests {
                 kind: Default::default(),
             },
             pills: Vec::new(),
+            pause: None,
+            paused_itself: false,
             counts,
         }
     }
@@ -431,7 +485,15 @@ mod tests {
             .or_default()
             .push(card(12, Some(4), down));
         let mut rows = Vec::new();
-        let (n, counts) = subtree(Lang::De, Some(1), &groups, &mut cards, 1, &mut rows);
+        let (n, counts) = subtree(
+            Lang::De,
+            &Pauses::default(),
+            Some(1),
+            &groups,
+            &mut cards,
+            1,
+            &mut rows,
+        );
         assert_eq!((n, counts.status()), (3, Some(Status::Down)));
         let shape: Vec<String> = rows
             .iter()

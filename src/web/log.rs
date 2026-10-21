@@ -1,5 +1,6 @@
-//! Problem log: warnings, outages and their end over all sensors, newest first. Only the newest
-//! [`status::EVENTS_KEPT`] status changes are stored, so the log reaches back that far.
+//! Problem log: warnings, outages and their end over all sensors, and who paused or resumed what,
+//! newest first. Only the newest [`status::EVENTS_KEPT`] status changes and
+//! [`pauses::LOG_KEPT`] pause entries are stored, so the log reaches back that far.
 
 use std::collections::HashMap;
 
@@ -10,9 +11,11 @@ use axum::response::Html;
 use crate::devices::Device;
 use crate::error::Result;
 use crate::i18n::Lang;
+use crate::pause::Target;
 use crate::sensors::Unit;
 use crate::sensors::format::format_value;
 use crate::status::Status;
+use crate::storage::pauses::{self, Action};
 use crate::storage::{devices, groups, sensors, status};
 use crate::web::auth::CurrentUser;
 use crate::web::sensors::now_ms;
@@ -20,17 +23,23 @@ use crate::web::status_list::group_paths;
 use crate::web::{AppState, Layout, time_html};
 
 struct Entry {
+    ts_ms: i64,
     at: String,
-    status: Status,
+    status_class: &'static str,
     status_label: String,
     /// The status before, e.g. "vorher Warnung"; empty for a first poll.
     before: String,
-    sensor_id: i64,
+    /// `None` for the pause of a whole device or group, see `scope`.
+    sensor_id: Option<i64>,
     sensor_name: String,
-    device_id: i64,
+    /// "ganzes Gerät", "ganze Gruppe".
+    scope: String,
+    device_id: Option<i64>,
     device_name: String,
     group: String,
     message: String,
+    /// The planned end of a pause as `<time>` HTML.
+    until: Option<String>,
     /// How long the problem lasted, lasts so far, or (for a recovery) lasted before.
     duration: String,
     ongoing: bool,
@@ -84,25 +93,96 @@ pub async fn log(State(state): State<AppState>, user: CurrentUser) -> Result<Htm
             (false, None) => (duration(t, now - ev.ts_ms), true),
         };
         entries.push(Entry {
+            ts_ms: ev.ts_ms,
             at: time_html(ev.ts_ms),
-            status: ev.to,
+            status_class: ev.to.as_str(),
             status_label: t.get(ev.to.label_id()),
             before: ev.from.map_or_else(String::new, |from| {
                 t.get1("log-before", "status", t.get(from.label_id()))
             }),
-            sensor_id: ev.sensor_id,
+            sensor_id: Some(ev.sensor_id),
             sensor_name: sensor_name.clone(),
-            device_id: device.id,
+            scope: String::new(),
+            device_id: Some(device.id),
             device_name: device.name.clone(),
             group: device
                 .group_id
                 .and_then(|g| paths.get(&g).cloned())
                 .unwrap_or_default(),
             message: t.msg(&ev.message),
+            until: None,
             duration,
             ongoing,
         });
     }
+    for p in pauses::log_entries(&state.pool).await? {
+        let (status_class, status_label, mut message) = match p.action {
+            Action::Paused => (
+                Status::Paused.as_str(),
+                t.get(Status::Paused.label_id()),
+                t.get1("log-paused-by", "user", p.user.clone().unwrap_or_default()),
+            ),
+            Action::Resumed => (
+                Status::Up.as_str(),
+                t.get("log-resumed"),
+                t.get1("log-resumed-by", "user", p.user.clone().unwrap_or_default()),
+            ),
+            Action::Expired => (
+                Status::Up.as_str(),
+                t.get("log-expired"),
+                t.get("log-expired-message"),
+            ),
+        };
+        if !p.reason.is_empty() {
+            message.push_str(" · ");
+            message.push_str(&p.reason);
+        }
+        let (duration, ongoing) = match (p.action, p.end_ms) {
+            (Action::Paused, Some(end)) => (duration(t, end - p.ts_ms), false),
+            (Action::Paused, None) => (duration(t, now - p.ts_ms), true),
+            _ => (String::new(), false),
+        };
+        let group_id = match p.target {
+            Target::Group(id) => Some(id),
+            _ => p
+                .device
+                .as_ref()
+                .and_then(|(id, _)| devices.get(id))
+                .and_then(|d| d.group_id),
+        };
+        entries.push(Entry {
+            ts_ms: p.ts_ms,
+            at: time_html(p.ts_ms),
+            status_class,
+            status_label,
+            before: String::new(),
+            sensor_id: match p.target {
+                Target::Sensor(id) => Some(id),
+                _ => None,
+            },
+            sensor_name: p.sensor.unwrap_or_default(),
+            scope: match p.target {
+                Target::Group(_) => t.get("log-scope-group"),
+                Target::Device(_) => t.get("log-scope-device"),
+                Target::Sensor(_) => String::new(),
+            },
+            device_id: p.device.as_ref().map(|(id, _)| *id),
+            device_name: p.device.map(|(_, name)| name).unwrap_or_default(),
+            group: group_id
+                .and_then(|g| paths.get(&g).cloned())
+                .or(p.group)
+                .unwrap_or_default(),
+            message,
+            until: p
+                .until_ms
+                .filter(|_| p.action == Action::Paused)
+                .map(time_html),
+            duration,
+            ongoing,
+        });
+    }
+    // Both lists are newest first; merge them by time (stable, so ties keep their order).
+    entries.sort_by_key(|e| std::cmp::Reverse(e.ts_ms));
     let page = LogTemplate {
         t,
         layout: user.layout(),
