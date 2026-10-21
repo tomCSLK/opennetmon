@@ -82,7 +82,7 @@ Der Poller startet zusätzlich eine Wartungsaufgabe (30 s nach dem Start, danach
 
 1. **Rollup:** `samples_1h` (Stunde, min/avg/max/Anzahl) aus den Rohwerten, `samples_1d` (Tag, gewichteter Mittelwert) aus den Stundenwerten. Es werden die letzten
    2 Stunden bzw. 1 Tag vor dem neuesten Rollup-Eintrag neu berechnet (unfertige Stunde, nachgelieferte Werte); wiederholtes Ausführen ändert nichts.
-2. **Aufbewahrung:** Rohwerte `retention_raw_days` (Standard 7), Stundenwerte und Ereignisse `retention_hourly_days` (Standard 365); **Tageswerte bleiben unbegrenzt**.
+2. **Aufbewahrung:** Rohwerte `retention_raw_days` (Standard 7), Stundenwerte und Ereignisse `retention_hourly_days` (Standard 365; Ereignisse zusätzlich höchstens die neuesten 500, siehe `docs/poller.md`); **Tageswerte bleiben unbegrenzt**.
    Aggregiert wird immer vor dem Löschen.
 
 Config: `retention_raw_days` (1–3650), `retention_hourly_days` (mindestens `retention_raw_days`, höchstens 36500). Läuft der Server länger als die Rohdaten-Aufbewahrung

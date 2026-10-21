@@ -249,7 +249,7 @@ fn sort_rows(rows: &mut [Row], key: SortKey, dir: Dir) {
 }
 
 /// The group path of every group, e.g. `Netzwerk / Switche`.
-fn group_paths(groups: &[Group]) -> HashMap<i64, String> {
+pub(crate) fn group_paths(groups: &[Group]) -> HashMap<i64, String> {
     groups
         .iter()
         .map(|g| {

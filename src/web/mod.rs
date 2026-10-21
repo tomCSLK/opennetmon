@@ -6,6 +6,7 @@ pub mod auth;
 pub mod credentials;
 pub mod devices;
 pub mod groups;
+pub mod log;
 pub mod mail_settings;
 pub mod mibs;
 pub mod order;
@@ -140,6 +141,7 @@ pub fn router(state: AppState) -> Router {
             post(sensors::create_interfaces),
         )
         .route("/status/{filter}", get(status_list::list))
+        .route("/log", get(log::log))
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))
         .route(

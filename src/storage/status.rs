@@ -20,6 +20,9 @@ pub struct StatusChange {
     pub ts_ms: i64,
 }
 
+/// Status changes kept in `events`; older ones are deleted whenever a new one is written.
+pub const EVENTS_KEPT: i64 = 500;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Event {
     pub id: i64,
@@ -145,6 +148,12 @@ pub async fn record_poll(
         .bind(change.message.encode())
         .execute(&mut *tx)
         .await?;
+        sqlx::query(
+            "DELETE FROM events WHERE id <= (SELECT id FROM events ORDER BY id DESC LIMIT 1 OFFSET ?)",
+        )
+        .bind(EVENTS_KEPT)
+        .execute(&mut *tx)
+        .await?;
     }
     tx.commit().await?;
     Ok(change)
@@ -193,6 +202,50 @@ pub async fn events_of_sensor(pool: &SqlitePool, sensor_id: i64, limit: u32) -> 
     .collect()
 }
 
+/// An entry of the problem log: a change to warning or down, or back to up from one of them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogEntry {
+    pub event: Event,
+    /// Time of the sensor's change before this one, if still kept.
+    pub prev_ts_ms: Option<i64>,
+    /// Time of the sensor's next change; `None` while this status lasts.
+    pub next_ts_ms: Option<i64>,
+}
+
+type LogRow = (
+    i64,
+    i64,
+    i64,
+    Option<String>,
+    String,
+    String,
+    Option<i64>,
+    Option<i64>,
+);
+
+/// Warnings, outages and their ends, newest first.
+pub async fn problem_log(pool: &SqlitePool) -> Result<Vec<LogEntry>> {
+    let rows: Vec<LogRow> = sqlx::query_as(
+        "SELECT id, ts_ms, sensor_id, from_status, to_status, message, prev_ts, next_ts FROM ( \
+               SELECT *, LAG(ts_ms) OVER w AS prev_ts, LEAD(ts_ms) OVER w AS next_ts FROM events \
+               WINDOW w AS (PARTITION BY sensor_id ORDER BY ts_ms, id)) \
+             WHERE to_status IN ('warning', 'down') \
+                OR (to_status = 'up' AND from_status IN ('warning', 'down')) \
+             ORDER BY ts_ms DESC, id DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+    rows.into_iter()
+        .map(|(id, ts, sensor, from, to, message, prev, next)| {
+            Ok(LogEntry {
+                event: event_from_row((id, ts, sensor, from, to, message))?,
+                prev_ts_ms: prev,
+                next_ts_ms: next,
+            })
+        })
+        .collect()
+}
+
 /// The status of a sensor since `from_ms`: the status at `from_ms` (`None` if it had none yet) and
 /// the changes after it as `(ts_ms, status)`, oldest first.
 pub async fn status_history(
@@ -215,11 +268,38 @@ pub async fn status_history(
     .bind(from_ms)
     .fetch_all(pool)
     .await?;
-    let changes = rows
+    let changes: Vec<(i64, Status)> = rows
         .into_iter()
         .map(|(ts, s)| Ok((ts, parse_status(&s)?)))
         .collect::<Result<_>>()?;
-    Ok((before.as_deref().map(parse_status).transpose()?, changes))
+    let before = match before {
+        Some(s) => Some(parse_status(&s)?),
+        // Only the newest events are kept: the status before the first kept change, or the
+        // current one if it already held at `from_ms`.
+        None => status_before(pool, sensor_id, from_ms).await?,
+    };
+    Ok((before, changes))
+}
+
+async fn status_before(pool: &SqlitePool, sensor_id: i64, from_ms: i64) -> Result<Option<Status>> {
+    let first: Option<Option<String>> = sqlx::query_scalar(
+        "SELECT from_status FROM events WHERE sensor_id = ? AND ts_ms > ? ORDER BY ts_ms, id LIMIT 1",
+    )
+    .bind(sensor_id)
+    .bind(from_ms)
+    .fetch_optional(pool)
+    .await?;
+    if let Some(from) = first {
+        return from.as_deref().map(parse_status).transpose();
+    }
+    let current: Option<String> = sqlx::query_scalar(
+        "SELECT status FROM sensor_status WHERE sensor_id = ? AND since_ms <= ?",
+    )
+    .bind(sensor_id)
+    .bind(from_ms)
+    .fetch_optional(pool)
+    .await?;
+    current.as_deref().map(parse_status).transpose()
 }
 
 #[cfg(test)]
@@ -349,6 +429,65 @@ mod tests {
             status_history(&pool, sensor, 4_000).await.unwrap(),
             (Some(Status::Down), vec![(5_000, Status::Up)])
         );
+    }
+
+    #[tokio::test]
+    async fn the_problem_log_lists_warnings_outages_and_their_end() {
+        let (_dir, pool, sensor) = setup().await;
+        for (ts, a) in [
+            (1_000, ok()),
+            (2_000, fail()),
+            (3_000, fail()),
+            (5_000, ok()),
+        ] {
+            record_poll(&pool, sensor, ts, &[], &a).await.unwrap();
+        }
+        let log: Vec<_> = problem_log(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|e| (e.event.ts_ms, e.event.to, e.prev_ts_ms, e.next_ts_ms))
+            .collect();
+        // The first "up" is no recovery and stays out.
+        assert_eq!(
+            log,
+            [
+                (5_000, Status::Up, Some(3_000), None),
+                (3_000, Status::Down, Some(2_000), Some(5_000)),
+                (2_000, Status::Warning, Some(1_000), Some(3_000)),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn only_the_newest_events_are_kept() {
+        let (_dir, pool, sensor) = setup().await;
+        // Every poll flips between up and warning, so each one logs an event.
+        let polls = EVENTS_KEPT + 20;
+        for i in 0..polls {
+            let a = if i % 2 == 0 { ok() } else { fail() };
+            record_poll(&pool, sensor, (i + 1) * 1_000, &[], &a)
+                .await
+                .unwrap();
+        }
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, EVENTS_KEPT);
+        let oldest: i64 = sqlx::query_scalar("SELECT MIN(ts_ms) FROM events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(oldest, 21_000);
+        // Before the oldest kept change, the history falls back to that change's "from".
+        let (before, changes) = status_history(&pool, sensor, 20_500).await.unwrap();
+        assert_eq!((before, changes.len()), (Some(Status::Warning), 500));
+        // Without any change in the window, the current status applies.
+        let (before, changes) = status_history(&pool, sensor, polls * 1_000 + 1)
+            .await
+            .unwrap();
+        assert_eq!((before, changes.len()), (Some(Status::Warning), 0));
     }
 
     #[tokio::test]

@@ -40,6 +40,17 @@ nur deaktivierte ergeben `Paused`, keine Sensoren oder noch keine Abfrage ergebe
 
 - `sensor_status`: aktueller Zustand je Sensor (Status, seit wann, letzte Abfrage, Meldung auf Deutsch, Fehler in Folge).
 - `events`: Protokoll der Statuswechsel (Zeit, Sensor, von → nach, Meldung); der erste Wert eines Sensors wird mit `from = NULL` protokolliert.
+  Es bleiben nur die **neuesten 500 Statuswechsel** über alle Sensoren (`storage::status::EVENTS_KEPT`): `record_poll` löscht ältere in derselben
+  Transaktion. Damit reichen auch die „letzten Statuswechsel“ der Sensor-Detailseite nur so weit zurück; das Statusband der Sensorliste nimmt für den
+  Anfang der Stunde notfalls das „von“ des ältesten gespeicherten Wechsels oder den aktuellen Zustand (`status_history`).
+
+## Protokoll (`/log`)
+
+Menüpunkt **„Protokoll“** unter Monitoring, für alle Benutzer: Warnungen und Ausfälle sowie ihr Ende (Wechsel von Warnung/Ausfall nach „In Ordnung“)
+über alle Sensoren, **neueste zuerst** (`web::log`, `storage::status::problem_log`). Spalten: Zeitpunkt, Status mit dem Status davor, Sensor, Gerät mit
+Gruppenpfad, Meldung, Dauer. Die Dauer ist bei Warnung/Ausfall die Zeit bis zum nächsten Wechsel bzw. „dauert an“ mit der bisherigen Zeit, bei einer
+Erholung „nach …“ die Dauer des Problems davor (aus `LAG`/`LEAD` über die Wechsel desselben Sensors). Erstabfragen, Pausieren und „Unbekannt“ stehen
+nicht im Protokoll, zählen aber zu den 500 gespeicherten Wechseln. Oben rechts „Aktualisieren“ mit „Automatisch“.
 - `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignis in **einer Transaktion** und liefert den `StatusChange` zurück
   (die spätere Benachrichtigung hängt sich dort an; ein Wechsel `NULL → Up` ist kein Alarmgrund).
 

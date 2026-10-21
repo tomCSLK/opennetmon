@@ -1,0 +1,37 @@
+{% extends "app.html" %}
+{% block title %}{{ t.get("log") }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ t.get("log") }}</h1>
+    <p class="subtitle">{{ t.get1("log-count", "count", entries.len()) }} · {{ t.get1("log-kept", "count", kept) }}</p>
+  </div>
+  <div class="actions">{% include "refresh.html" %}</div>
+</div>
+
+<section class="card flush">
+  {% if entries.is_empty() %}
+  <div class="empty"><strong>{{ t.get("log-empty") }}</strong></div>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>{{ t.get("detail-when") }}</th><th>{{ t.get("status") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("status-list-device") }}</th><th>{{ t.get("message") }}</th><th>{{ t.get("log-duration") }}</th></tr>
+    </thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td class="nowrap">{{ e.at|safe }}</td>
+        <td class="nowrap"><span class="badge status-{{ e.status.as_str() }}">{{ e.status_label }}</span>{% if !e.before.is_empty() %}<span class="sub">{{ e.before }}</span>{% endif %}</td>
+        <td><a href="/sensors/{{ e.sensor_id }}"><strong>{{ e.sensor_name }}</strong></a></td>
+        <td class="nowrap"><a href="/devices/{{ e.device_id }}/sensors">{{ e.device_name }}</a>{% if !e.group.is_empty() %}<span class="sub">{{ e.group }}</span>{% endif %}</td>
+        <td class="wrap muted">{{ e.message }}</td>
+        <td class="nowrap">{{ e.duration }}{% if e.ongoing %}<span class="sub">{{ t.get("log-ongoing") }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

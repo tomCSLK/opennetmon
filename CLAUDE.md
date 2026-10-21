@@ -137,7 +137,8 @@ Ein Binary, ein Prozess, Module:
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
   (`web::overview`: Gruppen mit Sprungmarke `#group-<id>`, Ziel der Pfadleiste `web::group_trail`/`device_trail.html` auf Geräte- und Sensorseiten; eine Karte je oberster Gruppe, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, aufklappbar, Zustand in `localStorage` über `static/app.js`), Gruppen-, Geräte-, Profil- und Benutzerseiten (`web::groups`, `web::devices`, `web::credentials`, `web::users`: letzter Admin geschützt, eigenes Konto nicht löschbar, Passwortwechsel beendet die übrigen Sitzungen, Sprache je Benutzer; `web::account` „Mein Konto“ für alle: eigene Sprache, eigenes Passwort mit dem bisherigen, Fehlversuche über `login_throttle`), Sensorseiten mit Discovery und Mini-Graphen der letzten Stunde (`web::sensors`, `web::sparkline`: Linien bzw. Statusband als SVG), Detailseite mit JSON-Endpoint für uPlot, Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`) und Schwellwertformular (`web::sensor_detail`); Statuslisten hinter den Kacheln der Übersicht
   (`web::status_list`, `/status/all|up|warning|down|inactive`, sortierbar per Spaltenkopf `?sort=…&dir=…`, aktuelle Werte über `web::sensors::fresh_values`); oben rechts auf Übersicht, Statuslisten, Sensor- und Detailseite „Aktualisieren“ mit
-  „Automatisch“ (alle 60 s, pausiert bei Eingaben; `templates/refresh.html`, `static/refresh.js`)
+  „Automatisch“ (alle 60 s, pausiert bei Eingaben; `templates/refresh.html`, `static/refresh.js`); Protokoll `/log` (`web::log`: Warnungen, Ausfälle und
+  ihr Ende, `storage::status::problem_log`; `events` hält nur die neuesten 500 Wechsel, `EVENTS_KEPT`)
 
 ### Messdaten
 
