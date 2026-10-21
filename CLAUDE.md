@@ -32,8 +32,9 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 ## Stack (Rust)
 
 - Runtime/Web: `tokio`, `axum`, `tower-http` (Static, Compression, Trace)
-- Templates/UI: `askama` (server-seitiges HTML), **htmx** für Interaktivität, **uPlot** für Graphen.
-  JS/CSS lokal vendoren (kein CDN – Server steht ggf. ohne Internet), per `rust-embed` ins Binary.
+- Templates/UI: `askama` (server-seitiges HTML), **uPlot** für Graphen, sonst nur wenige eigene Skripte in `static/`
+  (kein htmx: am 2026-10-21 gestrichen, die Oberfläche kommt ohne aus).
+  JS/CSS lokal vendoren (kein CDN – die Oberfläche soll ohne fremde Server funktionieren), per `rust-embed` ins Binary.
   Kein npm, kein WASM-Frontend.
 - Design: `static/app.css` ist ein kleines Designsystem (Farb-Tokens für hell/dunkel, Seitenleiste, Kacheln, Karten, Badges, Tabellen, Formulare);
   Schema folgt dem System, Umschalter in der Seitenleiste (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js` für Umschalter, aktiven Menüpunkt
@@ -247,14 +248,13 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 
 ## Offene Punkte (vom Nutzer zu klären)
 
-- Ist der Server vom Internet getrennt? (relevant für Updates und E-Mail-Versand)
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller auf ein längeres
   Passwort ändern und lokal in `~/.config/opennetmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- uPlot 1.6.32 ist eingebunden (`static/vendor/uplot/`); htmx ist noch nicht eingebunden (die Oberfläche ist sonst rein serverseitig gerendert) – dafür braucht es dein Okay zum Herunterladen
-
 - GitHub-Repo `tomCSLK/opennetmon` ist noch privat; vor dem Öffentlichmachen ist die Historie geprüft (2026-10-19: keine Secrets). Für fremde Beiträge
   ggf. eine Beitragsvereinbarung (CLA/DCO) festlegen, damit eine spätere Doppellizenzierung möglich bleibt
+- Sensoren für den Server selbst (CPU, Load, Speicher, Dateisysteme, Temperaturen …): welche Werte, eingebauter Sensortyp oder `snmpd` auf dem Server (`PLAN.md`, Phase 13)
+- Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
 
-Geklärt: Name opennetmon (mit Logo), Lizenz AGPL-3.0-or-later, Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.
+Geklärt: Server hat Internetzugang und betreibt weitere Programme, die es brauchen (2026-10-21); Name opennetmon (mit Logo), Lizenz AGPL-3.0-or-later, Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

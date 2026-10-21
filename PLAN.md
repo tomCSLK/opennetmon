@@ -2,9 +2,43 @@
 
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
-> **Status (2026-10-16): Phase 0 (Spike) und Phase 1 (Gerüst) sind abgeschlossen. Von MVP-Schritt 1 sind Login,
-> SNMP-Credential-Profile, Gruppen, Geräte und der Verbindungstest umgesetzt. **MVP-Schritt 1 ist damit komplett.**
-> Von MVP 2 sind `Sensor`-Trait, Counter-/Ratenlogik, die fünf Sensortypen (Ping, Uptime, Interface-Traffic, Interface-Status, OID) und die Tabellen für Sensoren/Kanäle/Messwerte fertig (`docs/sensoren.md`); **der Poller mit Statuslogik und Ereignislog läuft ebenfalls** (`docs/poller.md`). **MVP 3 (Sensor-Oberfläche und Interface-Discovery) ist ebenfalls umgesetzt.** **MVP 4 ist umgesetzt** (Schwellwerte, Detailseite mit uPlot-Graph 1h/24h/7d/30d, Rollups und Retention; `docs/graphen-und-schwellwerte.md`). **MVP 6 (E-Mail-Benachrichtigung, einstellbar in der Oberfläche, getestet gegen Test-SMTP-Server) ist umgesetzt** (`docs/benachrichtigung.md`). **Die Begrenzung der Anmeldeversuche, die Anzeige aller Zeiten in der Browser-Zeitzone das neue Oberflächendesign (Seitenleiste, Kacheln, hell/dunkel) und die Messwerte-Tabelle wie die PRTG-Livedaten sind umgesetzt. **MIB-Import Schritt 1** (Parser, Standard-MIBs, Upload, OID per Name mit Typ/Einheit/Klartext; `docs/mibs.md`) ist umgesetzt; **Schritt 2** (Werte suchen: bekannte und frei wählbare Tabellen walken, z. B. PoE je Port, CPU, Speicher, Temperaturen, Lüfter; neue Sensoren standardmäßig inaktiv, Aktivieren einzeln oder gesammelt; getestet am SG2008P) ist umgesetzt; **Schritt 3 (Gerätevorlagen) ist umgesetzt:** Vorlage aus einem fertig eingerichteten Gerät speichern, beim Anlegen eines Geräts automatisch per `sysObjectID` oder später per Knopf anwenden, nur Fehlendes anlegen (`docs/geraetevorlagen.md`, getestet SG2008 → SG2008). **Die Benutzerverwaltung in der Oberfläche und „Mein Konto“ (eigenes Passwort) sind umgesetzt** (`docs/benutzer-und-login.md`). **Geräte ohne SNMP (nur Ping) sind umgesetzt** (`docs/geraete-und-gruppen.md`; der ER605 läuft so). **Die Statusbewertung von Aufzählungswerten ist umgesetzt** (je Wert In Ordnung/Warnung/Ausfall, Vorschlag aus den Namen beim Anlegen, auch für den Interface-Status; `docs/graphen-und-schwellwerte.md`, getestet am SG2008P).** **Umbenennen von Sensoren (Detailseite) und die Reihenfolge (automatisch natürlich sortiert, Sensoren nach Typ; von Hand per Ziehen, ↑/↓ oder Position für Gruppen, Geräte und Sensoren) sind umgesetzt** (`docs/geraete-und-gruppen.md`, `docs/sensoren.md`). **Die Mehrsprachigkeit ist umgesetzt** (Oberfläche Deutsch/Englisch je Benutzer, Mails in einer einstellbaren Sprache, README auf Englisch; `docs/uebersetzungen.md`). **Der Betrieb ist vorbereitet** (systemd-Unit, Installer, Backup, Proxy-Beispiele; `docs/betrieb.md`). **Die Kacheln der Übersicht öffnen sortierbare Statuslisten** (alle, In Ordnung, Warnung, Ausfall, Inaktiv/unbekannt; `docs/sensoren.md`). Als Nächstes: Installation auf dem echten Server, echter Mailserver des Nutzers, htmx und Feinschliff.**
+
+## Stand (2026-10-21, Release v0.4.0)
+
+Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. Als Nächstes: **Installation auf dem echten Server**,
+Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest und Feinschliff. Geplant sind außerdem **Sensoren für den Server
+selbst** und eine **Update-Möglichkeit** (Zeitpunkt offen).
+
+Umgesetzt (Details in `docs/`):
+
+- **Geräte und Gruppen:** CRUD, hierarchische Gruppen, Verbindungstest, Geräte ohne SNMP (nur Ping; der ER605 läuft so), Gerätetypen fürs Symbol
+  in der Übersicht, Reihenfolge automatisch natürlich sortiert oder von Hand (Ziehen, ↑/↓, Position) (`docs/geraete-und-gruppen.md`)
+- **SNMP-Profile:** v2c und v3 authNoPriv/authPriv, Secrets verschlüsselt (`docs/snmp-profile.md`)
+- **Sensoren:** Ping, Uptime, Interface-Traffic (64 Bit mit Fallback auf 32 Bit), Interface-Status, OID (Gauge/Counter); Interface-Discovery per Walk,
+  Umbenennen, Mini-Graphen der letzten Stunde (`docs/sensoren.md`)
+- **MIBs:** Import mit Parser und Standard-MIBs, OID per Name; „Werte suchen“ (PoE je Port, CPU, Speicher, Temperaturen, Lüfter; neue Sensoren pausiert)
+  (`docs/mibs.md`, getestet am SG2008P)
+- **Gerätevorlagen:** aus einem eingerichteten Gerät speichern, beim Anlegen automatisch per `sysObjectID` oder später per Knopf anwenden, nur Fehlendes
+  anlegen (`docs/geraetevorlagen.md`, getestet SG2008 → SG2008)
+- **Poller und Status:** Scheduler mit Jitter, Semaphore, Timeouts/Retries, Fail-fast bei geräteweitem SNMP-Fehler; Statuslogik, Ereignislog (`docs/poller.md`)
+- **Schwellwerte und Graphen:** je Kanal warn/down über/unter, Bewertung von Aufzählungswerten (In Ordnung/Warnung/Ausfall je Wert, Vorschlag aus den
+  Namen), Detailseite mit uPlot-Graph 1h/24h/7d/30d (bis 120 gemittelte Punkte), Messwerte-Tabelle wie die PRTG-Livedaten, Rollups und Retention
+  (`docs/graphen-und-schwellwerte.md`)
+- **Übersicht:** Gerätebaum wie in PRTG (Linien, ⊟/⊞, Sensorplaketten je Zustand, Summen je Teilbaum), Kacheln öffnen sortierbare Statuslisten,
+  „Aktualisieren“ mit automatischem Neuladen alle 60 s
+- **Pausieren wie in PRTG:** Gruppen, Geräte und Sensoren bis zum Fortsetzen oder 15 min bis 1 Woche, mit Grund; Vererbung nach unten, Ablauf durch den
+  Poller, Neustart ohne alten Zustand (keine nachträgliche Erholungsmail) (`docs/geraete-und-gruppen.md`, „Pausieren“)
+- **Protokoll** (`/log`): Warnungen, Ausfälle und ihr Ende, gemischt mit Pausen (je die neuesten 500)
+- **Benachrichtigung:** E-Mail bei Statuswechsel, Einstellungen in der Oberfläche, Testmail, Sendelog (`docs/benachrichtigung.md`; getestet nur gegen
+  Test-SMTP-Server)
+- **Benutzer:** Login, Rollen Admin/Leser, Benutzerverwaltung in der Oberfläche, „Mein Konto“, Begrenzung der Anmeldeversuche (`docs/benutzer-und-login.md`)
+- **Mehrsprachigkeit:** Oberfläche Deutsch/Englisch je Benutzer, Mails in einer einstellbaren Sprache, README auf Englisch (`docs/uebersetzungen.md`)
+- **Oberfläche:** Seitenleiste, Kacheln, hell/dunkel, alle Zeiten in der Browser-Zeitzone; rein serverseitig gerendert, wenige eigene Skripte in `static/`
+- **Betrieb:** statisches musl-Binary, systemd-Unit mit Hardening, Installer, `.deb`-Paket, eingebautes HTTPS, Backup mit Timer, Proxy-Beispiele
+  (`docs/betrieb.md`)
+
+Releases (alle Vorabversionen, x86_64): **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, Mehrsprachigkeit, .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS),
+**v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen).
 
 ## Kontext
 
@@ -13,18 +47,21 @@ agentlos per SNMP überwacht. Zielumgebung: privates Netz mit TP-Link Omada (Sit
 Access Points 1× EAP225 und 2× EAP653 (7 Geräte). SNMP ist im Controller site-weit nur als SNMPv3 authNoPriv/MD5 aktiviert (v1/v2c aus).
 Die Omada-Controller-API ist nicht Teil des MVP.
 Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedienung nur per Browser.
+Der Server hat Internetzugang (geklärt 2026-10-21) und ist nicht allein für opennetmon da: dort laufen später weitere Programme, die das Internet
+brauchen. opennetmon muss sich deshalb Ports und Ressourcen teilen (Standardport 8443) und darf nichts am System verändern, was andere Dienste betrifft.
 
 ## Leitentscheidungen (aus CLAUDE.md)
 
 | Thema | Entscheidung |
 |---|---|
 | Sprache | **Rust** (Edition 2024, stable), entschieden am 2026-10-15 nach dem Spike (`docs/decisions/0001-sprache.md`) |
-| Web | `axum`, `tower-http`, `askama`, htmx, uPlot (lokal vendort, per `rust-embed` ins Binary, kein CDN, kein npm) |
-| SNMP | `snmp2` (Features `tokio`, `crypto-rust`); v2c und v3 (authNoPriv/authPriv); Omada-Geräte nutzen v3 authNoPriv/MD5; ausschließlich lesend |
-| Ping | `surge-ping`, bevorzugt unprivilegierte ICMP-Sockets (`ping_group_range` ist auf dem Entwicklungsrechner gesetzt) |
+| Web | `axum`, `tower-http`, `askama` (serverseitiges HTML), uPlot für Graphen (lokal vendort, per `rust-embed` ins Binary, kein CDN, kein npm); kein htmx (2026-10-21 gestrichen: die Oberfläche kommt ohne aus, das Neuladen erledigt `static/refresh.js`) |
+| SNMP | `snmp2` (Features `tokio`, `crypto-rust`, `heap_buffers`); v2c und v3 (authNoPriv/authPriv); Omada-Geräte nutzen v3 authNoPriv/MD5; ausschließlich lesend |
+| Ping | `surge-ping`, bevorzugt unprivilegierte ICMP-Sockets (`ping_group_range`) |
 | DB | SQLite über `sqlx`, WAL, Migrations in `migrations/` |
-| Auth | Lokale Benutzer, Rollen Admin/Leser, argon2, serverseitige Sitzungen, CSRF – umgesetzt |
-| Secrets | SNMP-Passwörter mit XChaCha20-Poly1305 verschlüsselt, Schlüsseldatei 0600 (`opennetmon key generate`) – umgesetzt |
+| Auth | Lokale Benutzer, Rollen Admin/Leser, argon2, serverseitige Sitzungen, CSRF |
+| Secrets | SNMP- und SMTP-Passwörter mit XChaCha20-Poly1305 verschlüsselt, Schlüsseldatei 0600 (`opennetmon key generate`) |
+| Übersetzungen | Fluent (`fluent-bundle`), Kataloge `locales/<code>/*.ftl`, Deutsch Ausgangssprache, Englisch mitgepflegt |
 | Lizenz | **AGPL-3.0-or-later**, Copyright Thomas Cieslik; Quellcode-Link in der Oberfläche (Abschnitt 13), Fremdlizenzen in `THIRD-PARTY-LICENSES.txt` (`dev/third-party-licenses.py`) |
 | Betrieb | Statisches musl-Binary, systemd-Unit, .deb-Paket; eingebautes HTTPS auf `0.0.0.0:8443` (ausgelieferte Config, seit 0.3.0), alternativ Reverse Proxy (Caddy/nginx) vor `127.0.0.1:8080` |
 
@@ -36,7 +73,8 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 - Messwerte werden als Zeitreihe gespeichert; Graphen für 1h/24h/7d/30d.
 - Status: `Up`, `Warning`, `Down`, `Unknown`, `Paused`. Sensorstatus aus Kanälen (Schwellwerte),
   Gerätestatus aus Sensoren (schlechtester Status), Gruppenstatus analog.
-- Timeout oder SNMP-Fehler ergibt `Down`.
+- Timeout oder SNMP-Fehler ergibt beim ersten Mal `Warning`, ab dem zweiten Mal in Folge `Down`.
+- Pausieren vererbt sich: eine pausierte Gruppe oder ein pausiertes Gerät pausiert alles darunter.
 - Beim Anlegen eines Geräts: Interface-Discovery per Walk, Nutzer wählt die Sensoren aus (kein Subnetz-Scan).
 
 ## Ergebnisse Phase 0 (Spike)
@@ -50,104 +88,92 @@ Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedien
 
 ## Architektur
 
-Ein Binary, ein Prozess, Module `config`, `auth`, `crypto`, `credentials`, `devices`, `snmp`, `storage`, `poller`, `sensors`, `status`, `alerting`, `web`
-(Details und Regeln siehe CLAUDE.md). Vorhanden: `config`, `auth`, `crypto`, `credentials`, `devices`, `snmp`, `storage`, `web`, `error`.
-
-- **poller:** Polls gleichmäßig über das Intervall verteilt (Jitter), globale Nebenläufigkeit per `Semaphore`,
-  Timeout/Retries pro Gerät, langsame Geräte blockieren andere nie.
-- **sensors:** Trait `Sensor`, eine Implementierung je Typ. Keine Sonderfälle im Poller.
-- **status:** Schwellwertauswertung, Statusübergänge, Ereignislog.
-- **alerting:** E-Mail (SMTP), entkoppelt über Channel/Queue; erst nach MVP-Schritten 1–5.
+Ein Binary, ein Prozess. Module und ihre Regeln stehen in `CLAUDE.md` (Abschnitt „Architektur“).
 
 ### Datenmodell
 
-Vorhanden (Migrations `0001`–`0004`): `meta`, `users`, `sessions`, `credential_profiles` (v2c/v3, Secrets verschlüsselt, `CHECK` für konsistente Spalten),
-`groups` (hierarchisch, höchstens 8 Ebenen), `devices` (Gruppe und Profil mit `ON DELETE RESTRICT`, Intervall/Timeout/Wiederholungen als `CHECK`).
-Geplant: `sensors`, `channels`
-(Einheit, Schwellwerte), `samples`, `samples_1h`, `samples_1d`, `status_events`.
+Migrations `0001`–`0016`: `meta`, `users`, `sessions`, `credential_profiles` (Secrets verschlüsselt), `groups` (hierarchisch, höchstens 8 Ebenen),
+`devices` (Profil optional für Geräte ohne SNMP, Gerätetyp `kind`), `sensors`, `channels` (Einheit, Schwellwerte), `value_states` (Bewertung von
+Aufzählungswerten), `samples`, `samples_1h`, `samples_1d`, `sensor_status`, `events`, `mail_settings`, `notifications`, `mib_files`,
+`device_templates`, `pause_log`; Pausen als Spalten an `groups`/`devices` (`paused`, `pause_until_ms`, `pause_reason`), Spalte `position` für die Handordnung.
 
 Retention (konfigurierbar): Rohdaten 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt.
 Counter → Rate per Differenz/Zeitdelta; bei Wrap oder Reset (z. B. `sysUpTime` kleiner) wird **kein** Wert geschrieben.
-Zeitstempel intern UTC.
-
-### Sensortypen (MVP)
-
-Ping, SNMP Uptime, Interface-Traffic (IF-MIB, 64-Bit-HC-Counter; für Access Points 32-Bit), Interface-Status (`ifOperStatus`),
-benutzerdefinierter OID-Sensor (Gauge/Counter).
+Zeitstempel intern UTC, Anzeige in der Zeitzone des Browsers.
 
 ## Projektstruktur (Stand)
 
 ```
 opennetmon/
-  Cargo.toml
-  CLAUDE.md, PLAN.md
+  Cargo.toml, CLAUDE.md, PLAN.md, README.md, LICENSE, THIRD-PARTY-LICENSES.txt
   src/
-    main.rs           # CLI: serve (Standard), user add|passwd|list, key generate
-    lib.rs
-    config.rs
-    error.rs
-    auth/             # Rollen, Argon2, Tokens, Validierung
-    crypto.rs         # SecretBox (XChaCha20-Poly1305), Schlüsseldatei
-    credentials.rs    # Profil-Domäne, Secret, Validierung
-    devices.rs        # Geräte-/Gruppen-Domäne, Validierung (Host, Intervall), Gruppenbaum
-    snmp/             # mod.rs (SnmpClient, probe, Fehler), testagent.rs (Fake-v2c-Agent, nur Tests)
-    storage/          # mod.rs (Pool, WAL, Migrations), users.rs, credentials.rs, groups.rs, devices.rs
-    web/              # mod.rs (Router, State, Layout, Header, /healthz), auth.rs (Login), overview.rs (Startseite), credentials.rs, groups.rs, devices.rs (inkl. Verbindungstest), assets.rs, testutil.rs (nur Tests)
-    poller/           # geplant
-    sensors/          # geplant: Trait + ping, uptime, if_traffic, if_status, custom_oid
-    status/           # geplant
-    alerting/         # geplant
-  templates/          # askama: base, app (Kopfzeile), login, home (Gruppenbaum), credentials_list/_form, group_form, device_form, device_test
-  static/             # app.css (htmx, uPlot folgen)
+    main.rs             # CLI: serve (Standard), user add|passwd|list, key generate, backup, tls generate
+    lib.rs, config.rs, error.rs, i18n.rs, tls.rs
+    auth/               # Rollen, Argon2, Tokens, Validierung, throttle (Anmeldeversuche)
+    crypto.rs           # SecretBox (XChaCha20-Poly1305), Schlüsseldatei
+    credentials.rs      # SNMP-Profile
+    devices.rs          # Geräte, Gruppen, Gerätetypen
+    snmp/               # SnmpClient, probe; testagent.rs (Fake-v2c-Agent, nur Tests)
+    discovery.rs        # Interface-Discovery
+    mib/                # Lexer, Parser, Index, catalog (bekannte Tabellen)
+    value_discovery.rs  # „Werte suchen“
+    templates.rs        # Gerätevorlagen
+    ordering.rs         # Anzeigereihenfolge
+    pause.rs            # Pausen und ihre Vererbung
+    sensors/            # Trait Sensor, ping, snmp, spec, counter, format
+    status.rs           # Schwellwerte, Bewertungen, Zustandsautomat
+    poller.rs           # Supervisor, eine Aufgabe je Gerät
+    maintenance.rs      # Rollups, Retention
+    alerting.rs, mail.rs, mail/   # Benachrichtigung, SMTP (testsmtp.rs nur Tests)
+    storage/            # Repository je Thema (users, credentials, groups, devices, sensors, status, pauses, measurements, mail, mibs, templates)
+    web/                # Router, Handler je Seite, assets, testutil.rs (nur Tests)
+  templates/            # askama
+  static/               # app.css, eigene Skripte (theme, app, chart, refresh, order, samples, time, …), vendor/uplot
+  locales/              # de/, en/ (Fluent)
+  mibs/                 # mitgelieferte Standard-MIBs
+  migrations/           # 0001–0016
   examples/snmp_probe.rs
-  tests/              # snmp_local.rs (lokaler snmpd), omada_manual.rs (echte Hardware, #[ignore])
-  migrations/         # 0001_init, 0002_users_sessions, 0003_credential_profiles, 0004_groups_devices
-  dev/                # config.toml, sync.sh, sync-filter.txt (Drive-Abgleich nur CLAUDE.md und PLAN.md)
-  deploy/             # geplant: opennetmon.service
-  docs/               # decisions/0001-sprache.md, dev-testagent.md, benutzer-und-login.md, snmp-profile.md, geraete-und-gruppen.md
+  tests/                # snmp_local.rs (lokaler snmpd), omada_manual.rs (echte Hardware, #[ignore])
+  deploy/               # Unit, Installer, Backup, sysctl, Proxy-Beispiele, deb/ (Maintainer-Skripte)
+  dev/                  # config.toml, sync.sh (Drive nur CLAUDE.md und PLAN.md), release.sh, deb.sh, smtp_sink.py, mib-oracle.sh, third-party-licenses.py
+  docs/                 # Projektdokumentation (Deutsch), decisions/
 ```
 
 ## Umsetzungsphasen
 
 0. ✔ **Spike:** `examples/snmp_probe` gegen lokalen Agenten und Omada-Geräte; Entscheidung Rust.
 1. ✔ **Gerüst:** Config (TOML + ENV), Error-Typ mit `IntoResponse`, Logging, `/healthz`, Migrations, SQLite/WAL, Graceful Shutdown.
-2. **MVP 1** (in drei Commits):
-   1. ✔ Benutzer, Login, Rollen, CSRF, Sicherheits-Header, CLI zum Anlegen von Benutzern.
-   2. ✔ Credential-Profile (v2c, v3 authNoPriv/authPriv) mit verschlüsselten Secrets, Schlüsseldatei 0600; Formulare zeigen nur „gesetzt"; leere Passwortfelder behalten das gespeicherte Geheimnis.
-   3. ✔ Geräte und Gruppen: CRUD mit serverseitiger Validierung (IP/Hostname, Intervall), hierarchische Gruppen, Profilauswahl pro Gerät (verwendetes Profil lässt sich nicht löschen), Gruppenbaum auf der Startseite, **Verbindungstest** je Gerät (`sysDescr`/`sysUpTime`, getestet gegen alle Omada-Geräte). Die Oberfläche ist serverseitig gerendert; htmx folgt, sobald das Skript lokal vendort ist.
-3. **MVP 2:** `Sensor`-Trait und Counter-/Ratenlogik inkl. Wrap/Reset (32 und 64 Bit) – **umgesetzt** (`src/sensors/`, `storage::sensors`, Migration 0005), auch die Sensortypen; Poller (Scheduler mit Jitter, Semaphore, Fail-fast), Statuslogik und Ereignislog **umgesetzt** (`src/poller.rs`, `src/status.rs`, Migration 0006); 
-4. **Poller:** Scheduler mit Jitter, Semaphore, Timeouts/Retries; Statuslogik und Ereignislog.
-5. **MVP 3:** Interface-Discovery per Walk mit Auswahl durch den Nutzer (Namen über `ifName`/`ifDescr`) – **umgesetzt** (`src/discovery.rs`, `src/web/sensors.rs`, `docs/sensoren.md`).
-6. **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph (1h/24h/7d/30d), Rollups und Retention – **umgesetzt** (`docs/graphen-und-schwellwerte.md`).
-7. **Betrieb:** musl-Release-Build (zuletzt nach den Geräten geprüft: statisch gelinkt, 9,3 MB), `deploy/opennetmon.service` mit Hardening, Reverse-Proxy-Beispiel, Betriebsdoku.
-8. **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel – **umgesetzt** (`docs/benachrichtigung.md`).
-9. **Mehrsprachigkeit – umgesetzt** (vor dem Öffentlichmachen des Repos; jede neue Funktion vergrößert den Umbau):
-   - Technik entschieden (2026-10-19): **Fluent** mit nur `fluent-bundle` 0.16 (eigener Lader über `rust-embed`, ohne `fluent-templates`);
-     Kataloge `locales/<code>/*.ftl`, Deutsch Ausgangssprache, Englisch als erste weitere Sprache (`docs/uebersetzungen.md`).
-   - **Schritt 1 – umgesetzt:** Modul `i18n` (`Lang`, `Msg`, Sprache der Anfrage), Tests (Kataloge fehlerfrei, gleiche Nachrichten und Variablen in
-     allen Sprachen, jede verwendete ID vorhanden, keine unbenutzte), Spalte `users.language` (Migration `0013`, `NULL` = wie im Browser),
-     Auswahl unter „Mein Konto“, beim Anlegen und je Benutzer, `user add --language`; `Error::Invalid`/`Conflict` tragen `Msg`.
-     Übersetzt: Seitenrahmen, Anmeldung, Mein Konto, Benutzerverwaltung, Meldungen nach Aktionen, Fehlerseiten.
-   - **Schritt 2 – umgesetzt:** alle übrigen Seiten (Übersicht, Gruppen/Geräte, Sensoren, Discovery und Detailseite, Werte suchen, Reihenfolge,
-     Profile, Vorlagen, MIBs, E-Mail-Einstellungen) samt Meldungen aus der Fachlogik (`Msg` statt deutscher Texte, gespeichert kodiert in
-     Zustand, Ereignislog und Sendelog), Statusnamen, Einheiten und Zahlenformat je Sprache (`sensors::format`), Texte in `static/*.js` über einen
-     JSON-Datenblock (`js.ftl`, `T('…')`). Nebenbei behoben: Geräte ohne SNMP zeigten das Formular „Sensor hinzufügen“ nicht.
-   - **Schritt 3 – umgesetzt:** Benachrichtigungs-Mails in **einer** Sprache für alle Empfänger, einstellbar auf der Seite „E-Mail“
-     (`mail_settings.language`, Migration `0014`; Alarm- und Testmail, Kataloge `alert-…`); getestet mit `dev/smtp_sink.py` (Testmail und echter Ausfall-Alarm).
-     Nebenbei: drei deutsche Katalogeinträge mit HTML-Resten korrigiert, neuer Test `catalogs_contain_no_markup`.
-   - **Schritt 4 – umgesetzt (vorgezogen):** README komplett auf Englisch (2026-10-19, vor dem Öffentlichmachen) und nur noch englisch gepflegt;
-     `docs/` bleibt Deutsch.
-   - Nicht übersetzt: gespeicherte Namen (Sensoren, Gruppen, Geräte) und die Projektdoku in `docs/` (bleibt Deutsch).
-10. **Debian-Paket – umgesetzt (2026-10-20):** `.deb` für amd64 mit `cargo-deb` (MIT, nur auf dem Entwicklungsrechner) aus dem statischen musl-Binary,
-    gebaut von `dev/deb.sh` und von `dev/release.sh` mit ins Release gelegt. Gleiche Einrichtung wie `deploy/install.sh`, aber unter `/usr`:
-    Benutzer, `dpkg-statoverride` für `/etc/opennetmon`, Schlüssel und Sicherungsverzeichnis in `deploy/deb/postinst`, `config.toml` als Konfigurationsdatei,
-    systemd-Handling von cargo-deb (aktiviert, erst nach dem ersten Admin gestartet, bei Updates neu gestartet); `purge` löscht Konfiguration und Schlüssel,
-    nie Daten (`docs/betrieb.md`). Später: arm64, ein apt-Repository erst nach dem Öffentlichmachen.
-11. **Eingebautes HTTPS – umgesetzt (2026-10-20, in 0.3.0):** Wunsch des Nutzers: ohne Proxy direkt per IP und Port erreichbar, zwingend verschlüsselt.
-    Modul `tls` (rustls mit ring, Zertifikat mit rcgen), Config `tls_cert_file`/`tls_key_file`, CLI `tls generate`; Paket und Installer erzeugen ein selbst
-    signiertes Zertifikat für Hostname und IP-Adressen und liefern `listen = "0.0.0.0:8443"` aus; Klartext-HTTP auf dem Port bekommt nur eine Weiterleitung.
-    Doku zu eigenem Zertifikat (eigene CA mit openssl, Let's Encrypt), Port 443 und Umstellung bestehender Installationen in `docs/betrieb.md`.
-    Im Container getestet: Erstinstallation, Login über HTTPS, eigene CA (EC und RSA, Kette), Port 443, Update von 0.2.0 mit und ohne geänderte Config.
+2. ✔ **MVP 1:** Benutzer, Login, Rollen, CSRF, Sicherheits-Header; SNMP-Profile mit verschlüsselten Secrets; Geräte und Gruppen mit Verbindungstest.
+3. ✔ **MVP 2 und Poller:** `Sensor`-Trait, Counter-/Ratenlogik inkl. Wrap/Reset (32 und 64 Bit), fünf Sensortypen; Poller mit Jitter, Semaphore und
+   Fail-fast, Statuslogik und Ereignislog.
+4. ✔ **MVP 3:** Interface-Discovery per Walk mit Auswahl durch den Nutzer (Namen über `ifName`/`ifDescr`).
+5. ✔ **MVP 4:** Schwellwerte je Kanal, Statusübersicht, Detailseite mit uPlot-Graph, Rollups und Retention.
+6. ✔ **MVP 5:** Benutzerverwaltung in der Oberfläche, „Mein Konto“, Begrenzung der Anmeldeversuche.
+7. ✔ **MVP 6:** E-Mail-Benachrichtigung bei Statuswechsel.
+8. ✔ **MIBs, „Werte suchen“, Gerätevorlagen, Bewertung von Aufzählungswerten, Reihenfolge, Geräte ohne SNMP.**
+9. ✔ **Mehrsprachigkeit** (Fluent, Oberfläche und Mails; README Englisch, `docs/` Deutsch).
+10. ✔ **Betrieb:** musl-Binary, systemd-Unit mit Hardening, Installer, Backup, Proxy-Beispiele, `.deb`-Paket (im Podman-Container getestet).
+11. ✔ **Eingebautes HTTPS** (0.3.0): rustls, selbst signiertes Zertifikat bei der Installation, Klartext-HTTP nur Weiterleitung.
+12. ✔ **Statuslisten, Gerätebaum, Gerätetypen, Pausieren, Protokoll** (0.3.1 und 0.4.0).
+13. **Offen:**
+    - Installation auf dem echten Ubuntu Server (Paket), `/healthz` und Login über HTTPS prüfen, die sieben Omada-Geräte einrichten
+    - Benachrichtigung mit dem echten Mailserver des Nutzers testen
+    - Integrationstest Ende zu Ende gegen den lokalen `snmpd`: Gerät anlegen → Discovery → Messwerte nach 1–2 Intervallen → Agent stoppen → `Down`
+      → Agent starten → `Up`
+    - Feinschliff nach den ersten Tagen im Betrieb
+    - **Sensoren für den Server selbst** (Wunsch 2026-10-21): CPU-Last, Load, Arbeitsspeicher, Swap, Belegung der Dateisysteme, Temperaturen,
+      Netzwerk-Traffic, Uptime; denkbar auch ausstehende Updates, Neustart nötig, Zustand wichtiger systemd-Dienste. Zwei Wege:
+      - heute schon möglich: `snmpd` (net-snmp) auf dem Server installieren, den Server als SNMP-Gerät anlegen und „Werte suchen“ nutzen
+        (HOST-RESOURCES: CPU je Kern, Speicher und Dateisysteme; Interfaces per Discovery). Kostet einen weiteren Dienst und ein weiteres Passwort,
+        Load, Temperaturen und Dienste fehlen ohne UCD-MIB
+      - eingebaut: neuer Sensortyp „Dieser Server“ über den `Sensor`-Trait, der `/proc`, `statvfs` und `/sys/class/hwmon` direkt liest (kein snmpd,
+        keine Zugangsdaten; verträgt sich mit dem Hardening der Unit, nur lesend). Empfehlung, vor der Umsetzung festzulegen: welche Werte, und ob
+        systemd-Dienste/Updates dazugehören (bräuchte D-Bus bzw. apt-Daten und lockerere Rechte)
+    - **Update-Möglichkeit** (Wunsch 2026-10-21, Zeitpunkt offen): heute per neuem `.deb` mit `apt install ./…deb` (Daten und Config bleiben).
+      Später z. B. ein apt-Repository (Updates mit `apt upgrade`, setzt ein öffentliches Repo oder eigenen Paket-Server voraus) und/oder ein Hinweis
+      in der Oberfläche, wenn auf GitHub eine neue Version erschienen ist. Ein Selbst-Update aus der Oberfläche heraus passt nicht zum Hardening
+      (`ProtectSystem=strict`, eigener Benutzer ohne Rechte auf `/usr`)
+    - Später: `.deb` für arm64, ein apt-Repository erst nach dem Öffentlichmachen
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
@@ -156,32 +182,33 @@ Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlos
 
 SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET, Mandantenfähigkeit, Omada-Controller-API,
 Herstellermibs außer gezielt benötigten TP-Link-OIDs.
-Zurückgestellt gegenüber früheren Ideen: CPU/RAM/Disk-Sensoren (HOST-RESOURCES/UCD), SNMP v1, Subnetz-Scan, Docker-Betrieb.
+Zurückgestellt gegenüber früheren Ideen: SNMP v1, Subnetz-Scan, Docker-Betrieb, htmx.
 
 ## Verifikation
 
-- **Unit-Tests:** Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik und Aggregation, Config-Parsing, Downsampling.
-  Vorhanden: Config, Auth, Krypto, Profil- und Geräte-Validierung, Gruppenbaum, Fehlertyp, Storage, SNMP-Client (115 Unit-/Handler-Tests).
-- **Integrationstests:** gegen lokalen `snmpd` (v2c und v3), vorhanden in `tests/snmp_local.rs` (5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
-  64-Bit-Counter). Später: Gerät anlegen → Discovery → Messwerte nach 1–2 Intervallen → Agent stoppen → `Down` → Agent starten → `Up`.
-- **Handler-Tests:** `axum` mit `tower::ServiceExt::oneshot` (Login, Logout, CSRF, abgelaufene Sitzung, Header, `/healthz`, Profil-Seiten mit Rollenprüfung, Maskierung, HTML-Escaping); gemeinsame Helfer in `web/testutil.rs`.
-- **Gerätetests** gegen echte Omada-Hardware nur manuell, nicht in `cargo test` (`tests/omada_manual.rs`, Switch 64-Bit, AP nur 32-Bit-Counter bestätigt).
+- **Unit- und Handler-Tests** (436, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Config, Auth, Krypto, Validierung,
+  Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
+- **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
+  64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).
+- **Gerätetests** gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, `#[ignore]`).
+- **Oberfläche:** Änderungen im Browser mit einer Wegwerfkopie der Entwicklungsdaten prüfen, hell und dunkel.
+- **Packaging:** `dev/release.sh` prüft Archiv, Installer-Probelauf und Inhalt des .deb; Paket im Podman-Container getestet (Installation, Update, remove, purge).
 - **Vor jedem Abschluss:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
-- **Packaging:** musl-Binary auf dem Ubuntu Server per systemd starten und `/healthz` prüfen.
 
 ## Sicherheit (Kurzfassung)
 
 SNMP nur lesend; Secrets verschlüsselt in der DB (Schlüsseldatei 0600, Rechteprüfung beim Start), nie in Logs oder HTML; argon2;
 `HttpOnly`/`SameSite=Strict`-Cookies, `Secure` per Config; CSRF-Schutz für alle POST-Formulare; serverseitige Validierung
-von IP, OID, Intervallen; nur HTTPS (eingebaut, Klartext-HTTP nur Weiterleitung) oder Bind auf `127.0.0.1` hinter einem TLS-Proxy.
-Begrenzung der Anmeldeversuche: umgesetzt (`auth::throttle`, `docs/benutzer-und-login.md`).
+von IP, OID, Intervallen; nur HTTPS (eingebaut, Klartext-HTTP nur Weiterleitung) oder Bind auf `127.0.0.1` hinter einem TLS-Proxy;
+Begrenzung der Anmeldeversuche (`auth::throttle`).
 
 ## Offene Punkte (vom Nutzer zu klären)
 
-- Ist der Server vom Internet getrennt? (Updates, E-Mail-Versand)
 - SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller ändern und lokal nachtragen
 - ER605: läuft als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- uPlot ist eingebunden; htmx ist noch nicht eingebunden (dafür braucht es dein Okay zum Herunterladen)
-- Repo öffentlich machen (Historie am 2026-10-19 geprüft: keine Secrets); Regel für fremde Beiträge (CLA/DCO) festlegen.
-  Erstes Release **v0.1.0** (Vorabversion, x86_64) ist am 2026-10-19 auf GitHub erschienen, **v0.2.0** (Mehrsprachigkeit, .deb-Paket) **v0.3.0** (eingebautes HTTPS) und **v0.3.1** (Statuslisten hinter den Kacheln) am 2026-10-20; weitere mit `dev/release.sh`
+- Repo öffentlich machen (Historie am 2026-10-19 geprüft: keine Secrets); Regel für fremde Beiträge (CLA/DCO) festlegen
+- Sensoren für den Server: welche Werte, eingebaut oder über snmpd (siehe Phase 13)
+- Update-Möglichkeit: Weg und Zeitpunkt
+
+Geklärt: Der Server hat Internetzugang und betreibt weitere Programme (2026-10-21).
