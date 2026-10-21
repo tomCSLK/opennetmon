@@ -133,5 +133,6 @@ Passwörter erscheinen weder auf der Ergebnisseite noch im Log (das Log nennt nu
 
 - Unit- und Handler-Tests nutzen einen kleinen **Fake-SNMPv2c-Agenten** (`src/snmp/testagent.rs`), der wie echte Agenten bei falscher Community schweigt.
 - `tests/snmp_local.rs`: Integrationstests gegen den lokalen `snmpd` (v2c, v3 mit `OPENNETMON_TEST_V3_*`); überspringen sich selbst, wenn der Agent oder die Variablen fehlen.
-- `tests/omada_manual.rs`: manuelle Tests gegen die echten Omada-Geräte, alle `#[ignore]`:
+- `tests/omada_manual.rs`: manuelle Tests gegen echte Omada-Geräte, alle `#[ignore]`. Adressen und Zugangsdaten kommen aus der Umgebung
+  (`OPENNETMON_OMADA_SWITCH`, `OPENNETMON_OMADA_AP`, `OPENNETMON_OMADA_USER`, `OPENNETMON_PROBE_AUTH_PASS`), z. B. aus einer Datei außerhalb des Repos:
   `set -a; . ~/.config/opennetmon-dev/omada.env; set +a; cargo test --test omada_manual -- --ignored --nocapture`

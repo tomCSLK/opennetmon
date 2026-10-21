@@ -4,25 +4,34 @@
 //! set -a; . ~/.config/opennetmon-dev/omada.env; set +a
 //! cargo test --test omada_manual -- --ignored --nocapture
 //! ```
-//! Needs `OPENNETMON_PROBE_AUTH_PASS` (the SNMPv3 password of user `MCS6_SNMP`, authNoPriv/MD5).
+//! Needs `OPENNETMON_OMADA_SWITCH` and `OPENNETMON_OMADA_AP` (addresses of a switch and an access point),
+//! `OPENNETMON_OMADA_USER` and `OPENNETMON_PROBE_AUTH_PASS` (SNMPv3 user and password, authNoPriv/MD5).
 
 use std::time::Duration;
 
 use opennetmon::credentials::{AuthProtocol, Credentials, Secret};
 use opennetmon::snmp::{SnmpClient, SnmpTarget, SnmpValue, probe};
 
-const SWITCH: &str = "192.168.178.253";
-const ACCESS_POINT: &str = "192.168.178.240";
 const IF_HC_IN_OCTETS_FIRST: &[u64] = &[1, 3, 6, 1, 2, 1, 31, 1, 1, 1, 6, 1];
 const IF_IN_OCTETS_FIRST: &[u64] = &[1, 3, 6, 1, 2, 1, 2, 2, 1, 10, 1];
 
+fn env(name: &str) -> String {
+    std::env::var(name).unwrap_or_else(|_| panic!("{name} is not set"))
+}
+
+fn switch() -> String {
+    env("OPENNETMON_OMADA_SWITCH")
+}
+
+fn access_point() -> String {
+    env("OPENNETMON_OMADA_AP")
+}
+
 fn credentials() -> Credentials {
     Credentials::V3 {
-        username: "MCS6_SNMP".to_owned(),
+        username: env("OPENNETMON_OMADA_USER"),
         auth_protocol: AuthProtocol::Md5,
-        auth_password: Secret::new(
-            std::env::var("OPENNETMON_PROBE_AUTH_PASS").expect("OPENNETMON_PROBE_AUTH_PASS"),
-        ),
+        auth_password: Secret::new(env("OPENNETMON_PROBE_AUTH_PASS")),
         privacy: None,
     }
 }
@@ -39,14 +48,14 @@ fn target(host: &str) -> SnmpTarget {
 #[tokio::test]
 #[ignore = "needs the real Omada network"]
 async fn switch_answers_with_64_bit_counters() {
-    let result = probe(&target(SWITCH), &credentials()).await.unwrap();
+    let result = probe(&target(&switch()), &credentials()).await.unwrap();
     println!(
         "{} | {} ms",
         result.sys_descr,
         result.round_trip.as_millis()
     );
     assert!(result.sys_descr.contains("Omada"));
-    let mut client = SnmpClient::connect(&target(SWITCH), &credentials())
+    let mut client = SnmpClient::connect(&target(&switch()), &credentials())
         .await
         .unwrap();
     let values = client.get(&[IF_HC_IN_OCTETS_FIRST]).await.unwrap();
@@ -56,9 +65,11 @@ async fn switch_answers_with_64_bit_counters() {
 #[tokio::test]
 #[ignore = "needs the real Omada network"]
 async fn access_point_answers_with_32_bit_counters_only() {
-    let result = probe(&target(ACCESS_POINT), &credentials()).await.unwrap();
+    let result = probe(&target(&access_point()), &credentials())
+        .await
+        .unwrap();
     println!("{}", result.sys_descr);
-    let mut client = SnmpClient::connect(&target(ACCESS_POINT), &credentials())
+    let mut client = SnmpClient::connect(&target(&access_point()), &credentials())
         .await
         .unwrap();
     let values = client
@@ -113,7 +124,7 @@ async fn poll_twice(
 async fn sensors_work_on_switch_and_access_point() {
     use opennetmon::sensors::spec::SensorSpec;
     // Switch port 1 has 64-bit counters, the access point's first interface only 32-bit ones.
-    for host in [SWITCH, ACCESS_POINT] {
+    for host in [switch(), access_point()] {
         for spec in [
             SensorSpec::Uptime,
             SensorSpec::InterfaceStatus { if_index: 1 },
@@ -121,7 +132,7 @@ async fn sensors_work_on_switch_and_access_point() {
             SensorSpec::Ping,
         ] {
             let mut sensor = spec.build();
-            let last = poll_twice(host, sensor.as_mut()).await;
+            let last = poll_twice(&host, sensor.as_mut()).await;
             assert!(
                 last.iter().all(|(_, v)| v.is_some())
                     || matches!(spec, SensorSpec::InterfaceTraffic { .. }),
@@ -155,13 +166,10 @@ async fn poller_cycle_against_real_devices() {
         &ProfileInput {
             name: "omada".to_owned(),
             kind: ProfileKind::V3 {
-                username: "MCS6_SNMP".to_owned(),
+                username: env("OPENNETMON_OMADA_USER"),
                 level: SecurityLevel::AuthNoPriv,
                 auth_protocol: AuthProtocol::Md5,
-                auth_password: Some(Secret::new(
-                    std::env::var("OPENNETMON_PROBE_AUTH_PASS")
-                        .expect("OPENNETMON_PROBE_AUTH_PASS"),
-                )),
+                auth_password: Some(Secret::new(env("OPENNETMON_PROBE_AUTH_PASS"))),
                 priv_protocol: None,
                 priv_password: None,
             },
@@ -171,14 +179,14 @@ async fn poller_cycle_against_real_devices() {
     .unwrap();
 
     let ping = PingClients::new();
-    for (name, host) in [("switch", SWITCH), ("ap", ACCESS_POINT)] {
+    for (name, host) in [("switch", switch()), ("ap", access_point())] {
         let device = devices::save_device(
             &pool,
             None,
             DeviceInput {
                 kind: Default::default(),
                 name: name.to_owned(),
-                host: host.to_owned(),
+                host,
                 group_id: None,
                 profile_id: Some(profile),
                 polling: Polling::default(),
@@ -221,8 +229,8 @@ async fn poller_cycle_against_real_devices() {
 #[tokio::test]
 #[ignore = "needs the real Omada network"]
 async fn interface_discovery_on_switch_and_access_point() {
-    for host in [SWITCH, ACCESS_POINT] {
-        let mut client = SnmpClient::connect(&target(host), &credentials())
+    for host in [switch(), access_point()] {
+        let mut client = SnmpClient::connect(&target(&host), &credentials())
             .await
             .unwrap();
         let found = opennetmon::discovery::discover_interfaces(&mut client)

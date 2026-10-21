@@ -145,7 +145,7 @@ pub struct ProfileView {
 }
 
 impl ProfileView {
-    /// One-line description for lists, e.g. `SNMPv3 · authNoPriv · MD5 · Benutzer MCS6_SNMP`.
+    /// One-line description for lists, e.g. `SNMPv3 · authNoPriv · MD5 · Benutzer monitor`.
     pub fn summary(&self, t: Lang) -> String {
         let mut parts = vec![self.version.label().to_owned()];
         if let Some(level) = self.level {
@@ -281,7 +281,7 @@ mod tests {
     fn valid_inputs_pass() {
         assert!(
             v3(
-                "MCS6_SNMP",
+                "monitor",
                 SecurityLevel::AuthNoPriv,
                 Some("12345678"),
                 None,
@@ -392,14 +392,14 @@ mod tests {
             id: 1,
             name: "Omada".to_owned(),
             version: SnmpVersion::V3,
-            username: Some("MCS6_SNMP".to_owned()),
+            username: Some("monitor".to_owned()),
             level: Some(SecurityLevel::AuthNoPriv),
             auth_protocol: Some(AuthProtocol::Md5),
             priv_protocol: None,
         };
         assert_eq!(
             view.summary(Lang::De),
-            "SNMPv3 · authNoPriv · MD5 · Benutzer MCS6_SNMP"
+            "SNMPv3 · authNoPriv · MD5 · Benutzer monitor"
         );
     }
 }

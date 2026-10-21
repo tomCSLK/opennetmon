@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn hosts_are_validated_and_normalized() {
         for ok in [
-            "192.168.178.253",
+            "192.0.2.253",
             "fe80::1",
             "switch-keller.lan",
             "Router",

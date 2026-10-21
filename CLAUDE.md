@@ -13,7 +13,7 @@ Agentloses Netzwerk-Monitoring per SNMP mit Web-Oberfläche, inspiriert vom Bedi
 Läuft headless auf einem **Ubuntu Server ohne GUI**; Bedienung ausschließlich über den Browser.
 Entwickelt wird auf Zorin OS (Desktop), betrieben auf Ubuntu Server.
 
-Zielumgebung: privates Netz mit TP-Link Omada (Software-Controller, Site `MCS6`): Gateway ER605, drei Smart-Switches
+Zielumgebung: privates Netz mit TP-Link Omada (Software-Controller): Gateway ER605, drei Smart-Switches
 (2× SG2008, 1× SG2008P), drei Access Points (1× EAP225, 2× EAP653). SNMP wird im Controller site-weit konfiguriert
 und ist dort nur als **SNMPv3 authNoPriv mit MD5** aktiv (v1/v2c aus, kein Privacy-Passwort). Gemessen im Spike:
 Switches und Access Points antworten, der ER605 nicht. Switches liefern 64-Bit-Counter (`ifXTable`), Access Points nur
@@ -212,6 +212,8 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 
 ## Tests
 
+- CI: `.github/workflows/ci.yml` (fmt, clippy, Tests, `third-party-licenses.py --check`; bei Pull Requests zusätzlich DCO-Prüfung `Signed-off-by`
+  des Autors); Actions nur von `actions/*`, auf Commit-Hash gepinnt. Beitragsregeln in `CONTRIBUTING.md` (Englisch), Meldeweg für Lücken in `SECURITY.md`
 - Unit-Tests für Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Config-Parsing
 - Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent (`tests/snmp_local.rs`, überspringen sich ohne Agent oder
   ohne `OPENNETMON_TEST_V3_*`); Gerätetests gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, alle `#[ignore]`; u. a. `sensors_work_on_switch_and_access_point` und `poller_cycle_against_real_devices`, `interface_discovery_on_switch_and_access_point`)
@@ -249,12 +251,14 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 
 ## Offene Punkte (vom Nutzer zu klären)
 
-- SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller auf ein längeres
-  Passwort ändern und lokal in `~/.config/opennetmon-dev/omada.env` nachtragen (nie ins Repo oder auf Drive)
+- Angaben zum Heimnetz des Nutzers (Site, Adressen, SNMP-Benutzer und offene Punkte dazu) stehen nur lokal in `CLAUDE.local.md` (gitignored)
+  und `~/.config/opennetmon-dev/omada.env`, nie im Repo oder auf Drive; Tests nutzen neutrale Werte (`192.0.2.x`, Benutzer `monitor`)
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- GitHub-Repo `tomCSLK/opennetmon` ist noch privat; vor dem Öffentlichmachen ist die Historie geprüft (2026-10-19: keine Secrets). Für fremde Beiträge
-  ggf. eine Beitragsvereinbarung (CLA/DCO) festlegen, damit eine spätere Doppellizenzierung möglich bleibt
+- GitHub-Repo `tomCSLK/opennetmon` ist noch privat, das Öffentlichmachen ist vorbereitet (2026-10-21: Historie erneut ohne Secrets, Heimnetz-Angaben
+  neutralisiert, `SECURITY.md`, `CONTRIBUTING.md`, Vorlagen unter `.github/`, CI). Umschalten macht der Nutzer; danach „Private vulnerability reporting“,
+  Dependabot-Warnungen und Secret Scanning einschalten. Die Autor-Adresse in den Commits bleibt (Entscheidung des Nutzers)
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
 
-Geklärt: Server hat Internetzugang und betreibt weitere Programme, die es brauchen (2026-10-21); Name opennetmon (mit Logo), Lizenz AGPL-3.0-or-later, Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.
+Geklärt: Beiträge nach **DCO** (`Signed-off-by`, CI prüft es bei Pull Requests; 2026-10-21) – eine spätere Doppellizenzierung
+bräuchte damit die Zustimmung der Beitragenden; Server hat Internetzugang und betreibt weitere Programme, die es brauchen (2026-10-21); Name opennetmon (mit Logo), Lizenz AGPL-3.0-or-later, Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

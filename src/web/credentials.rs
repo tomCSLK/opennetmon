@@ -351,7 +351,7 @@ mod tests {
         priv_pw: &str,
     ) -> String {
         format!(
-            "csrf_token={csrf}&name={}&version=v3&community=&username=MCS6_SNMP&level={level}\
+            "csrf_token={csrf}&name={}&version=v3&community=&username=monitor&level={level}\
              &auth_protocol=md5&auth_password={}&priv_protocol={priv_proto}&priv_password={}",
             enc(name),
             enc(auth_pw),
@@ -417,14 +417,14 @@ mod tests {
         assert!(list.body.contains("Omada Switches"));
         assert!(
             list.body
-                .contains("SNMPv3 · authNoPriv · MD5 · Benutzer MCS6_SNMP")
+                .contains("SNMPv3 · authNoPriv · MD5 · Benutzer monitor")
         );
         assert!(list.body.contains("Profil angelegt."));
 
         let edit = send(&h.app, get("/credentials/1/edit", Some(&admin))).await;
         assert_eq!(edit.status, StatusCode::OK);
         assert!(edit.body.contains("gesetzt – leer lassen zum Beibehalten"));
-        assert!(edit.body.contains("MCS6_SNMP"));
+        assert!(edit.body.contains("monitor"));
         for page in [&list.body, &edit.body] {
             assert!(!page.contains(AUTH_PW));
         }

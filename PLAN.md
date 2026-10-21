@@ -47,7 +47,7 @@ Releases (alle Vorabversionen, x86_64): **v0.1.0** (2026-10-19), **v0.2.0** (202
 ## Kontext
 
 PRTG gibt es nur für Windows. Ziel ist eine Linux-native Anwendung mit ähnlichem Bedienkonzept, die Netzwerkgeräte
-agentlos per SNMP überwacht. Zielumgebung: privates Netz mit TP-Link Omada (Site `MCS6`): Gateway ER605, Switches 2× SG2008 und 1× SG2008P,
+agentlos per SNMP überwacht. Zielumgebung: privates Netz mit TP-Link Omada: Gateway ER605, Switches 2× SG2008 und 1× SG2008P,
 Access Points 1× EAP225 und 2× EAP653 (7 Geräte). SNMP ist im Controller site-weit nur als SNMPv3 authNoPriv/MD5 aktiviert (v1/v2c aus).
 Die Omada-Controller-API ist nicht Teil des MVP.
 Entwickelt wird auf Zorin OS, betrieben auf einem headless Ubuntu Server; Bedienung nur per Browser.
@@ -109,7 +109,8 @@ Zeitstempel intern UTC, Anzeige in der Zeitzone des Browsers.
 
 ```
 opennetmon/
-  Cargo.toml, CLAUDE.md, PLAN.md, README.md, LICENSE, THIRD-PARTY-LICENSES.txt
+  Cargo.toml, CLAUDE.md, PLAN.md, README.md, CONTRIBUTING.md, SECURITY.md, LICENSE, THIRD-PARTY-LICENSES.txt
+  .github/              # CI (workflows/ci.yml), Issue- und Pull-Request-Vorlagen
   src/
     main.rs             # CLI: serve (Standard), user add|passwd|list, key generate, backup, tls generate
     lib.rs, config.rs, error.rs, i18n.rs, tls.rs
@@ -203,10 +204,9 @@ Begrenzung der Anmeldeversuche (`auth::throttle`).
 
 ## Offene Punkte (vom Nutzer zu klären)
 
-- SNMPv3-Passwort des Omada-Benutzers ist kurz (8 Zeichen) und stand einmal im Chat: im Controller ändern und lokal nachtragen
 - ER605: läuft als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- Repo öffentlich machen (Historie am 2026-10-19 geprüft: keine Secrets); Regel für fremde Beiträge (CLA/DCO) festlegen
+- Repo öffentlich machen: vorbereitet (2026-10-21), Umschalten durch den Nutzer
 - Update-Möglichkeit: Weg und Zeitpunkt
 
-Geklärt: Der Server hat Internetzugang und betreibt weitere Programme (2026-10-21).
+Geklärt: Beiträge nach DCO (2026-10-21). Der Server hat Internetzugang und betreibt weitere Programme (2026-10-21).

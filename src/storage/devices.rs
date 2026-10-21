@@ -147,7 +147,7 @@ mod tests {
         let input = ProfileInput {
             name: "Omada".to_owned(),
             kind: ProfileKind::V3 {
-                username: "MCS6_SNMP".to_owned(),
+                username: "monitor".to_owned(),
                 level: SecurityLevel::AuthNoPriv,
                 auth_protocol: AuthProtocol::Md5,
                 auth_password: Some(Secret::new("12345678")),
@@ -180,7 +180,7 @@ mod tests {
         let id = save_device(
             &pool,
             None,
-            input(" Switch Keller ", "192.168.178.251", Some(group), profile),
+            input(" Switch Keller ", "192.0.2.251", Some(group), profile),
         )
         .await
         .unwrap();
@@ -188,7 +188,7 @@ mod tests {
         let d = get_device(&pool, id).await.unwrap().unwrap();
         assert_eq!(
             (d.name.as_str(), d.host.as_str(), d.group_id),
-            ("Switch Keller", "192.168.178.251", Some(group))
+            ("Switch Keller", "192.0.2.251", Some(group))
         );
         assert_eq!(
             (d.profile_name.as_deref().unwrap_or_default(), d.polling),

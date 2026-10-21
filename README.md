@@ -5,11 +5,33 @@
 Agentless network monitoring over SNMP with a web interface, inspired by the way PRTG is operated.
 A single, statically linked binary (Rust) with SQLite – meant to run on a headless Ubuntu server and to be used in the browser.
 
+[![CI](https://github.com/tomCSLK/opennetmon/actions/workflows/ci.yml/badge.svg)](https://github.com/tomCSLK/opennetmon/actions/workflows/ci.yml)
+
 > “PRTG” is a trademark of Paessler; opennetmon is not affiliated with Paessler.
 > The target environment is a private network with TP-Link Omada (switches and access points via SNMPv3); it works with any device that speaks SNMP v2c or v3.
 
 > **Language:** The user interface is available in German and English (language per user, by default the browser's).
 > The project documentation in [`docs/`](docs/) and the planning files are currently written in German.
+
+## Try it – testers welcome
+
+opennetmon is a **pre-release** (0.x): it works and is tested on real hardware, but it has not yet run for a long time on many servers.
+Feedback from your network is very welcome – especially devices from other vendors.
+
+1. Download the `.deb` package and `SHA256SUMS` from the [latest release](https://github.com/tomCSLK/opennetmon/releases) (amd64 only for now;
+   for other systems with systemd there is an archive with `deploy/install.sh`).
+2. Install and create the first administrator:
+
+   ```bash
+   sha256sum -c SHA256SUMS --ignore-missing
+   sudo apt install ./opennetmon_<version>-1_amd64.deb
+   sudo -u opennetmon opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
+   sudo systemctl start opennetmon
+   ```
+
+3. Open `https://<server address>:8443`. The browser warns once about the self-signed certificate; compare its fingerprint with the
+   one printed during installation, or use your own certificate ([`docs/betrieb.md`](docs/betrieb.md)).
+4. Report what you find as an [issue](https://github.com/tomCSLK/opennetmon/issues/new/choose) – never include passwords or keys.
 
 ## Status
 
@@ -119,6 +141,8 @@ and Let's Encrypt), port 443, running behind Caddy or nginx instead, update, rol
 - The SMTP password is stored encrypted like the SNMP credentials and never shown.
 - Secrets never belong in the repository, in logs or in HTML output.
 
+Please report vulnerabilities privately, not as an issue: see [`SECURITY.md`](SECURITY.md).
+
 ## Documentation
 
 The documentation is in German.
@@ -139,6 +163,11 @@ The documentation is in German.
 | [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-mail settings, rules, test SMTP server |
 | [`docs/uebersetzungen.md`](docs/uebersetzungen.md) | Translations: Fluent catalogs, rules, texts in JavaScript, adding a language |
 | [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Decision for Rust (spike results) |
+
+## Contributing
+
+Bug reports, tests with other devices and pull requests are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) first: commits need
+a DCO sign-off (`git commit -s`), and `cargo fmt`, `cargo clippy` and `cargo test` must pass.
 
 ## License
 

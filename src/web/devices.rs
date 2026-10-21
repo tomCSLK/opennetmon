@@ -600,7 +600,7 @@ mod tests {
             post(
                 "/devices",
                 Some(&admin),
-                &simple(&acsrf, "Switch+Keller", "192.168.178.251", profile),
+                &simple(&acsrf, "Switch+Keller", "192.0.2.251", profile),
             ),
         )
         .await;
@@ -643,7 +643,7 @@ mod tests {
         }
 
         let home = send(&h.app, get("/", Some(&viewer))).await;
-        assert!(home.body.contains("Switch Keller") && home.body.contains("192.168.178.251:161"));
+        assert!(home.body.contains("Switch Keller") && home.body.contains("192.0.2.251:161"));
         assert!(!home.body.contains("Testen") && !home.body.contains("/devices/1/edit"));
         assert!(
             !home.body.contains("Alt"),
@@ -664,7 +664,7 @@ mod tests {
         let body = form(
             &csrf,
             "Switch+Keller",
-            "192.168.178.251",
+            "192.0.2.251",
             "1",
             profile,
             161,
@@ -679,7 +679,7 @@ mod tests {
             post(
                 "/devices",
                 Some(&admin),
-                &simple(&csrf, "Router", "192.168.178.1", profile),
+                &simple(&csrf, "Router", "192.0.2.1", profile),
             ),
         )
         .await;

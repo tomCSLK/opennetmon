@@ -394,14 +394,14 @@ mod tests {
             &pool,
             &sb,
             None,
-            &v3_no_priv("Omada", "MCS6_SNMP", Some("12345678")),
+            &v3_no_priv("Omada", "monitor", Some("12345678")),
         )
         .await
         .unwrap();
         let view = get_profile(&pool, id).await.unwrap().unwrap();
         assert_eq!(
             view.summary(Lang::De),
-            "SNMPv3 · authNoPriv · MD5 · Benutzer MCS6_SNMP"
+            "SNMPv3 · authNoPriv · MD5 · Benutzer monitor"
         );
         match load_credentials(&pool, &sb, id).await.unwrap().unwrap() {
             Credentials::V3 { privacy, .. } => assert!(privacy.is_none()),

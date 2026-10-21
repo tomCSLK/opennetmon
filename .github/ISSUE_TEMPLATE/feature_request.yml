@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest a sensor type, a device or an improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want to monitor or do?
+      description: Describe the problem first; a solution is welcome but optional.
+    validations:
+      required: true
+  - type: textarea
+    id: devices
+    attributes:
+      label: Devices involved (if any)
+      description: Vendor, model and the relevant MIB or OIDs, if you know them.
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else

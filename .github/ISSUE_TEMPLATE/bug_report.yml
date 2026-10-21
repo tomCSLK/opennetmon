@@ -1,0 +1,59 @@
+name: Bug report
+description: Something does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing opennetmon! Please never paste passwords, SNMP communities, the contents of `secret.key`
+        or other secrets into an issue. Replace them with `***`.
+  - type: input
+    id: version
+    attributes:
+      label: opennetmon version
+      description: Shown at the bottom of the sidebar, or run `opennetmon --version`.
+      placeholder: "0.4.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed with
+      options:
+        - Debian package (.deb)
+        - deploy/install.sh from the release archive
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Ubuntu 24.04 (amd64)"
+    validations:
+      required: true
+  - type: input
+    id: devices
+    attributes:
+      label: Monitored device (if relevant)
+      description: Vendor, model, firmware and SNMP version (v2c, v3 authNoPriv/authPriv).
+      placeholder: "TP-Link SG2008, firmware 1.0.x, SNMPv3 authNoPriv/MD5"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: For example `journalctl -u opennetmon --since "10 min ago"`. Check it for secrets first.
+      render: text
