@@ -19,7 +19,9 @@ use crate::sensors::spec::SensorSpec;
 use crate::snmp::{self, SnmpTarget, format_uptime};
 use crate::storage::{credentials, devices as store, groups, sensors};
 use crate::web::auth::{CsrfForm, CurrentUser};
-use crate::web::{AppState, Crumb, Layout, SelectOption, group_options, group_trail};
+use crate::web::{
+    AppState, Crumb, Layout, SelectOption, back_to_group, group_options, group_trail,
+};
 
 /// The test never blocks a request for long, whatever the device is configured to.
 const TEST_MAX_TIMEOUT_SECS: u32 = 10;
@@ -105,40 +107,56 @@ struct KindOption {
     selected: bool,
 }
 
-/// The page an edit was opened from; cancelling and saving return there.
+/// The page the form was opened from; cancelling and saving return there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Back {
     Overview,
     /// The sensor page of the device.
     #[default]
     Device,
+    /// The page of a group (`group-<id>`).
+    Group(i64),
 }
 
 impl Back {
     fn parse(s: &str) -> Self {
+        if let Some(id) = back_to_group(s) {
+            return Self::Group(id);
+        }
         match s {
             "overview" => Self::Overview,
             _ => Self::Device,
         }
     }
 
-    pub fn as_str(self) -> &'static str {
+    pub fn as_string(self) -> String {
         match self {
-            Self::Overview => "overview",
-            Self::Device => "device",
+            Self::Overview => "overview".to_owned(),
+            Self::Device => "device".to_owned(),
+            Self::Group(id) => format!("group-{id}"),
         }
     }
 
-    fn href(self, device_id: i64) -> String {
-        match self {
-            Self::Overview => "/".to_owned(),
-            Self::Device => format!("/devices/{device_id}/sensors"),
+    /// The page to return to; `None` for a device that does not exist yet.
+    fn href(self, device_id: Option<i64>) -> String {
+        match (self, device_id) {
+            (Self::Device, Some(id)) => format!("/devices/{id}/sensors"),
+            (Self::Group(id), _) => format!("/groups/{id}"),
+            _ => "/".to_owned(),
         }
     }
 }
 
 #[derive(Deserialize)]
 pub struct BackQuery {
+    #[serde(default)]
+    back: String,
+}
+
+/// `/devices/new?group=<id>&back=…`: the group to preselect and the page to return to.
+#[derive(Deserialize)]
+pub struct NewQuery {
+    group: Option<i64>,
     #[serde(default)]
     back: String,
 }
@@ -273,18 +291,18 @@ async fn profile_options(
         .collect())
 }
 
-/// `editing` is the device being edited and the page to return to; `None` when creating.
+/// `existing` is the device being edited (`None` when creating), `back` the page to return to.
+#[allow(clippy::too_many_arguments)]
 async fn render_form(
     state: &AppState,
     user: &CurrentUser,
-    editing: Option<(&Device, Back)>,
+    existing: Option<&Device>,
+    back: Back,
     form: FormValues,
     selected_group: Option<i64>,
     selected_profile: Option<i64>,
     error: Option<String>,
 ) -> Result<String> {
-    let existing = editing.map(|(d, _)| d);
-    let back = editing.map_or(Back::Overview, |(_, b)| b);
     let all_groups = groups::list_groups(&state.pool).await?;
     let trail = match existing {
         Some(d) => group_trail(&state.pool, d.group_id).await?,
@@ -327,12 +345,16 @@ async fn render_form(
             href: format!("/devices/{}/sensors", d.id),
         }),
         back,
-        cancel_href: existing.map_or_else(|| "/".to_owned(), |d| back.href(d.id)),
+        cancel_href: back.href(existing.map(|d| d.id)),
     };
     Ok(page.render()?)
 }
 
-pub async fn new_form(State(state): State<AppState>, user: CurrentUser) -> Result<Html<String>> {
+pub async fn new_form(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Query(query): Query<NewQuery>,
+) -> Result<Html<String>> {
     user.require_admin()?;
     let first_profile = credentials::list_profiles(&state.pool)
         .await?
@@ -343,8 +365,12 @@ pub async fn new_form(State(state): State<AppState>, user: CurrentUser) -> Resul
             &state,
             &user,
             None,
+            match Back::parse(&query.back) {
+                Back::Device => Back::Overview,
+                back => back,
+            },
             FormValues::default(),
-            None,
+            query.group,
             first_profile,
             None,
         )
@@ -367,7 +393,8 @@ pub async fn edit_form(
         render_form(
             &state,
             &user,
-            Some((&device, Back::parse(&query.back))),
+            Some(&device),
+            Back::parse(&query.back),
             values,
             device.group_id,
             device.profile_id,
@@ -439,12 +466,16 @@ async fn save(
                         .await?;
                 return Ok(Html(html).into_response());
             }
-            let target = match id {
-                Some(id) if Back::parse(&form.back) == Back::Device => {
-                    format!("/devices/{id}/sensors?msg=device_updated")
-                }
-                Some(_) => "/?msg=device_updated".to_owned(),
-                None => "/?msg=device_created".to_owned(),
+            let msg = if id.is_some() {
+                "device_updated"
+            } else {
+                "device_created"
+            };
+            let back = Back::parse(&form.back);
+            let target = match (back, id) {
+                (Back::Device, Some(id)) => format!("/devices/{id}/sensors?msg={msg}"),
+                (Back::Group(group), _) => format!("/groups/{group}?msg={msg}"),
+                _ => format!("/?msg={msg}"),
             };
             Ok(Redirect::to(&target).into_response())
         }
@@ -460,7 +491,8 @@ async fn save(
             let html = render_form(
                 state,
                 user,
-                existing.as_ref().map(|d| (d, Back::parse(&form.back))),
+                existing.as_ref(),
+                Back::parse(&form.back),
                 form.values(),
                 form.selected_group(),
                 form.selected_profile(),
@@ -864,6 +896,67 @@ mod tests {
         )
         .await;
         assert_eq!(to_overview.location(), "/?msg=device_updated");
+        // Opened from a group page: back there, also after creating a device in that group.
+        let group = crate::storage::groups::create_group(&h.state.pool, "Netzwerk", None)
+            .await
+            .unwrap();
+        let from_group = send(
+            &h.app,
+            get(&format!("/devices/1/edit?back=group-{group}"), Some(&admin)),
+        )
+        .await;
+        assert!(
+            from_group
+                .body
+                .contains(&format!("href=\"/groups/{group}\">Abbrechen</a>"))
+        );
+        let with_back = |form: String| format!("{form}&back=group-{group}");
+        let to_group = send(
+            &h.app,
+            post(
+                "/devices/1",
+                Some(&admin),
+                &with_back(simple(&csrf, "Neu", "10.0.0.2", profile)),
+            ),
+        )
+        .await;
+        assert_eq!(
+            to_group.location(),
+            format!("/groups/{group}?msg=device_updated")
+        );
+        let new_page = send(
+            &h.app,
+            get(
+                &format!("/devices/new?group={group}&back=group-{group}"),
+                Some(&admin),
+            ),
+        )
+        .await;
+        assert!(
+            new_page.body.contains(&format!(
+                "<option value=\"{group}\" selected>Netzwerk</option>"
+            )),
+            "{}",
+            new_page.body
+        );
+        assert!(
+            new_page
+                .body
+                .contains(&format!("name=\"back\" value=\"group-{group}\""))
+        );
+        let created = send(
+            &h.app,
+            post(
+                "/devices",
+                Some(&admin),
+                &with_back(simple(&csrf, "Zweit", "10.0.0.9", profile)),
+            ),
+        )
+        .await;
+        assert_eq!(
+            created.location(),
+            format!("/groups/{group}?msg=device_created")
+        );
         let d = store::get_device(&h.state.pool, 1).await.unwrap().unwrap();
         assert_eq!((d.name.as_str(), d.host.as_str()), ("Neu", "10.0.0.2"));
         assert_eq!(

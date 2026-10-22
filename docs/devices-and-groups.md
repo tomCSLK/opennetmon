@@ -7,7 +7,8 @@ devices, then the subgroups, nested to any depth and connected by dotted lines. 
 on the right, in a fixed column, is the **sensor label**: if all active sensors are in the same state, a single label such as “✓ 9 sensors” (green OK,
 yellow warning, red down, grey unknown), otherwise one label per state with the count, worst first (✕ down, ! warning, ? unknown, ✓ OK).
 Paused sensors appear as an outlined label ‖ at the end; the tooltip names count and state. Groups show the sum of their whole subtree (also when
-collapsed) and the number of devices. For devices, name and labels lead to the sensor page. Whether a group is expanded or collapsed is remembered in the
+collapsed) and the number of devices. For devices, name and labels lead to the sensor page; the name of a group leads to its **group page** (below),
+while the ⊟/⊞ box and the rest of the row expand and collapse it. Whether a group is expanded or collapsed is remembered in the
 browser (`localStorage`; without storage all groups are open). “No devices in this group.” only appears for groups that are really empty.
 The order is described below.
 Devices without a group come first under “Without group” (if there are no groups: “All devices”). Viewers see name, address and interval;
@@ -23,8 +24,24 @@ after a longer absence the page reloads immediately on return. The switch is on 
 “Refresh” stays a normal link to the page. Implementation: `templates/refresh.html`, `static/refresh.js`.
 
 **Path at the top of device and sensor pages:** Overview › group › subgroup › device › sensor, e.g. “Overview › Network › Router › Router ER605 › Ping”
-(`web::group_trail`, partial template `templates/device_trail.html`). Each group leads to the overview with the anchor `/#group-<id>`; `static/app.js`
-expands the group and the groups above it, jumps there and highlights the group header. Devices without a group only show Overview › device.
+(`web::group_trail`, partial template `templates/device_trail.html`). Each group leads to its group page. Devices without a group only show Overview › device.
+(Links to the overview with the anchor `/#group-<id>`, as after pausing a group there, still expand the group and the groups above it and jump there;
+`static/app.js`.)
+
+## Group page
+
+A click on the name of a group opens its page `/groups/<id>` (`web::overview::group`, template `templates/group.html`, all signed-in users), like the
+sensor page of a device:
+
+- **Path** Overview › groups above › group, then the name, a status badge (worst state of the active sensors in the whole subtree; “Paused” if the group
+  or everything in it is paused), the number of devices and sensors and, if any, “N devices down”. A paused group shows the pause and its reason.
+- **Tiles** like on the overview, but counted for the group and all its subgroups. They open the status lists limited to this subtree
+  (`/status/<filter>?group=<id>`; the list says “in “Network” and its subgroups” and offers “all groups”).
+- **Tree** of the group's own devices and its subgroups, exactly as on the overview (the shared macros are in `templates/tree.html`).
+- **Administrators** additionally get “Edit group”, “Pause”/“Resume”, “Change order”, “New subgroup” (with this group preselected as parent) and
+  “New device” (with this group preselected). These pages and the edit/pause icons in the tree return to the group page afterwards (`back=group-<id>`;
+  `web::back_to_group`).
+- “Without group” has no page of its own; unknown ids answer 404.
 
 ## Pausing (administrators only)
 
@@ -32,7 +49,7 @@ As in PRTG, **groups, devices and individual sensors can be paused** (`src/pause
 
 - **Form** `/pause/<group|device|sensor>/<id>` (icon ‖ in the overview, a button on the sensor page of a device and on the detail page):
   duration **until resumed**, 15 minutes, 1 hour, 3 hours, 1 day or 1 week, plus an optional **reason** (at most 200 characters, e.g.
-  “firmware update”). After saving, you return to the page you came from (`back=overview|device|sensor`).
+  “firmware update”). After saving, you return to the page you came from (`back=overview|device|sensor|group-<id>`).
 - **Inheritance:** a paused group pauses all subgroups, devices and sensors below it, a paused device all of its sensors. The nearest pause is shown:
   first the object's own, then the device's, then the groups' from bottom to top. Own pauses further down are kept and apply again when the outer one ends.
 - **Effect:** paused sensors are not polled, trigger no mail and do not count towards the device status; they appear as “Paused” in the overview, the status
@@ -83,7 +100,8 @@ In addition, **timeout × (retries + 1) ≤ interval** must hold, so that polls 
 All checks run on the server; after an error the entered values stay in the form (there are no passwords here).
 
 “Edit device” shows the groups and the device in the path (a link to its sensor page). “Cancel” and “Save” return to the page from which the form was opened:
-the overview (the link there carries `?back=overview`) or otherwise the device's sensor page.
+the overview (the link there carries `?back=overview`), a group page (`?back=group-<id>`) or otherwise the device's sensor page. “New device” on a group
+page preselects the group (`/devices/new?group=<id>`) and returns there after saving.
 
 ## Devices without SNMP (ping only)
 

@@ -2,7 +2,7 @@
 
 use askama::Template;
 use axum::Form;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
@@ -12,7 +12,7 @@ use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::storage::groups as store;
 use crate::web::auth::CurrentUser;
-use crate::web::{AppState, Layout, SelectOption, group_options};
+use crate::web::{AppState, Layout, SelectOption, back_to_group, group_options};
 
 #[derive(Template)]
 #[template(path = "group_form.html")]
@@ -27,6 +27,9 @@ struct FormTemplate {
     error: Option<String>,
     name: String,
     parents: Vec<SelectOption>,
+    /// `back` of the form: "overview" or the group page (`group-<id>`) it was opened from.
+    back: String,
+    cancel_href: String,
 }
 
 #[derive(Deserialize)]
@@ -35,6 +38,26 @@ pub struct GroupForm {
     name: String,
     #[serde(default)]
     parent_id: String,
+    #[serde(default)]
+    back: String,
+}
+
+/// `?parent=<id>` preselects the parent of a new group; `back` is the page to return to.
+#[derive(Deserialize)]
+pub struct FormQuery {
+    parent: Option<i64>,
+    #[serde(default)]
+    back: String,
+}
+
+/// The group page to return to, or the overview.
+fn back_href(back: &str) -> String {
+    back_to_group(back).map_or_else(|| "/".to_owned(), |id| format!("/groups/{id}"))
+}
+
+/// The value of the hidden `back` field (unknown values become "overview").
+fn back_value(back: &str) -> String {
+    back_to_group(back).map_or_else(|| "overview".to_owned(), |id| format!("group-{id}"))
 }
 
 #[derive(Deserialize)]
@@ -53,7 +76,11 @@ fn parse_optional_id(value: &str) -> Result<Option<i64>> {
     }
 }
 
-pub async fn new_form(State(state): State<AppState>, user: CurrentUser) -> Result<Html<String>> {
+pub async fn new_form(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Query(query): Query<FormQuery>,
+) -> Result<Html<String>> {
     user.require_admin()?;
     let groups = store::list_groups(&state.pool).await?;
     let page = FormTemplate {
@@ -64,7 +91,9 @@ pub async fn new_form(State(state): State<AppState>, user: CurrentUser) -> Resul
         delete_action: None,
         error: None,
         name: String::new(),
-        parents: group_options(&groups, None, &[]),
+        parents: group_options(&groups, query.parent, &[]),
+        back: back_value(&query.back),
+        cancel_href: back_href(&query.back),
     };
     Ok(Html(page.render()?))
 }
@@ -73,6 +102,7 @@ pub async fn edit_form(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(id): Path<i64>,
+    Query(query): Query<FormQuery>,
 ) -> Result<Html<String>> {
     user.require_admin()?;
     let groups = store::list_groups(&state.pool).await?;
@@ -86,6 +116,8 @@ pub async fn edit_form(
         error: None,
         name: group.name.clone(),
         parents: group_options(&groups, group.parent_id, &subtree_ids(&groups, id)),
+        back: back_value(&query.back),
+        cancel_href: back_href(&query.back),
     };
     Ok(Html(page.render()?))
 }
@@ -134,7 +166,11 @@ async fn save(
             } else {
                 "group_created"
             };
-            Ok(Redirect::to(&format!("/?msg={msg}")).into_response())
+            let page = match back_to_group(&form.back) {
+                Some(group) => format!("/groups/{group}"),
+                None => "/".to_owned(),
+            };
+            Ok(Redirect::to(&format!("{page}?msg={msg}")).into_response())
         }
         Err(Error::Invalid(message) | Error::Conflict(message)) => {
             let groups = store::list_groups(&state.pool).await?;
@@ -156,6 +192,8 @@ async fn save(
                     parse_optional_id(&form.parent_id).ok().flatten(),
                     &exclude,
                 ),
+                back: back_value(&form.back),
+                cancel_href: back_href(&form.back),
             };
             Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(page.render()?)).into_response())
         }

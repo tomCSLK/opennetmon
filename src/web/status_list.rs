@@ -1,6 +1,7 @@
 //! Sensor lists by status, opened from the tiles on the start page: all sensors, those that are
 //! up, in warning, down, or inactive/unknown. Sortable by status, sensor, device, current value
-//! and the time of the last status change.
+//! and the time of the last status change. `?group=<id>` limits a list to a group and its
+//! subgroups (the tiles of a group page).
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -301,8 +302,14 @@ impl Tile {
 }
 
 /// The tiles for sensor counts in the order of [`Filter::ALL`] (all, up, warning, down,
-/// inactive/unknown), each linking to its list.
-pub fn tiles(t: Lang, counts: [usize; 5], current: Option<Filter>) -> Vec<Tile> {
+/// inactive/unknown), each linking to its list, limited to `group` when given.
+pub fn tiles(
+    t: Lang,
+    counts: [usize; 5],
+    current: Option<Filter>,
+    group: Option<i64>,
+) -> Vec<Tile> {
+    let scope = group.map(|g| format!("?group={g}")).unwrap_or_default();
     Filter::ALL
         .into_iter()
         .zip(counts)
@@ -314,7 +321,7 @@ pub fn tiles(t: Lang, counts: [usize; 5], current: Option<Filter>) -> Vec<Tile> 
                 f.label_id()
             }),
             count,
-            href: format!("/status/{}", f.as_str()),
+            href: format!("/status/{}{scope}", f.as_str()),
             class: Tile::class(f, count),
             current: current == Some(f),
         })
@@ -337,6 +344,12 @@ struct StatusListTemplate {
     t: Lang,
     layout: Layout,
     title: String,
+    /// The groups down to the one the list is limited to, for the breadcrumb.
+    trail: Vec<crate::web::Crumb>,
+    /// Path of that group, e.g. `Netzwerk / Switche` (empty for all sensors).
+    group: String,
+    /// The same list for all groups.
+    all_href: String,
     tiles: Vec<Tile>,
     columns: Vec<Column>,
     rows: Vec<Row>,
@@ -346,6 +359,7 @@ struct StatusListTemplate {
 pub struct SortQuery {
     sort: Option<String>,
     dir: Option<String>,
+    group: Option<i64>,
 }
 
 pub async fn list(
@@ -373,7 +387,16 @@ pub async fn list(
 
     let t = user.lang;
     let mibs = state.mib_index();
-    let paths = group_paths(&groups::list_groups(&state.pool).await?);
+    let all_groups = groups::list_groups(&state.pool).await?;
+    // The group the list is limited to, with its subgroups.
+    let scope = match query.group {
+        Some(id) if all_groups.iter().any(|g| g.id == id) => {
+            Some((id, crate::devices::subtree_ids(&all_groups, id)))
+        }
+        Some(_) => return Err(Error::NotFound),
+        None => None,
+    };
+    let paths = group_paths(&all_groups);
     let devices: HashMap<i64, Device> = devices::list_devices(&state.pool)
         .await?
         .into_iter()
@@ -389,6 +412,11 @@ pub async fn list(
         let Some(device) = devices.get(&sensor.device_id) else {
             continue;
         };
+        if let Some((_, ids)) = &scope
+            && !device.group_id.is_some_and(|g| ids.contains(&g))
+        {
+            continue;
+        }
         let sensor_state = states.get(&sensor.id);
         let why = pauses.sensor(sensor.id, device.id);
         let active = why.is_none();
@@ -447,7 +475,9 @@ pub async fn list(
     }
     sort_rows(&mut rows, key, dir);
 
-    let tiles = tiles(t, counts, Some(filter));
+    let group = scope.as_ref().map(|(id, _)| *id);
+    let tiles = tiles(t, counts, Some(filter), group);
+    let group_param = group.map(|g| format!("group={g}&")).unwrap_or_default();
     let mut columns: Vec<Column> = SortKey::ALL
         .into_iter()
         .map(|k| {
@@ -455,7 +485,7 @@ pub async fn list(
             Column {
                 label: t.get(k.label_id()),
                 href: Some(format!(
-                    "/status/{}?sort={}&dir={}",
+                    "/status/{}?{group_param}sort={}&dir={}",
                     filter.as_str(),
                     k.as_str(),
                     next.as_str()
@@ -482,6 +512,11 @@ pub async fn list(
     let page = StatusListTemplate {
         layout: user.layout(),
         title: t.get(filter.label_id()),
+        trail: crate::web::group_trail(&state.pool, group).await?,
+        group: group
+            .and_then(|g| paths.get(&g).cloned())
+            .unwrap_or_default(),
+        all_href: format!("/status/{}", filter.as_str()),
         tiles,
         columns,
         rows,

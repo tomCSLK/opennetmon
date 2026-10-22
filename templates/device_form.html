@@ -23,7 +23,7 @@
 <section class="card">
   <form method="post" action="{{ action }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    {% if device.is_some() %}<input type="hidden" name="back" value="{{ back.as_str() }}">{% endif %}
+    <input type="hidden" name="back" value="{{ back.as_string() }}">
     <div class="form-grid">
       <div>
         <label for="name">{{ t.get("name") }}</label>

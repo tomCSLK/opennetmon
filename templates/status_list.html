@@ -4,9 +4,9 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="breadcrumb"><a href="/">{{ t.get("nav-overview") }}</a><span>›</span><span>{{ title }}</span></div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<span>{{ title }}</span></div>
     <h1>{{ title }}</h1>
-    <p class="subtitle">{{ t.get1("count-sensors", "count", rows.len()) }}</p>
+    <p class="subtitle">{{ t.get1("count-sensors", "count", rows.len()) }}{% if !group.is_empty() %} · {{ t.get1("status-list-in-group", "group", group.as_str()) }} · <a href="{{ all_href }}">{{ t.get("status-list-all-groups") }}</a>{% endif %}</p>
   </div>
   <div class="actions">{% include "refresh.html" %}</div>
 </div>

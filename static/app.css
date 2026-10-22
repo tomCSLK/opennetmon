@@ -262,8 +262,8 @@ details[open] > summary .tree-toggle::after { display: none; }
 .tree-icon { color: var(--muted); width: 17px; height: 17px; }
 .tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-name strong { font-weight: 650; }
-.device-name { color: var(--text); font-weight: 500; }
-.device-name:hover { color: var(--accent); }
+.device-name, .group-name { color: var(--text); font-weight: 500; }
+.device-name:hover, .group-name:hover { color: var(--accent); }
 .tree-meta { margin-left: .5rem; color: var(--faint); font-size: .82rem; }
 .tree-pause { margin-left: .5rem; color: var(--muted); font-size: .82rem; }
 .tree-pause::before { content: "‖ "; font-weight: 700; }

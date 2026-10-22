@@ -12,7 +12,7 @@ use crate::i18n::{Lang, Msg};
 use crate::pause::{DURATIONS_MIN, Pause, Target, Why, parse_duration, validate_reason};
 use crate::storage::{devices, groups, pauses, sensors};
 use crate::web::auth::CurrentUser;
-use crate::web::{AppState, Crumb, Layout, group_trail, time_html};
+use crate::web::{AppState, Crumb, Layout, back_to_group, group_trail, time_html};
 
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
@@ -44,10 +44,15 @@ enum Back {
     Device,
     /// The detail page of the sensor.
     Sensor,
+    /// The page of a group (`group-<id>`).
+    Group(i64),
 }
 
 impl Back {
     fn parse(s: &str, target: Target) -> Self {
+        if let Some(id) = back_to_group(s) {
+            return Self::Group(id);
+        }
         match (s, target) {
             ("overview", _) => Self::Overview,
             ("sensor", Target::Sensor(_)) => Self::Sensor,
@@ -57,11 +62,12 @@ impl Back {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    fn as_string(self) -> String {
         match self {
-            Self::Overview => "overview",
-            Self::Device => "device",
-            Self::Sensor => "sensor",
+            Self::Overview => "overview".to_owned(),
+            Self::Device => "device".to_owned(),
+            Self::Sensor => "sensor".to_owned(),
+            Self::Group(id) => format!("group-{id}"),
         }
     }
 }
@@ -82,6 +88,7 @@ impl Object {
         match (back, self.target, self.device_id) {
             (Back::Sensor, Target::Sensor(id), _) => format!("/sensors/{id}{query}"),
             (Back::Device, _, Some(device)) => format!("/devices/{device}/sensors{query}"),
+            (Back::Group(group), ..) => format!("/groups/{group}{query}"),
             (_, Target::Group(id), _) => format!("/{query}#group-{id}"),
             _ => format!("/{query}"),
         }
@@ -174,7 +181,7 @@ struct PauseTemplate {
     hint: String,
     trail: Vec<Crumb>,
     action: String,
-    back: &'static str,
+    back: String,
     cancel_href: String,
     durations: Vec<DurationOption>,
     reason: String,
@@ -209,7 +216,7 @@ fn render(
         },
         trail: obj.trail.clone(),
         action: format!("/pause/{}/{}", obj.target.kind(), obj.target.id()),
-        back: back.as_str(),
+        back: back.as_string(),
         cancel_href: obj.href(back, None),
         durations: DURATIONS_MIN
             .into_iter()

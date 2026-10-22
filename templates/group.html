@@ -1,0 +1,57 @@
+{% extends "app.html" %}
+{% import "tree.html" as tree %}
+{% import "pause_note.html" as pause %}
+{% block title %}{{ summary.name }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<span>{{ summary.name }}</span></div>
+    <h1>{{ summary.name }}</h1>
+    <p class="subtitle status-line">
+      <span class="badge status-{{ status_class }}">{{ status_label }}</span>
+      <span>{{ t.get1("count-devices", "count", summary.devices) }} · {{ t.get1("count-sensors", "count", summary.counts.total()) }}</span>{% if devices_down > 0 %} · <strong class="c-down">{{ t.get1("overview-devices-down", "count", devices_down) }}</strong>{% endif %}
+    </p>
+  </div>
+  <div class="actions">
+    {% if layout.is_admin %}
+    <a class="button ghost" href="/groups/{{ summary.id }}/edit?back={{ back }}">{{ t.get("group-edit") }}</a>
+    {% if summary.paused_itself %}
+    <form method="post" action="/resume/group/{{ summary.id }}">
+      <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+      <input type="hidden" name="back" value="{{ back }}">
+      <button type="submit" class="secondary">{{ t.get("resume") }}</button>
+    </form>
+    {% else %}
+    <a class="button ghost" href="/pause/group/{{ summary.id }}?back={{ back }}">{{ t.get("pause") }}</a>
+    {% endif %}
+    {% if !rows.is_empty() %}<a class="button ghost" href="/groups/{{ summary.id }}/order?back={{ back }}">{{ t.get("order-change") }}</a>{% endif %}
+    <a class="button secondary" href="/groups/new?parent={{ summary.id }}&back={{ back }}">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      {{ t.get("group-new-sub") }}
+    </a>
+    <a class="button" href="/devices/new?group={{ summary.id }}&back={{ back }}">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      {{ t.get("device-new") }}
+    </a>
+    {% endif %}
+    {% include "refresh.html" %}
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(n) = summary.pause %}
+<p class="notice" role="status">{% call pause::note(n, t) %}{% endcall %}. {{ t.get("pause-group-notice") }}</p>
+{% endif %}
+
+{% include "status_tiles.html" %}
+
+<div class="card tree">
+{% if rows.is_empty() %}
+  <p class="node tree-empty">{{ t.get("group-empty") }}</p>
+{% else %}
+  {% call tree::rows(rows.as_slice(), layout, t, back) %}{% endcall %}
+{% endif %}
+</div>
+{% endblock %}

@@ -14,6 +14,7 @@
 <section class="card">
   <form method="post" action="{{ action }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <input type="hidden" name="back" value="{{ back }}">
     <label for="name">{{ t.get("name") }}</label>
     <input id="name" name="name" type="text" value="{{ name }}" required maxlength="64" autofocus>
     <label for="parent_id">{{ t.get("group-parent") }}</label>
@@ -25,7 +26,7 @@
     </select>
     <div class="form-actions">
       <button type="submit">{{ t.get("save") }}</button>
-      <a class="button secondary" href="/">{{ t.get("cancel") }}</a>
+      <a class="button secondary" href="{{ cancel_href }}">{{ t.get("cancel") }}</a>
     </div>
   </form>
   {% if let Some(delete_action) = delete_action %}

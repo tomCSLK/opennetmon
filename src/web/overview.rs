@@ -1,14 +1,15 @@
-//! The start page: status tiles and all groups with their devices.
+//! The start page (status tiles and all groups with their devices) and the page of a group (the
+//! same for the group's subtree).
 
 use std::collections::HashMap;
 
 use askama::Template;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::response::Html;
 use serde::Deserialize;
 
 use crate::devices::{Device, Group};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::i18n::Lang;
 use crate::pause::{Pauses, Source, Why};
 use crate::status::{Status, device_status, shown_status};
@@ -16,7 +17,7 @@ use crate::storage::sensors::SensorRecord;
 use crate::storage::{devices, groups, pauses, sensors, status};
 use crate::web::auth::CurrentUser;
 use crate::web::pause::{PauseNote, note};
-use crate::web::{AppState, Layout, flash_message};
+use crate::web::{AppState, Crumb, Layout, flash_message, group_trail};
 
 /// Number of sensors per effective status (disabled sensors count as paused).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -116,6 +117,8 @@ pub struct DeviceCard {
     pub pause: Option<PauseNote>,
     /// Paused by itself, so it can be resumed here (not only through a group).
     pub paused_itself: bool,
+    /// The device is down (counted in the page subtitle).
+    pub down: bool,
 }
 
 /// The devices without a group (`Ohne Gruppe`, or `Alle Geräte` when there are no groups).
@@ -281,11 +284,17 @@ fn subtree(
     (devices, counts)
 }
 
-pub async fn home(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    Query(query): Query<FlashQuery>,
-) -> Result<Html<String>> {
+/// Every device as a card, by group in display order, with what the pages count.
+struct Forest {
+    groups: Vec<Group>,
+    cards: HashMap<Option<i64>, Vec<DeviceCard>>,
+    pauses: Pauses,
+    totals: Counts,
+    device_count: usize,
+    devices_down: usize,
+}
+
+async fn load(state: &AppState, t: Lang) -> Result<Forest> {
     let groups = groups::list_groups(&state.pool).await?;
     let devices = devices::list_devices(&state.pool).await?;
     let all_sensors = sensors::list_all_sensors(&state.pool).await?;
@@ -294,7 +303,6 @@ pub async fn home(
 
     let mut totals = Counts::default();
     let mut devices_down = 0;
-    // Device cards by group, in display order.
     let mut cards: HashMap<Option<i64>, Vec<DeviceCard>> = HashMap::new();
     for d in &devices {
         let own: Vec<&SensorRecord> = all_sensors.iter().filter(|s| s.device_id == d.id).collect();
@@ -310,17 +318,42 @@ pub async fn home(
             )
         }));
         let why = pauses.device(d.id);
-        if overall == Status::Down {
+        let down = overall == Status::Down;
+        if down {
             devices_down += 1;
         }
         cards.entry(d.group_id).or_default().push(DeviceCard {
             device: d.clone(),
-            pills: counts.pills(user.lang),
+            pills: counts.pills(t),
             paused_itself: why.as_ref().is_some_and(|w| w.source == Source::Own),
-            pause: why.as_ref().map(|w| note(user.lang, w)),
+            pause: why.as_ref().map(|w| note(t, w)),
+            down,
             counts,
         });
     }
+    Ok(Forest {
+        groups,
+        cards,
+        pauses,
+        totals,
+        device_count: devices.len(),
+        devices_down,
+    })
+}
+
+pub async fn home(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Query(query): Query<FlashQuery>,
+) -> Result<Html<String>> {
+    let Forest {
+        groups,
+        mut cards,
+        pauses,
+        totals,
+        device_count,
+        devices_down,
+    } = load(&state, user.lang).await?;
 
     let ungrouped = cards.remove(&None).map(|devices| {
         let mut counts = Counts::default();
@@ -370,12 +403,83 @@ pub async fn home(
         t: user.lang,
         ungrouped,
         groups: tops,
-        tiles: crate::web::status_list::tiles(user.lang, totals.tile_counts(), None),
+        tiles: crate::web::status_list::tiles(user.lang, totals.tile_counts(), None, None),
         totals,
-        device_count: devices.len(),
+        device_count,
         devices_down,
         top_groups: top.len(),
         flash: flash_message(user.lang, query.msg.as_deref()),
+    };
+    Ok(Html(page.render()?))
+}
+
+#[derive(Template)]
+#[template(path = "group.html")]
+struct GroupTemplate {
+    /// Language of the page.
+    t: Lang,
+    layout: Layout,
+    /// The group with the totals of its subtree.
+    summary: Summary,
+    status_class: &'static str,
+    status_label: String,
+    /// The groups above, for the breadcrumb.
+    trail: Vec<Crumb>,
+    rows: Vec<Row>,
+    tiles: Vec<crate::web::status_list::Tile>,
+    devices_down: usize,
+    /// `back` of the edit and pause pages opened here, so they return to this page.
+    back: String,
+    flash: Option<String>,
+}
+
+/// The page of a group: its devices and subgroups as on the overview, with tiles for its subtree.
+pub async fn group(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Query(query): Query<FlashQuery>,
+) -> Result<Html<String>> {
+    let t = user.lang;
+    let Forest {
+        groups,
+        mut cards,
+        pauses,
+        ..
+    } = load(&state, t).await?;
+    let group = groups
+        .iter()
+        .find(|g| g.id == id)
+        .ok_or(Error::NotFound)?
+        .clone();
+    let mut rows = Vec::new();
+    let (n, counts) = subtree(t, &pauses, Some(id), &groups, &mut cards, 1, &mut rows);
+    let devices_down = rows
+        .iter()
+        .filter(|r| matches!(r, Row::Device(card) if card.down))
+        .count();
+    let summary = Summary::new(t, id, group.name, n, counts, pauses.group(id));
+    let status = if summary.pause.is_some() {
+        Status::Paused
+    } else {
+        counts.status().unwrap_or(if counts.paused > 0 {
+            Status::Paused
+        } else {
+            Status::Unknown
+        })
+    };
+    let page = GroupTemplate {
+        layout: user.layout(),
+        status_class: status.as_str(),
+        status_label: t.get(status.label_id()),
+        trail: group_trail(&state.pool, group.parent_id).await?,
+        tiles: crate::web::status_list::tiles(t, counts.tile_counts(), None, Some(id)),
+        rows,
+        summary,
+        devices_down,
+        back: format!("group-{id}"),
+        flash: flash_message(t, query.msg.as_deref()),
+        t,
     };
     Ok(Html(page.render()?))
 }
@@ -450,6 +554,7 @@ mod tests {
             pills: Vec::new(),
             pause: None,
             paused_itself: false,
+            down: false,
             counts,
         }
     }
@@ -520,5 +625,253 @@ mod tests {
             ]
         );
         assert!(cards.is_empty(), "every card is placed once");
+    }
+
+    #[tokio::test]
+    async fn a_group_page_shows_its_subtree_and_its_forms_return_there() {
+        use axum::http::StatusCode;
+
+        use crate::devices::{DeviceInput, Polling};
+        use crate::sensors::spec::SensorSpec;
+        use crate::status::Assessment;
+        use crate::storage::groups::create_group;
+        use crate::storage::sensors::create_sensor;
+        use crate::storage::status::record_poll;
+        use crate::web::testutil::*;
+
+        let h = harness(true).await;
+        let pool = &h.state.pool;
+        let network = create_group(pool, "Netzwerk", None).await.unwrap();
+        let routers = create_group(pool, "Router", Some(network)).await.unwrap();
+        let office = create_group(pool, "Büro", None).await.unwrap();
+        let now = crate::web::sensors::now_ms();
+        let mut ping = HashMap::new();
+        for (name, group) in [
+            ("Switch", network),
+            ("Gateway", routers),
+            ("Drucker", office),
+        ] {
+            let device = devices::save_device(
+                pool,
+                None,
+                DeviceInput {
+                    kind: Default::default(),
+                    name: name.to_owned(),
+                    host: "192.0.2.1".to_owned(),
+                    group_id: Some(group),
+                    profile_id: None,
+                    polling: Polling::default(),
+                },
+            )
+            .await
+            .unwrap();
+            let sensor = create_sensor(pool, device, "Ping", &SensorSpec::Ping)
+                .await
+                .unwrap();
+            ping.insert(name, (device, sensor));
+        }
+        for name in ["Switch", "Drucker"] {
+            let assessment = Assessment::Healthy("OK".into());
+            record_poll(pool, ping[name].1, now, &[], &assessment)
+                .await
+                .unwrap();
+        }
+        for ts in [now - 120_000, now - 60_000] {
+            let assessment = Assessment::Failed("weg".into());
+            record_poll(pool, ping["Gateway"].1, ts, &[], &assessment)
+                .await
+                .unwrap();
+        }
+        let (viewer, _) = login(&h, "bert").await;
+
+        // The overview links the group names to their pages.
+        let home = send(&h.app, get("/", Some(&viewer))).await;
+        assert!(home.body.contains(&format!(
+            "<a class=\"group-name\" href=\"/groups/{routers}\">"
+        )));
+
+        let page = send(&h.app, get(&format!("/groups/{network}"), Some(&viewer))).await;
+        assert_eq!(page.status, StatusCode::OK);
+        assert!(page.body.contains("<h1>Netzwerk</h1>"));
+        assert!(page.body.contains(
+            "<div class=\"breadcrumb\"><a href=\"/\">Übersicht</a><span>›</span><span>Netzwerk</span>"
+        ));
+        assert!(page.body.contains("Switch") && page.body.contains("Gateway"));
+        assert!(!page.body.contains("Drucker"), "other groups stay out");
+        assert!(page.body.contains("2 Geräte") && page.body.contains("1 Gerät mit Ausfall"));
+        assert!(page.body.contains("<span class=\"badge status-down\">"));
+        // Tiles count the subtree and open its status lists.
+        assert!(page.body.contains(&format!(
+            "<a class=\"tile status-down active\" href=\"/status/down?group={network}\"><div class=\"tile-value\">1</div>"
+        )));
+        assert!(page.body.contains(&format!(
+            "href=\"/status/all?group={network}\"><div class=\"tile-value\">2</div>"
+        )));
+        assert!(
+            !page.body.contains("/edit?back="),
+            "no admin actions for viewers"
+        );
+
+        let sub = send(&h.app, get(&format!("/groups/{routers}"), Some(&viewer))).await;
+        assert!(sub.body.contains(&format!(
+            "<a href=\"/groups/{network}\">Netzwerk</a><span>›</span><span>Router</span>"
+        )));
+        assert!(!sub.body.contains("Switch"));
+        assert_eq!(
+            send(&h.app, get("/groups/999", Some(&viewer))).await.status,
+            StatusCode::NOT_FOUND
+        );
+
+        // Status lists limited to a group and its subgroups.
+        let list = send(
+            &h.app,
+            get(&format!("/status/all?group={network}"), Some(&viewer)),
+        )
+        .await;
+        for (name, shown) in [("Switch", true), ("Gateway", true), ("Drucker", false)] {
+            let link = format!("href=\"/sensors/{}\"", ping[name].1);
+            assert_eq!(list.body.contains(&link), shown, "{name}");
+        }
+        assert!(list.body.contains("in „Netzwerk“ mit Untergruppen"));
+        assert!(
+            list.body
+                .contains("<a href=\"/status/all\">alle Gruppen</a>")
+        );
+        assert!(list.body.contains(&format!(
+            "href=\"/status/all?group={network}&#38;sort=sensor"
+        )));
+        assert!(list.body.contains(&format!(
+            "<a href=\"/groups/{network}\">Netzwerk</a><span>›</span><span>Alle Sensoren</span>"
+        )));
+        assert_eq!(
+            send(&h.app, get("/status/all?group=999", Some(&viewer)))
+                .await
+                .status,
+            StatusCode::NOT_FOUND
+        );
+
+        // Admins get the actions; their pages lead back to the group page.
+        let (admin, csrf) = login(&h, "anna").await;
+        let back = format!("back=group-{network}");
+        let page = send(&h.app, get(&format!("/groups/{network}"), Some(&admin))).await;
+        for link in [
+            format!("/groups/{network}/edit?{back}"),
+            format!("/pause/group/{network}?{back}"),
+            format!("/groups/{network}/order?{back}"),
+            format!("/groups/new?parent={network}&{back}"),
+            format!("/devices/new?group={network}&{back}"),
+            format!("/pause/device/{}?{back}", ping["Gateway"].0),
+            format!("/groups/{routers}/edit?{back}"),
+        ] {
+            assert!(page.body.contains(&format!("href=\"{link}\"")), "{link}");
+        }
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/pause/group/{network}"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&duration=0&{back}"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/groups/{network}?msg=group_paused")
+        );
+        let page = send(
+            &h.app,
+            get(&format!("/groups/{network}?msg=group_paused"), Some(&admin)),
+        )
+        .await;
+        assert!(page.body.contains("Gruppe pausiert."), "{}", page.body);
+        assert!(page.body.contains("keins ihrer Geräte abgefragt"));
+        assert!(page.body.contains("<span class=\"badge status-paused\">"));
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/resume/group/{network}"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&{back}"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/groups/{network}?msg=group_resumed")
+        );
+
+        let new_group = send(
+            &h.app,
+            get(
+                &format!("/groups/new?parent={network}&{back}"),
+                Some(&admin),
+            ),
+        )
+        .await;
+        assert!(
+            new_group
+                .body
+                .contains(&format!("<option value=\"{network}\" selected>"))
+        );
+        assert!(
+            new_group
+                .body
+                .contains(&format!("href=\"/groups/{network}\">Abbrechen</a>"))
+        );
+        let reply = send(
+            &h.app,
+            post(
+                "/groups",
+                Some(&admin),
+                &format!("csrf_token={csrf}&name=Keller&parent_id={network}&{back}"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/groups/{network}?msg=group_created")
+        );
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/groups/{network}"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&name=Netz&parent_id=&{back}"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/groups/{network}?msg=group_updated")
+        );
+
+        let order = send(
+            &h.app,
+            get(&format!("/groups/{network}/order?{back}"), Some(&admin)),
+        )
+        .await;
+        assert!(
+            order
+                .body
+                .contains(&format!("href=\"/groups/{network}\">Abbrechen</a>"))
+        );
+        assert!(
+            order
+                .body
+                .contains(&format!("<a href=\"/groups/{network}\">Netz</a>"))
+        );
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/groups/{network}/order"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&action=reset&{back}"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/groups/{network}?msg=order_reset")
+        );
     }
 }

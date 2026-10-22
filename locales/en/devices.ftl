@@ -13,6 +13,7 @@ overview-empty-hint = Create a device – with an SNMP profile or “No SNMP –
 group-new = New group
 group-edit = Edit group
 group-empty = No devices in this group.
+group-new-sub = New subgroup
 device-new = New device
 device-edit = Edit device
 device-test = Test

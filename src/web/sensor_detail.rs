@@ -653,8 +653,8 @@ mod tests {
             .await
             .unwrap();
         let groups = format!(
-            "<a href=\"/\">Übersicht</a><span>›</span><a href=\"/#group-{network}\">Netzwerk</a><span>›</span>\
-             <a href=\"/#group-{routers}\">Router</a><span>›</span>"
+            "<a href=\"/\">Übersicht</a><span>›</span><a href=\"/groups/{network}\">Netzwerk</a><span>›</span>\
+             <a href=\"/groups/{routers}\">Router</a><span>›</span>"
         );
         let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&viewer))).await;
         assert_eq!(
@@ -669,13 +669,10 @@ mod tests {
             crumbs(&page.body),
             format!("<div class=\"breadcrumb\">{groups}<span>Switch</span>")
         );
-        // The links land on the groups of the overview.
-        let page = send(&h.app, get("/", Some(&viewer))).await;
+        // The links lead to the group pages.
         for id in [network, routers] {
-            assert!(
-                page.body.contains(&format!("id=\"group-{id}\"")),
-                "group {id}"
-            );
+            let page = send(&h.app, get(&format!("/groups/{id}"), Some(&viewer))).await;
+            assert_eq!(page.status, StatusCode::OK, "group {id}");
         }
     }
 

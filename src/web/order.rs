@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use askama::Template;
 use axum::Form;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
 use crate::error::{Error, Result};
@@ -14,7 +14,7 @@ use crate::i18n::{Lang, Msg};
 use crate::ordering::{positions_from_form, reorder};
 use crate::storage::{devices, groups, sensors};
 use crate::web::auth::CurrentUser;
-use crate::web::{AppState, Layout};
+use crate::web::{AppState, Layout, back_to_group};
 
 struct Item {
     id: i64,
@@ -40,8 +40,24 @@ struct OrderTemplate {
     /// Breadcrumb links before the last part: (href, label).
     crumbs: Vec<(String, String)>,
     back: String,
+    /// Hidden `back` field of a group's order: the group page it was opened from (`group-<id>`).
+    return_to: String,
     action: String,
     lists: Vec<List>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct BackQuery {
+    #[serde(default)]
+    back: String,
+}
+
+/// The group page an order was opened from, or the overview.
+fn group_back(back: &str) -> (String, String) {
+    match back_to_group(back) {
+        Some(id) => (format!("/groups/{id}"), format!("group-{id}")),
+        None => ("/".to_owned(), String::new()),
+    }
 }
 
 fn list(title: String, prefix: &'static str, items: Vec<(i64, String, String)>) -> List {
@@ -76,6 +92,7 @@ pub async fn group_page(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(id): Path<i64>,
+    Query(query): Query<BackQuery>,
 ) -> Result<Html<String>> {
     user.require_admin()?;
     let group = group_scope(&state, id).await?;
@@ -112,6 +129,14 @@ pub async fn group_page(
         members,
     ));
     lists.retain(|l| !l.items.is_empty());
+    let (back, return_to) = group_back(&query.back);
+    let mut crumbs = vec![("/".to_owned(), t.get("nav-overview"))];
+    crumbs.extend(
+        crate::web::group_trail(&state.pool, parent)
+            .await?
+            .into_iter()
+            .map(|c| (c.href, c.name)),
+    );
     let page = OrderTemplate {
         layout: user.layout(),
         t: user.lang,
@@ -119,8 +144,9 @@ pub async fn group_page(
             Some(g) => t.get1("order-in-group", "name", g.name.as_str()),
             None => t.get("order-top-level"),
         },
-        crumbs: vec![("/".to_owned(), t.get("nav-overview"))],
-        back: "/".to_owned(),
+        crumbs,
+        back,
+        return_to,
         action: format!("/groups/{id}/order"),
         lists,
     };
@@ -161,6 +187,7 @@ pub async fn sensor_page(
             (format!("/devices/{id}/sensors"), device.name),
         ],
         back: format!("/devices/{id}/sensors"),
+        return_to: String::new(),
         action: format!("/devices/{id}/sensors/order"),
         lists,
     };
@@ -210,7 +237,8 @@ pub async fn save_group(
     devices::set_positions(&state.pool, parent, &device_ids).await?;
     tracing::info!(user = %user.username, group = id, reset, "order of groups and devices saved");
     let msg = if reset { "order_reset" } else { "order_saved" };
-    Ok(Redirect::to(&format!("/?msg={msg}")).into_response())
+    let (page, _) = group_back(fields.get("back").map_or("", String::as_str));
+    Ok(Redirect::to(&format!("{page}?msg={msg}")).into_response())
 }
 
 pub async fn save_sensors(

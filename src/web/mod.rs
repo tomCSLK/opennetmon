@@ -114,7 +114,7 @@ pub fn router(state: AppState) -> Router {
         .route("/groups/new", get(groups::new_form))
         .route("/groups", post(groups::create))
         .route("/groups/{id}/edit", get(groups::edit_form))
-        .route("/groups/{id}", post(groups::update))
+        .route("/groups/{id}", get(overview::group).post(groups::update))
         .route("/groups/{id}/delete", post(groups::delete))
         .route(
             "/groups/{id}/order",
@@ -280,7 +280,7 @@ pub(crate) async fn snmp_credentials(
         })
 }
 
-/// A group in the breadcrumb trail of a device page, linking to its place on the overview.
+/// A group in the breadcrumb trail of a device or group page, linking to the group's page.
 #[derive(Clone)]
 pub struct Crumb {
     pub name: String,
@@ -301,7 +301,7 @@ pub(crate) async fn group_trail(
     while let Some(group) = groups.iter().find(|g| g.id == id) {
         trail.push(Crumb {
             name: group.name.clone(),
-            href: format!("/#group-{}", group.id),
+            href: format!("/groups/{}", group.id),
         });
         match group.parent_id {
             Some(parent) if trail.len() < groups.len() => id = parent,
@@ -310,6 +310,11 @@ pub(crate) async fn group_trail(
     }
     trail.reverse();
     Ok(trail)
+}
+
+/// The group page a form was opened from (`back=group-<id>`), so that it returns there.
+pub(crate) fn back_to_group(back: &str) -> Option<i64> {
+    back.strip_prefix("group-")?.parse().ok()
 }
 
 /// Group options in tree order, indented by depth. `exclude` hides groups (e.g. a group and its subtree).

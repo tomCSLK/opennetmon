@@ -13,6 +13,7 @@ overview-empty-hint = Lege ein Gerät an – mit SNMP-Profil oder „Kein SNMP �
 group-new = Neue Gruppe
 group-edit = Gruppe bearbeiten
 group-empty = Keine Geräte in dieser Gruppe.
+group-new-sub = Neue Untergruppe
 device-new = Neues Gerät
 device-edit = Gerät bearbeiten
 device-test = Testen

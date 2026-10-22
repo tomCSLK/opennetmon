@@ -27,6 +27,7 @@ pause-note-own = Pausiert
 pause-note-device = Pausiert mit dem Gerät
 pause-note-group = Pausiert mit der Gruppe „{ $name }“
 pause-device-notice = Solange das Gerät pausiert ist, wird keiner seiner Sensoren abgefragt.
+pause-group-notice = Solange die Gruppe pausiert ist, wird keins ihrer Geräte abgefragt.
 pause-duration-invalid = Bitte eine der angebotenen Dauern wählen.
 pause-reason-invalid = Der Grund darf höchstens 200 Zeichen lang sein und keine Zeilenumbrüche enthalten.
 pause-not-paused = Das ist nicht (mehr) selbst pausiert.

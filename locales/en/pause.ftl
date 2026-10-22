@@ -27,6 +27,7 @@ pause-note-own = Paused
 pause-note-device = Paused with the device
 pause-note-group = Paused with the group “{ $name }”
 pause-device-notice = While the device is paused, none of its sensors is polled.
+pause-group-notice = While the group is paused, none of its devices is polled.
 pause-duration-invalid = Please choose one of the offered durations.
 pause-reason-invalid = The reason may be at most 200 characters long and must not contain line breaks.
 pause-not-paused = This is not (or no longer) paused by itself.

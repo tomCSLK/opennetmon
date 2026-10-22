@@ -1,0 +1,98 @@
+{# The device tree of the overview and the group pages (`web::overview`). `back` is where the edit and
+   pause pages return to: "overview" or "group-<id>". -#}
+{% import "pause_note.html" as pause %}
+
+{% macro pills(list) %}{% for p in list %}<span class="pill status-{{ p.class }}" title="{{ p.title }}"><span aria-hidden="true">{{ p.glyph }}</span> {{ p.text }}</span>{% endfor %}{% endmacro %}
+
+{# The icon of a device kind (`DeviceKind`); its name is the tooltip. #}
+{% macro device_icon(kind, t) %}<svg class="icon tree-icon" viewBox="0 0 24 24" role="img" aria-label="{{ t.get(kind.label_id()) }}"><title>{{ t.get(kind.label_id()) }}</title>
+{%- match kind.as_str() -%}
+{%- when "router" -%}<rect x="2" y="13" width="20" height="8" rx="2"/><line x1="6" y1="17" x2="6.01" y2="17"/><line x1="10" y1="17" x2="10.01" y2="17"/><line x1="15" y1="13" x2="17" y2="5"/><line x1="19" y1="13" x2="21" y2="7"/>
+{%- when "switch" -%}<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11v2M10 11v2M14 11v2M18 11v2"/>
+{%- when "access_point" -%}<path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.4a10 10 0 0 1 14 0"/><path d="M8.5 15.9a5 5 0 0 1 7 0"/><line x1="12" y1="19.5" x2="12.01" y2="19.5"/>
+{%- when "firewall" -%}<path d="M12 2.5 4 5.5v6c0 5 3.5 8.6 8 10 4.5-1.4 8-5 8-10v-6z"/><line x1="4.5" y1="10" x2="19.5" y2="10"/><line x1="5.5" y1="15" x2="18.5" y2="15"/><line x1="12" y1="10" x2="12" y2="15"/>
+{%- when "server" -%}<rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><line x1="7" y1="6.5" x2="7.01" y2="6.5"/><line x1="7" y1="17.5" x2="7.01" y2="17.5"/>
+{%- when "storage" -%}<ellipse cx="12" cy="5.5" rx="8" ry="2.5"/><path d="M4 5.5v13c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5v-13"/><path d="M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5"/>
+{%- when "computer" -%}<rect x="2" y="4" width="20" height="13" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/>
+{%- when "printer" -%}<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="7" y="14" width="10" height="7"/>
+{%- when "camera" -%}<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10.5 6-3.5v10l-6-3.5"/>
+{%- when "smart_home" -%}<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9.5 21v-6h5v6"/>
+{%- when "internet" -%}<circle cx="12" cy="12" r="9.5"/><line x1="2.5" y1="12" x2="21.5" y2="12"/><path d="M12 2.5c2.5 2.6 3.8 5.8 3.8 9.5s-1.3 6.9-3.8 9.5c-2.5-2.6-3.8-5.8-3.8-9.5S9.5 5.1 12 2.5z"/>
+{%- else -%}<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="7" y1="15" x2="11" y2="15"/><line x1="15" y1="15" x2="17" y2="15"/>
+{%- endmatch -%}
+</svg>{% endmacro %}
+
+{# Pause (link to the form) or, when paused by itself, resume (a button). #}
+{% macro pause_action(kind, id, paused_itself, layout, t, back) %}
+{%- if paused_itself -%}
+<form method="post" action="/resume/{{ kind }}/{{ id }}">
+  <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <button type="submit" class="ghost small icon-only" title="{{ t.get("resume") }}" aria-label="{{ t.get("resume") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 5 19 12 7 19 7 5"/></svg></button>
+</form>
+{%- else -%}
+<a class="button ghost small icon-only" href="/pause/{{ kind }}/{{ id }}?back={{ back }}" title="{{ t.get("pause") }}" aria-label="{{ t.get("pause") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="9" y1="6" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="18"/></svg></a>
+{%- endif -%}
+{% endmacro %}
+
+{% macro device_row(card, layout, t, back) %}
+<div class="node">
+  <div class="tree-row{% if card.pause.is_some() %} paused{% endif %}">
+    {% call device_icon(card.device.kind, t) %}{% endcall %}
+    <span class="tree-name">
+      <a class="device-name" href="/devices/{{ card.device.id }}/sensors">{{ card.device.name }}</a>
+      <span class="tree-meta num">{{ card.device.host }}{% if card.device.has_snmp() %}:{{ card.device.polling.port }}{% endif %} · {{ t.get1("every-seconds", "seconds", card.device.polling.interval_secs) }}{% if layout.is_admin %} · {{ card.device.profile_label(*t) }}{% endif %}</span>
+      {% if let Some(n) = card.pause %}<span class="tree-pause">{% call pause::note(n, t) %}{% endcall %}</span>{% endif %}
+    </span>
+    <a class="pills" href="/devices/{{ card.device.id }}/sensors">{% if card.pills.is_empty() %}<span class="muted small">{{ t.get("no-sensors") }}</span>{% else %}{% call pills(card.pills.as_slice()) %}{% endcall %}{% endif %}</a>
+    <span class="tree-actions">
+      {% if layout.is_admin %}
+      {% if card.device.has_snmp() %}
+      <form method="post" action="/devices/{{ card.device.id }}/test">
+        <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+        <button type="submit" class="ghost small icon-only" title="{{ t.get("device-test") }}" aria-label="{{ t.get("device-test") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 12 7 12 10 5 14 19 17 12 21 12"/></svg></button>
+      </form>
+      {% endif %}
+      {% call pause_action("device", card.device.id, card.paused_itself, layout, t, back) %}{% endcall %}
+      <a class="button ghost small icon-only" href="/devices/{{ card.device.id }}/edit?back={{ back }}" title="{{ t.get("edit") }}" aria-label="{{ t.get1("edit-named", "name", card.device.name) }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><line x1="13.5" y1="6.5" x2="17.5" y2="10.5"/></svg></a>
+      {% endif %}
+    </span>
+  </div>
+</div>
+{% endmacro %}
+
+{# Opens a group node (`edit`: real groups only, not "Ohne Gruppe"; their name links to the group page);
+   the caller closes it. #}
+{% macro group_start(s, layout, t, edit, back) %}
+<details class="node" id="group-{{ s.id }}" data-group="{{ s.id }}" open>
+  <summary class="tree-row{% if s.pause.is_some() %} paused{% endif %}">
+    <span class="tree-toggle" aria-hidden="true"></span>
+    <svg class="icon tree-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    <span class="tree-name">{% if edit %}<a class="group-name" href="/groups/{{ s.id }}"><strong>{{ s.name }}</strong></a>{% else %}<strong>{{ s.name }}</strong>{% endif %} <span class="tree-meta">{{ t.get1("count-devices", "count", s.devices) }}</span>{% if let Some(n) = s.pause %}<span class="tree-pause">{% call pause::note(n, t) %}{% endcall %}</span>{% endif %}</span>
+    <span class="pills">{% call pills(s.pills.as_slice()) %}{% endcall %}</span>
+    <span class="tree-actions">
+      {% if layout.is_admin %}
+      <a class="button ghost small icon-only" href="/groups/{{ s.id }}/order?back={{ back }}" title="{{ t.get("order") }}" aria-label="{{ t.get("order") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="8 9 12 5 16 9"/><polyline points="8 15 12 19 16 15"/></svg></a>
+      {% if edit %}{% call pause_action("group", s.id, s.paused_itself, layout, t, back) %}{% endcall %}<a class="button ghost small icon-only" href="/groups/{{ s.id }}/edit?back={{ back }}" title="{{ t.get("group-edit") }}" aria-label="{{ t.get("group-edit") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><line x1="13.5" y1="6.5" x2="17.5" y2="10.5"/></svg></a>{% endif %}
+      {% endif %}
+    </span>
+  </summary>
+  <div class="children">
+{% endmacro %}
+
+{# The rows of a subtree (`overview::Row`): devices, and subgroups opened and closed around theirs. #}
+{% macro rows(list, layout, t, back) %}
+{% for row in list %}
+  {% match row %}
+  {% when Row::Start with (s) %}
+  {% call group_start(s, layout, t, true, back) %}{% endcall %}
+  {% when Row::Device with (card) %}
+  {% call device_row(card, layout, t, back) %}{% endcall %}
+  {% when Row::Empty %}
+  <p class="node tree-empty">{{ t.get("group-empty") }}</p>
+  {% when Row::End %}
+  </div>
+</details>
+  {% endmatch %}
+{% endfor %}
+{% endmacro %}

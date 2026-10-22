@@ -96,6 +96,8 @@ Manually against real hardware: `cargo test --test omada_manual sensors_work -- 
   reverses). Default: warning and down newest changes first, “Sensors” worst status first, otherwise by device. For the value, sensors with the same unit stay
   together (traffic first, then rates, ms, %, counts, uptime, status values); within a unit they are sorted by the sum of the channels (traffic: in + out).
   Rows without a value or time always come last; ties keep the sensor order per device.
+  With `?group=<id>` (the tiles of a group page) a list only contains the sensors of that group and its subgroups; tiles and sort links keep the filter,
+  the path shows the group, and “all groups” drops the filter. An unknown group answers 404.
 - **Sensor page** (`/devices/<id>/sensors`, all signed-in users): a table with name, type, status, last message, current value (one line per channel without
   wrapping, e.g. traffic in/out one below the other, channel names as tooltip; only if the last value is at most three intervals plus one minute old) and a
   **mini chart of the last hour** (`src/web/sparkline.rs`, SVG from the server, without a script; a click leads to the detail page):

@@ -14,6 +14,7 @@
 
 <form method="post" action="{{ action }}" class="stack">
   <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+  {% if !return_to.is_empty() %}<input type="hidden" name="back" value="{{ return_to }}">{% endif %}
   {% if lists.is_empty() %}
   <div class="card"><div class="empty"><strong>{{ t.get("order-nothing") }}</strong></div></div>
   {% endif %}

@@ -28,7 +28,8 @@ Umgesetzt (Details in `docs/`):
   Namen), Detailseite mit uPlot-Graph 1h/24h/7d/30d (bis 120 gemittelte Punkte), Messwerte-Tabelle wie die PRTG-Livedaten, Rollups und Retention
   (`docs/charts-and-thresholds.md`)
 - **Übersicht:** Gerätebaum wie in PRTG (Linien, ⊟/⊞, Sensorplaketten je Zustand, Summen je Teilbaum), Kacheln öffnen sortierbare Statuslisten,
-  „Aktualisieren“ mit automatischem Neuladen alle 60 s
+  „Aktualisieren“ mit automatischem Neuladen alle 60 s; **Gruppenseite** je Gruppe (Klick auf den Namen; Teilbaum, eigene Kacheln mit auf die Gruppe
+  gefilterten Statuslisten, Aktionen, Rücksprung der Formulare dorthin; 2026-10-22)
 - **Pausieren wie in PRTG:** Gruppen, Geräte und Sensoren bis zum Fortsetzen oder 15 min bis 1 Woche, mit Grund; Vererbung nach unten, Ablauf durch den
   Poller, Neustart ohne alten Zustand (keine nachträgliche Erholungsmail) (`docs/devices-and-groups.md`, „Pausieren“)
 - **Protokoll** (`/log`): Warnungen, Ausfälle und ihr Ende, gemischt mit Pausen (je die neuesten 500)
