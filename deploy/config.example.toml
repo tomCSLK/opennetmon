@@ -9,7 +9,7 @@ listen = "0.0.0.0:8443"
 
 # Certificate for HTTPS. Created on installation by `opennetmon tls generate` (self-signed, valid for the
 # host name and the IP addresses of the server, ten years). To use your own certificate, point these to it
-# (PEM, server certificate first; key mode 0600, owned by opennetmon) - see docs/betrieb.md, "HTTPS".
+# (PEM, server certificate first; key mode 0600, owned by opennetmon) - see docs/operations.md, "HTTPS".
 tls_cert_file = "/etc/opennetmon/tls-cert.pem"
 tls_key_file = "/etc/opennetmon/tls-key.pem"
 

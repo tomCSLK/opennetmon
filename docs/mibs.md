@@ -1,96 +1,98 @@
-# MIB-Dateien
+# MIB files
 
-opennetmon versteht MIB-Dateien. Damit lassen sich eigene OID-Sensoren **per Name** anlegen (`tpSysMonitorCpu5Seconds.1` statt
-`1.3.6.1.4.1.11863.6.4.1.1.1.1.2.1`), und Auswertung, Einheit und Klartext für Statuswerte kommen aus der MIB.
+opennetmon understands MIB files. This lets you create custom OID sensors **by name** (`tpSysMonitorCpu5Seconds.1` instead of
+`1.3.6.1.4.1.11863.6.4.1.1.1.1.2.1`), and evaluation, unit and plain text for status values come from the MIB.
 
-## Mitgelieferte Standard-MIBs
+## Bundled standard MIBs
 
-Im Binary stecken die gängigen Standard-MIBs (Quellen und Lizenz in `mibs/README.md`): SNMPv2-SMI/-TC/-CONF/-MIB, RFC1155-SMI, RFC-1215,
-RFC1213-MIB (MIB-II), IF-MIB, IANAifType-MIB, SNMP-FRAMEWORK-MIB, HOST-RESOURCES-MIB (CPU, Speicher, Datenträger vieler Geräte),
-INET-ADDRESS-MIB, ENTITY-MIB und ENTITY-SENSOR-MIB (Temperaturen u. Ä.). Sie sind immer geladen und können nicht durch Uploads ersetzt werden.
+The binary contains the common standard MIBs (sources and license in `mibs/README.md`): SNMPv2-SMI/-TC/-CONF/-MIB, RFC1155-SMI, RFC-1215,
+RFC1213-MIB (MIB-II), IF-MIB, IANAifType-MIB, SNMP-FRAMEWORK-MIB, HOST-RESOURCES-MIB (CPU, memory, disks of many devices),
+INET-ADDRESS-MIB, ENTITY-MIB and ENTITY-SENSOR-MIB (temperatures and the like). They are always loaded and cannot be replaced by uploads.
 
-## Hersteller-MIBs hochladen (`/mibs`, nur Administratoren)
+## Uploading vendor MIBs (`/mibs`, administrators only)
 
-- Unter **MIB-Dateien** eine oder viele Dateien auf einmal auswählen (z. B. den ganzen entpackten Ordner des Herstellers) und hochladen.
-  Für die TP-Link-Switches ist das das Paket „TP-Link_L2 Switch_MIB“ (`L2-tplinkMibs.zip`, 104 Dateien) von der Omada-Supportseite des Modells.
-- Jede Datei wird geprüft: Text mit mindestens einem Modul („… DEFINITIONS ::= BEGIN“), höchstens 2 MB je Datei, 300 Dateien und 20 MB je Upload.
-  Dateien, die nur ein mitgeliefertes Modul enthalten (z. B. TP-Links `RFC1213-MIB.mib`), werden übersprungen.
-- Enthält eine neue Datei ein Modul, das schon geladen ist, **ersetzt** sie die ältere Fassung.
-- Die Liste zeigt je Datei die Module mit Objektanzahl und Problemen: **fehlt: X-MIB** (eine importierte Datei fehlt noch – nachladen),
-  **n Definitionen nicht auflösbar** (z. B. Verweis auf einen nirgends definierten Knoten – so bei 19 Produktkennungen in TP-Links `tplink-products.mib`,
-  für das Monitoring ohne Bedeutung).
-- Löschen entfernt die Datei; der Index wird sofort neu aufgebaut. Bestehende Sensoren bleiben unverändert (sie speichern die numerische OID),
-  nur Namen und Klartext in der Anzeige fallen dann weg.
-- **Suche** auf derselben Seite: nach Name oder Begriff in der Beschreibung; Treffer mit OID, Art (Einzelwert, Tabellenspalte, Tabelle, …),
-  Typ, Einheit, Zugriff und Beschreibung. Abfragbare Werte stehen oben und zeigen den Eintrag für das OID-Feld.
+- Under **MIB files**, choose one or many files at once (e.g. the vendor's whole unpacked folder) and upload them.
+  For the TP-Link switches this is the package “TP-Link_L2 Switch_MIB” (`L2-tplinkMibs.zip`, 104 files) from the model's Omada support page.
+- Every file is checked: text with at least one module (“… DEFINITIONS ::= BEGIN”), at most 2 MB per file, 300 files and 20 MB per upload.
+  Files that only contain a bundled module (e.g. TP-Link's `RFC1213-MIB.mib`) are skipped.
+- If a new file contains a module that is already loaded, it **replaces** the older version.
+- The list shows the modules of each file with the number of objects and any problems: **missing: X-MIB** (an imported file is still missing – upload it),
+  **n definitions cannot be resolved** (e.g. a reference to a node defined nowhere – as for 19 product identifiers in TP-Link's `tplink-products.mib`,
+  irrelevant for monitoring).
+- Deleting removes the file; the index is rebuilt immediately. Existing sensors stay unchanged (they store the numeric OID); only names and plain text in the
+  display disappear.
+- **Search** on the same page: by name or by a term in the description; hits with OID, kind (scalar, table column, table, …), type, unit, access and
+  description. Pollable values come first and show the entry for the OID field.
 
-## Eigene OID per Name
+## Custom OID by name
 
-Im Formular „Sensor hinzufügen“ (Typ „Eigene OID“; beim Tippen ins OID-Feld wird der Typ automatisch gewählt):
+In the form “Add sensor” (type “Custom OID”; typing into the OID field selects the type automatically):
 
-| Eingabe | Bedeutung |
+| Input | Meaning |
 |---|---|
-| `tpSysMonitorCpu5Seconds.1` | Name plus Index (Tabellenspalte; Index = Zeile, hier Unit 1) |
-| `sysUpTime` | Einzelwert; `.0` wird automatisch angehängt |
-| `IF-MIB::ifInErrors.3` | mit Modul, falls ein Name in mehreren MIBs mit verschiedener OID vorkommt |
-| `1.3.6.1.2.1.1.3.0` | weiterhin numerisch; ist die OID bekannt, wird sie trotzdem benannt |
+| `tpSysMonitorCpu5Seconds.1` | name plus index (table column; index = row, here unit 1) |
+| `sysUpTime` | scalar; `.0` is appended automatically |
+| `IF-MIB::ifInErrors.3` | with module, if a name occurs in several MIBs with different OIDs |
+| `1.3.6.1.2.1.1.3.0` | still numeric; if the OID is known, it is named anyway |
 
-- Beim Tippen erscheinen Vorschläge; bei einem bekannten Namen zeigt die Zeile darunter Modul, Art, Typ, Einheit, OID und Beschreibung
-  (bei Tabellenspalten auch, welcher Index anzuhängen ist).
-- **Auswertung „Automatisch“**: Zähler (`Counter32/64`) werden als Rate pro Sekunde gemessen, alles andere als Wert. Wert/Zähler lässt sich weiterhin fest wählen.
-- **Einheit**: leer = `UNITS` aus der MIB (falls vorhanden); sonst frei eintragen (z. B. `%`, höchstens 24 Zeichen). Sie steht hinter jedem Wert.
-- **Name**: leer = Objektname mit Index (z. B. „tpSysMonitorCpu5Seconds.1“).
-- Klare Fehlermeldungen für Tabellen/Zeilen/Knoten („kein abfragbarer Wert“), Spalten ohne Index, nicht lesbare Objekte und unbekannte Namen.
+- Suggestions appear while typing; for a known name the line below shows module, kind, type, unit, OID and description
+  (for table columns also which index to append).
+- **Evaluation “Automatic”**: counters (`Counter32/64`) are measured as a rate per second, everything else as a value. Value/counter can still be chosen
+  explicitly.
+- **Unit**: empty = `UNITS` from the MIB (if present); otherwise enter it freely (e.g. `%`, at most 24 characters). It is shown after every value.
+- **Name**: empty = object name with index (e.g. “tpSysMonitorCpu5Seconds.1”).
+- Clear error messages for tables/rows/nodes (“not a pollable value”), columns without an index, objects that cannot be read and unknown names.
 
-## Werte suchen: Tabellen als Sensoren übernehmen (`/devices/<id>/values`, nur Administratoren)
+## Find values: taking over tables as sensors (`/devices/<id>/values`, administrators only)
 
-Auf der Sensorseite eines Geräts öffnet **Werte suchen** eine Liste aller Messwerte, die das Gerät in bekannten Tabellen liefert:
+On a device's sensor page, **Find values** opens a list of all values the device returns in known tables:
 
-| Tabelle | Inhalt | vorausgewählt |
+| Table | Contents | preselected |
 |---|---|---|
-| `tpPoePortConfigTable` (TP-Link) | je Port PoE-Leistung (W), Status, Strom (mA), Spannung (V), Klasse | Leistung, Status |
-| `tpPoeGlobal` (TP-Link) | PoE-Verbrauch gesamt, Reserve, Budget (W) | Verbrauch |
-| `tpSysMonitorCpuTable`, `tpSysMonitorMemoryTable` (TP-Link) | CPU (5 s, 1 min, 5 min) und Speicher in % | CPU 1 min, Speicher |
-| `hrProcessorTable`, `hrStorageTable` (HOST-RESOURCES-MIB) | CPU-Last je Kern; Belegung und Größe je Speicher (MB) | Last, Belegt |
-| `entPhySensorTable` (ENTITY-SENSOR-MIB) | Temperaturen, Lüfter, Spannungen, Ströme mit Namen aus `entPhysicalName` | Messwert |
+| `tpPoePortConfigTable` (TP-Link) | per port PoE power (W), status, current (mA), voltage (V), class | power, status |
+| `tpPoeGlobal` (TP-Link) | PoE consumption total, remaining, budget (W) | consumption |
+| `tpSysMonitorCpuTable`, `tpSysMonitorMemoryTable` (TP-Link) | CPU (5 s, 1 min, 5 min) and memory in % | CPU 1 min, memory |
+| `hrProcessorTable`, `hrStorageTable` (HOST-RESOURCES-MIB) | CPU load per core; usage and size per storage (MB) | load, used |
+| `entPhySensorTable` (ENTITY-SENSOR-MIB) | temperatures, fans, voltages, currents with names from `entPhysicalName` | reading |
 
-- Tabellen, deren MIB nicht geladen ist oder die das Gerät nicht beantwortet, fehlen einfach (die TP-Link-Einträge brauchen die hochgeladenen TP-Link-MIBs).
-- **Andere Tabelle oder Gruppe**: Name oben eingeben (z. B. `tpPoePortConfigTable`, `IF-MIB::ifXTable` oder eine Gruppe mit Einzelwerten).
-  Dann werden alle Zahlenspalten gelesen; vorausgewählt sind nur reine Messwerte (nur lesbar), keine Einstellungen.
-- **Namen** der Zeilen: Ports über `ifName`/`ifDescr`, Hardware über `entPhysicalName`, sonst eine Textspalte der Tabelle (…Name, …Descr, …Label), sonst „Index N“.
-  Jeder Name ist vor dem Anlegen änderbar.
-- **Einheit und Faktor**: aus `UNITS`, sonst aus der Beschreibung (TP-Link schreibt z. B. „in 0.1W“ → Faktor 0,1, Einheit W), bei Hardware-Sensoren aus
-  Typ, Skala und Genauigkeit der ENTITY-SENSOR-MIB. Zähler werden als Rate angelegt.
-- **Neue Sensoren sind pausiert**: Sie werden nicht abgefragt und lösen keine Benachrichtigung aus, bis ein Administrator sie fortsetzt.
-  Wer sie gleich abfragen will, setzt das Häkchen „Sofort starten“. Bereits überwachte OIDs sind als „vorhanden“ gesperrt; gleiche Namen werden durchnummeriert.
-- **Fortsetzen**: Auf der Sensorseite stehen pausierte Sensoren in einem eigenen, aufklappbaren Bereich „Pausierte Sensoren (n)“ mit
-  „Ausgewählte fortsetzen“, „Alle fortsetzen“ und „Ausgewählte löschen“ (`POST /devices/<id>/sensors/bulk`). Laufende Sensoren lassen sich einzeln wieder pausieren
-  (`docs/geraete-und-gruppen.md`, „Pausieren“). Pausierte Sensoren stehen in der Übersicht als eigene, umrandete Plakette und bestimmen den Status nicht mit.
-- Grenzen: Timeout höchstens 10 s, eine Wiederholung; höchstens 3000 Zeilen je Spalte und 500 Werte je Suche.
-- Gemessen am SG2008P (.252): 4 PoE-Ports (Port 1: 6,3 W, 119 mA, 52,9 V, Klasse 4), Gesamtverbrauch 6,5 W bei 62 W Budget, CPU 5 %, Speicher 53 %.
-  Die SG2008 liefern CPU und Speicher, aber weder HOST-RESOURCES- noch ENTITY-Tabellen.
+- Tables whose MIB is not loaded or which the device does not answer are simply missing (the TP-Link entries need the uploaded TP-Link MIBs).
+- **Another table or group**: enter the name at the top (e.g. `tpPoePortConfigTable`, `IF-MIB::ifXTable` or a group of scalars).
+  Then all numeric columns are read; only pure measurements (read-only) are preselected, no settings.
+- **Names** of the rows: ports via `ifName`/`ifDescr`, hardware via `entPhysicalName`, otherwise a text column of the table (…Name, …Descr, …Label), otherwise
+  “Index N”. Every name can be changed before creating.
+- **Unit and factor**: from `UNITS`, otherwise from the description (TP-Link writes e.g. “in 0.1W” → factor 0.1, unit W), for hardware sensors from type,
+  scale and precision of the ENTITY-SENSOR-MIB. Counters are created as a rate.
+- **New sensors are paused**: they are not polled and trigger no notification until an administrator resumes them.
+  To poll them right away, tick “Start now”. OIDs that are already monitored are locked as “exists”; equal names are numbered.
+- **Resume**: on the sensor page, paused sensors appear in a collapsible section of their own, “Paused sensors (n)”, with “Resume selected”, “Resume all” and
+  “Delete selected” (`POST /devices/<id>/sensors/bulk`). Running sensors can be paused again one by one (`docs/devices-and-groups.md`, “Pausing”). In the
+  overview, paused sensors appear as an outlined label of their own and do not affect the status.
+- Limits: timeout at most 10 s, one retry; at most 3000 rows per column and 500 values per search.
+- Measured on the SG2008P: 4 PoE ports (port 1: 6.3 W, 119 mA, 52.9 V, class 4), total consumption 6.5 W with a 62 W budget, CPU 5 %, memory 53 %.
+  The SG2008 return CPU and memory, but neither HOST-RESOURCES nor ENTITY tables.
 
-## Anzeige
+## Display
 
-- Sensorliste und Detailseite nennen OID-Sensoren mit Namen und Modul („tpSysMonitorCpu5Seconds.1 (TPLINK-SYSMONITOR-MIB) · Wert, Einheit %“).
-- **Statuswerte im Klartext**: Hat das Objekt eine Aufzählung (z. B. `ifOperStatus`: 1 = up, 2 = down …), zeigen Kachel, Graph-Achse und Tabelle
-  „down (2)“. Das gilt auch für den eingebauten Interface-Status-Sensor.
-- **Statuswerte bewerten:** Je Wert einer Aufzählung lässt sich festlegen, ob er In Ordnung, eine Warnung oder ein Ausfall ist; neue Sensoren bekommen
-  einen Vorschlag aus den Namen der Werte (`docs/graphen-und-schwellwerte.md`, Abschnitt „Statuswerte bewerten“).
+- The sensor list and the detail page name OID sensors with name and module (“tpSysMonitorCpu5Seconds.1 (TPLINK-SYSMONITOR-MIB) · value, unit %”).
+- **Status values in plain text**: if the object has an enumeration (e.g. `ifOperStatus`: 1 = up, 2 = down …), tile, chart axis and table show “down (2)”.
+  This also applies to the built-in interface status sensor.
+- **Rating status values:** for each value of an enumeration you can define whether it is OK, a warning or down; new sensors get a suggestion from the names
+  of the values (`docs/charts-and-thresholds.md`, section “Rating status values”).
 
-## Technik
+## Technical details
 
-- `src/mib/lexer.rs`, `src/mib/parser.rs`: toleranter Parser für SMIv1/SMIv2 (Importe, OID-Zuweisungen, OBJECT-TYPE mit SYNTAX/UNITS/ACCESS/
-  DESCRIPTION/INDEX/AUGMENTS, Textual Conventions, Aufzählungen; Makrodefinitionen, Compliance-Abschnitte u. Ä. werden übersprungen).
-  Hersteller-Eigenheiten wie `n/a(0)` oder `power_user(1)` in Aufzählungen und Windows-Zeilenenden werden verkraftet.
-- `src/mib/mod.rs`: Auflösung über Modulgrenzen (Importe, notfalls eindeutiger Name in einem anderen Modul), Basistypen über Textual Conventions,
-  Tabellen/Zeilen/Spalten inkl. `AUGMENTS`, Suche, Name ↔ OID. Der Index liegt im Speicher und wird beim Start sowie nach jedem Upload/Löschen neu
-  gebaut (Datenbank: nur die Dateitexte, Tabelle `mib_files`, Migration `0009`).
-- Gegenprobe mit net-snmp: `dev/mib-oracle.sh dev/data/mibs/tplink/*.mib` vergleicht alle aufgelösten OIDs mit `snmptranslate`.
-  Ergebnis mit den Standard- und TP-Link-MIBs: 2963 gemeinsame Namen, **0 Abweichungen**; opennetmon kennt 230 Objekte mehr, weil net-snmp zwei
-  fehlerhafte TP-Link-Dateien abweist.
-- `src/mib/catalog.rs`: bekannte Tabellen mit Spalten, Namen, Faktoren und Einheiten; Einheiten aus Beschreibungen (`unit_from_description`).
-  `src/value_discovery.rs`: Walk je Spalte, Zeilennamen, Vorschläge; `src/web/sensor_values.rs`: Suchseite und Anlegen.
-  Ein Walk, der auf eine nicht steigende OID trifft (fehlerhafte Agenten), endet dort, statt die ganze Suche abzubrechen.
-- Tests: Lexer/Parser (auch abgeschnittene und kaputte Eingaben), alle mitgelieferten MIBs fehlerfrei, bekannte OIDs/Typen/Aufzählungen, Namensauflösung,
-  Upload als Multipart, Ersetzen, Löschen, Rechte, Sensoren per Name; die TP-Link-Dateien werden mitgetestet, wenn sie lokal unter `dev/data/mibs/tplink` liegen.
+- `src/mib/lexer.rs`, `src/mib/parser.rs`: a tolerant parser for SMIv1/SMIv2 (imports, OID assignments, OBJECT-TYPE with SYNTAX/UNITS/ACCESS/
+  DESCRIPTION/INDEX/AUGMENTS, textual conventions, enumerations; macro definitions, compliance sections and the like are skipped).
+  Vendor quirks such as `n/a(0)` or `power_user(1)` in enumerations and Windows line endings are handled.
+- `src/mib/mod.rs`: resolution across module boundaries (imports, if necessary a unique name in another module), base types via textual conventions,
+  tables/rows/columns including `AUGMENTS`, search, name ↔ OID. The index lives in memory and is rebuilt at startup and after every upload/deletion
+  (database: only the file texts, table `mib_files`, migration `0009`).
+- Cross-check with net-snmp: `dev/mib-oracle.sh dev/data/mibs/tplink/*.mib` compares all resolved OIDs with `snmptranslate`.
+  Result with the standard and TP-Link MIBs: 2963 common names, **0 differences**; opennetmon knows 230 more objects because net-snmp rejects two faulty
+  TP-Link files.
+- `src/mib/catalog.rs`: known tables with columns, names, factors and units; units from descriptions (`unit_from_description`).
+  `src/value_discovery.rs`: walk per column, row names, suggestions; `src/web/sensor_values.rs`: search page and creation.
+  A walk that hits a non-increasing OID (faulty agents) ends there instead of aborting the whole search.
+- Tests: lexer/parser (including truncated and broken input), all bundled MIBs without errors, known OIDs/types/enumerations, name resolution,
+  upload as multipart, replacing, deleting, permissions, sensors by name; the TP-Link files are tested too if they are present locally under
+  `dev/data/mibs/tplink`.

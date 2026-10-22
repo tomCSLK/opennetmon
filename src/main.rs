@@ -231,7 +231,7 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         .await
         .with_context(|| {
             let hint = if config.listen.port() < 1024 {
-                " (ports below 1024 need CAP_NET_BIND_SERVICE, see docs/betrieb.md)"
+                " (ports below 1024 need CAP_NET_BIND_SERVICE, see docs/operations.md)"
             } else {
                 ""
             };

@@ -30,7 +30,7 @@ if [ "$1" = configure ]; then
     chown "$USER_NAME:$USER_NAME" "$KEY"
     NEW_KEY=yes
   fi
-  # Self-signed certificate for the host name and every address of the server (replaceable, see docs/betrieb.md).
+  # Self-signed certificate for the host name and every address of the server (replaceable, see docs/operations.md).
   if [ ! -e "$TLS_CERT" ] && [ ! -e "$TLS_KEY" ]; then
     NAMES=""
     for name in $(hostname -f 2>/dev/null) $(hostname -I 2>/dev/null); do
@@ -40,7 +40,7 @@ if [ "$1" = configure ]; then
     if /usr/bin/opennetmon --config "$CONFIG" tls generate --cert "$TLS_CERT" --key "$TLS_KEY" $NAMES; then
       chown "$USER_NAME:$USER_NAME" "$TLS_KEY"
     else
-      echo "opennetmon: could not create the HTTPS certificate; create one with 'opennetmon tls generate' (docs/betrieb.md)."
+      echo "opennetmon: could not create the HTTPS certificate; create one with 'opennetmon tls generate' (docs/operations.md)."
     fi
   fi
   # systemd creates the state directory on the first start; `user add` runs before that.

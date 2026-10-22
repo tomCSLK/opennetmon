@@ -1,0 +1,96 @@
+# Users and login
+
+## Roles
+
+| Role | Permissions |
+|---|---|
+| Administrator (`admin`) | everything, including user management |
+| Viewer (`viewer`) | read only |
+
+Handlers that should only allow administrators call `CurrentUser::require_admin()`.
+
+## Managing users (user interface, `/users`, administrators only)
+
+Under **Settings → Users**:
+
+- **List** with role, language, creation time and number of open sessions; your own account is marked “(you)”.
+- **New user:** user name, role (viewer or administrator), the password twice and the language (default “Same as the browser”).
+  After an error, name, role and language are kept, passwords never.
+- **Per user** (`/users/<id>`):
+  - **Change role** – applies immediately, also in open sessions. The **last administrator** cannot become a viewer (checked in the same SQL statement,
+    so that two simultaneous changes cannot both remove administrators). If you make yourself a viewer, you land on the overview.
+  - **Language** – see below.
+  - **Set password** – ends all sessions of the user; for your own account the current session stays signed in.
+  - **Delete** – with a confirmation tick, signs out all sessions; never your own account and never the last administrator.
+- Actions are logged (who, what, which user), passwords never.
+
+## My account (`/account`, all users)
+
+Reached through the name and role at the bottom of the sidebar. Shows user name and role, chooses **your own language** and changes **your own password**:
+
+- You need the current password and the new one twice (10 to 128 characters, different from the current one).
+- Wrong current passwords count like failed logins for the user name (`auth::throttle`); from 5 failed attempts on, requests are slowed down.
+- Afterwards all other sessions of the user are signed out; the current one stays signed in.
+
+## Language
+
+The user interface is available in German and English. Every user has a language (column `users.language`):
+
+- **“Same as the browser”** (default, `NULL`): the preferred language from the browser's `Accept-Language` header; if none matches, German applies.
+- **Deutsch** or **English**: fixed, regardless of the browser.
+
+It can be chosen under **My account** (your own language), when creating a user and on the user's page (administrators). The login page and error pages
+before login always follow the browser. Stored names (devices, groups, sensors) are not translated.
+The texts are in `locales/<language>/*.ftl` ([Fluent](https://projectfluent.org/)); notes on translating are in `docs/translations.md`.
+
+## Creating users (command line)
+
+The first administrator is created on the server; there are no default credentials:
+
+```bash
+opennetmon --config /etc/opennetmon/config.toml user add admin --role admin
+opennetmon --config /etc/opennetmon/config.toml user add lena --role viewer --language en   # without --language: same as the browser
+opennetmon --config /etc/opennetmon/config.toml user passwd lena    # ends all sessions of the user
+opennetmon --config /etc/opennetmon/config.toml user list
+```
+
+The password is prompted for (twice, without echo). With input from a pipe, one line is read from stdin.
+Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), password 10 to 128 characters.
+
+## Security features
+
+- Passwords: Argon2id with a random salt. A hash is verified even for an unknown user, so that response time and message stay the same.
+- Session: a random 256-bit token in the cookie `opennetmon_session` (`HttpOnly`, `SameSite=Strict`, `Secure` according to the config). The database only
+  holds the SHA-256 value of the token.
+- Lifetime: absolute `session_ttl_hours` (default 168 hours). Expired sessions are deleted at login.
+- CSRF: the login form uses a double-submit cookie (`opennetmon_login`), all other POST forms a token per session.
+- Response headers: `Content-Security-Policy` (own resources only), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
+- Passwords never appear in logs. Failed logins are logged without the user name.
+
+## Configuration
+
+| Key | Default | Meaning |
+|---|---|---|
+| `cookie_secure` | `true` | Send cookies over HTTPS only. Set it to `false` only for development over plain HTTP |
+| `session_ttl_hours` | `168` | Session lifetime in hours (1 to 2160) |
+| `client_ip_header` | not set | Behind a reverse proxy: `"x-forwarded-for"` (last entry) or `"x-real-ip"`, so that the rate limiting sees the real client address (see below) |
+
+## Limiting login attempts (`src/auth/throttle.rs`)
+
+Failed logins are counted in a sliding window of 15 minutes, **per user name** and **per client address**. Above a threshold, further attempts are
+**rejected** (HTTP 429 with `Retry-After`, without checking the password – not even the right one), and the waiting time doubles with every further failure:
+
+| | Threshold | Waiting time | Maximum |
+|---|---|---|---|
+| per user name (case-insensitive) | 5 failures | 5 s, 10 s, 20 s … | 60 s |
+| per address (IPv6: per /64) | 10 failures | 30 s, 60 s, 120 s … | 15 min |
+
+The user name is deliberately only **slowed down, never locked**: an attacker can delay the real administrator by at most a minute this way, even when
+changing addresses, and gets about one password per minute. The stricter address limit prevents a single machine from trying many accounts.
+A successful login resets the counters of user name and address; so does a restart of the server (the state is kept only in memory and is bounded).
+The rejecting response is the same for correct and wrong user names, so accounts cannot be guessed through it.
+
+**Behind a reverse proxy** the server only sees the proxy's address. With `client_ip_header = "x-forwarded-for"` (Caddy and nginx append the client address;
+the *last* entry is used, i.e. the one from your own proxy) or `"x-real-ip"`, the real address is taken instead. Only set this if the service is reachable
+exclusively through the proxy (default: `127.0.0.1`); otherwise a client could forge the address and bypass the address limit (the limit per user name stays
+effective). Without this setting, all requests through the proxy count as one address – the strict address limit then applies to all of them together.

@@ -67,7 +67,7 @@ fi
 # 2. Binary.
 step "installing the binary to $BIN_DIR/opennetmon"
 install -d -m 0755 "$BIN_DIR"
-# Keep the previous binary for a quick rollback (see docs/betrieb.md).
+# Keep the previous binary for a quick rollback (see docs/operations.md).
 [ -e "$BIN_DIR/opennetmon" ] && cp -p "$BIN_DIR/opennetmon" "$BIN_DIR/opennetmon.previous"
 install -m 0755 "$BINARY" "$BIN_DIR/opennetmon.new"
 mv -f "$BIN_DIR/opennetmon.new" "$BIN_DIR/opennetmon"
@@ -96,7 +96,7 @@ else
   step "keeping the existing key $KEY"
   KEY_IS_NEW=no
 fi
-# Self-signed HTTPS certificate for the host name and every address of the server (replaceable, see docs/betrieb.md).
+# Self-signed HTTPS certificate for the host name and every address of the server (replaceable, see docs/operations.md).
 if [ ! -e "$TLS_CERT" ] && [ ! -e "$TLS_KEY" ]; then
   step "generating the HTTPS certificate $TLS_CERT"
   NAMES=()

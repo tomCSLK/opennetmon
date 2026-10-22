@@ -28,8 +28,8 @@ The tests need no network (a fake SNMP agent is built in). Optional tests agains
 
 ## Conventions
 
-- **Language:** code, identifiers, code comments and commit messages are English. The project documentation in `docs/` is German,
-  `README.md` is English.
+- **Language:** code, identifiers, code comments and commit messages are English. The documentation in `docs/` and `README.md` is English;
+  only the internal planning files `PLAN.md` and `CLAUDE.md` are German.
 - **UI texts** only through the Fluent catalogs in `locales/<code>/*.ftl`, never as fixed text in templates, Rust or JavaScript.
   German (`de`) is the source language; add every new message in English (`en`) too. Tests check that both catalogs match the code.
 - **No inline styles or scripts:** the Content Security Policy forbids them. Styles go into `static/app.css`, scripts into `static/`.

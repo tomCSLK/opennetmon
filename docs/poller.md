@@ -1,63 +1,67 @@
-# Poller, Status und Ereignislog
+# Poller, status and event log
 
-## Ablauf (`src/poller.rs`)
+## How it works (`src/poller.rs`)
 
-Beim Serverstart läuft ein **Supervisor**, der alle 15 s die Geräteliste liest und für jedes Gerät eine Aufgabe (Task) startet.
-Jede Geräte-Aufgabe lädt in **jedem Zyklus** Gerät, nicht pausierte Sensoren (auch Pausen von Gerät und Gruppen, `storage::pauses::load`) und SNMP-Profil neu
-aus der Datenbank. Änderungen (Intervall, Adresse, Zugangsdaten, neue oder pausierte Sensoren) wirken daher ohne Neustart; wird das Gerät gelöscht, endet die Aufgabe.
+When the server starts, a **supervisor** runs that reads the device list every 15 s and starts a task for each device.
+Every device task reloads the device, the sensors that are not paused (including pauses of the device and its groups, `storage::pauses::load`) and the SNMP
+profile from the database in **every cycle**. Changes (interval, address, credentials, new or paused sensors) therefore take effect without a restart; if the
+device is deleted, the task ends.
 
-- **Startzeitpunkte** sind je Gerät deterministisch über das Intervall verteilt (höchstens 30 s Versatz): kein Burst zur vollen Minute.
-  Die ersten Messwerte erscheinen deshalb bis zu 30 s nach dem Start.
-- **Gleichzeitigkeit:** globale `Semaphore` (`poll_concurrency`, Standard 16); ein langsames Gerät blockiert nie andere.
-- **Takt:** fester Takt je Gerät; überschreitet ein Zyklus das Intervall, geht es sofort weiter statt Aufholläufe zu starten.
-- **Sensoren eines Geräts** laufen nacheinander (je ein GET). Jede Sensorabfrage ist zusätzlich durch `Timeout × (Wiederholungen + 1) + 2 s` begrenzt.
-- **Geräteweiter SNMP-Fehler** (Timeout, Anmeldung fehlgeschlagen, nicht erreichbar): die übrigen SNMP-Sensoren desselben Zyklus werden nicht mehr
-  versucht, sondern mit demselben Fehler markiert. Ping-Sensoren laufen trotzdem.
-- **SNMP-Sitzung** wird je Zyklus neu aufgebaut (eine Runde Engine-Discovery bei v3). Das vermeidet veraltete Engine-Zeiten nach einem Gerätereboot.
-- **Zähler-Basiswerte** bleiben über Zyklen erhalten, solange sich die Sensorkonfiguration nicht ändert. Nach einer Änderung kostet das einen Messwert.
-- **Entschlüsselung** der Zugangsdaten nur im Poller (`storage::credentials::load_credentials`); Fehler dabei werden ohne Geheimnis protokolliert.
+- **Start times** are spread deterministically across the interval per device (at most 30 s offset): no burst at the full minute.
+  The first values therefore appear up to 30 s after the start.
+- **Concurrency:** a global `Semaphore` (`poll_concurrency`, default 16); a slow device never blocks others.
+- **Clock:** a fixed clock per device; if a cycle exceeds the interval, the next one starts immediately instead of catching up.
+- **The sensors of a device** run one after another (one GET each). Every sensor poll is additionally limited by `timeout × (retries + 1) + 2 s`.
+- **Device-wide SNMP error** (timeout, authentication failed, not reachable): the remaining SNMP sensors of the same cycle are not tried any more but marked
+  with the same error. Ping sensors run anyway.
+- **The SNMP session** is set up anew in every cycle (one round of engine discovery for v3). This avoids stale engine times after a device reboot.
+- **Counter base values** are kept across cycles as long as the sensor configuration does not change. After a change this costs one value.
+- **Decryption** of the credentials only in the poller (`storage::credentials::load_credentials`); errors are logged without the secret.
 
-Config: `poller_enabled` (Standard `true`) und `poll_concurrency` (1–256, Standard 16). Beim Beenden stoppt der Server zuerst den Webserver
-(Graceful Shutdown), dann den Poller (höchstens 10 s Wartezeit).
+Config: `poller_enabled` (default `true`) and `poll_concurrency` (1–256, default 16). On shutdown the server first stops the web server
+(graceful shutdown), then the poller (waiting at most 10 s).
 
 ## Status (`src/status.rs`)
 
-Sensorstatus: `Up`, `Warning`, `Down`, `Unknown`, `Paused`.
+Sensor status: `Up`, `Warning`, `Down`, `Unknown`, `Paused`.
 
-| Ergebnis der Abfrage | Status |
+| Result of the poll | Status |
 |---|---|
-| Messung gelungen, Wert in Ordnung | `Up` |
-| Messung gelungen, aber Interface nicht `up` (`ifOperStatus` ≠ 1) | `Down` (sofort) |
-| Messung fehlgeschlagen, 1. Fehler in Folge | `Warning` |
-| Messung fehlgeschlagen, ab dem 2. Fehler in Folge (`DOWN_AFTER_FAILURES`) | `Down` |
-| nach einem Fehler wieder eine gelungene Messung | `Up` (sofort) |
+| Measurement succeeded, value OK | `Up` |
+| Measurement succeeded, but interface not `up` (`ifOperStatus` ≠ 1) | `Down` (immediately) |
+| Measurement failed, 1st failure in a row | `Warning` |
+| Measurement failed, from the 2nd failure in a row on (`DOWN_AFTER_FAILURES`) | `Down` |
+| A successful measurement again after a failure | `Up` (immediately) |
 
-Ein einzelnes verlorenes UDP-Paket löst so keinen Down-Alarm aus. Schwellwerte je Kanal (Warning/Down) kommen mit MVP-Schritt 4 in `assess`.
-Gerätestatus = schlechtester Status der aktiven Sensoren (`Down` > `Warning` > `Unknown` > `Up`); pausierte Sensoren (`Paused`) zählen nicht,
-nur pausierte ergeben `Paused`, keine Sensoren oder noch keine Abfrage ergeben `Unknown`.
+A single lost UDP packet therefore triggers no down alert. Thresholds per channel (warning/down) and rated status values are evaluated in `assess`
+(see `docs/charts-and-thresholds.md`).
+Device status = worst status of the active sensors (`Down` > `Warning` > `Unknown` > `Up`); paused sensors (`Paused`) do not count, only paused ones result in
+`Paused`, no sensors or no poll yet result in `Unknown`.
 
-## Datenbank (Migration `0006`)
+## Database (migration `0006`)
 
-- `sensor_status`: aktueller Zustand je Sensor (Status, seit wann, letzte Abfrage, Meldung auf Deutsch, Fehler in Folge).
-- `events`: Protokoll der Statuswechsel (Zeit, Sensor, von → nach, Meldung); der erste Wert eines Sensors wird mit `from = NULL` protokolliert.
-  Es bleiben nur die **neuesten 500 Statuswechsel** über alle Sensoren (`storage::status::EVENTS_KEPT`): `record_poll` löscht ältere in derselben
-  Transaktion. Damit reichen auch die „letzten Statuswechsel“ der Sensor-Detailseite nur so weit zurück; das Statusband der Sensorliste nimmt für den
-  Anfang der Stunde notfalls das „von“ des ältesten gespeicherten Wechsels oder den aktuellen Zustand (`status_history`).
+- `sensor_status`: the current state per sensor (status, since when, last poll, message, failures in a row). Messages are stored as catalog messages and shown
+  in the reader's language.
+- `events`: log of the status changes (time, sensor, from → to, message); the first value of a sensor is logged with `from = NULL`.
+  Only the **newest 500 status changes** across all sensors are kept (`storage::status::EVENTS_KEPT`): `record_poll` deletes older ones in the same
+  transaction. The “Recent status changes” on the sensor detail page therefore only reach back that far; for the beginning of the hour, the status band of the
+  sensor list falls back to the “from” of the oldest stored change or to the current state (`status_history`).
 
-## Protokoll (`/log`)
+## Log (`/log`)
 
-Menüpunkt **„Protokoll“** unter Monitoring, für alle Benutzer: Warnungen und Ausfälle sowie ihr Ende (Wechsel von Warnung/Ausfall nach „In Ordnung“)
-über alle Sensoren, dazu **Pausen** (`storage::pauses::log_entries`: „Pausiert“ von wem, mit Grund und geplantem Ende, Dauer bis zum Fortsetzen bzw.
-„dauert an“; „Fortgesetzt“ von wem; „Pause abgelaufen“ zum geplanten Ende; bei Geräten und Gruppen steht statt des Sensors „ganzes Gerät“/„ganze Gruppe“),
-beides zusammen **neueste zuerst** (`web::log`, `storage::status::problem_log`). Spalten: Zeitpunkt, Status mit dem Status davor, Sensor, Gerät mit
-Gruppenpfad, Meldung, Dauer. Die Dauer ist bei Warnung/Ausfall die Zeit bis zum nächsten Wechsel bzw. „dauert an“ mit der bisherigen Zeit, bei einer
-Erholung „nach …“ die Dauer des Problems davor (aus `LAG`/`LEAD` über die Wechsel desselben Sensors). Erstabfragen, Pausieren und „Unbekannt“ stehen
-nicht im Protokoll, zählen aber zu den 500 gespeicherten Wechseln. Vom Pausenprotokoll (`pause_log`) bleiben ebenfalls die neuesten 500 Einträge. Oben rechts „Aktualisieren“ mit „Automatisch“.
-- `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignis in **einer Transaktion** und liefert den `StatusChange` zurück
-  (die spätere Benachrichtigung hängt sich dort an; ein Wechsel `NULL → Up` ist kein Alarmgrund).
+Menu item **“Log”** under Monitoring, for all users: warnings and failures and their end (changes from warning/down to “OK”) across all sensors, plus
+**pauses** (`storage::pauses::log_entries`: “Paused” by whom, with reason and planned end, duration until resumed or “ongoing”; “Resumed” by whom; “Pause
+ended” at the planned end; for devices and groups “whole device”/“whole group” instead of the sensor), both together **newest first** (`web::log`,
+`storage::status::problem_log`). Columns: time, status with the previous status, sensor, device with group path, message, duration. For a warning/failure
+the duration is the time until the next change, or “ongoing” with the time so far; for a recovery “after …” it is the duration of the problem before (from
+`LAG`/`LEAD` over the changes of the same sensor). First polls, pausing and “Unknown” are not in the log but count towards the 500 stored changes. The pause
+log (`pause_log`) also keeps the newest 500 entries. At the top right, “Refresh” with “Auto”.
+
+- `storage::status::record_poll` writes values, state and event in **one transaction** and returns the `StatusChange`
+  (notifications hook in there; a change `NULL → Up` is no reason for an alert).
 
 ## Tests
 
-Unit-Tests für die Statuslogik und `storage::status`; Poller-Tests gegen den Fake-Agenten (Messwerte, Warning → Down → Up, Fail-fast, Rate nach
-dem zweiten Zyklus, pausierte/gelöschte Sensoren, Start und Stopp). Manuell gegen die echte Hardware:
-`cargo test --test omada_manual poller_cycle -- --ignored --nocapture` (temporäre Datenbank, Switch und AP, zwei Zyklen).
+Unit tests for the status logic and `storage::status`; poller tests against the fake agent (values, Warning → Down → Up, fail fast, rate after the second
+cycle, paused/deleted sensors, start and stop). Manually against real hardware:
+`cargo test --test omada_manual poller_cycle -- --ignored --nocapture` (temporary database, switch and AP, two cycles).

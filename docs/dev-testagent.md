@@ -1,29 +1,29 @@
-# Lokaler SNMP-Testagent (net-snmp)
+# Local SNMP test agent (net-snmp)
 
-Der lokale `snmpd` dient als Testagent für den Spike und die Integrationstests (nur Entwicklungsrechner).
-Er lauscht auf `127.0.0.1:161`, v2c funktioniert mit der Community `public`.
+The local `snmpd` serves as the test agent for the spike and the integration tests (development machine only).
+It listens on `127.0.0.1:161`; v2c works with the community `public`.
 
-> Passwörter nur lokal verwenden. Keine echten Gerätezugangsdaten in diese Datei oder ins Repository schreiben.
+> Use passwords only locally. Do not write real device credentials into this file or into the repository.
 
-## SNMPv3-Benutzer anlegen
+## Creating an SNMPv3 user
 
-Beispiel: Benutzer `netmontest`, SHA-256 / AES-128. Die Passwörter (mindestens 8 Zeichen) frei wählen.
+Example: user `netmontest`, SHA-256 / AES-128. Choose the passwords freely (at least 8 characters).
 
 ```bash
 sudo systemctl stop snmpd
-echo 'createUser netmontest SHA-256 "AUTH_PASSWORT" AES "PRIV_PASSWORT"' | sudo tee -a /var/lib/snmp/snmpd.conf
+echo 'createUser netmontest SHA-256 "AUTH_PASSWORD" AES "PRIV_PASSWORD"' | sudo tee -a /var/lib/snmp/snmpd.conf
 echo 'rouser netmontest authPriv' | sudo tee -a /etc/snmp/snmpd.conf
 sudo systemctl start snmpd
 ```
 
-Beim Start ersetzt `snmpd` die `createUser`-Zeile in `/var/lib/snmp/snmpd.conf` durch den gehashten Schlüssel.
-Das Klartextpasswort steht danach nicht mehr in der Datei. `rouser` erlaubt ausschließlich lesenden Zugriff.
+On startup, `snmpd` replaces the `createUser` line in `/var/lib/snmp/snmpd.conf` with the hashed key.
+The plain-text password is then no longer in the file. `rouser` allows read-only access exclusively.
 
 ## Test
 
-Auf dem Entwicklungsrechner sind keine MIB-Dateien installiert (`snmp-mibs-downloader` ist non-free), daher mit
-numerischen OIDs arbeiten. Die Zugangsdaten liegen lokal in `~/.config/opennetmon-dev/test-agent.env` (Rechte 0600,
-nicht im Repository). Vorher laden mit `. ~/.config/opennetmon-dev/test-agent.env`.
+No MIB files are installed on the development machine (`snmp-mibs-downloader` is non-free), so work with numeric OIDs.
+The credentials are kept locally in `~/.config/opennetmon-dev/test-agent.env` (permissions 0600, not in the repository).
+Load them first with `. ~/.config/opennetmon-dev/test-agent.env`.
 
 ```bash
 # v2c: sysDescr, sysUpTime
@@ -33,26 +33,26 @@ snmpget -v2c -c public -On 127.0.0.1 1.3.6.1.2.1.1.1.0 1.3.6.1.2.1.1.3.0
 V3=(-v3 -l authPriv -u "$OPENNETMON_TEST_V3_USER" -a SHA-256 -A "$OPENNETMON_TEST_V3_AUTH_PASS" -x AES -X "$OPENNETMON_TEST_V3_PRIV_PASS")
 snmpget "${V3[@]}" -On 127.0.0.1 1.3.6.1.2.1.1.1.0 1.3.6.1.2.1.1.3.0
 
-# GETBULK-Walk über ifXTable (1.3.6.1.2.1.31.1.1) und ifTable (1.3.6.1.2.1.2.2)
+# GETBULK walk over ifXTable (1.3.6.1.2.1.31.1.1) and ifTable (1.3.6.1.2.1.2.2)
 snmpbulkwalk "${V3[@]}" -On 127.0.0.1 1.3.6.1.2.1.31.1.1
 snmpbulkwalk "${V3[@]}" -On 127.0.0.1 1.3.6.1.2.1.2.2
 ```
 
-Erwartung: v2c und v3 liefern dieselbe `sysDescr`. `Authentication failure` bedeutet falsches Passwort,
-`Unknown user name`, dass der Benutzer nicht angelegt wurde (Reihenfolge: erst `stop`, dann `createUser`, dann `start`).
-Ein `snmpset` muss mit `noAccess` abgelehnt werden (nur `rouser`).
+Expected: v2c and v3 return the same `sysDescr`. `Authentication failure` means a wrong password,
+`Unknown user name` that the user was not created (order: first `stop`, then `createUser`, then `start`).
+An `snmpset` must be rejected with `noAccess` (only `rouser`).
 
-Stand 2026-10-15: v2c, v3 SHA-256/AES-128, GETBULK-Walk (`ifXTable` 54 Zeilen, `ifTable` 66 Zeilen),
-falsches Passwort und SET-Ablehnung gegen den lokalen `snmpd` mit den Kommandozeilentools verifiziert.
-Der Rust-Spike (`snmp2`) ist damit noch nicht getestet.
+As of 2026-10-15: v2c, v3 SHA-256/AES-128, GETBULK walk (`ifXTable` 54 rows, `ifTable` 66 rows), a wrong password and the rejected SET were verified
+against the local `snmpd` with the command line tools. The Rust spike (`snmp2`) was then tested against the same agent (`docs/decisions/0001-language.md`);
+`tests/snmp_local.rs` uses it for the integration tests.
 
-## Weitere Kombinationen testen
+## Testing other combinations
 
-Zum Prüfen der auf den Omada-Geräten verwendeten Kombination den Benutzer mit anderen Protokollen anlegen
-(zum Beispiel `SHA` + `AES`, `SHA-512` + `AES`, `MD5` + `DES`). Pro Benutzer eine eigene `createUser`-Zeile
-und ein eigenes `rouser`. Welche Protokolle der lokale `snmpd` unterstützt, zeigt `snmpd --help`/`man snmpd.conf`.
+To check the combination used on your devices, create the user with other protocols
+(for example `SHA` + `AES`, `SHA-512` + `AES`, `MD5` + `DES`). One `createUser` line and one `rouser` per user.
+`snmpd --help`/`man snmpd.conf` shows which protocols the local `snmpd` supports.
 
-## Benutzer wieder entfernen
+## Removing the user again
 
 ```bash
 sudo systemctl stop snmpd

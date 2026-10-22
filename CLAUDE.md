@@ -24,7 +24,7 @@ Switches und Access Points antworten, der ER605 nicht. Switches liefern 64-Bit-C
 **Phase 0 (Spike) ist abgeschlossen, Entscheidung am 2026-10-15: Rust bleibt.** `examples/snmp_probe` fragt
 `sysDescr`, `sysUpTime`, `ifHCInOctets` und GETBULK-Walks über `ifTable`/`ifXTable` per SNMPv2c und SNMPv3
 (authNoPriv und authPriv) ab und lief gegen den lokalen `snmpd` (SHA-256/AES-128) sowie gegen alle SNMP-fähigen Omada-Geräte
-(authNoPriv/MD5). Details und Messwerte: `docs/decisions/0001-sprache.md`.
+(authNoPriv/MD5). Details und Messwerte: `docs/decisions/0001-language.md`.
 
 Der Python-Fallback (unten) ist **nicht** gewählt und nur noch als Dokumentation der Alternative erhalten.
 Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund dokumentieren und nachfragen.
@@ -85,14 +85,14 @@ sind mit 7.x nicht kompatibel), SQLite via SQLAlchemy + Alembic, Paketverwaltung
 ## MVP-Umfang
 
 1. Geräteverwaltung (CRUD), Gruppen, SNMP-Credentials (v2c, v3 authNoPriv/authPriv) als wiederverwendbare Profile – **umgesetzt**
-   (`docs/snmp-profile.md`, `docs/geraete-und-gruppen.md`), inklusive Verbindungstest je Gerät
+   (`docs/snmp-profiles.md`, `docs/devices-and-groups.md`), inklusive Verbindungstest je Gerät
 2. Sensortypen: Ping, SNMP Uptime, Interface-Traffic (IF-MIB, 64-Bit-HC-Counter), Interface-Status
    (`ifOperStatus`), benutzerdefinierter OID-Sensor (Gauge/Counter)
-3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden – **umgesetzt** (`docs/sensoren.md`);
+3. Auto-Discovery der Interfaces per Walk; Nutzer wählt, welche als Sensoren angelegt werden – **umgesetzt** (`docs/sensors.md`);
    darüber hinaus MIB-Import und „Werte suchen“ (PoE, CPU, Speicher, Hardware-Sensoren; neue Sensoren inaktiv) – **umgesetzt** (`docs/mibs.md`)
-4. Schwellwerte je Kanal → Statusberechnung; Statusübersicht und Detailseite mit Graph (1h/24h/7d/30d) – **umgesetzt** (`docs/graphen-und-schwellwerte.md`)
-5. Login (lokale Benutzer), Rolle Admin/Leser – **umgesetzt** (erster Admin per CLI, danach Benutzerverwaltung in der Oberfläche `web::users`, siehe `docs/benutzer-und-login.md`)
-6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – **umgesetzt**, Einstellungen in der Oberfläche (`docs/benachrichtigung.md`)
+4. Schwellwerte je Kanal → Statusberechnung; Statusübersicht und Detailseite mit Graph (1h/24h/7d/30d) – **umgesetzt** (`docs/charts-and-thresholds.md`)
+5. Login (lokale Benutzer), Rolle Admin/Leser – **umgesetzt** (erster Admin per CLI, danach Benutzerverwaltung in der Oberfläche `web::users`, siehe `docs/users-and-login.md`)
+6. Benachrichtigung per E-Mail (SMTP) bei Statuswechsel – **umgesetzt**, Einstellungen in der Oberfläche (`docs/notifications.md`)
 
 **Nicht im MVP:** SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET,
 Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benötigten TP-Link-OIDs.
@@ -105,7 +105,7 @@ Ein Binary, ein Prozess, Module:
   `Msg::Text` unverändert; `Display` = Deutsch für Logs), Sprache der Anfrage als Task-Local (`scope`, `current`, `set_current`; gesetzt von der
   Middleware `web::request_language` aus `Accept-Language` und vom `CurrentUser`-Extractor aus `users.language`); gespeicherte Meldungen als
   `Msg::encode` (Zustand, Ereignisse, Sendelog); `js_texts()` liefert die `js-…`-Nachrichten als JSON-Datenblock für `static/*.js`
-  (`T('key')` aus `static/theme.js`, Platzhalter `%1`); Tests prüfen die Kataloge gegeneinander und gegen Code, Templates und JS (`docs/uebersetzungen.md`)
+  (`T('key')` aus `static/theme.js`, Platzhalter `%1`); Tests prüfen die Kataloge gegeneinander und gegen Code, Templates und JS (`docs/translations.md`)
 - `tls` – eingebautes HTTPS: `generate` (ECDSA P-256, zehn Jahre, SAN aus `certificate_names`: `--name`-Werte, Hostname, localhost, Loopback; ungültige Namen
   vom System überspringt die CLI), `load` (PEM-Kette + Schlüssel PKCS#8/PKCS#1/SEC1, Schlüssel 0600 Pflicht, Fingerabdruck), `serve` (ein Port, nur HTTPS: erstes Byte
   `0x16` → TLS, sonst `301` auf `https://` mit Host/Pfad aus der Anfrage bzw. `400`; Handshake- und Header-Timeouts); Config `tls_cert_file`/`tls_key_file`
@@ -122,20 +122,20 @@ Ein Binary, ein Prozess, Module:
 - `templates` – Gerätevorlagen: `Body` (Regeln als JSON in `device_templates`, Migration `0011`), `build` aus den Sensoren eines Geräts,
   `plan` (reine Logik: nur Fehlendes, Übersprungenes mit Grund), `apply` (Interfaces lesen, OIDs per GET prüfen, Sensoren mit Schwellwerten anlegen),
   `detect` über `sysObjectID`; `storage::templates`, `devices.template_id`; Seiten `web::templates` (`/templates`, `/devices/<id>/template/new|apply`),
-  Auswahl „automatisch erkennen“ beim Anlegen eines Geräts (`docs/geraetevorlagen.md`)
+  Auswahl „automatisch erkennen“ beim Anlegen eines Geräts (`docs/device-templates.md`)
 - `value_discovery` – Tabellen/Gruppen walken und Sensorvorschläge bilden (Namen, Faktor, Einheit); Seite `web::sensor_values`, neue Sensoren standardmäßig **pausiert** (`enabled = false`, Status „Pausiert“), Sammelaktionen `web::sensors::bulk`
 - `pause` – Pausieren wie in PRTG: `Target` (Gruppe/Gerät/Sensor), `Pause` (Ende, Grund), `Pauses` (Vererbung Sensor → Gerät → Gruppen, `Why`/`Source`),
   `parse_duration`/`validate_reason`; `storage::pauses` (`load`, `pause`, `resume`, `expire` vom Poller alle 15 s, `log_entries`; Tabelle `pause_log`, neueste 500,
   Migration `0016`: `paused`/`pause_until_ms`/`pause_reason` an `groups`/`devices`, eigene Sensorpause bleibt `enabled = 0`); Seiten `web::pause`
   (`/pause/<kind>/<id>`, `/resume/<kind>/<id>`); beim Pausieren Zustand sofort „Pausiert“ (`storage::status::mark_paused`), erste Abfrage danach ohne alten Zustand
-  (keine nachträgliche Erholungsmail); im Protokoll mit Problemen gemischt (`docs/geraete-und-gruppen.md`, „Pausieren“)
+  (keine nachträgliche Erholungsmail); im Protokoll mit Problemen gemischt (`docs/devices-and-groups.md`, „Pausieren“)
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum; `DeviceKind`: Gerätetyp, nur fürs Symbol in der Übersicht, Spalte `kind`, Migration `0015`); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - Geräte ohne SNMP: `Device.profile_id` ist `Option` (`None` = „Kein SNMP – nur Ping“, `has_snmp()`, `profile_label()`); interaktive SNMP-Aktionen holen die Zugangsdaten über `web::snmp_credentials` (Fehlermeldung für Ping-Geräte). Die Spalte wurde nachträglich nullbar: `storage::migrate` baut `devices` einmalig mit abgeschalteten Fremdschlüsseln neu auf (`allow_devices_without_profile`), weil das in einer sqlx-Migration (immer Transaktion) nicht geht
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::pauses` für Pausen und ihr Protokoll, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
 - `poller` – Supervisor + eine Aufgabe je Gerät, die Gerät/Sensoren/Profil in jedem Zyklus neu lädt; verteilt Startzeiten über das Intervall
   (kein Burst zur vollen Minute); globale Nebenläufigkeit per `Semaphore` (`poll_concurrency`, `poller_enabled`); Timeout und Retries pro Gerät;
   ein langsames Gerät blockiert nie andere; nach geräteweitem SNMP-Fehler werden die übrigen SNMP-Sensoren des Zyklus übersprungen (`docs/poller.md`)
-- `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets), `sensors::local` („Dieser Server“: `LocalMetric` CPU, Load, Speicher, Uptime, Dateisystem, Temperatur, Traffic aus `/proc`, `/sys` und `statvfs`; Typ `local`, Spalte `sensors.target`, Tabelle einmalig neu aufgebaut von `storage::migrate`/`allow_local_sensors`; Seite `web::server_values` unter `/devices/<id>/server`, erreichbar über den Typ „Dieser Server“ in „Sensor hinzufügen“ (jedes Gerät) und als Knopf bei Gerätetyp Server, Loopback-Adresse oder vorhandenen lokalen Sensoren; die Unit setzt kein `ProcSubset=pid`; `docs/sensoren.md`), `sensors::spec` (`SensorSpec`: Validierung, Kanäle, `build()`, `parse_oid`). `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
+- `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets), `sensors::local` („Dieser Server“: `LocalMetric` CPU, Load, Speicher, Uptime, Dateisystem, Temperatur, Traffic aus `/proc`, `/sys` und `statvfs`; Typ `local`, Spalte `sensors.target`, Tabelle einmalig neu aufgebaut von `storage::migrate`/`allow_local_sensors`; Seite `web::server_values` unter `/devices/<id>/server`, erreichbar über den Typ „Dieser Server“ in „Sensor hinzufügen“ (jedes Gerät) und als Knopf bei Gerätetyp Server, Loopback-Adresse oder vorhandenen lokalen Sensoren; die Unit setzt kein `ProcSubset=pid`; `docs/sensors.md`), `sensors::spec` (`SensorSpec`: Validierung, Kanäle, `build()`, `parse_oid`). `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
 - `maintenance` – Rollups (`samples_1h`, `samples_1d`) und Aufbewahrung (Config `retention_raw_days`, `retention_hourly_days`), vom Poller periodisch gestartet
 - `status` – `Thresholds` (je Kanal warn/down über/unter, strikt, sofort ohne Entprellung), `ValueState`/`ChannelRules` (Bewertung benannter Statuswerte je Kanal, Tabelle `value_states`, Migration `0012`), `suggest_status` (Vorschlag aus dem Namen, beim Anlegen über `web::sensor_text::rate_new_sensor`), `assess_with` (Messergebnis + Grenzen + Bewertungen → `Assessment`; `assess` ohne Bewertungen), `advance` (Zustandsautomat: erster Fehler `Warning`, ab dem zweiten `Down`, Erfolg sofort `Up`), `device_status`; `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignislog (`sensor_status`, `events`) in einer Transaktion
 - `alerting` – `AlertEvent`, `is_alertworthy`, `compose` (in der Mail-Sprache `MailConfig.language`), `deliver`; `Notifier`-Aufgabe sammelt Wechsel 10 s lang zu einer Mail; vom Poller über eine `mpsc`-Queue gespeist (nie blockierend)
@@ -168,17 +168,17 @@ Ein Binary, ein Prozess, Module:
   CSRF-Schutz für alle POST-Formulare (Login: Double-Submit-Cookie, danach Token pro Sitzung)
 - Sitzungen serverseitig; in der DB steht nur der SHA-256-Wert des Cookie-Tokens; kein Standardbenutzer, erster Admin per CLI
 - Sicherheits-Header auf allen Antworten (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`)
-- Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/benutzer-und-login.md`)
+- Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/users-and-login.md`)
 - Omada-SNMP ist nur authNoPriv/MD5 (keine Verschlüsselung, schwacher Hash): nur im privaten Netz, Passwort lang und einzigartig wählen
 - Ausgelieferte Config (Paket, `install.sh`): `listen = "0.0.0.0:8443"` mit eingebautem HTTPS (seit 0.3.0, Wunsch des Nutzers: direkter Zugriff per IP und Port, zwingend HTTPS);
   Zertifikat `/etc/opennetmon/tls-cert.pem`/`tls-key.pem` bei der Installation selbst signiert erzeugt (`hostname -f`, `hostname -I`), ersetzbar durch ein eigenes
-  (`docs/betrieb.md`, „HTTPS“: eigene CA mit openssl, Let's Encrypt, Port 443 per Drop-in mit `CAP_NET_BIND_SERVICE`). Ohne `tls_*` Standard-Bind `127.0.0.1:8080`
+  (`docs/operations.md`, „HTTPS“: eigene CA mit openssl, Let's Encrypt, Port 443 per Drop-in mit `CAP_NET_BIND_SERVICE`). Ohne `tls_*` Standard-Bind `127.0.0.1:8080`
   für einen Reverse Proxy (Caddy oder nginx); kein HSTS (gälte für alle Ports des Hosts)
 - Eingaben (IP, OID, Intervalle) serverseitig validieren
 
 ## Betrieb auf Ubuntu Server
 
-Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
+Vollständige Anleitung: `docs/operations.md`. Dateien unter `deploy/`:
 
 - Release-Build als statisches Binary: Target `x86_64-unknown-linux-musl` (vermeidet glibc-Versionskonflikte zwischen Zorin und dem Server)
 - Debian-Paket (empfohlen für Ubuntu/Debian amd64): `dev/deb.sh` baut mit `cargo-deb` (`[package.metadata.deb]` in `Cargo.toml`) `target/debian/opennetmon_<version>-1_amd64.deb`;
@@ -202,7 +202,7 @@ Vollständige Anleitung: `docs/betrieb.md`. Dateien unter `deploy/`:
 - Code, Bezeichner, Commit-Messages und Code-Kommentare: Englisch
 - UI-Texte: über die Fluent-Kataloge in `locales/` (Deutsch ist Ausgangssprache, Englisch muss mitgepflegt werden; keine festen Texte mehr in Templates
   oder Rust-Code – Seiten nutzen `t.get("id")`, Fachlogik liefert `Msg`, JS nutzt `T('key')`). `Msg::Text` nur für fremde Texte (Gerät, SMTP-Server);
-  Benachrichtigungs-Mails in der Sprache von `mail_settings.language` (eine für alle Empfänger). Projektdokumentation (`docs/`): Deutsch; `README.md`: Englisch
+  Benachrichtigungs-Mails in der Sprache von `mail_settings.language` (eine für alle Empfänger). Dokumentation (`docs/`, `mibs/README.md`) und `README.md`: **Englisch** (seit 2026-10-22, vorher war `docs/` deutsch); nur CLAUDE.md und PLAN.md bleiben deutsch
 - Kein `unwrap()`/`expect()` außerhalb von Tests und Startcode; Fehler über eigenen Error-Typ mit `IntoResponse`
 - Kleine, thematisch abgeschlossene Commits; nach jedem MVP-Schritt lauffähiger Stand
 - Neue Sensortypen nur über den `Sensor`-Trait, keine Sonderfälle im Poller
@@ -241,7 +241,7 @@ dev/release.sh --publish --notes <datei>                               # zusätz
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
-Releases: Version in `Cargo.toml` erhöhen und committen, dann `dev/release.sh --publish --notes <datei>` (Release-Notizen auf Deutsch; prüft sauberen,
+Releases: Version in `Cargo.toml` erhöhen und committen, dann `dev/release.sh --publish --notes <datei>` (Release-Notizen auf **Englisch** seit 2026-10-22; v0.1.0–v0.4.1 sind zweisprachig, Englisch oben; prüft sauberen,
 gepushten Stand, fmt/clippy/Tests, Fremdlizenzen, Installer-Probelauf aus dem Archiv, Inhalt des .deb; 0.x als Vorabversion). Bisher: **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, erstmals mit .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS), **v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln; Repo privat), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen), **v0.4.1** (2026-10-21, Sensoren „Dieser Server“).
 
 `README.md` (GitHub-Startseite) ist seit 2026-10-19 **nur noch Englisch** und wird nur auf Englisch gepflegt; bei Meilensteinen mitpflegen: Status-Tabelle, Konfigurationsbeispiel und Dokumentationsliste müssen zum Code passen.

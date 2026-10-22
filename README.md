@@ -11,7 +11,7 @@ A single, statically linked binary (Rust) with SQLite – meant to run on a head
 > The target environment is a private network with TP-Link Omada (switches and access points via SNMPv3); it works with any device that speaks SNMP v2c or v3.
 
 > **Language:** The user interface is available in German and English (language per user, by default the browser's).
-> The project documentation in [`docs/`](docs/) and the planning files are currently written in German.
+> The documentation in [`docs/`](docs/) is in English; only the internal planning files (`PLAN.md`, `CLAUDE.md`) are written in German.
 
 ## Try it – testers welcome
 
@@ -30,7 +30,7 @@ Feedback from your network is very welcome – especially devices from other ven
    ```
 
 3. Open `https://<server address>:8443`. The browser warns once about the self-signed certificate; compare its fingerprint with the
-   one printed during installation, or use your own certificate ([`docs/betrieb.md`](docs/betrieb.md)).
+   one printed during installation, or use your own certificate ([`docs/operations.md`](docs/operations.md)).
 4. Report what you find as an [issue](https://github.com/tomCSLK/opennetmon/issues/new/choose) – never include passwords or keys.
 
 ## Status
@@ -128,7 +128,7 @@ Then open **`https://<server address>:8443`** from any computer in the network (
 Both create the user, configuration, key, a self-signed HTTPS certificate for the server's host name and addresses, a hardened systemd unit, the ping
 permission and a daily database backup, and leave existing configuration, key, certificate and data untouched on updates (the package installs to `/usr`,
 the script to `/usr/local`). The browser warns about the self-signed certificate once; compare the SHA-256 fingerprint printed on installation (and logged on
-every start) before accepting it, or use your own certificate. [`docs/betrieb.md`](docs/betrieb.md) covers your own certificate (including a small private CA
+every start) before accepting it, or use your own certificate. [`docs/operations.md`](docs/operations.md) covers your own certificate (including a small private CA
 and Let's Encrypt), port 443, running behind Caddy or nginx instead, update, rollback, backup, restore and troubleshooting.
 
 ## Security
@@ -145,24 +145,22 @@ Please report vulnerabilities privately, not as an issue: see [`SECURITY.md`](SE
 
 ## Documentation
 
-The documentation is in German.
-
 | | |
 |---|---|
-| [`PLAN.md`](PLAN.md) | Phases, status, next steps |
-| [`CLAUDE.md`](CLAUDE.md) | Architecture, conventions, commands (working instructions for development with Claude Code) |
-| [`docs/benutzer-und-login.md`](docs/benutzer-und-login.md) | Users, roles, sessions, language |
-| [`docs/snmp-profile.md`](docs/snmp-profile.md) | SNMP profiles and encryption |
-| [`docs/geraete-und-gruppen.md`](docs/geraete-und-gruppen.md) | Devices, groups, connection test |
-| [`docs/sensoren.md`](docs/sensoren.md) | Sensor types, counter logic, discovery |
+| [`PLAN.md`](PLAN.md) | Phases, status, next steps (German) |
+| [`CLAUDE.md`](CLAUDE.md) | Architecture, conventions, commands (working instructions for development with Claude Code; German) |
+| [`docs/users-and-login.md`](docs/users-and-login.md) | Users, roles, sessions, language |
+| [`docs/snmp-profiles.md`](docs/snmp-profiles.md) | SNMP profiles and encryption |
+| [`docs/devices-and-groups.md`](docs/devices-and-groups.md) | Devices, groups, connection test |
+| [`docs/sensors.md`](docs/sensors.md) | Sensor types, counter logic, discovery |
 | [`docs/poller.md`](docs/poller.md) | Polling, status logic, event log |
-| [`docs/graphen-und-schwellwerte.md`](docs/graphen-und-schwellwerte.md) | Detail page, charts, thresholds, status values, rollups |
-| [`docs/betrieb.md`](docs/betrieb.md) | Installation, proxy, update, backup, troubleshooting |
-| [`docs/geraetevorlagen.md`](docs/geraetevorlagen.md) | Device templates: create from a device, apply when adding a device or later |
+| [`docs/charts-and-thresholds.md`](docs/charts-and-thresholds.md) | Detail page, charts, thresholds, status values, rollups |
+| [`docs/operations.md`](docs/operations.md) | Installation, proxy, update, backup, troubleshooting |
+| [`docs/device-templates.md`](docs/device-templates.md) | Device templates: create from a device, apply when adding a device or later |
 | [`docs/mibs.md`](docs/mibs.md) | MIB files, custom OID by name, finding values |
-| [`docs/benachrichtigung.md`](docs/benachrichtigung.md) | E-mail settings, rules, test SMTP server |
-| [`docs/uebersetzungen.md`](docs/uebersetzungen.md) | Translations: Fluent catalogs, rules, texts in JavaScript, adding a language |
-| [`docs/decisions/0001-sprache.md`](docs/decisions/0001-sprache.md) | Decision for Rust (spike results) |
+| [`docs/notifications.md`](docs/notifications.md) | E-mail settings, rules, test SMTP server |
+| [`docs/translations.md`](docs/translations.md) | Translations: Fluent catalogs, rules, texts in JavaScript, adding a language |
+| [`docs/decisions/0001-language.md`](docs/decisions/0001-language.md) | Decision for Rust (spike results) |
 
 ## Contributing
 

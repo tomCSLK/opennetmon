@@ -12,33 +12,33 @@ Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstes
 Umgesetzt (Details in `docs/`):
 
 - **Geräte und Gruppen:** CRUD, hierarchische Gruppen, Verbindungstest, Geräte ohne SNMP (nur Ping; der ER605 läuft so), Gerätetypen fürs Symbol
-  in der Übersicht, Reihenfolge automatisch natürlich sortiert oder von Hand (Ziehen, ↑/↓, Position) (`docs/geraete-und-gruppen.md`)
-- **SNMP-Profile:** v2c und v3 authNoPriv/authPriv, Secrets verschlüsselt (`docs/snmp-profile.md`)
+  in der Übersicht, Reihenfolge automatisch natürlich sortiert oder von Hand (Ziehen, ↑/↓, Position) (`docs/devices-and-groups.md`)
+- **SNMP-Profile:** v2c und v3 authNoPriv/authPriv, Secrets verschlüsselt (`docs/snmp-profiles.md`)
 - **Sensoren:** Ping, Uptime, Interface-Traffic (64 Bit mit Fallback auf 32 Bit), Interface-Status, OID (Gauge/Counter); Interface-Discovery per Walk,
-  Umbenennen, Mini-Graphen der letzten Stunde (`docs/sensoren.md`)
+  Umbenennen, Mini-Graphen der letzten Stunde (`docs/sensors.md`)
 - **Dieser Server:** CPU-Last, Load, Arbeitsspeicher und Swap, Laufzeit, Dateisysteme, Temperaturen (hwmon) und Netzwerk-Traffic des Rechners, auf
   dem opennetmon läuft, direkt aus `/proc`, `/sys` und `statvfs` (kein snmpd, keine Zugangsdaten); Auswahl per Häkchen, Grenzen für Speicher,
-  Dateisysteme und Temperaturen beim Anlegen (`docs/sensoren.md`, „Dieser Server“)
+  Dateisysteme und Temperaturen beim Anlegen (`docs/sensors.md`, „Dieser Server“)
 - **MIBs:** Import mit Parser und Standard-MIBs, OID per Name; „Werte suchen“ (PoE je Port, CPU, Speicher, Temperaturen, Lüfter; neue Sensoren pausiert)
   (`docs/mibs.md`, getestet am SG2008P)
 - **Gerätevorlagen:** aus einem eingerichteten Gerät speichern, beim Anlegen automatisch per `sysObjectID` oder später per Knopf anwenden, nur Fehlendes
-  anlegen (`docs/geraetevorlagen.md`, getestet SG2008 → SG2008)
+  anlegen (`docs/device-templates.md`, getestet SG2008 → SG2008)
 - **Poller und Status:** Scheduler mit Jitter, Semaphore, Timeouts/Retries, Fail-fast bei geräteweitem SNMP-Fehler; Statuslogik, Ereignislog (`docs/poller.md`)
 - **Schwellwerte und Graphen:** je Kanal warn/down über/unter, Bewertung von Aufzählungswerten (In Ordnung/Warnung/Ausfall je Wert, Vorschlag aus den
   Namen), Detailseite mit uPlot-Graph 1h/24h/7d/30d (bis 120 gemittelte Punkte), Messwerte-Tabelle wie die PRTG-Livedaten, Rollups und Retention
-  (`docs/graphen-und-schwellwerte.md`)
+  (`docs/charts-and-thresholds.md`)
 - **Übersicht:** Gerätebaum wie in PRTG (Linien, ⊟/⊞, Sensorplaketten je Zustand, Summen je Teilbaum), Kacheln öffnen sortierbare Statuslisten,
   „Aktualisieren“ mit automatischem Neuladen alle 60 s
 - **Pausieren wie in PRTG:** Gruppen, Geräte und Sensoren bis zum Fortsetzen oder 15 min bis 1 Woche, mit Grund; Vererbung nach unten, Ablauf durch den
-  Poller, Neustart ohne alten Zustand (keine nachträgliche Erholungsmail) (`docs/geraete-und-gruppen.md`, „Pausieren“)
+  Poller, Neustart ohne alten Zustand (keine nachträgliche Erholungsmail) (`docs/devices-and-groups.md`, „Pausieren“)
 - **Protokoll** (`/log`): Warnungen, Ausfälle und ihr Ende, gemischt mit Pausen (je die neuesten 500)
-- **Benachrichtigung:** E-Mail bei Statuswechsel, Einstellungen in der Oberfläche, Testmail, Sendelog (`docs/benachrichtigung.md`; getestet nur gegen
+- **Benachrichtigung:** E-Mail bei Statuswechsel, Einstellungen in der Oberfläche, Testmail, Sendelog (`docs/notifications.md`; getestet nur gegen
   Test-SMTP-Server)
-- **Benutzer:** Login, Rollen Admin/Leser, Benutzerverwaltung in der Oberfläche, „Mein Konto“, Begrenzung der Anmeldeversuche (`docs/benutzer-und-login.md`)
-- **Mehrsprachigkeit:** Oberfläche Deutsch/Englisch je Benutzer, Mails in einer einstellbaren Sprache, README auf Englisch (`docs/uebersetzungen.md`)
+- **Benutzer:** Login, Rollen Admin/Leser, Benutzerverwaltung in der Oberfläche, „Mein Konto“, Begrenzung der Anmeldeversuche (`docs/users-and-login.md`)
+- **Mehrsprachigkeit:** Oberfläche Deutsch/Englisch je Benutzer, Mails in einer einstellbaren Sprache, README auf Englisch (`docs/translations.md`)
 - **Oberfläche:** Seitenleiste, Kacheln, hell/dunkel, alle Zeiten in der Browser-Zeitzone; rein serverseitig gerendert, wenige eigene Skripte in `static/`
 - **Betrieb:** statisches musl-Binary, systemd-Unit mit Hardening, Installer, `.deb`-Paket, eingebautes HTTPS, Backup mit Timer, Proxy-Beispiele
-  (`docs/betrieb.md`)
+  (`docs/operations.md`)
 
 Releases (alle Vorabversionen, x86_64): **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, Mehrsprachigkeit, .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS),
 **v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen),
@@ -58,7 +58,7 @@ brauchen. opennetmon muss sich deshalb Ports und Ressourcen teilen (Standardport
 
 | Thema | Entscheidung |
 |---|---|
-| Sprache | **Rust** (Edition 2024, stable), entschieden am 2026-10-15 nach dem Spike (`docs/decisions/0001-sprache.md`) |
+| Sprache | **Rust** (Edition 2024, stable), entschieden am 2026-10-15 nach dem Spike (`docs/decisions/0001-language.md`) |
 | Web | `axum`, `tower-http`, `askama` (serverseitiges HTML), uPlot für Graphen (lokal vendort, per `rust-embed` ins Binary, kein CDN, kein npm); kein htmx (2026-10-21 gestrichen: die Oberfläche kommt ohne aus, das Neuladen erledigt `static/refresh.js`) |
 | SNMP | `snmp2` (Features `tokio`, `crypto-rust`, `heap_buffers`); v2c und v3 (authNoPriv/authPriv); Omada-Geräte nutzen v3 authNoPriv/MD5; ausschließlich lesend |
 | Ping | `surge-ping`, bevorzugt unprivilegierte ICMP-Sockets (`ping_group_range`) |
@@ -141,7 +141,7 @@ opennetmon/
   tests/                # snmp_local.rs (lokaler snmpd), omada_manual.rs (echte Hardware, #[ignore])
   deploy/               # Unit, Installer, Backup, sysctl, Proxy-Beispiele, deb/ (Maintainer-Skripte)
   dev/                  # config.toml, sync.sh (Drive nur CLAUDE.md und PLAN.md), release.sh, deb.sh, smtp_sink.py, mib-oracle.sh, third-party-licenses.py
-  docs/                 # Projektdokumentation (Deutsch), decisions/
+  docs/                 # Dokumentation (Englisch, seit 2026-10-22), decisions/
 ```
 
 ## Umsetzungsphasen

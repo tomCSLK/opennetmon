@@ -25,6 +25,6 @@ Debian package, `deploy/install.sh` and the systemd units.
 Known and documented, not vulnerabilities in themselves:
 
 - SNMPv3 with authNoPriv or MD5 and SNMPv2c offer weak or no protection; that is a property of the protocol and the devices. Use them
-  only in trusted networks ([`docs/snmp-profile.md`](docs/snmp-profile.md)).
-- The built-in HTTPS uses a self-signed certificate until you replace it ([`docs/betrieb.md`](docs/betrieb.md)).
+  only in trusted networks ([`docs/snmp-profiles.md`](docs/snmp-profiles.md)).
+- The built-in HTTPS uses a self-signed certificate until you replace it ([`docs/operations.md`](docs/operations.md)).
 - No HSTS header (it would apply to all ports of the host).
