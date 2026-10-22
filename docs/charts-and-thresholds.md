@@ -33,7 +33,7 @@ Below the chart – like PRTG's “live data” table – there is one row per v
   themselves.
 - Above the rows are **sum** (volumes only), **average**, **minimum** and **maximum**, each “of N values”. Status channels show the name (`up`, `down` …).
 - The newest **50** rows are shown; “Rows” offers **100** or **500** (the browser remembers the choice).
-  Sum, average, minimum and maximum always cover the whole time range. The table updates together with the chart every 30 s (`static/samples.js`, shared
+  Sum, average, minimum and maximum cover exactly the rows shown (e.g. the newest 50 of 59). The table updates together with the chart every 30 s (`static/samples.js`, shared
   formatting in `static/format.js`).
 - Not yet as in PRTG: columns for downtime and coverage (failed polls are not stored as rows; gaps are visible in the chart).
 

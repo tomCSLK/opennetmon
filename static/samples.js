@@ -1,6 +1,6 @@
 // Table of measured values below the chart (like PRTG's "Live data" table): one row per point,
-// newest first, with average/minimum/maximum (and the summed volume for traffic) on top. The summary
-// covers the whole range; the viewer picks how many of the newest rows are listed (50/100/500).
+// newest first, with average/minimum/maximum (and the summed volume for traffic) on top. The viewer
+// picks how many of the newest rows are listed (50/100/500); the summary covers exactly those rows.
 // Renders from the data static/chart.js loads (event "opennetmon:data"), so both refresh together.
 (function () {
   'use strict';
@@ -120,7 +120,7 @@
     table.appendChild(head);
 
     var body = el('tbody');
-    var st = cols.map(function (c) { return stats(c.values); });
+    var st = cols.map(function (c) { return stats(c.values.slice(count - limit)); });
     var summary = [
       { label: T('samples-sum'), pick: function (s, c) { return c.sum ? c.fmt(s.n ? s.sum : null) : ''; }, onlyIf: function () { return cols.some(function (c) { return c.sum; }); } },
       { label: T('samples-average'), pick: function (s, c) { return c.state ? '' : c.fmt(s.avg); } },
@@ -132,7 +132,7 @@
       if (row.onlyIf && !row.onlyIf()) { return; }
       var tr = el('tr', 'summary');
       lastSummary = tr;
-      tr.appendChild(el('td', null, count === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, count)));
+      tr.appendChild(el('td', null, limit === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, limit)));
       cols.forEach(function (c, i) { tr.appendChild(el('td', 'n', row.pick(st[i], c))); });
       body.appendChild(tr);
     });
