@@ -257,10 +257,9 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   und `~/.config/opennetmon-dev/omada.env`, nie im Repo oder auf Drive; Tests nutzen neutrale Werte (`192.0.2.x`, Benutzer `monitor`)
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- GitHub-Repo `tomCSLK/opennetmon` ist noch privat, das Öffentlichmachen ist vorbereitet (2026-10-21: Historie erneut ohne Secrets, Heimnetz-Angaben
-  neutralisiert, `SECURITY.md`, `CONTRIBUTING.md`, Vorlagen unter `.github/`, CI). Umschalten macht der Nutzer; danach „Private vulnerability reporting“,
-  Dependabot-Warnungen und Secret Scanning einschalten. Die Autor-Adresse in den Commits bleibt (Entscheidung des Nutzers)
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
 
-Geklärt: Beiträge nach **DCO** (`Signed-off-by`, CI prüft es bei Pull Requests; 2026-10-21) – eine spätere Doppellizenzierung
+Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
+stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,
+Secret Scanning und Push Protection; Beiträge nach **DCO** (`Signed-off-by`, CI prüft es bei Pull Requests; 2026-10-21) – eine spätere Doppellizenzierung
 bräuchte damit die Zustimmung der Beitragenden; Server hat Internetzugang und betreibt weitere Programme, die es brauchen (2026-10-21); Name opennetmon (mit Logo), Lizenz AGPL-3.0-or-later, Zielumgebung Omada (7 Geräte, im MVP etwa 70 Sensoren, SQLite reicht), SNMPv3 authNoPriv/MD5, Sprache Rust.

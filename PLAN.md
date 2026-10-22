@@ -208,7 +208,6 @@ Begrenzung der Anmeldeversuche (`auth::throttle`).
 
 - ER605: läuft als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- Repo öffentlich machen: vorbereitet (2026-10-21), Umschalten durch den Nutzer
 - Update-Möglichkeit: Weg und Zeitpunkt
 
 Geklärt: Beiträge nach DCO (2026-10-21). Der Server hat Internetzugang und betreibt weitere Programme (2026-10-21).
