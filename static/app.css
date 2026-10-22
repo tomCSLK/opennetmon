@@ -175,7 +175,7 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 .page { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
 .page.narrow { max-width: 760px; }
 
-.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.page-head { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
 .page-head .subtitle { margin: .3rem 0 0; color: var(--muted); }
 .breadcrumb { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .35rem; font-size: .85rem; color: var(--muted); }
 .breadcrumb a { color: var(--muted); }
@@ -438,7 +438,6 @@ a.button.secondary { color: var(--text); }
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tree-meta { display: none; }
   .pills { width: auto; }
-  .page-head .actions { width: 100%; }
   h1 { font-size: 1.3rem; }
 }
 .c-down { color: var(--down); } .c-warning { color: var(--warn); }
