@@ -24,17 +24,29 @@ status changes of this sensor. The sensor list of a device (`/devices/<id>/senso
 
 ## The “Values” table
 
-Below the chart – like PRTG's “live data” table – there is one row per value, **newest at the top**, for the chosen time range
-(1 h: every poll; 24 h, 7 days and 30 days: the chart's 120 block averages, column “Period from”).
+Below the chart – like PRTG's “live data” table – there is one row per **poll** (raw values), **newest at the top**, within the chosen time range.
+This holds for every range, also where the chart shows block averages. How far back the table reaches is chosen next to its title
+(“Time range”; the first entry is the default, the browser remembers the choice per range):
+
+| Chart range | Table reaches back |
+|---|---|
+| 1 hour | the whole hour (no choice; about 60 polls at a 60-second interval) |
+| 24 hours | last hour, last 6 hours, last 24 hours |
+| 7 days | last 6 hours, last 24 hours, last 7 days |
+| 30 days | last 24 hours, last 7 days |
+
+Raw values exist for `retention_raw_days` (7 days by default), so no choice reaches further. Seven days at a 60-second interval are about
+10,000 rows; at most 20,000 rows are sent (the newest). The table loads from its own endpoint `/sensors/<id>/samples?range=…&hours=…`
+(the raw values of the span plus their total).
 
 - Traffic channels have two columns per direction: **volume** (the amount of data in the section, decimal: 1 MB = 1,000,000 bytes) and **speed**.
-  The volume is rate × duration; for raw values the duration is the gap to the previous poll, at most one polling interval (after a restart or a lost poll
-  a longer gap would otherwise inflate the volume), for averages the block length. It is therefore an approximation; PRTG calculates with the counter readings
+  The volume is rate × duration; the duration is the gap to the previous poll, at most one polling interval (after a restart or a lost poll
+  a longer gap would otherwise inflate the volume). It is therefore an approximation; PRTG calculates with the counter readings
   themselves.
 - Above the rows are **sum** (volumes only), **average**, **minimum** and **maximum**, each “of N values”. Status channels show the name (`up`, `down` …).
-- The newest **50** rows are shown; “Rows” offers **100** or **500** (the browser remembers the choice).
-  Sum, average, minimum and maximum cover exactly the rows shown (e.g. the newest 50 of 59). The table updates together with the chart every 30 s (`static/samples.js`, shared
+- Sum, average, minimum and maximum cover exactly the rows shown. The table reloads together with the chart every 30 s (`static/samples.js`, shared
   formatting in `static/format.js`).
+- After a restart of opennetmon a traffic sensor misses one value, because a rate needs two counter readings.
 - Not yet as in PRTG: columns for downtime and coverage (failed polls are not stored as rows; gaps are visible in the chart).
 
 ## Times in tables

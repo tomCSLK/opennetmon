@@ -113,7 +113,13 @@ detail-no-value = no value yet
 detail-no-samples = No values in the chosen time range yet.
 detail-chart-needs-js = The chart needs JavaScript.
 detail-samples = Values
-detail-rows = Rows
+# How far back the table of values reaches ($hours: 1, 6, 24 or 168).
+detail-span = { $hours ->
+    [1] last hour
+    [24] last 24 hours
+    [168] last 7 days
+   *[other] last { $hours } hours
+}
 detail-table-needs-js = The table needs JavaScript.
 detail-new-name = New name
 detail-rename = Rename

@@ -150,6 +150,7 @@ pub fn router(state: AppState) -> Router {
         .route("/log", get(log::log))
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))
+        .route("/sensors/{id}/samples", get(sensor_detail::samples))
         .route(
             "/sensors/{id}/thresholds",
             post(sensor_detail::save_thresholds),

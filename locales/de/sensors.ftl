@@ -113,7 +113,13 @@ detail-no-value = noch kein Messwert
 detail-no-samples = Noch keine Messwerte im gewählten Zeitraum.
 detail-chart-needs-js = Für den Graphen wird JavaScript benötigt.
 detail-samples = Messwerte
-detail-rows = Zeilen
+# Wie weit die Tabelle der Messwerte zurückreicht ($hours: 1, 6, 24 oder 168).
+detail-span = { $hours ->
+    [1] letzte Stunde
+    [24] letzte 24 Stunden
+    [168] letzte 7 Tage
+   *[other] letzte { $hours } Stunden
+}
 detail-table-needs-js = Für die Tabelle wird JavaScript benötigt.
 detail-new-name = Neuer Name
 detail-rename = Umbenennen

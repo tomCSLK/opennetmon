@@ -82,7 +82,7 @@
       .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.json(); })
       .then(function (data) {
         build(data);
-        // The table of values (static/samples.js) renders from the same data.
+        // The table of values (static/samples.js) reloads with the chart.
         window.dispatchEvent(new CustomEvent('opennetmon:data', { detail: data }));
       })
       .catch(function () { /* keep the last picture; the next refresh retries */ });

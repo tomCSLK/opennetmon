@@ -69,16 +69,18 @@
     <h2>{{ t.get("detail-samples") }}</h2>
     <div class="actions">
       <span class="muted small" id="samples-info"></span>
-      <label class="rows-select" for="samples-limit">{{ t.get("detail-rows") }}
-        <select id="samples-limit">
-          <option value="50" selected>50</option>
-          <option value="100">100</option>
-          <option value="500">500</option>
+      {% if spans.len() > 1 %}
+      <label class="rows-select" for="samples-span">{{ t.get("detail-range") }}
+        <select id="samples-span" data-range="{{ range }}">
+          {% for s in spans %}
+          <option value="{{ s.hours }}"{% if loop.first %} selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
         </select>
       </label>
+      {% endif %}
     </div>
   </div>
-  <div id="samples" class="table-wrap" data-empty="{{ t.get("detail-no-samples") }}" aria-live="polite"></div>
+  <div id="samples" class="table-wrap" data-src="/sensors/{{ sensor.id }}/samples?range={{ range }}" data-empty="{{ t.get("detail-no-samples") }}" aria-live="polite"></div>
   <noscript><p class="empty small">{{ t.get("detail-table-needs-js") }}</p></noscript>
 </section>
 

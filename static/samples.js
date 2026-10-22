@@ -1,7 +1,9 @@
-// Table of measured values below the chart (like PRTG's "Live data" table): one row per point,
-// newest first, with average/minimum/maximum (and the summed volume for traffic) on top. The viewer
-// picks how many of the newest rows are listed (50/100/500); the summary covers exactly those rows.
-// Renders from the data static/chart.js loads (event "opennetmon:data"), so both refresh together.
+// Table of measured values below the chart (like PRTG's "Live data" table): one row per poll,
+// newest first, with average/minimum/maximum (and the summed volume for traffic) on top. Always raw
+// values, also where the chart shows averages; in the longer ranges the viewer picks how far back
+// the table reaches (#samples-span, hours) and the summary covers exactly those rows. Loads from
+// #samples[data-src] whenever static/chart.js has loaded new data (event "opennetmon:data"), so both
+// refresh together.
 (function () {
   'use strict';
   var box = document.getElementById('samples');
@@ -9,24 +11,19 @@
   if (!box || !window.opennetmonFormat) { return; }
   var F = window.opennetmonFormat;
   var T = window.opennetmonText;
-  var LIMITS = [50, 100, 500];
-  var select = document.getElementById('samples-limit');
-  var shown = LIMITS[0];
+  var select = document.getElementById('samples-span');
   var data = null;
 
-  // The chosen number of rows is a per-viewer convenience; storage may be blocked.
-  try {
-    var saved = parseInt(localStorage.getItem('opennetmon-samples-limit'), 10);
-    if (LIMITS.indexOf(saved) >= 0) { shown = saved; }
-  } catch (e) { /* default */ }
+  // The chosen span is remembered per range, a per-viewer convenience; storage may be blocked.
   if (select) {
-    select.value = String(shown);
+    var key = 'opennetmon-samples-span-' + select.getAttribute('data-range');
+    try {
+      var saved = localStorage.getItem(key);
+      if (saved && select.querySelector('option[value="' + saved + '"]')) { select.value = saved; }
+    } catch (e) { /* default */ }
     select.addEventListener('change', function () {
-      var n = parseInt(select.value, 10);
-      if (LIMITS.indexOf(n) < 0) { return; }
-      shown = n;
-      try { localStorage.setItem('opennetmon-samples-limit', String(n)); } catch (e) { /* not remembered */ }
-      render();
+      try { localStorage.setItem(key, select.value); } catch (e) { /* not remembered */ }
+      load();
     });
   }
 
@@ -37,25 +34,16 @@
     return e;
   }
 
-  // Seconds a point stands for: the bucket length for averages, otherwise the gap to the previous
-  // sample, at most one polling interval. A rate always describes the last interval; after a gap
-  // (restart, lost poll) the longer distance must not inflate the volume.
+  // Seconds a sample stands for: the gap to the previous sample, at most one polling interval.
+  // A rate always describes the last interval; after a gap (restart, lost poll) the longer distance
+  // must not inflate the volume.
   function durations(d) {
     var out = [];
     for (var i = 0; i < d.ts.length; i++) {
-      if (d.step_secs) { out.push(d.step_secs); continue; }
       var gap = i > 0 ? d.ts[i] - d.ts[i - 1] : d.interval_secs;
       out.push(Math.min(gap, d.interval_secs));
     }
     return out;
-  }
-
-  // Bucket length as whole hours and minutes, e.g. "1 Std. 24 Min.".
-  function stepText(secs) {
-    var h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60), parts = [];
-    if (h) { parts.push(h + ' ' + T('unit-hours')); }
-    if (m || !h) { parts.push(m + ' ' + T('unit-minutes')); }
-    return parts.join(' ');
   }
 
   // Column definitions: traffic channels get a volume and a speed column, like PRTG.
@@ -100,27 +88,21 @@
     var dur = durations(data);
     var cols = columns(data, dur);
     var count = data.ts.length;
-    var limit = Math.min(shown, count);
     if (info) {
-      var text;
-      if (count > limit) { text = T('samples-newest', limit, count); }
-      else { text = count === 1 ? T('samples-one') : T('samples-many', count); }
-      if (data.step_secs) {
-        text += ' · ' + T('samples-averages', stepText(data.step_secs));
-      }
-      info.textContent = text;
+      if (data.total > count) { info.textContent = T('samples-newest', count, data.total); }
+      else { info.textContent = count === 1 ? T('samples-one') : T('samples-many', count); }
     }
 
     var table = el('table', 'samples');
     var head = el('thead');
     var hr = el('tr');
-    hr.appendChild(el('th', null, data.step_secs ? T('samples-period-from') : T('samples-date-time')));
+    hr.appendChild(el('th', null, T('samples-date-time')));
     cols.forEach(function (c) { hr.appendChild(el('th', 'n', c.title)); });
     head.appendChild(hr);
     table.appendChild(head);
 
     var body = el('tbody');
-    var st = cols.map(function (c) { return stats(c.values.slice(count - limit)); });
+    var st = cols.map(function (c) { return stats(c.values); });
     var summary = [
       { label: T('samples-sum'), pick: function (s, c) { return c.sum ? c.fmt(s.n ? s.sum : null) : ''; }, onlyIf: function () { return cols.some(function (c) { return c.sum; }); } },
       { label: T('samples-average'), pick: function (s, c) { return c.state ? '' : c.fmt(s.avg); } },
@@ -132,16 +114,16 @@
       if (row.onlyIf && !row.onlyIf()) { return; }
       var tr = el('tr', 'summary');
       lastSummary = tr;
-      tr.appendChild(el('td', null, limit === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, limit)));
+      tr.appendChild(el('td', null, count === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, count)));
       cols.forEach(function (c, i) { tr.appendChild(el('td', 'n', row.pick(st[i], c))); });
       body.appendChild(tr);
     });
     if (lastSummary) { lastSummary.className = 'summary summary-last'; }
 
-    for (var k = 0; k < limit; k++) {
+    for (var k = 0; k < count; k++) {
       var i = count - 1 - k; // newest first
       var tr = el('tr');
-      tr.appendChild(el('td', 'nowrap', F.dateTime(data.ts[i], !data.step_secs)));
+      tr.appendChild(el('td', 'nowrap', F.dateTime(data.ts[i], true)));
       cols.forEach(function (c) { tr.appendChild(el('td', 'n', c.fmt(c.values[i]))); });
       body.appendChild(tr);
     }
@@ -149,19 +131,18 @@
     box.appendChild(table);
   }
 
-  // Averaged ranges list empty buckets too (gaps in the chart); the table leaves them out.
-  function withValues(d) {
-    var keep = [];
-    for (var i = 0; i < d.ts.length; i++) {
-      if (d.series.some(function (s) { return s.values[i] !== null; })) { keep.push(i); }
-    }
-    if (keep.length === d.ts.length) { return d; }
-    var pick = function (a) { return keep.map(function (i) { return a[i]; }); };
-    return Object.assign({}, d, {
-      ts: pick(d.ts),
-      series: d.series.map(function (s) { return Object.assign({}, s, { values: pick(s.values) }); })
-    });
+  // The newest request wins; an older reply arriving late is dropped.
+  var pending = 0;
+  function load() {
+    var src = box.getAttribute('data-src');
+    if (!src) { return; }
+    var mine = ++pending;
+    if (select) { src += '&hours=' + encodeURIComponent(select.value); }
+    fetch(src, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.json(); })
+      .then(function (d) { if (mine === pending) { data = d; render(); } })
+      .catch(function () { /* keep the last table; the next refresh retries */ });
   }
 
-  window.addEventListener('opennetmon:data', function (e) { data = withValues(e.detail); render(); });
+  window.addEventListener('opennetmon:data', load);
 })();

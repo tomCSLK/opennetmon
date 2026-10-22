@@ -18,7 +18,7 @@ use crate::sensors::format::{channel_label, input_unit, parse_threshold, thresho
 use crate::sensors::spec::SensorSpec;
 use crate::status::{Status, Thresholds, ValueState};
 use crate::storage::devices;
-use crate::storage::measurements::{Range, chart_data, latest_values};
+use crate::storage::measurements::{ChartSeries, Range, chart_data, latest_values, recent_samples};
 use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
 use crate::storage::status as status_store;
 use crate::web::auth::CurrentUser;
@@ -26,6 +26,8 @@ use crate::web::sensor_text::ValueFormat;
 use crate::web::{AppState, Crumb, Layout, flash_message, group_trail, time_html};
 
 const EVENT_LIMIT: u32 = 20;
+/// Safety bound for the table of values (7 days at a 60-second interval are about 10,000 rows).
+const TABLE_ROWS_MAX: u32 = 20_000;
 
 #[derive(Deserialize)]
 pub struct RangeQuery {
@@ -68,6 +70,12 @@ struct StatesView {
     interface: bool,
 }
 
+/// A choice how far back the table of values reaches.
+struct SpanOption {
+    hours: u32,
+    label: String,
+}
+
 struct RangeLink {
     value: &'static str,
     label: String,
@@ -101,6 +109,8 @@ struct DetailTemplate {
     last_poll: String,
     channels: Vec<ChannelView>,
     ranges: Vec<RangeLink>,
+    /// How far back the table can reach in this range; no choice when there is only one.
+    spans: Vec<SpanOption>,
     range: &'static str,
     events: Vec<EventView>,
     flash: Option<String>,
@@ -241,6 +251,14 @@ async fn render(
                 current: r == range,
             })
             .collect(),
+        spans: range
+            .table_spans()
+            .iter()
+            .map(|&hours| SpanOption {
+                hours,
+                label: user.lang.get1("detail-span", "hours", hours),
+            })
+            .collect(),
         range: range.as_str(),
         events,
         flash,
@@ -371,25 +389,85 @@ pub async fn data(
 ) -> Result<Json<ChartJson>> {
     let (sensor, device) = load(&state, id).await?;
     let range = query.range();
-    let value_format = ValueFormat::for_sensor(&sensor.spec, &state.mib_index());
     let chart = chart_data(&state.pool, &sensor.channels, range, now_ms()).await?;
     Ok(Json(ChartJson {
         range: range.as_str(),
         step_secs: range.step_secs(),
         interval_secs: device.polling.interval_secs,
         ts: chart.ts,
-        series: chart
-            .series
-            .into_iter()
-            .map(|s| SeriesJson {
-                label: user.lang.msg(&channel_label(&s.key)),
-                unit_label: value_format.unit_label.clone(),
-                labels: value_format.labels.clone(),
-                unit: s.unit.as_str(),
-                key: s.key,
-                values: s.values,
-            })
-            .collect(),
+        series: series_json(&state, &sensor, user.lang, chart.series),
+    }))
+}
+
+fn series_json(
+    state: &AppState,
+    sensor: &SensorRecord,
+    lang: Lang,
+    series: Vec<ChartSeries>,
+) -> Vec<SeriesJson> {
+    let value_format = ValueFormat::for_sensor(&sensor.spec, &state.mib_index());
+    series
+        .into_iter()
+        .map(|s| SeriesJson {
+            label: lang.msg(&channel_label(&s.key)),
+            unit_label: value_format.unit_label.clone(),
+            labels: value_format.labels.clone(),
+            unit: s.unit.as_str(),
+            key: s.key,
+            values: s.values,
+        })
+        .collect()
+}
+
+#[derive(Deserialize)]
+pub struct SamplesQuery {
+    range: Option<String>,
+    hours: Option<u32>,
+}
+
+#[derive(Serialize)]
+pub struct SamplesJson {
+    /// Polling interval of the device, to estimate the time a raw sample covers.
+    interval_secs: u32,
+    /// Raw samples in the span; `ts` holds all of them up to [`TABLE_ROWS_MAX`], the newest.
+    total: u64,
+    ts: Vec<i64>,
+    series: Vec<SeriesJson>,
+}
+
+/// The table of values: the raw samples (every poll) of the last `hours`, however the chart
+/// averages the range; `hours` is one of [`Range::table_spans`], otherwise the first.
+pub async fn samples(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Query(query): Query<SamplesQuery>,
+) -> Result<Json<SamplesJson>> {
+    let (sensor, device) = load(&state, id).await?;
+    let range = query
+        .range
+        .as_deref()
+        .and_then(Range::parse)
+        .unwrap_or(Range::Day);
+    let spans = range.table_spans();
+    let hours = query
+        .hours
+        .filter(|h| spans.contains(h))
+        .or_else(|| spans.first().copied())
+        .unwrap_or(1);
+    let (rows, total) = recent_samples(
+        &state.pool,
+        &sensor.channels,
+        hours,
+        now_ms(),
+        TABLE_ROWS_MAX,
+    )
+    .await?;
+    Ok(Json(SamplesJson {
+        interval_secs: device.polling.interval_secs,
+        total,
+        ts: rows.ts,
+        series: series_json(&state, &sensor, user.lang, rows.series),
     }))
 }
 
@@ -696,8 +774,10 @@ mod tests {
             "/static/time.js",
             "/static/samples.js",
             "id=\"samples\"",
-            "id=\"samples-limit\"",
-            "<option value=\"500\">500</option>",
+            "data-src=\"/sensors/1/samples?range=24h\"",
+            "id=\"samples-span\" data-range=\"24h\"",
+            "<option value=\"1\" selected>letzte Stunde</option>",
+            "<option value=\"24\">letzte 24 Stunden</option>",
             "<time class=\"ts\" datetime=\"",
         ] {
             assert!(
@@ -718,6 +798,21 @@ mod tests {
         )
         .await;
         assert!(week.body.contains("range=7d\"") && week.body.contains("aria-current=\"page\""));
+        assert!(
+            week.body
+                .contains("<option value=\"6\" selected>letzte 6 Stunden</option>")
+        );
+        assert!(
+            week.body
+                .contains("<option value=\"168\">letzte 7 Tage</option>")
+        );
+        // The hour has no choice: the table lists all of its polls.
+        let hour = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}?range=1h"), Some(&viewer)),
+        )
+        .await;
+        assert!(!hour.body.contains("samples-span"), "{}", hour.body);
         let bogus = send(
             &h.app,
             get(&format!("/sensors/{sensor}?range=evil"), Some(&viewer)),
@@ -781,6 +876,52 @@ mod tests {
         );
         assert_eq!(
             send(&h.app, get("/sensors/99", Some(&viewer))).await.status,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[tokio::test]
+    async fn the_table_endpoint_serves_raw_samples_in_every_range() {
+        let h = harness(true).await;
+        let (sensor, _) = traffic_sensor(&h).await;
+        let (viewer, _) = login(&h, "bert").await;
+        // The week's chart averages, the table still gets the poll itself.
+        let reply = send(
+            &h.app,
+            get(
+                &format!("/sensors/{sensor}/samples?range=7d&hours=168"),
+                Some(&viewer),
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::OK);
+        let body = &reply.body;
+        assert!(body.contains("\"total\":1"), "{body}");
+        assert!(body.contains("\"interval_secs\":60"), "{body}");
+        assert!(
+            body.contains("[12500000.0]") && body.contains("[3000.0]"),
+            "{body}"
+        );
+        // A span the range does not offer falls back to its first instead of failing.
+        let odd = send(
+            &h.app,
+            get(
+                &format!("/sensors/{sensor}/samples?range=1h&hours=168"),
+                Some(&viewer),
+            ),
+        )
+        .await;
+        assert_eq!(odd.status, StatusCode::OK);
+        assert_eq!(
+            send(&h.app, get(&format!("/sensors/{sensor}/samples"), None))
+                .await
+                .status,
+            StatusCode::SEE_OTHER
+        );
+        assert_eq!(
+            send(&h.app, get("/sensors/99/samples", Some(&viewer)))
+                .await
+                .status,
             StatusCode::NOT_FOUND
         );
     }
