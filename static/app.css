@@ -388,6 +388,10 @@ form.inline-note .muted { font-size: .85rem; }
 .chart:last-child { margin-bottom: 0; }
 .u-legend { color: var(--text); font-size: .85rem; }
 .u-legend .u-marker { border-radius: 3px; }
+.u-legend th, .u-legend td { border-bottom: 0; }
+/* Fixed value widths so the legend does not shift while the pointer moves over the chart */
+.u-legend td.u-value { min-width: 7rem; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.u-legend tr:first-child td.u-value { min-width: 10.5rem; }
 details.panel > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
 details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }

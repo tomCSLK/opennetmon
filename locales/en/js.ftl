@@ -13,6 +13,7 @@ js-oid-index = append the index (%1), e.g. %2.1
 js-refresh-left = %1 s
 js-refresh-paused = paused
 js-oid-not-pollable = not a pollable number
+js-chart-time = Time
 js-samples-volume = %1 (volume)
 js-samples-speed = %1 (speed)
 js-samples-newest = newest %1 of %2 values

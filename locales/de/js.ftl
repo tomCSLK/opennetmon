@@ -13,6 +13,7 @@ js-oid-index = Index anhängen (%1), z. B. %2.1
 js-refresh-left = %1 s
 js-refresh-paused = pausiert
 js-oid-not-pollable = kein abfragbarer Zahlenwert
+js-chart-time = Zeit
 js-samples-volume = %1 (Volumen)
 js-samples-speed = %1 (Geschwindigkeit)
 js-samples-newest = neueste %1 von %2 Werten

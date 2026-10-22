@@ -14,6 +14,7 @@
   }
 
   var F = window.opennetmonFormat;
+  var T = window.opennetmonText;
   var day = F.day, clock = F.clock;
 
   function xValues(u, splits, axisIdx, foundSpace, foundIncr) {
@@ -47,7 +48,7 @@
       var el = document.createElement('div');
       el.className = 'chart';
       root.appendChild(el);
-      var series = [{ value: function (u, ts) { return ts === null ? '--' : day(ts) + ' ' + clock(ts, true); } }];
+      var series = [{ label: T('chart-time'), value: function (u, ts) { return ts === null ? '--' : day(ts) + ' ' + clock(ts, true); } }];
       var columns = [data.ts];
       groups[unit].forEach(function (s, i) {
         series.push({
