@@ -3,7 +3,7 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-10-21, Release v0.4.1)
+## Stand (2026-10-22, Release v0.4.2)
 
 Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. Als Nächstes: **Installation auf dem echten Server**,
 Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest und Feinschliff. Geplant ist außerdem eine
@@ -29,7 +29,7 @@ Umgesetzt (Details in `docs/`):
   (`docs/charts-and-thresholds.md`)
 - **Übersicht:** Gerätebaum wie in PRTG (Linien, ⊟/⊞, Sensorplaketten je Zustand, Summen je Teilbaum), Kacheln öffnen sortierbare Statuslisten,
   „Aktualisieren“ mit automatischem Neuladen alle 60 s; **Gruppenseite** je Gruppe (Klick auf den Namen; Teilbaum, eigene Kacheln mit auf die Gruppe
-  gefilterten Statuslisten, Aktionen, Rücksprung der Formulare dorthin; 2026-10-22)
+  gefilterten Statuslisten, Aktionen, Rücksprung der Formulare dorthin; 0.4.2)
 - **Pausieren wie in PRTG:** Gruppen, Geräte und Sensoren bis zum Fortsetzen oder 15 min bis 1 Woche, mit Grund; Vererbung nach unten, Ablauf durch den
   Poller, Neustart ohne alten Zustand (keine nachträgliche Erholungsmail) (`docs/devices-and-groups.md`, „Pausieren“)
 - **Protokoll** (`/log`): Warnungen, Ausfälle und ihr Ende, gemischt mit Pausen (je die neuesten 500)
@@ -43,7 +43,7 @@ Umgesetzt (Details in `docs/`):
 
 Releases (alle Vorabversionen, x86_64): **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, Mehrsprachigkeit, .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS),
 **v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen),
-**v0.4.1** (2026-10-21, Sensoren „Dieser Server“).
+**v0.4.1** (2026-10-21, Sensoren „Dieser Server“), **v0.4.2** (2026-10-22, Gruppenseiten, Dokumentation auf Englisch).
 
 ## Kontext
 
@@ -162,6 +162,7 @@ opennetmon/
 11. ✔ **Eingebautes HTTPS** (0.3.0): rustls, selbst signiertes Zertifikat bei der Installation, Klartext-HTTP nur Weiterleitung.
 12. ✔ **Statuslisten, Gerätebaum, Gerätetypen, Pausieren, Protokoll** (0.3.1 und 0.4.0).
 12a. ✔ **Sensoren „Dieser Server“** (0.4.1): eingebauter Sensortyp statt snmpd auf dem Server.
+12b. ✔ **Gruppenseiten** (0.4.2): eigene Seite je Gruppe, Statuslisten mit Gruppenfilter; Dokumentation auf Englisch.
 13. **Offen:**
     - Installation auf dem echten Ubuntu Server (Paket), `/healthz` und Login über HTTPS prüfen, die sieben Omada-Geräte einrichten
     - Benachrichtigung mit dem echten Mailserver des Nutzers testen
