@@ -41,7 +41,7 @@ password-new-repeat = Repeat new password
 confirm-delete = Please confirm the deletion.
 refresh = Refresh
 refresh-auto = Auto
-refresh-auto-title = Reload the page every 60 seconds (waits while you are entering something)
+refresh-auto-title = Reload the page every 30 seconds (waits while you are entering something)
 
 ## Error pages
 

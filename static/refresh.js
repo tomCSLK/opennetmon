@@ -1,12 +1,12 @@
 // Refresh control (templates/refresh.html): "Aktualisieren" reloads the page, "Automatisch" does so
-// every 60 s. It waits while a form field has the focus or a form was changed, so nothing entered
+// every 30 s (like PRTG). It waits while a form field has the focus or a form was changed, so nothing entered
 // gets lost, and counts only while the page is visible.
 (function () {
   'use strict';
   var box = document.querySelector('[data-refresh]');
   if (!box) { return; }
   var T = window.opennetmonText;
-  var PERIOD = 60, KEY = 'opennetmon-auto-refresh';
+  var PERIOD = 30, KEY = 'opennetmon-auto-refresh';
   var auto = box.querySelector('[data-refresh-auto]');
   var left = box.querySelector('[data-refresh-left]');
   var loadedAt = Date.now(), remaining = PERIOD, dirty = false;

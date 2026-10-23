@@ -13,7 +13,7 @@ status changes of this sensor. The sensor list of a device (`/devices/<id>/senso
 - The data come as JSON from `/sensors/<id>/data?range=…`: `{"range","step_secs","interval_secs","ts":[seconds…],"series":[{"key","label","unit","values":[…|null]}]}`.
   All channels share the time axis; a missing value is `null` (a gap in the chart, no line).
 - One chart per unit (inbound and outbound share one). Shown in the **browser's time zone** (`static/chart.js`), 24-hour clock, numbers and units in the
-  user's language (bit/s, kbit/s, Mbit/s, Gbit/s). The chart reloads every 30 s; header and value tiles are updated by “Auto” (every 60 s, see
+  user's language (bit/s, kbit/s, Mbit/s, Gbit/s). The chart reloads every 30 s; header and value tiles are updated by “Auto” (every 30 s, see
   `docs/devices-and-groups.md`).
 - Where the points come from: 1 h raw values (every poll); 24 h, 7 d and 30 d **120 averages** each in blocks of equal length – 12 minutes, 1 h 24 min
   and 6 hours. 24 h and 7 d average the raw values, 30 d the hourly values from `samples_1h` (as long as no rollups exist yet, the raw data directly).

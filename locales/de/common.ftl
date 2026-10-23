@@ -41,7 +41,7 @@ password-new-repeat = Neues Passwort wiederholen
 confirm-delete = Bitte das Löschen bestätigen.
 refresh = Aktualisieren
 refresh-auto = Automatisch
-refresh-auto-title = Seite alle 60 Sekunden neu laden (wartet, solange du etwas eingibst)
+refresh-auto-title = Seite alle 30 Sekunden neu laden (wartet, solange du etwas eingibst)
 
 ## Fehlerseiten
 

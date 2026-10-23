@@ -18,7 +18,7 @@ screens (below 560 px) address and interval are left out.
 The action messages (“Device created.” etc.) come in through `?msg=` and are only mapped to fixed texts.
 
 **Refresh:** the overview, the status lists, the sensor page of a device and the sensor detail page have a **“Refresh”** button at the top right (only the
-icon ↻, the name as a tooltip; reloads the page, dropping any `?msg=` message) and the switch **“Auto”**: the page then reloads every 60 s, with a countdown next
+icon ↻, the name as a tooltip; reloads the page, dropping any `?msg=` message) and the switch **“Auto”**: the page then reloads every 30 s (as in PRTG), with a countdown next
 to it. The countdown waits (“paused”) while an input field has the focus or a form was changed (e.g. ticked sensors), and only runs while the tab is visible;
 after a longer absence the page reloads immediately on return. The switch is on by default and remembered per browser (`localStorage`). Without JavaScript,
 “Refresh” stays a normal link to the page. Implementation: `templates/refresh.html`, `static/refresh.js`.
