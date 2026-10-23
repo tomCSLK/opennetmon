@@ -113,17 +113,23 @@ detail-no-value = noch kein Messwert
 detail-no-samples = Noch keine Messwerte im gewählten Zeitraum.
 detail-chart-needs-js = Für den Graphen wird JavaScript benötigt.
 detail-samples = Messwerte
-# Wie weit die Tabelle der Messwerte zurückreicht ($hours: 1, 6, 24 oder 168).
-detail-span = { $hours ->
-    [1] letzte Stunde
-    [24] letzte 24 Stunden
-    [168] letzte 7 Tage
-   *[other] letzte { $hours } Stunden
+# Wie weit die Tabelle der Messwerte zurückreicht ($minutes: 15, 30, 60, 360, 1440 oder 10080).
+detail-span = { $minutes ->
+    [60] letzte Stunde
+    [360] letzte 6 Stunden
+    [1440] letzte 24 Stunden
+    [10080] letzte 7 Tage
+   *[other] letzte { $minutes } Minuten
 }
 detail-table-needs-js = Für die Tabelle wird JavaScript benötigt.
 detail-new-name = Neuer Name
 detail-rename = Umbenennen
 detail-rename-hint = Höchstens 64 Zeichen, je Gerät eindeutig. Messwerte, Graph, Schwellwerte und Status bleiben erhalten.
+detail-interval = Abfrageintervall
+detail-interval-seconds = Intervall in Sekunden
+detail-interval-own = eigenes Intervall
+detail-interval-hint = Leer lassen für das Intervall des Geräts ({ $seconds } s). 10 bis 3600 Sekunden; kürzere Intervalle ergeben mehr Messwerte und eine größere Datenbank.
+detail-interval-invalid = Bitte eine ganze Zahl von Sekunden eingeben oder das Feld leer lassen.
 detail-states = Statuswerte
 detail-states-rated = bewertet
 detail-states-stored = Jeder Wert bestimmt den Sensorstatus. Werte, die hier nicht stehen, gelten als Warnung.

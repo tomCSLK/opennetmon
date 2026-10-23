@@ -90,6 +90,7 @@ flash-sensors-activated = Sensoren fortgesetzt.
 flash-sensors-deleted = Sensoren gelöscht.
 flash-thresholds-saved = Schwellwerte gespeichert.
 flash-sensor-renamed = Sensor umbenannt.
+flash-interval-saved = Abfrageintervall gespeichert.
 flash-states-saved = Bewertung der Statuswerte gespeichert. Sie gilt ab der nächsten Abfrage.
 flash-states-reset = Bewertung der Statuswerte entfernt.
 flash-order-saved = Reihenfolge gespeichert.

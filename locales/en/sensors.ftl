@@ -113,17 +113,23 @@ detail-no-value = no value yet
 detail-no-samples = No values in the chosen time range yet.
 detail-chart-needs-js = The chart needs JavaScript.
 detail-samples = Values
-# How far back the table of values reaches ($hours: 1, 6, 24 or 168).
-detail-span = { $hours ->
-    [1] last hour
-    [24] last 24 hours
-    [168] last 7 days
-   *[other] last { $hours } hours
+# How far back the table of values reaches ($minutes: 15, 30, 60, 360, 1440 or 10080).
+detail-span = { $minutes ->
+    [60] last hour
+    [360] last 6 hours
+    [1440] last 24 hours
+    [10080] last 7 days
+   *[other] last { $minutes } minutes
 }
 detail-table-needs-js = The table needs JavaScript.
 detail-new-name = New name
 detail-rename = Rename
 detail-rename-hint = At most 64 characters, unique per device. Values, chart, thresholds and status are kept.
+detail-interval = Polling interval
+detail-interval-seconds = Interval in seconds
+detail-interval-own = own interval
+detail-interval-hint = Leave empty for the device's interval ({ $seconds } s). 10 to 3600 seconds; shorter intervals mean more values and a larger database.
+detail-interval-invalid = Please enter a whole number of seconds or leave the field empty.
 detail-states = Status values
 detail-states-rated = rated
 detail-states-stored = Each value decides the sensor status. Values not listed here count as a warning.

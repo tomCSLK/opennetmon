@@ -16,6 +16,7 @@
     <p class="subtitle status-line">
       <span class="badge status-{{ status_class }}">{{ status_label }}</span>
       <span>{{ description }}</span>
+      <span>· {{ t.get1("every-seconds", "seconds", interval) }}</span>
       {% if !message.is_empty() %}<span>· {{ message }}</span>{% endif %}
       {% if let Some(n) = pause %}<span>· {% call pause::note(n, t) %}{% endcall %}</span>{% endif %}
       {% if !last_poll.is_empty() %}<span>· {{ t.get("detail-last-poll") }} {{ last_poll|safe }}</span>{% endif %}
@@ -73,7 +74,7 @@
       <label class="rows-select" for="samples-span">{{ t.get("detail-range") }}
         <select id="samples-span" data-range="{{ range }}">
           {% for s in spans %}
-          <option value="{{ s.hours }}"{% if loop.first %} selected{% endif %}>{{ s.label }}</option>
+          <option value="{{ s.minutes }}"{% if loop.first %} selected{% endif %}>{{ s.label }}</option>
           {% endfor %}
         </select>
       </label>
@@ -94,6 +95,18 @@
     <button type="submit">{{ t.get("detail-rename") }}</button>
   </form>
   <p class="hint">{{ t.get("detail-rename-hint") }}</p>
+</details>
+
+<details class="card panel"{% if interval_failed %} open{% endif %}>
+  <summary><h2>{{ t.get("detail-interval") }}{% if sensor.interval_secs.is_some() %} <span class="badge">{{ t.get("detail-interval-own") }}</span>{% endif %}</h2></summary>
+  <form method="post" action="/sensors/{{ sensor.id }}/interval" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label for="interval" class="visually-hidden">{{ t.get("detail-interval-seconds") }}</label>
+    <input id="interval" name="interval" type="text" inputmode="numeric" value="{{ interval_field }}" placeholder="{{ device.polling.interval_secs }}" maxlength="5" class="narrow-input">
+    <span class="muted">s</span>
+    <button type="submit">{{ t.get("save") }}</button>
+  </form>
+  <p class="hint">{{ t.get1("detail-interval-hint", "seconds", device.polling.interval_secs) }}</p>
 </details>
 {% endif %}
 
@@ -140,7 +153,7 @@
 </details>
 {% endif %}
 
-<details class="card panel"{% if error.is_some() && !rename_failed %} open{% endif %}>
+<details class="card panel"{% if error.is_some() && !rename_failed && !interval_failed %} open{% endif %}>
   <summary><h2>{{ t.get("detail-thresholds") }}</h2></summary>
   {% if layout.is_admin %}
   <p class="muted small">{{ t.get("detail-thresholds-hint") }}</p>

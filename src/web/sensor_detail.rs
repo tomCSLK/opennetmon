@@ -72,7 +72,7 @@ struct StatesView {
 
 /// A choice how far back the table of values reaches.
 struct SpanOption {
-    hours: u32,
+    minutes: u32,
     label: String,
 }
 
@@ -118,6 +118,11 @@ struct DetailTemplate {
     /// Name field of the rename form (the rejected input after an error).
     new_name: String,
     rename_failed: bool,
+    /// The interval the sensor is polled at (its own or the device's).
+    interval: u32,
+    /// Interval field of its form: the own interval, empty for the device's, or the rejected input.
+    interval_field: String,
+    interval_failed: bool,
     states: Option<StatesView>,
 }
 
@@ -150,6 +155,8 @@ struct View<'a> {
     submitted: Option<&'a HashMap<String, String>>,
     /// Rejected new name to echo back.
     rejected_name: Option<String>,
+    /// Rejected interval input to echo back.
+    rejected_interval: Option<String>,
 }
 
 async fn render(
@@ -165,6 +172,7 @@ async fn render(
         error,
         submitted,
         rejected_name,
+        rejected_interval,
     } = view;
     let latest = latest_values(&state.pool, &sensor.channels).await?;
     let mibs = state.mib_index();
@@ -254,9 +262,9 @@ async fn render(
         spans: range
             .table_spans()
             .iter()
-            .map(|&hours| SpanOption {
-                hours,
-                label: user.lang.get1("detail-span", "hours", hours),
+            .map(|&minutes| SpanOption {
+                minutes,
+                label: user.lang.get1("detail-span", "minutes", minutes),
             })
             .collect(),
         range: range.as_str(),
@@ -264,6 +272,13 @@ async fn render(
         flash,
         error,
         rename_failed: rejected_name.is_some(),
+        interval_failed: rejected_interval.is_some(),
+        interval: sensor.interval(device.polling.interval_secs),
+        interval_field: rejected_interval.unwrap_or_else(|| {
+            sensor
+                .interval_secs
+                .map_or_else(String::new, |s| s.to_string())
+        }),
         states,
         new_name: rejected_name.unwrap_or_else(|| sensor.name.clone()),
         sensor,
@@ -351,6 +366,7 @@ pub async fn detail(
                 error: None,
                 submitted: None,
                 rejected_name: None,
+                rejected_interval: None,
             },
         )
         .await?,
@@ -393,7 +409,7 @@ pub async fn data(
     Ok(Json(ChartJson {
         range: range.as_str(),
         step_secs: range.step_secs(),
-        interval_secs: device.polling.interval_secs,
+        interval_secs: sensor.interval(device.polling.interval_secs),
         ts: chart.ts,
         series: series_json(&state, &sensor, user.lang, chart.series),
     }))
@@ -422,7 +438,7 @@ fn series_json(
 #[derive(Deserialize)]
 pub struct SamplesQuery {
     range: Option<String>,
-    hours: Option<u32>,
+    minutes: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -435,8 +451,8 @@ pub struct SamplesJson {
     series: Vec<SeriesJson>,
 }
 
-/// The table of values: the raw samples (every poll) of the last `hours`, however the chart
-/// averages the range; `hours` is one of [`Range::table_spans`], otherwise the first.
+/// The table of values: the raw samples (every poll) of the last `minutes`, however the chart
+/// averages the range; `minutes` is one of [`Range::table_spans`], otherwise the first.
 pub async fn samples(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -450,21 +466,21 @@ pub async fn samples(
         .and_then(Range::parse)
         .unwrap_or(Range::Day);
     let spans = range.table_spans();
-    let hours = query
-        .hours
+    let minutes = query
+        .minutes
         .filter(|h| spans.contains(h))
         .or_else(|| spans.first().copied())
         .unwrap_or(1);
     let (rows, total) = recent_samples(
         &state.pool,
         &sensor.channels,
-        hours,
+        minutes,
         now_ms(),
         TABLE_ROWS_MAX,
     )
     .await?;
     Ok(Json(SamplesJson {
-        interval_secs: device.polling.interval_secs,
+        interval_secs: sensor.interval(device.polling.interval_secs),
         total,
         ts: rows.ts,
         series: series_json(&state, &sensor, user.lang, rows.series),
@@ -531,6 +547,7 @@ pub async fn save_thresholds(
                     error: Some(user.lang.msg(&message)),
                     submitted: Some(&form),
                     rejected_name: None,
+                    rejected_interval: None,
                 },
             )
             .await?;
@@ -622,6 +639,65 @@ pub async fn rename(
                     error: Some(user.lang.msg(&message)),
                     submitted: None,
                     rejected_name: Some(form.name),
+                    rejected_interval: None,
+                },
+            )
+            .await?;
+            Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct IntervalForm {
+    csrf_token: String,
+    #[serde(default)]
+    interval: String,
+}
+
+/// Sets the sensor's own polling interval; an empty field returns to the device's.
+pub async fn set_interval(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Form(form): Form<IntervalForm>,
+) -> Result<Response> {
+    user.require_admin()?;
+    user.verify_csrf(&form.csrf_token)?;
+    let (sensor, device) = load(&state, id).await?;
+    let input = form.interval.trim();
+    let saved = match input {
+        "" => Ok(None),
+        text => text
+            .parse::<u32>()
+            .map(Some)
+            .map_err(|_| Error::invalid(Msg::new("detail-interval-invalid"))),
+    };
+    let saved = match saved {
+        Ok(secs) => store::set_interval(&state.pool, id, secs, &device.polling)
+            .await
+            .map(|()| secs),
+        Err(e) => Err(e),
+    };
+    match saved {
+        Ok(secs) => {
+            tracing::info!(user = %user.username, sensor = id, interval = ?secs, "sensor interval set");
+            Ok(Redirect::to(&format!("/sensors/{id}?msg=interval_saved")).into_response())
+        }
+        Err(Error::Invalid(message)) => {
+            let html = render(
+                &state,
+                &user,
+                sensor,
+                device,
+                View {
+                    range: Range::Day,
+                    flash: None,
+                    error: Some(user.lang.msg(&message)),
+                    submitted: None,
+                    rejected_name: None,
+                    rejected_interval: Some(input.to_owned()),
                 },
             )
             .await?;
@@ -776,8 +852,8 @@ mod tests {
             "id=\"samples\"",
             "data-src=\"/sensors/1/samples?range=24h\"",
             "id=\"samples-span\" data-range=\"24h\"",
-            "<option value=\"1\" selected>letzte Stunde</option>",
-            "<option value=\"24\">letzte 24 Stunden</option>",
+            "<option value=\"60\" selected>letzte Stunde</option>",
+            "<option value=\"1440\">letzte 24 Stunden</option>",
             "<time class=\"ts\" datetime=\"",
         ] {
             assert!(
@@ -800,19 +876,26 @@ mod tests {
         assert!(week.body.contains("range=7d\"") && week.body.contains("aria-current=\"page\""));
         assert!(
             week.body
-                .contains("<option value=\"6\" selected>letzte 6 Stunden</option>")
+                .contains("<option value=\"360\" selected>letzte 6 Stunden</option>")
         );
         assert!(
             week.body
-                .contains("<option value=\"168\">letzte 7 Tage</option>")
+                .contains("<option value=\"10080\">letzte 7 Tage</option>")
         );
-        // The hour has no choice: the table lists all of its polls.
+        // The hour offers quarter and half hours for short intervals.
         let hour = send(
             &h.app,
             get(&format!("/sensors/{sensor}?range=1h"), Some(&viewer)),
         )
         .await;
-        assert!(!hour.body.contains("samples-span"), "{}", hour.body);
+        assert!(
+            hour.body
+                .contains("<option value=\"15\" selected>letzte 15 Minuten</option>")
+        );
+        assert!(
+            hour.body
+                .contains("<option value=\"60\">letzte Stunde</option>")
+        );
         let bogus = send(
             &h.app,
             get(&format!("/sensors/{sensor}?range=evil"), Some(&viewer)),
@@ -889,7 +972,7 @@ mod tests {
         let reply = send(
             &h.app,
             get(
-                &format!("/sensors/{sensor}/samples?range=7d&hours=168"),
+                &format!("/sensors/{sensor}/samples?range=7d&minutes=10080"),
                 Some(&viewer),
             ),
         )
@@ -906,7 +989,7 @@ mod tests {
         let odd = send(
             &h.app,
             get(
-                &format!("/sensors/{sensor}/samples?range=1h&hours=168"),
+                &format!("/sensors/{sensor}/samples?range=1h&minutes=10080"),
                 Some(&viewer),
             ),
         )
@@ -1105,6 +1188,96 @@ mod tests {
             );
             assert!(!reply.body.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn admins_give_a_sensor_its_own_interval() {
+        let h = harness(true).await;
+        let (sensor, _) = traffic_sensor(&h).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        assert!(page.body.contains("· alle 60 s"), "{}", page.body);
+        assert!(page.body.contains("action=\"/sensors/1/interval\""));
+        assert!(page.body.contains("placeholder=\"60\""));
+
+        let path = format!("/sensors/{sensor}/interval");
+        let reply = send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!("csrf_token={csrf}&interval=10"),
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        assert!(reply.location().ends_with("msg=interval_saved"));
+        let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
+        assert_eq!(stored.interval_secs, Some(10));
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        assert!(page.body.contains("· alle 10 s") && page.body.contains("eigenes Intervall"));
+        let list = send(
+            &h.app,
+            get(
+                &format!("/devices/{}/sensors", stored.device_id),
+                Some(&admin),
+            ),
+        )
+        .await;
+        assert!(list.body.contains("· alle 10 s"), "{}", list.body);
+
+        // Not a number, or outside 10 to 3600 seconds: explained, the input is kept.
+        for (input, message) in [
+            ("zehn", "ganze Zahl von Sekunden"),
+            ("5", "zwischen 10 und 3600 Sekunden"),
+        ] {
+            let page = send(
+                &h.app,
+                post(
+                    &path,
+                    Some(&admin),
+                    &format!("csrf_token={csrf}&interval={input}"),
+                ),
+            )
+            .await;
+            assert_eq!(page.status, StatusCode::UNPROCESSABLE_ENTITY);
+            assert!(page.body.contains(message), "{input}: {}", page.body);
+            assert!(page.body.contains(&format!("value=\"{input}\"")));
+        }
+        assert_eq!(
+            get_sensor(&h.state.pool, sensor)
+                .await
+                .unwrap()
+                .unwrap()
+                .interval_secs,
+            Some(10)
+        );
+
+        // An empty field returns to the device's interval; viewers may not change it.
+        send(
+            &h.app,
+            post(&path, Some(&admin), &format!("csrf_token={csrf}&interval=")),
+        )
+        .await;
+        assert_eq!(
+            get_sensor(&h.state.pool, sensor)
+                .await
+                .unwrap()
+                .unwrap()
+                .interval_secs,
+            None
+        );
+        let (viewer, viewer_csrf) = login(&h, "bert").await;
+        let reply = send(
+            &h.app,
+            post(
+                &path,
+                Some(&viewer),
+                &format!("csrf_token={viewer_csrf}&interval=10"),
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

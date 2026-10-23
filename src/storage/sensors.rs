@@ -29,7 +29,16 @@ pub struct SensorRecord {
     pub name: String,
     pub spec: SensorSpec,
     pub enabled: bool,
+    /// Own polling interval in seconds; `None` = the device's.
+    pub interval_secs: Option<u32>,
     pub channels: Vec<ChannelRecord>,
+}
+
+impl SensorRecord {
+    /// The interval the sensor is polled at: its own, otherwise `device_interval`.
+    pub fn interval(&self, device_interval: u32) -> u32 {
+        self.interval_secs.unwrap_or(device_interval)
+    }
 }
 
 /// One stored measurement.
@@ -54,6 +63,7 @@ struct SensorRow {
     target: Option<String>,
     enabled: i64,
     position: Option<i64>,
+    interval_secs: Option<i64>,
 }
 
 #[derive(FromRow)]
@@ -107,7 +117,7 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
     })
 }
 
-const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, enabled, position FROM sensors";
+const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, enabled, position, interval_secs FROM sensors";
 
 /// Automatic order of sensor kinds: reachability first, then ports, then everything else.
 fn kind_rank(kind: &str) -> u8 {
@@ -178,6 +188,7 @@ async fn assemble(pool: &SqlitePool, rows: Vec<SensorRow>) -> Result<Vec<SensorR
                 name: r.name.clone(),
                 spec: spec_from_row(&r)?,
                 enabled: r.enabled != 0,
+                interval_secs: r.interval_secs.and_then(|s| u32::try_from(s).ok()),
                 channels,
             })
         })
@@ -211,6 +222,33 @@ pub async fn rename_sensor(pool: &SqlitePool, id: i64, name: &str) -> Result<()>
             Some(d) if d.is_unique_violation() => name_taken(),
             _ => e.into(),
         })?;
+    if done.rows_affected() == 0 {
+        return Err(Error::NotFound);
+    }
+    Ok(())
+}
+
+/// Sets a sensor's own polling interval (`None`: the device's), checked against the device's
+/// timeout and retries like the device's own interval.
+pub async fn set_interval(
+    pool: &SqlitePool,
+    id: i64,
+    interval_secs: Option<u32>,
+    polling: &crate::devices::Polling,
+) -> Result<()> {
+    if let Some(secs) = interval_secs {
+        crate::devices::Polling {
+            interval_secs: secs,
+            ..*polling
+        }
+        .validate()
+        .map_err(Error::invalid)?;
+    }
+    let done = sqlx::query("UPDATE sensors SET interval_secs = ? WHERE id = ?")
+        .bind(interval_secs)
+        .bind(id)
+        .execute(pool)
+        .await?;
     if done.rows_affected() == 0 {
         return Err(Error::NotFound);
     }

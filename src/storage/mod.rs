@@ -124,7 +124,8 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
         return Ok(());
     }
     const COLUMNS: &str = "id, device_id, name, kind, if_index, oid, oid_mode, scale, enabled, \
-                           created_at, unit_label, position, pause_until_ms, pause_reason";
+                           created_at, unit_label, position, pause_until_ms, pause_reason, \
+                           interval_secs";
     rebuild_without_foreign_keys(pool, "sensors", |tx| {
         Box::pin(async move {
             sqlx::query(
@@ -145,6 +146,8 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
                     pause_reason   TEXT NOT NULL DEFAULT '',
                     -- what a local sensor measures, e.g. 'cpu' or 'disk:/var'
                     target         TEXT,
+                    -- own polling interval (migration 0017); NULL = the device's
+                    interval_secs  INTEGER CHECK (interval_secs IS NULL OR interval_secs BETWEEN 10 AND 3600),
                     UNIQUE (device_id, name),
                     -- Exactly the columns that belong to the kind are set.
                     CHECK (

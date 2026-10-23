@@ -261,7 +261,7 @@ async fn recent(
             band => Trend::Band(band),
         }
     } else {
-        let (bucket, count) = sparkline::buckets(device.polling.interval_secs);
+        let (bucket, count) = sparkline::buckets(sensor.interval(device.polling.interval_secs));
         let from = now - bucket * i64::try_from(count).unwrap_or(0);
         let mut series = Vec::new();
         for channel in &sensor.channels {
@@ -296,7 +296,8 @@ pub(crate) async fn fresh_values(
     t: Lang,
     now: i64,
 ) -> Result<FreshValues> {
-    let fresh_from = now - 3_000 * i64::from(device.polling.interval_secs) - 60_000;
+    let fresh_from =
+        now - 3_000 * i64::from(sensor.interval(device.polling.interval_secs)) - 60_000;
     let latest = latest_values(pool, &sensor.channels).await?;
     let format = ValueFormat::for_sensor(&sensor.spec, mibs);
     let (mut shown, mut titled, mut total) = (Vec::new(), Vec::new(), None);
@@ -352,7 +353,7 @@ async fn render_sensors(
         let row = SensorRowView {
             id: r.id,
             name: r.name.clone(),
-            description: crate::web::sensor_text::describe(user.lang, &r.spec, &mibs),
+            description: crate::web::sensor_text::describe_sensor(user.lang, r, &mibs),
             status_label: user.lang.get(status.label_id()),
             status_class: status.as_str(),
             message: state

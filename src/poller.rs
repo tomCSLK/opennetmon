@@ -1,11 +1,14 @@
-//! The poller: one task per device polls its sensors at the device's interval.
+//! The poller: one task per device polls its sensors, each at its own interval (the device's unless
+//! the sensor has one).
 //!
 //! A supervisor discovers devices (and notices new ones); each device task reloads its device row,
 //! sensors and credentials from the database on every cycle, so edits take effect without a
-//! restart and a deleted device simply ends its task. Counter baselines live in the task and
-//! survive reloads as long as a sensor's configuration is unchanged.
+//! restart and a deleted device simply ends its task. Counter baselines and the time each sensor is
+//! due next live in the task and survive reloads as long as a sensor's configuration is unchanged.
 //!
 //! - Start times are spread deterministically over the interval (no burst at a full minute).
+//! - A cycle polls the sensors that are due; the task then sleeps until the next one is due, at
+//!   most one device interval (so new or resumed sensors start soon).
 //! - A global [`Semaphore`] caps how many devices are polled at the same time.
 //! - Sensors of one device run one after another; once a device-level SNMP error occurs
 //!   (timeout, authentication, unreachable) the remaining SNMP sensors of that cycle are not tried.
@@ -216,13 +219,15 @@ async fn device_loop(shared: Arc<Shared>, device_id: i64, mut shutdown: watch::R
             permit = shared.permits.acquire() => permit,
             _ = shutdown.changed() => return,
         };
+        let mut due_next = None;
         if permit.is_ok() {
             match poll_device(&shared, device_id, &mut state).await {
-                Ok(Some(changes)) => {
-                    for change in &changes {
+                Ok(Some(cycle)) => {
+                    for change in &cycle.changes {
                         log_change(&device, &change.change);
                     }
-                    queue_alerts(&shared.alerts, &device.name, changes);
+                    queue_alerts(&shared.alerts, &device.name, cycle.changes);
+                    due_next = cycle.next_due;
                 }
                 Ok(None) => return,
                 Err(e) => tracing::error!(device = %device.name, error = %e, "poll failed"),
@@ -230,8 +235,12 @@ async fn device_loop(shared: Arc<Shared>, device_id: i64, mut shutdown: watch::R
         }
         drop(permit);
 
-        // Fixed schedule; if a cycle overran, continue right away instead of bursting.
-        next = (next + interval).max(tokio::time::Instant::now());
+        // Fixed schedule per sensor; if a cycle overran, continue right away instead of bursting.
+        let now = tokio::time::Instant::now();
+        next = due_next
+            .unwrap_or(now + interval)
+            .min(now + interval)
+            .max(now);
     }
 }
 
@@ -271,12 +280,15 @@ fn log_change(device: &Device, change: &StatusChange) {
 #[derive(Default)]
 pub struct SensorSet {
     sensors: HashMap<i64, (SensorSpec, Box<dyn Sensor>)>,
+    /// When each sensor is due next (scheduled polling only; missing = due now).
+    due: HashMap<i64, tokio::time::Instant>,
 }
 
 impl SensorSet {
     fn reconcile(&mut self, records: &[SensorRecord]) {
         let live: HashSet<i64> = records.iter().map(|r| r.id).collect();
         self.sensors.retain(|id, _| live.contains(id));
+        self.due.retain(|id, _| live.contains(id));
         for record in records {
             let stale = self
                 .sensors
@@ -305,7 +317,7 @@ fn device_level(error: &SensorError) -> bool {
 }
 
 /// Polls all sensors of one device that are not paused (by themselves, the device or a group) once
-/// and stores the results.
+/// and stores the results, whether they are due or not.
 /// Returns `None` if the device no longer exists, otherwise the status changes of this cycle.
 pub async fn poll_device_once(
     pool: &SqlitePool,
@@ -314,6 +326,28 @@ pub async fn poll_device_once(
     device_id: i64,
     state: &mut SensorSet,
 ) -> Result<Option<Vec<SensorChange>>> {
+    Ok(poll_sensors(pool, secrets, ping, device_id, state, None)
+        .await?
+        .map(|cycle| cycle.changes))
+}
+
+/// The outcome of one polling cycle of a device.
+pub struct Cycle {
+    pub changes: Vec<SensorChange>,
+    /// When the next sensor is due; `None` if the device has no sensor to poll.
+    pub next_due: Option<tokio::time::Instant>,
+}
+
+/// Polls the sensors of one device that are not paused: with `at`, only those due at that time
+/// (and schedules their next poll one interval later), without it all of them.
+async fn poll_sensors(
+    pool: &SqlitePool,
+    secrets: &SecretBox,
+    ping: &PingClients,
+    device_id: i64,
+    state: &mut SensorSet,
+    at: Option<tokio::time::Instant>,
+) -> Result<Option<Cycle>> {
     let Some(device) = get_device(pool, device_id).await? else {
         return Ok(None);
     };
@@ -324,8 +358,35 @@ pub async fn poll_device_once(
         .filter(|r| pauses.sensor(r.id, device_id).is_none())
         .collect();
     state.reconcile(&records);
+    let interval_of =
+        |r: &SensorRecord| Duration::from_secs(u64::from(r.interval(device.polling.interval_secs)));
+    let records: Vec<&SensorRecord> = match at {
+        None => records.iter().collect(),
+        Some(now) => {
+            // A shortened interval applies right away, not after the old one has run out.
+            for r in &records {
+                if let Some(due) = state.due.get_mut(&r.id) {
+                    *due = (*due).min(now + interval_of(r));
+                }
+            }
+            let due: Vec<&SensorRecord> = records
+                .iter()
+                .filter(|r| state.due.get(&r.id).is_none_or(|due| *due <= now))
+                .collect();
+            // One interval after the time it was due; after a long delay from now on, so missed
+            // polls are not made up in a burst.
+            for r in &due {
+                let next = state.due.get(&r.id).copied().unwrap_or(now) + interval_of(r);
+                state.due.insert(r.id, next.max(now));
+            }
+            due
+        }
+    };
     if records.is_empty() {
-        return Ok(Some(Vec::new()));
+        return Ok(Some(Cycle {
+            changes: Vec::new(),
+            next_due: state_next_due(state, at),
+        }));
     }
 
     let polling = &device.polling;
@@ -363,7 +424,7 @@ pub async fn poll_device_once(
     }
 
     let mut changes = Vec::new();
-    for record in &records {
+    for &record in &records {
         let Some((spec, sensor)) = state.sensors.get_mut(&record.id) else {
             continue;
         };
@@ -428,20 +489,32 @@ pub async fn poll_device_once(
             });
         }
     }
-    Ok(Some(changes))
+    Ok(Some(Cycle {
+        changes,
+        next_due: state_next_due(state, at),
+    }))
+}
+
+/// The earliest time a sensor is due, for scheduled polling.
+fn state_next_due(
+    state: &SensorSet,
+    at: Option<tokio::time::Instant>,
+) -> Option<tokio::time::Instant> {
+    at.and(state.due.values().min().copied())
 }
 
 async fn poll_device(
     shared: &Shared,
     device_id: i64,
     state: &mut SensorSet,
-) -> Result<Option<Vec<SensorChange>>> {
-    poll_device_once(
+) -> Result<Option<Cycle>> {
+    poll_sensors(
         &shared.pool,
         &shared.secrets,
         &shared.ping,
         device_id,
         state,
+        Some(tokio::time::Instant::now()),
     )
     .await
 }
@@ -913,6 +986,93 @@ mod tests {
         assert_eq!(
             get_state(&env.pool, a).await.unwrap().unwrap().status,
             Status::Up
+        );
+    }
+
+    #[tokio::test]
+    async fn sensors_with_their_own_interval_are_polled_when_due() {
+        let env = env().await;
+        // The device polls every 10 seconds; B only every 30.
+        let a = create_sensor(&env.pool, env.device, "A", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        let b = create_sensor(&env.pool, env.device, "B", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        let polling = get_device(&env.pool, env.device)
+            .await
+            .unwrap()
+            .unwrap()
+            .polling;
+        crate::storage::sensors::set_interval(&env.pool, b, Some(30), &polling)
+            .await
+            .unwrap();
+        let polled = |id: i64| {
+            let pool = env.pool.clone();
+            async move {
+                let record = crate::storage::sensors::get_sensor(&pool, id)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                samples_since(&pool, record.channels[0].id, 0)
+                    .await
+                    .unwrap()
+                    .len()
+            }
+        };
+        let mut state = SensorSet::default();
+        let t0 = tokio::time::Instant::now();
+        async fn cycle(
+            env: &Env,
+            state: &mut SensorSet,
+            at: tokio::time::Instant,
+        ) -> Option<tokio::time::Instant> {
+            // Distinct sample timestamps for the quick succession of cycles.
+            tokio::time::sleep(Duration::from_millis(5)).await;
+            poll_sensors(
+                &env.pool,
+                &env.secrets,
+                &env.ping,
+                env.device,
+                state,
+                Some(at),
+            )
+            .await
+            .unwrap()
+            .unwrap()
+            .next_due
+        }
+        let s = Duration::from_secs;
+        assert_eq!(
+            cycle(&env, &mut state, t0).await,
+            Some(t0 + s(10)),
+            "both polled, A due first"
+        );
+        assert_eq!((polled(a).await, polled(b).await), (1, 1));
+        assert_eq!(cycle(&env, &mut state, t0 + s(10)).await, Some(t0 + s(20)));
+        assert_eq!((polled(a).await, polled(b).await), (2, 1), "only A was due");
+        assert_eq!(
+            cycle(&env, &mut state, t0 + s(15)).await,
+            Some(t0 + s(20)),
+            "nothing due"
+        );
+        assert_eq!((polled(a).await, polled(b).await), (2, 1));
+        cycle(&env, &mut state, t0 + s(30)).await;
+        assert_eq!((polled(a).await, polled(b).await), (3, 2), "both due again");
+
+        // Back to the device's interval; an interval the timeouts do not fit is refused.
+        crate::storage::sensors::set_interval(&env.pool, b, None, &polling)
+            .await
+            .unwrap();
+        let slow = Polling {
+            timeout_secs: 10,
+            retries: 1,
+            ..polling
+        };
+        assert!(
+            crate::storage::sensors::set_interval(&env.pool, b, Some(10), &slow)
+                .await
+                .is_err()
         );
     }
 

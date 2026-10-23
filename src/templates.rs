@@ -837,6 +837,7 @@ mod tests {
             name: name.to_owned(),
             spec,
             enabled,
+            interval_secs: None,
             channels,
         }
     }

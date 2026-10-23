@@ -448,7 +448,7 @@ pub async fn list(
         let total = total.map(|v| (rank, v));
         rows.push(Row {
             id: sensor.id,
-            description: crate::web::sensor_text::describe(t, &sensor.spec, &mibs),
+            description: crate::web::sensor_text::describe_sensor(t, &sensor, &mibs),
             name: sensor.name,
             device_id: device.id,
             device_name: device.name.clone(),

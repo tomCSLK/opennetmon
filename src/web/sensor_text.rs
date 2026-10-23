@@ -111,6 +111,19 @@ impl ValueFormat {
     }
 }
 
+/// [`describe`] plus the sensor's own polling interval, if it has one.
+pub fn describe_sensor(
+    t: Lang,
+    sensor: &crate::storage::sensors::SensorRecord,
+    index: &MibIndex,
+) -> String {
+    let text = describe(t, &sensor.spec, index);
+    match sensor.interval_secs {
+        Some(secs) => format!("{text} · {}", t.get1("every-seconds", "seconds", secs)),
+        None => text,
+    }
+}
+
 /// Description of a sensor for lists: custom OIDs by their MIB name when known.
 pub fn describe(t: Lang, spec: &SensorSpec, index: &MibIndex) -> String {
     match spec {

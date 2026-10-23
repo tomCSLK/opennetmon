@@ -65,14 +65,14 @@ impl Range {
         Some(((now_ms.div_euclid(step) + 1 - CHART_POINTS) * step, step))
     }
 
-    /// Hours the table of values can reach back in this range (raw samples, newest first); the
+    /// Minutes the table of values can reach back in this range (raw samples, newest first); the
     /// first is the default. Raw samples are kept 7 days by default, so 30 days stops there.
     pub fn table_spans(self) -> &'static [u32] {
         match self {
-            Self::Hour => &[1],
-            Self::Day => &[1, 6, 24],
-            Self::Week => &[6, 24, 168],
-            Self::Month => &[24, 168],
+            Self::Hour => &[15, 30, 60],
+            Self::Day => &[60, 360, 1440],
+            Self::Week => &[360, 1440, 10_080],
+            Self::Month => &[1440, 10_080],
         }
     }
 
@@ -183,17 +183,17 @@ pub async fn chart_data(
     Ok(ChartData { ts, series })
 }
 
-/// The raw samples of `channels` in the last `span_hours` before `now_ms` (aligned like
+/// The raw samples of `channels` in the last `span_minutes` before `now_ms` (aligned like
 /// [`chart_data`]; at most `limit`, the newest), and how many points the span holds in all.
 /// For the table of values, which lists every poll whatever the chart averages.
 pub async fn recent_samples(
     pool: &SqlitePool,
     channels: &[ChannelRecord],
-    span_hours: u32,
+    span_minutes: u32,
     now_ms: i64,
     limit: u32,
 ) -> Result<(ChartData, u64)> {
-    let from = now_ms - i64::from(span_hours) * HOUR_MS;
+    let from = now_ms - i64::from(span_minutes) * 60_000;
     let mut rows: BTreeMap<i64, Vec<Option<f64>>> = BTreeMap::new();
     for (i, channel) in channels.iter().enumerate() {
         let points: Vec<(i64, f64)> = sqlx::query_as(
@@ -408,18 +408,20 @@ mod tests {
         insert_samples(&pool, &samples).await.unwrap();
 
         // Every poll of the span (61: both ends included), not averages.
-        let (hour, total) = recent_samples(&pool, &ch, 1, now, 20_000).await.unwrap();
+        let (hour, total) = recent_samples(&pool, &ch, 60, now, 20_000).await.unwrap();
         assert_eq!((hour.ts.len(), total), (61, 61));
         assert_eq!(hour.ts.last(), Some(&(now / 1000)));
         assert_eq!(hour.ts[0], (now - HOUR_MS) / 1000);
         assert_eq!(hour.series[0].values[60], Some(0.0));
         assert_eq!(hour.series[1].values[0], Some(1060.0));
         // A day reaches all 180 polls; the limit keeps the newest.
-        let (day, total) = recent_samples(&pool, &ch, 24, now, 100).await.unwrap();
+        let (day, total) = recent_samples(&pool, &ch, 1440, now, 100).await.unwrap();
         assert_eq!((day.ts.len(), total), (100, 180));
         assert_eq!(day.ts[0], (now - 99 * 60_000) / 1000);
         // The week reaches the older sample.
-        let (_, total) = recent_samples(&pool, &ch, 168, now, 20_000).await.unwrap();
+        let (_, total) = recent_samples(&pool, &ch, 10_080, now, 20_000)
+            .await
+            .unwrap();
         assert_eq!(total, 181);
     }
 

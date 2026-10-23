@@ -178,6 +178,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/templates/{id}/delete", post(templates::delete))
         .route("/sensors/{id}/rename", post(sensor_detail::rename))
+        .route("/sensors/{id}/interval", post(sensor_detail::set_interval))
         .route("/sensors/{id}/states", post(sensor_detail::save_states))
         .route("/pause/{kind}/{id}", get(pause::form).post(pause::pause))
         .route("/resume/{kind}/{id}", post(pause::resume))
@@ -369,6 +370,7 @@ pub fn flash_message(t: Lang, key: Option<&str>) -> Option<String> {
         "sensors_deleted" => "flash-sensors-deleted",
         "thresholds_saved" => "flash-thresholds-saved",
         "sensor_renamed" => "flash-sensor-renamed",
+        "interval_saved" => "flash-interval-saved",
         "states_saved" => "flash-states-saved",
         "states_reset" => "flash-states-reset",
         "order_saved" => "flash-order-saved",

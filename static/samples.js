@@ -1,7 +1,7 @@
 // Table of measured values below the chart (like PRTG's "Live data" table): one row per poll,
 // newest first, with average/minimum/maximum (and the summed volume for traffic) on top. Always raw
-// values, also where the chart shows averages; in the longer ranges the viewer picks how far back
-// the table reaches (#samples-span, hours) and the summary covers exactly those rows. Loads from
+// values, also where the chart shows averages; the viewer picks how far back
+// the table reaches (#samples-span, minutes) and the summary covers exactly those rows. Loads from
 // #samples[data-src] whenever static/chart.js has loaded new data (event "opennetmon:data"), so both
 // refresh together.
 (function () {
@@ -137,7 +137,7 @@
     var src = box.getAttribute('data-src');
     if (!src) { return; }
     var mine = ++pending;
-    if (select) { src += '&hours=' + encodeURIComponent(select.value); }
+    if (select) { src += '&minutes=' + encodeURIComponent(select.value); }
     fetch(src, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
       .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.json(); })
       .then(function (d) { if (mine === pending) { data = d; render(); } })

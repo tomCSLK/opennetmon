@@ -30,14 +30,15 @@ This holds for every range, also where the chart shows block averages. How far b
 
 | Chart range | Table reaches back |
 |---|---|
-| 1 hour | the whole hour (no choice; about 60 polls at a 60-second interval) |
+| 1 hour | last 15 minutes, last 30 minutes, last hour |
 | 24 hours | last hour, last 6 hours, last 24 hours |
 | 7 days | last 6 hours, last 24 hours, last 7 days |
 | 30 days | last 24 hours, last 7 days |
 
-Raw values exist for `retention_raw_days` (7 days by default), so no choice reaches further. Seven days at a 60-second interval are about
-10,000 rows; at most 20,000 rows are sent (the newest). The table loads from its own endpoint `/sensors/<id>/samples?range=…&hours=…`
-(the raw values of the span plus their total).
+Raw values exist for `retention_raw_days` (7 days by default), so no choice reaches further. An hour has 60 polls at a 60-second interval and 360 at
+10 seconds; seven days are about 10,000 rows at 60 seconds and 60,000 at 10 seconds. At most 20,000 rows are sent (the newest; the table then says
+“newest 20000 of …”). The table loads from its own endpoint `/sensors/<id>/samples?range=…&minutes=…` (the raw values of the span plus their total).
+The volume of a traffic row uses the sensor's interval (its own or the device's).
 
 - Traffic channels have two columns per direction: **volume** (the amount of data in the section, decimal: 1 MB = 1,000,000 bytes) and **speed**.
   The volume is rate × duration; the duration is the gap to the previous poll, at most one polling interval (after a restart or a lost poll
