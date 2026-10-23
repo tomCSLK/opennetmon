@@ -77,6 +77,16 @@
     target.scrollIntoView();
   }
 
+  // "Back" on error pages: the browser's history keeps what was typed into the form; the link
+  // (previous page or overview) is the fallback without history.
+  var back = document.querySelector('[data-back]');
+  if (back && window.history.length > 1) {
+    back.addEventListener('click', function (e) {
+      e.preventDefault();
+      window.history.back();
+    });
+  }
+
   var menu = document.querySelector('.menu-toggle');
   if (menu) {
     menu.addEventListener('click', function () {

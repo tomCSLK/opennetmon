@@ -1,0 +1,9 @@
+<section class="card error-page">
+  <p class="error-code">{{ t.get1("error-code", "status", error.status) }}</p>
+  <h1>{{ error.heading }}</h1>
+  <p class="error" role="alert">{{ error.message }}</p>
+  <div class="actions">
+    <a class="button" href="{{ error.back }}" data-back>{{ t.get("error-back") }}</a>
+    <a class="button ghost" href="/">{{ t.get("nav-overview") }}</a>
+  </div>
+</section>

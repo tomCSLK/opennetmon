@@ -48,6 +48,17 @@ refresh-auto-title = Seite alle 60 Sekunden neu laden (wartet, solange du etwas 
 error-forbidden = Zugriff verweigert
 error-not-found = Nicht gefunden
 error-internal = Interner Fehler
+error-code = Fehler { $status }
+error-heading = Das hat nicht geklappt
+error-heading-input = Eingabe nicht möglich
+error-heading-not-found = Seite nicht gefunden
+error-heading-forbidden = Zugriff verweigert
+error-heading-internal = Interner Fehler
+error-not-found-text = Diese Seite gibt es nicht (mehr). Vielleicht wurde der Eintrag gelöscht.
+error-bad-request = Die Angaben konnten nicht verarbeitet werden. Bitte die Eingaben prüfen und es noch einmal versuchen.
+error-method = Diese Aktion ist hier nicht möglich.
+error-internal-text = Beim Verarbeiten ist ein Fehler aufgetreten. Die Einzelheiten stehen im Protokoll des Servers.
+error-back = Zurück
 
 ## Sprache
 

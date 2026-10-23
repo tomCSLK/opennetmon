@@ -5,6 +5,7 @@ mod assets;
 pub mod auth;
 pub mod credentials;
 pub mod devices;
+mod error_page;
 pub mod groups;
 pub mod log;
 pub mod mail_settings;
@@ -195,6 +196,10 @@ pub fn router(state: AppState) -> Router {
         .route("/mibs/search.json", get(mibs::search_json))
         .route("/healthz", get(healthz))
         .route("/static/{*path}", get(assets::serve))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            error_page::render,
+        ))
         .layer(security_header(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
         .layer(security_header(header::X_FRAME_OPTIONS, "DENY"))
         .layer(security_header(header::REFERRER_POLICY, "same-origin"))

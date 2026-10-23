@@ -49,22 +49,28 @@ impl Error {
     }
 }
 
+/// The user-facing message of an [`Error`] response, kept in its extensions so the error page
+/// (`web::error_page`) can show it; plain-text bodies without it come from elsewhere (axum).
+#[derive(Debug, Clone)]
+pub struct ErrorMessage(pub String);
+
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let t = i18n::current();
-        match self {
-            Self::Forbidden => (StatusCode::FORBIDDEN, t.get("error-forbidden")).into_response(),
-            Self::Conflict(message) => (StatusCode::CONFLICT, t.msg(&message)).into_response(),
-            Self::Invalid(message) => {
-                (StatusCode::UNPROCESSABLE_ENTITY, t.msg(&message)).into_response()
-            }
-            Self::NotFound => (StatusCode::NOT_FOUND, t.get("error-not-found")).into_response(),
+        let (status, message) = match self {
+            Self::Forbidden => (StatusCode::FORBIDDEN, t.get("error-forbidden")),
+            Self::Conflict(message) => (StatusCode::CONFLICT, t.msg(&message)),
+            Self::Invalid(message) => (StatusCode::UNPROCESSABLE_ENTITY, t.msg(&message)),
+            Self::NotFound => (StatusCode::NOT_FOUND, t.get("error-not-found")),
             other => {
                 // Never leak internal details (paths, SQL, secrets) to the client.
                 tracing::error!(error = %other, "request failed");
-                (StatusCode::INTERNAL_SERVER_ERROR, t.get("error-internal")).into_response()
+                (StatusCode::INTERNAL_SERVER_ERROR, t.get("error-internal"))
             }
-        }
+        };
+        let mut response = (status, message.clone()).into_response();
+        response.extensions_mut().insert(ErrorMessage(message));
+        response
     }
 }
 

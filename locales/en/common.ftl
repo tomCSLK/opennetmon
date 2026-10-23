@@ -48,6 +48,17 @@ refresh-auto-title = Reload the page every 60 seconds (waits while you are enter
 error-forbidden = Access denied
 error-not-found = Not found
 error-internal = Internal error
+error-code = Error { $status }
+error-heading = That did not work
+error-heading-input = Input not possible
+error-heading-not-found = Page not found
+error-heading-forbidden = Access denied
+error-heading-internal = Internal error
+error-not-found-text = This page does not exist (any more). Perhaps the entry was deleted.
+error-bad-request = The data could not be processed. Please check what you entered and try again.
+error-method = This action is not possible here.
+error-internal-text = An error occurred while processing. The details are in the server log.
+error-back = Back
 
 ## Language
 

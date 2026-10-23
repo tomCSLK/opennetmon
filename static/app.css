@@ -415,6 +415,9 @@ label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font
 .auth .card { padding: 1.75rem; box-shadow: var(--shadow-lg); }
 .auth h1 { font-size: 1.25rem; margin-bottom: .2rem; }
 .auth form.stack > button[type=submit] { align-self: stretch; }
+.error-page h1 { margin: .15rem 0 .9rem; }
+.error-page .error-code { margin: 0; color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.error-page .actions { margin-top: 1.25rem; }
 .auth-meta { margin-top: 1rem; text-align: center; color: var(--muted); font-size: .8rem; }
 
 /* legacy helpers still used by some templates */
