@@ -187,6 +187,10 @@ SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET, Mand
 Herstellermibs außer gezielt benötigten TP-Link-OIDs.
 Zurückgestellt gegenüber früheren Ideen: SNMP v1, Subnetz-Scan, Docker-Betrieb, htmx.
 
+Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
+- Knopf „Protokoll“ auch auf Gruppenseiten (`/log?group=<id>` mit allen Geräten der Gruppe und ihrer Untergruppen); am 2026-10-24 bewusst
+  nicht umgesetzt, weil das Protokoll großer Gruppen wieder unübersichtlich würde. Geräte- und Sensorseiten haben den Knopf seit v0.4.4.
+
 ## Verifikation
 
 - **Unit- und Handler-Tests** (436, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Config, Auth, Krypto, Validierung,
