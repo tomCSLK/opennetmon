@@ -26,3 +26,4 @@ js-samples-minimum = Minimum
 js-samples-maximum = Maximum
 js-samples-from-one = %1 (aus 1 Wert)
 js-samples-from-many = %1 (aus %2 Werten)
+js-filter-count = %1 von %2

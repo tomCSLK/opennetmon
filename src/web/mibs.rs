@@ -11,9 +11,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
+use crate::mib::vendors::Vendor;
 use crate::mib::{self, MibObject, Origin};
 use crate::storage::mibs::{self as store, NewMibFile};
-use crate::web::auth::{CsrfForm, CurrentUser};
+use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout, flash_message, iso_time_html};
 
 /// Upper bounds for one upload; MIB files are small text files.
@@ -31,6 +32,50 @@ const UNNAMED: &str = "unnamed.mib";
 pub struct MibsQuery {
     q: Option<String>,
     msg: Option<String>,
+    /// Which uploaded files to list: `problems`, `ok`, otherwise all.
+    files: Option<String>,
+}
+
+/// Choice above the list of uploaded files.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FileFilter {
+    All,
+    Problems,
+    Ok,
+}
+
+impl FileFilter {
+    fn parse(text: Option<&str>) -> Self {
+        match text {
+            Some("problems") => Self::Problems,
+            Some("ok") => Self::Ok,
+            _ => Self::All,
+        }
+    }
+
+    /// Value of `files` in addresses (`""` for all).
+    fn key(self) -> &'static str {
+        match self {
+            Self::All => "",
+            Self::Problems => "problems",
+            Self::Ok => "ok",
+        }
+    }
+
+    fn keeps(self, file: &FileView) -> bool {
+        match self {
+            Self::All => true,
+            Self::Problems => !file.ok,
+            Self::Ok => file.ok,
+        }
+    }
+}
+
+/// One choice of the file filter for the template.
+struct FilterLink {
+    href: &'static str,
+    label: String,
+    current: bool,
 }
 
 struct ModuleView {
@@ -46,6 +91,14 @@ struct FileView {
     size_kb: String,
     uploaded_at: String,
     modules: Vec<ModuleView>,
+    /// Every module of the file loaded without problems.
+    ok: bool,
+    /// Vendor of the file: rank of its kind (known or numbered enterprise, standard, none) and name.
+    vendor: (u8, String),
+    /// Set on the first file of a vendor in the list: the heading row with the number of files shown.
+    group_head: Option<String>,
+    /// File and module names in lower case, for the filter field (`static/table-filter.js`).
+    filter_text: String,
 }
 
 struct ObjectView {
@@ -92,7 +145,14 @@ struct PageTemplate {
     /// Language of the page.
     t: Lang,
     layout: Layout,
+    /// Uploaded files after the filter, problems first.
     files: Vec<FileView>,
+    /// Number of uploaded files, and of those with problems.
+    files_total: usize,
+    files_with_problems: usize,
+    filter_links: Vec<FilterLink>,
+    /// The chosen filter, kept by the delete buttons.
+    files_filter: &'static str,
     bundled: Vec<ModuleView>,
     total_objects: usize,
     total_modules: usize,
@@ -143,6 +203,21 @@ fn object_view(t: Lang, o: &MibObject) -> ObjectView {
     }
 }
 
+/// Rank and name of a vendor for grouping: enterprises by name first, then the standard tree, then files without one.
+fn vendor_label(t: Lang, vendor: Option<Vendor>) -> (u8, String) {
+    match vendor {
+        Some(v @ Vendor::Enterprise(number)) => (
+            0,
+            v.name().map_or_else(
+                || t.get1("mibs-vendor-number", "number", number.to_string()),
+                str::to_owned,
+            ),
+        ),
+        Some(Vendor::Standard) => (1, t.get("mibs-vendor-standard")),
+        None => (2, t.get("mibs-vendor-none")),
+    }
+}
+
 fn module_view(t: Lang, r: &mib::ModuleReport) -> ModuleView {
     let mut problems = Vec::new();
     if r.shadowed {
@@ -166,28 +241,102 @@ async fn render(
     state: &AppState,
     user: &CurrentUser,
     query: &str,
+    filter: FileFilter,
     flash: Option<String>,
     upload: Option<UploadResult>,
     error: Option<String>,
 ) -> Result<String> {
     let index = state.mib_index();
     let reports = index.reports();
-    let files = store::list_files(&state.pool)
+    let mut files: Vec<FileView> = store::list_files(&state.pool)
         .await?
         .into_iter()
-        .map(|f| FileView {
-            modules: reports
+        .map(|f| {
+            let modules: Vec<ModuleView> = reports
                 .iter()
                 .filter(|r| r.origin == Origin::Imported(f.id))
                 .map(|r| module_view(user.lang, r))
-                .collect(),
-            id: f.id,
-            size_kb: format!("{:.1} KB", f.size as f64 / 1024.0)
-                .replace('.', &user.lang.decimal_separator().to_string()),
-            uploaded_at: iso_time_html(&f.uploaded_at),
-            file_name: f.file_name,
+                .collect();
+            let file_reports = || {
+                reports
+                    .iter()
+                    .filter(|r| r.origin == Origin::Imported(f.id))
+            };
+            // An enterprise wins over the standard tree (e.g. a vendor MIB with one node in mib-2).
+            let vendor = file_reports()
+                .filter_map(|r| r.vendor)
+                .find(|v| matches!(v, Vendor::Enterprise(_)))
+                .or_else(|| file_reports().find_map(|r| r.vendor));
+            let vendor = vendor_label(user.lang, vendor);
+            let mut filter_text = format!("{} {}", f.file_name, vendor.1).to_lowercase();
+            for m in &modules {
+                filter_text.push(' ');
+                filter_text.push_str(&m.name.to_lowercase());
+            }
+            FileView {
+                ok: modules.iter().all(|m| m.ok),
+                vendor,
+                group_head: None,
+                modules,
+                filter_text,
+                id: f.id,
+                size_kb: format!("{:.1} KB", f.size as f64 / 1024.0)
+                    .replace('.', &user.lang.decimal_separator().to_string()),
+                uploaded_at: iso_time_html(&f.uploaded_at),
+                file_name: f.file_name,
+            }
         })
         .collect();
+    // By vendor; within a vendor the files that need attention first, then by name.
+    files.sort_by(|a, b| {
+        a.vendor
+            .0
+            .cmp(&b.vendor.0)
+            .then_with(|| crate::ordering::natural_cmp(&a.vendor.1, &b.vendor.1))
+            .then_with(|| a.ok.cmp(&b.ok))
+            .then_with(|| crate::ordering::natural_cmp(&a.file_name, &b.file_name))
+    });
+    let files_total = files.len();
+    let files_with_problems = files.iter().filter(|f| !f.ok).count();
+    files.retain(|f| filter.keeps(f));
+    let t = user.lang;
+    let mut start = 0;
+    while start < files.len() {
+        let end = start
+            + files[start..]
+                .iter()
+                .take_while(|f| f.vendor == files[start].vendor)
+                .count();
+        files[start].group_head = Some(t.get1("mibs-files-count", "count", end - start));
+        start = end;
+    }
+    let filter_links = [
+        (
+            FileFilter::All,
+            "/mibs#files",
+            "mibs-files-all",
+            files_total,
+        ),
+        (
+            FileFilter::Problems,
+            "/mibs?files=problems#files",
+            "mibs-files-problems",
+            files_with_problems,
+        ),
+        (
+            FileFilter::Ok,
+            "/mibs?files=ok#files",
+            "mibs-files-ok",
+            files_total - files_with_problems,
+        ),
+    ]
+    .into_iter()
+    .map(|(choice, href, id, count)| FilterLink {
+        href,
+        label: t.get1(id, "count", count),
+        current: choice == filter,
+    })
+    .collect();
     let bundled = reports
         .iter()
         .filter(|r| r.origin == Origin::Bundled)
@@ -202,6 +351,10 @@ async fn render(
         layout: user.layout(),
         t: user.lang,
         files,
+        files_total,
+        files_with_problems,
+        filter_links,
+        files_filter: filter.key(),
         bundled,
         total_objects: index.len(),
         total_modules: reports.iter().filter(|r| !r.shadowed).count(),
@@ -226,6 +379,7 @@ pub async fn show(
             &state,
             &user,
             q.trim(),
+            FileFilter::parse(query.files.as_deref()),
             flash_message(user.lang, query.msg.as_deref()),
             None,
             None,
@@ -333,6 +487,7 @@ pub async fn upload(
             &state,
             &user,
             "",
+            FileFilter::All,
             None,
             None,
             Some(user.lang.get("mibs-select-file")),
@@ -355,14 +510,17 @@ pub async fn upload(
         replaced = result.replaced,
         "MIB files uploaded"
     );
-    Ok(Html(render(&state, &user, "", None, Some(result), None).await?).into_response())
+    Ok(
+        Html(render(&state, &user, "", FileFilter::All, None, Some(result), None).await?)
+            .into_response(),
+    )
 }
 
 pub async fn delete(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(id): Path<i64>,
-    axum::Form(form): axum::Form<CsrfForm>,
+    axum::Form(form): axum::Form<DeleteForm>,
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
@@ -371,7 +529,18 @@ pub async fn delete(
     }
     state.reload_mibs().await?;
     tracing::info!(user = %user.username, file = id, "MIB file deleted");
-    Ok(Redirect::to("/mibs?msg=mib_deleted").into_response())
+    // Back to the same choice of files.
+    let to = match FileFilter::parse(form.files.as_deref()).key() {
+        "" => "/mibs?msg=mib_deleted#files".to_owned(),
+        key => format!("/mibs?msg=mib_deleted&files={key}#files"),
+    };
+    Ok(Redirect::to(&to).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct DeleteForm {
+    csrf_token: String,
+    files: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -616,7 +785,7 @@ END
             ),
         )
         .await;
-        assert_eq!(reply.location(), "/mibs?msg=mib_deleted");
+        assert_eq!(reply.location(), "/mibs?msg=mib_deleted#files");
         assert!(
             h.state
                 .mib_index()
@@ -649,6 +818,93 @@ END
         .await;
         assert!(reply.body.contains("fehlt: PARENT-MIB"), "{}", reply.body);
         assert!(reply.body.contains("1 Definition nicht auflösbar"));
+    }
+
+    #[tokio::test]
+    async fn the_file_list_groups_by_vendor_with_problems_first_and_filters() {
+        let h = harness(true).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let broken = "BROKEN-MIB DEFINITIONS ::= BEGIN IMPORTS OBJECT-TYPE, enterprises FROM SNMPv2-SMI;
+            brokenRoot OBJECT IDENTIFIER ::= { enterprises 64000 9 }
+            brokenValue OBJECT-TYPE SYNTAX INTEGER MAX-ACCESS read-only STATUS current DESCRIPTION \"x\" ::= { nowhere 1 } END";
+        let cisco = "CISCO-X-MIB DEFINITIONS ::= BEGIN IMPORTS enterprises FROM SNMPv2-SMI;
+            ciscoX OBJECT IDENTIFIER ::= { enterprises 9 99 } END";
+        let child = "CHILD-MIB DEFINITIONS ::= BEGIN IMPORTS OBJECT-TYPE FROM SNMPv2-SMI parentNode FROM PARENT-MIB;
+            childValue OBJECT-TYPE SYNTAX INTEGER MAX-ACCESS read-only STATUS current DESCRIPTION \"x\" ::= { parentNode 1 } END";
+        send(
+            &h.app,
+            upload_request(
+                &admin,
+                &csrf,
+                &[
+                    ("a-vendor.mib", VENDOR_MIB),
+                    ("z-broken.mib", broken),
+                    ("cisco-x.mib", cisco),
+                    ("child.mib", child),
+                ],
+            ),
+        )
+        .await;
+        let page = send(&h.app, get("/mibs", Some(&admin))).await;
+        let body = &page.body;
+        assert!(body.contains("4 Dateien, 2 mit Problemen"), "{body}");
+        for needle in [
+            "Alle (4)</a>",
+            "Mit Problemen (2)</a>",
+            "In Ordnung (2)</a>",
+            "data-filter=\"a-vendor.mib unternehmen 64000 vendor-mib\"",
+            "data-table-filter=\"mib-files\"",
+            "<th colspan=\"4\">Cisco <span class=\"muted\">· 1 Datei</span></th>",
+            "<th colspan=\"4\">Unternehmen 64000 <span class=\"muted\">· 2 Dateien</span></th>",
+            "<th colspan=\"4\">Ohne Hersteller <span class=\"muted\">· 1 Datei</span></th>",
+        ] {
+            assert!(body.contains(needle), "{needle} missing: {body}");
+        }
+        // Known vendors by name, numbered ones, files without a vendor last; problems first within a vendor.
+        let at = |name: &str| body.find(&format!("<strong>{name}</strong>")).unwrap();
+        assert!(at("cisco-x.mib") < at("z-broken.mib"));
+        assert!(at("z-broken.mib") < at("a-vendor.mib"));
+        assert!(at("a-vendor.mib") < at("child.mib"));
+
+        let problems = send(&h.app, get("/mibs?files=problems", Some(&admin))).await;
+        assert!(problems.body.contains("z-broken.mib") && problems.body.contains("child.mib"));
+        assert!(!problems.body.contains("a-vendor.mib") && !problems.body.contains("Cisco"));
+        assert!(
+            problems
+                .body
+                .contains("Unternehmen 64000 <span class=\"muted\">· 1 Datei")
+        );
+        assert!(
+            problems
+                .body
+                .contains("<a href=\"/mibs?files=problems#files\" aria-current=\"page\">")
+        );
+        let fine = send(&h.app, get("/mibs?files=ok", Some(&admin))).await;
+        assert!(fine.body.contains("a-vendor.mib") && !fine.body.contains("child.mib"));
+
+        // Deleting keeps the choice; with nothing left to show, the list says so.
+        let files = crate::storage::mibs::list_files(&h.state.pool)
+            .await
+            .unwrap();
+        for name in ["z-broken.mib", "child.mib"] {
+            let id = files.iter().find(|f| f.file_name == name).unwrap().id;
+            let reply = send(
+                &h.app,
+                post(
+                    &format!("/mibs/files/{id}/delete"),
+                    Some(&admin),
+                    &format!("csrf_token={csrf}&files=problems"),
+                ),
+            )
+            .await;
+            assert_eq!(
+                reply.location(),
+                "/mibs?msg=mib_deleted&files=problems#files"
+            );
+        }
+        let none = send(&h.app, get("/mibs?files=problems", Some(&admin))).await;
+        assert!(none.body.contains("Keine Datei passt zur Auswahl."));
+        assert!(none.body.contains("2 Dateien, alle in Ordnung"));
     }
 
     #[tokio::test]

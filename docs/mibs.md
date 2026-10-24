@@ -19,6 +19,14 @@ INET-ADDRESS-MIB, ENTITY-MIB and ENTITY-SENSOR-MIB (temperatures and the like). 
 - The list shows the modules of each file with the number of objects and any problems: **missing: X-MIB** (an imported file is still missing – upload it),
   **n definitions cannot be resolved** (e.g. a reference to a node defined nowhere – as for 19 product identifiers in TP-Link's `tplink-products.mib`,
   irrelevant for monitoring).
+- The list is **grouped by vendor** (a heading row with the number of files): known vendors by name, other enterprises as “Enterprise 12345”, then
+  “Standard MIBs (IETF)” for uploaded modules in the standard tree, last “No vendor”. The vendor is the private enterprise number
+  (`1.3.6.1.4.1.<number>`) under which most of a module's objects lie (`mib::vendors`, with names for about 50 common enterprises – the full IANA list
+  is not bundled); a module without objects of its own, such as `TPLINK-TC-MIB` with only textual conventions, belongs to the enterprise of the
+  modules importing from it. Within a vendor, files with problems come first, then the rest by name.
+- Above the list, **All / With problems / Fine** (with counts, `?files=problems|ok`) narrows it, and the filter field keeps only files whose file,
+  module or vendor name contains every word typed (`static/table-filter.js`; vendor headings without a matching file disappear; the text is kept in
+  the tab, e.g. after deleting a file, and Escape empties it). The list keeps its height and scrolls within, with its head in view. Deleting returns to the same choice.
 - Deleting removes the file; the index is rebuilt immediately. Existing sensors stay unchanged (they store the numeric OID); only names and plain text in the
   display disappear.
 - **Search** on the same page: by name or by a term in the description; hits with OID, kind (scalar, table column, table, …), type, unit, access and

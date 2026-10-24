@@ -6,6 +6,7 @@
 pub mod catalog;
 pub mod lexer;
 pub mod parser;
+pub mod vendors;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -176,6 +177,8 @@ pub struct ModuleReport {
     pub warnings: Vec<String>,
     /// Skipped because a module of the same name is already loaded (bundled modules win).
     pub shadowed: bool,
+    /// Owner of most of the module's objects (`None`: no objects in the enterprise or standard trees).
+    pub vendor: Option<vendors::Vendor>,
 }
 
 impl ModuleReport {
@@ -450,6 +453,7 @@ impl MibIndex {
                             unresolved: Vec::new(),
                             warnings: Vec::new(),
                             shadowed: true,
+                            vendor: None,
                         });
                     }
                     Some(pos) => {
@@ -486,8 +490,10 @@ impl MibIndex {
                 unresolved: Vec::new(),
                 warnings: l.module.warnings.clone(),
                 shadowed: false,
+                vendor: None,
             };
             report.missing_modules.dedup();
+            let first = index.objects.len();
             for def in &l.module.defs {
                 let Some(oid) = resolver.resolve_def(module, def) else {
                     report.unresolved.push(def.name.clone());
@@ -497,9 +503,47 @@ impl MibIndex {
                 report.objects += 1;
                 index.insert(object);
             }
+            report.vendor = vendors::most_common(index.objects[first..].iter().map(|o| &o.oid[..]));
             index.reports.push(report);
         }
+        index.adopt_vendorless(&loaded);
         index
+    }
+
+    /// A module without objects of its own (e.g. only textual conventions, like `TPLINK-TC-MIB`) belongs to the
+    /// enterprise of the modules that import from it.
+    fn adopt_vendorless(&mut self, loaded: &[Loaded]) {
+        let owner: HashMap<&str, vendors::Vendor> = self
+            .reports
+            .iter()
+            .filter(|r| !r.shadowed)
+            .filter_map(|r| r.vendor.map(|v| (r.name.as_str(), v)))
+            .collect();
+        let adopted: Vec<(usize, vendors::Vendor)> = self
+            .reports
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r.vendor.is_none() && !r.shadowed)
+            .filter_map(|(i, r)| {
+                let mut counts: BTreeMap<u64, usize> = BTreeMap::new();
+                for l in loaded {
+                    if l.module.imports.iter().any(|(from, _)| *from == r.name)
+                        && let Some(vendors::Vendor::Enterprise(n)) =
+                            owner.get(l.module.name.as_str())
+                    {
+                        *counts.entry(*n).or_default() += 1;
+                    }
+                }
+                counts
+                    .into_iter()
+                    .rev()
+                    .max_by_key(|(_, c)| *c)
+                    .map(|(n, _)| (i, vendors::Vendor::Enterprise(n)))
+            })
+            .collect();
+        for (i, vendor) in adopted {
+            self.reports[i].vendor = Some(vendor);
+        }
     }
 
     fn object(

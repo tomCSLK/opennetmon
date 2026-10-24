@@ -428,3 +428,45 @@ fn tplink_mibs_resolve_when_available() {
         .collect();
     eprintln!("TP-Link modules with problems: {problems:#?}");
 }
+
+#[test]
+fn modules_belong_to_the_enterprise_of_their_objects_or_of_their_importers() {
+    use super::vendors::Vendor;
+    let tc = "ACME-TC DEFINITIONS ::= BEGIN IMPORTS TEXTUAL-CONVENTION FROM SNMPv2-TC;
+        AcmeState ::= TEXTUAL-CONVENTION STATUS current DESCRIPTION \"x\" SYNTAX INTEGER { on(1), off(2) } END";
+    let acme = "ACME-MIB DEFINITIONS ::= BEGIN IMPORTS OBJECT-TYPE, enterprises FROM SNMPv2-SMI AcmeState FROM ACME-TC;
+        acme OBJECT IDENTIFIER ::= { enterprises 64000 }
+        acmeState OBJECT-TYPE SYNTAX AcmeState MAX-ACCESS read-only STATUS current DESCRIPTION \"x\" ::= { acme 1 } END";
+    let bridge = "MY-BRIDGE-MIB DEFINITIONS ::= BEGIN IMPORTS mib-2 FROM SNMPv2-SMI;
+        myBridge OBJECT IDENTIFIER ::= { mib-2 9999 } END";
+    let index = MibIndex::build(&[
+        Source {
+            origin: Origin::Imported(1),
+            text: tc,
+        },
+        Source {
+            origin: Origin::Imported(2),
+            text: acme,
+        },
+        Source {
+            origin: Origin::Imported(3),
+            text: bridge,
+        },
+    ]);
+    let vendor = |name: &str| {
+        index
+            .reports()
+            .iter()
+            .find(|r| r.name == name)
+            .unwrap()
+            .vendor
+    };
+    assert_eq!(vendor("ACME-MIB"), Some(Vendor::Enterprise(64000)));
+    assert_eq!(
+        vendor("ACME-TC"),
+        Some(Vendor::Enterprise(64000)),
+        "adopted by its importer"
+    );
+    assert_eq!(vendor("MY-BRIDGE-MIB"), Some(Vendor::Standard));
+    assert_eq!(vendor("IF-MIB"), Some(Vendor::Standard));
+}

@@ -56,6 +56,29 @@ mibs-none-uploaded = No vendor MIBs uploaded yet.
 mibs-file = File
 mibs-modules = Modules
 mibs-uploaded-at = Uploaded
+mibs-files-summary =
+    { $files ->
+        [one] 1 file
+       *[other] { $files } files
+    }{ $problems ->
+        [0] , all fine
+        [one] , 1 with problems
+       *[other] , { $problems } with problems
+    }
+mibs-files-count =
+    { $count ->
+        [one] 1 file
+       *[other] { $count } files
+    }
+mibs-vendor-number = Enterprise { $number }
+mibs-vendor-standard = Standard MIBs (IETF)
+mibs-vendor-none = No vendor
+mibs-files-show = Show files
+mibs-files-all = All ({ $count })
+mibs-files-problems = With problems ({ $count })
+mibs-files-ok = Fine ({ $count })
+mibs-files-filter = Filter by file, module or vendor
+mibs-files-none-match = No file matches the selection.
 count-objects =
     { $count ->
         [one] { $count } object

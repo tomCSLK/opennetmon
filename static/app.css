@@ -196,6 +196,11 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
   padding: .95rem 1.35rem; border-bottom: 1px solid var(--border); }
 .card-head h2 { margin: 0; }
 .card-body { padding: 1.1rem 1.35rem; }
+/* Tools between the head of a flush card and its table: filter choices, filter field, counter. */
+.card-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .9rem; padding: .75rem 1.35rem;
+  border-bottom: 1px solid var(--border); }
+.card-tools .ranges { flex-wrap: wrap; }
+.card-tools input[type=search] { width: auto; flex: 1 1 14rem; max-width: 24rem; }
 .card + .card { margin-top: 0; }
 /* A form holding several cards keeps the page's spacing between them. */
 form.sections { display: flex; flex-direction: column; gap: 1.25rem; }
@@ -296,11 +301,17 @@ a.pills:hover .pill { filter: brightness(1.08); }
 
 /* ---------- tables ---------- */
 .table-wrap { overflow-x: auto; }
+/* A long table keeps a fixed height and scrolls within, its head staying in view. */
+.table-wrap.scroll { max-height: 36rem; overflow-y: auto; }
+.table-wrap.scroll thead th { position: sticky; top: 0; z-index: 1; }
 table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { padding: .7rem .9rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
 thead th { font-size: .75rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
   background: var(--surface-2); }
 tbody tr:hover { background: var(--surface-hover); }
+/* A heading row inside a table, e.g. the vendor above its MIB files. */
+tbody tr.table-group th { background: var(--surface-2); color: var(--text); font-size: .86rem; font-weight: 700; }
+tbody tr.table-group:hover { background: none; }
 tbody tr:last-child td { border-bottom: 0; }
 .card:not(.flush) > table, .card:not(.flush) > .table-wrap { margin: .25rem -1.35rem -1.25rem; width: calc(100% + 2.7rem); }
 .card table th:first-child, .card table td:first-child { padding-left: 1.35rem; }
@@ -339,7 +350,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 form.stack { display: flex; flex-direction: column; }
 label { display: block; margin: .9rem 0 .3rem; font-size: .88rem; font-weight: 600; }
 form.stack > label:first-of-type, fieldset > label:first-of-type { margin-top: .2rem; }
-input[type=text], input[type=password], input[type=number], input[type=email], select, textarea {
+input[type=text], input[type=password], input[type=number], input[type=email], input[type=search], select, textarea {
   width: 100%; padding: .6rem .75rem; font: inherit; font-size: .93rem; color: var(--text); background: var(--surface);
   border: 1px solid var(--border-strong); border-radius: var(--radius-sm); transition: border-color .12s, box-shadow .12s; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus); }
