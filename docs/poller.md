@@ -61,6 +61,11 @@ the duration is the time until the next change, or “ongoing” with the time s
 `LAG`/`LEAD` over the changes of the same sensor). First polls, pausing and “Unknown” are not in the log but count towards the 500 stored changes. The pause
 log (`pause_log`) also keeps the newest 500 entries. At the top right, “Refresh” with “Auto”.
 
+Every column except the message sorts the log by a click on its head (`?sort=when|status|sensor|device|duration&dir=asc|desc`, like the status
+lists; first click: newest and longest first, otherwise ascending; ties newest first). The search field above the table keeps only entries that contain
+every word typed in status, previous status, sensor, device, group or message (`static/table-filter.js`, in the browser; the text is kept in the tab, so it
+survives the automatic refresh, which waits while the field has the focus).
+
 - `storage::status::record_poll` writes values, state and event in **one transaction** and returns the `StatusChange`
   (notifications hook in there; a change `NULL → Up` is no reason for an alert).
 

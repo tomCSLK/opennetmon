@@ -17,3 +17,5 @@ log-duration = Duration
 log-before = before: { $status }
 log-after = after { $duration }
 log-ongoing = ongoing
+log-filter = Search the log
+log-none-match = No entry matches the search.

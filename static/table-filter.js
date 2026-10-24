@@ -1,4 +1,4 @@
-// Filter field above a table (templates/mibs.html): `data-table-filter` names the table. Rows stay visible
+// Filter field above a table (templates/mibs.html, log.html): `data-table-filter` names the table. Rows stay visible
 // when their `data-filter` text (lower case) contains every word typed; a counter shows how many are left. Heading rows
 // (`data-filter-group`) stay visible while one of the rows below them does. The text survives
 // reloads in this tab (e.g. after deleting a row). Without JavaScript the field stays hidden and the table complete.

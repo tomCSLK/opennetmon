@@ -17,3 +17,5 @@ log-duration = Dauer
 log-before = vorher { $status }
 log-after = nach { $duration }
 log-ongoing = dauert an
+log-filter = Protokoll durchsuchen
+log-none-match = Kein Eintrag passt zur Suche.

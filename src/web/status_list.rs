@@ -139,13 +139,13 @@ impl SortKey {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Dir {
+pub(crate) enum Dir {
     Asc,
     Desc,
 }
 
 impl Dir {
-    fn parse(s: &str) -> Option<Self> {
+    pub(crate) fn parse(s: &str) -> Option<Self> {
         match s {
             "asc" => Some(Self::Asc),
             "desc" => Some(Self::Desc),
@@ -153,21 +153,29 @@ impl Dir {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Asc => "asc",
             Self::Desc => "desc",
         }
     }
 
-    fn flip(self) -> Self {
+    pub(crate) fn flip(self) -> Self {
         match self {
             Self::Asc => Self::Desc,
             Self::Desc => Self::Asc,
         }
     }
 
-    fn apply(self, ord: Ordering) -> Ordering {
+    /// `aria-sort` of the column sorted this way.
+    pub(crate) fn aria_sort(self) -> &'static str {
+        match self {
+            Self::Asc => "ascending",
+            Self::Desc => "descending",
+        }
+    }
+
+    pub(crate) fn apply(self, ord: Ordering) -> Ordering {
         match self {
             Self::Asc => ord,
             Self::Desc => ord.reverse(),
@@ -176,7 +184,7 @@ impl Dir {
 }
 
 /// Worst first, inactive last.
-fn rank(status: Status) -> u8 {
+pub(crate) fn rank(status: Status) -> u8 {
     match status {
         Status::Down => 0,
         Status::Warning => 1,
@@ -226,7 +234,11 @@ fn unit_rank(unit: Unit) -> u8 {
 }
 
 /// Compares two optional keys with `cmp`; rows without a key always come last.
-fn missing_last<T>(a: Option<T>, b: Option<T>, cmp: impl Fn(&T, &T) -> Ordering) -> Ordering {
+pub(crate) fn missing_last<T>(
+    a: Option<T>,
+    b: Option<T>,
+    cmp: impl Fn(&T, &T) -> Ordering,
+) -> Ordering {
     match (a, b) {
         (Some(a), Some(b)) => cmp(&a, &b),
         (Some(_), None) => Ordering::Less,
@@ -490,11 +502,7 @@ pub async fn list(
                     k.as_str(),
                     next.as_str()
                 )),
-                aria_sort: match (k == key, dir) {
-                    (false, _) => "",
-                    (true, Dir::Asc) => "ascending",
-                    (true, Dir::Desc) => "descending",
-                },
+                aria_sort: if k == key { dir.aria_sort() } else { "" },
                 right: k == SortKey::Value,
             }
         })

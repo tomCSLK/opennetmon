@@ -1,5 +1,6 @@
 {% extends "app.html" %}
 {% block title %}{{ t.get("log") }} – opennetmon{% endblock %}
+{% block head %}<script src="/static/table-filter.js?v=2" defer></script>{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -13,14 +14,22 @@
   {% if entries.is_empty() %}
   <div class="empty"><strong>{{ t.get("log-empty") }}</strong></div>
   {% else %}
+  <div class="card-tools">
+    <input type="search" data-table-filter="log-entries" placeholder="{{ t.get("log-filter") }}" aria-label="{{ t.get("log-filter") }}" hidden>
+    <span class="muted small" data-table-filter-count></span>
+  </div>
   <div class="table-wrap">
-  <table>
+  <table id="log-entries">
     <thead>
-      <tr><th>{{ t.get("detail-when") }}</th><th>{{ t.get("status") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("status-list-device") }}</th><th>{{ t.get("message") }}</th><th>{{ t.get("log-duration") }}</th></tr>
+      <tr>
+        {% for c in columns %}
+        <th{% if !c.aria_sort.is_empty() %} aria-sort="{{ c.aria_sort }}"{% endif %}>{% if let Some(href) = c.href %}<a class="sort" href="{{ href }}">{{ c.label }}</a>{% else %}{{ c.label }}{% endif %}</th>
+        {% endfor %}
+      </tr>
     </thead>
     <tbody>
     {% for e in entries %}
-      <tr>
+      <tr data-filter="{{ e.filter_text() }}">
         <td class="nowrap">{{ e.at|safe }}</td>
         <td class="nowrap"><span class="badge status-{{ e.status_class }}">{{ e.status_label }}</span>{% if !e.before.is_empty() %}<span class="sub">{{ e.before }}</span>{% endif %}</td>
         <td>{% if let Some(id) = e.sensor_id %}<a href="/sensors/{{ id }}"><strong>{{ e.sensor_name }}</strong></a>{% else %}<span class="muted">{{ e.scope }}</span>{% endif %}</td>
@@ -32,6 +41,7 @@
     </tbody>
   </table>
   </div>
+  <p class="empty small" data-table-filter-empty hidden>{{ t.get("log-none-match") }}</p>
   {% endif %}
 </section>
 {% endblock %}
