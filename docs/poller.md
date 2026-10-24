@@ -66,6 +66,10 @@ lists; first click: newest and longest first, otherwise ascending; ties newest f
 every word typed in status, previous status, sensor, device, group or message (`static/table-filter.js`, in the browser; the text is kept in the tab, so it
 survives the automatic refresh, which waits while the field has the focus).
 
+The button **“Log”** on a device page opens `/log?device=<id>` (the entries of its sensors and the pauses of the device and its sensors), the one on a sensor
+page `/log?sensor=<id>`. The page then shows a breadcrumb back to the device or sensor, “Whole log” leads back to all entries, sorting keeps the limit, and
+the search text is remembered per device and sensor.
+
 - `storage::status::record_poll` writes values, state and event in **one transaction** and returns the `StatusChange`
   (notifications hook in there; a change `NULL → Up` is no reason for an alert).
 

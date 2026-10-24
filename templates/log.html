@@ -4,8 +4,15 @@
 {% block content %}
 <div class="page-head">
   <div>
+    {% if let Some(s) = scope %}
+    {% let trail = s.trail.clone() %}
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ s.device_id }}/sensors">{{ s.device_name }}</a><span>›</span>{% if let Some((id, name)) = s.sensor %}<a href="/sensors/{{ id }}">{{ name }}</a><span>›</span>{% endif %}<span>{{ t.get("log") }}</span></div>
+    <h1>{{ t.get("log") }}</h1>
+    <p class="subtitle">{{ s.title }} · {{ t.get1("log-count", "count", entries.len()) }} · <a href="/log">{{ t.get("log-show-all") }}</a></p>
+    {% else %}
     <h1>{{ t.get("log") }}</h1>
     <p class="subtitle">{{ t.get1("log-count", "count", entries.len()) }} · {{ t.get1("log-kept", "count", kept) }}</p>
+    {% endif %}
   </div>
   <div class="actions">{% include "refresh.html" %}</div>
 </div>
@@ -15,7 +22,7 @@
   <div class="empty"><strong>{{ t.get("log-empty") }}</strong></div>
   {% else %}
   <div class="card-tools">
-    <input type="search" data-table-filter="log-entries" placeholder="{{ t.get("log-filter") }}" aria-label="{{ t.get("log-filter") }}" hidden>
+    <input type="search" data-table-filter="log-entries" data-table-filter-key="{{ filter_key() }}" placeholder="{{ t.get("log-filter") }}" aria-label="{{ t.get("log-filter") }}" hidden>
     <span class="muted small" data-table-filter-count></span>
   </div>
   <div class="table-wrap">

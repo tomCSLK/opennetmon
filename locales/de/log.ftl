@@ -19,3 +19,6 @@ log-after = nach { $duration }
 log-ongoing = dauert an
 log-filter = Protokoll durchsuchen
 log-none-match = Kein Eintrag passt zur Suche.
+log-scope-device-title = Gerät { $device }
+log-scope-sensor = Sensor { $sensor } auf { $device }
+log-show-all = Ganzes Protokoll

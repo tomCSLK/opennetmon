@@ -1,6 +1,7 @@
 //! Problem log: warnings, outages and their end over all sensors, and who paused or resumed what,
 //! newest first unless sorted by another column (`?sort=…&dir=…`, like the status lists); a filter field
-//! (`static/table-filter.js`) searches the entries. Only the newest [`status::EVENTS_KEPT`] status changes and
+//! (`static/table-filter.js`) searches the entries. `?device=<id>` or `?sensor=<id>` limits the log to one device (its
+//! sensors and pauses) or one sensor, opened by the "Log" buttons of the device and sensor pages. Only the newest [`status::EVENTS_KEPT`] status changes and
 //! [`pauses::LOG_KEPT`] pause entries are stored, so the log reaches back that far.
 
 use std::collections::HashMap;
@@ -11,7 +12,7 @@ use axum::response::Html;
 use serde::Deserialize;
 
 use crate::devices::Device;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::i18n::Lang;
 use crate::ordering::natural_cmp;
 use crate::pause::Target;
@@ -145,6 +146,24 @@ fn sort_entries(entries: &mut [Entry], key: SortKey, dir: Dir) {
 pub struct LogQuery {
     sort: Option<String>,
     dir: Option<String>,
+    device: Option<i64>,
+    sensor: Option<i64>,
+}
+
+/// The device or sensor the log is limited to.
+struct Scope {
+    /// `device=5&` or `sensor=7&`, for the sort links.
+    param: String,
+    /// Key of the remembered search text, so that each scope keeps its own.
+    filter_key: String,
+    /// "Gerät Router" or "Sensor Ping auf Router".
+    title: String,
+    /// Groups of the device, for the breadcrumb.
+    trail: Vec<crate::web::Crumb>,
+    device_id: i64,
+    device_name: String,
+    /// The sensor, if the log is limited to one.
+    sensor: Option<(i64, String)>,
 }
 
 #[derive(Template)]
@@ -152,9 +171,16 @@ pub struct LogQuery {
 struct LogTemplate {
     t: Lang,
     layout: Layout,
+    scope: Option<Scope>,
     columns: Vec<Column>,
     entries: Vec<Entry>,
     kept: i64,
+}
+
+impl LogTemplate {
+    fn filter_key(&self) -> &str {
+        self.scope.as_ref().map_or("log-entries", |s| &s.filter_key)
+    }
 }
 
 fn duration(t: Lang, ms: i64) -> String {
@@ -188,6 +214,40 @@ pub async fn log(
         .into_iter()
         .map(|s| (s.id, (s.name, s.device_id)))
         .collect();
+    let scope = match (query.sensor, query.device) {
+        (Some(id), _) => {
+            let (name, device_id) = sensors.get(&id).cloned().ok_or(Error::NotFound)?;
+            let device = devices.get(&device_id).ok_or(Error::NotFound)?;
+            Some(Scope {
+                param: format!("sensor={id}&"),
+                filter_key: format!("log-entries-sensor-{id}"),
+                title: t.get2(
+                    "log-scope-sensor",
+                    "sensor",
+                    name.as_str(),
+                    "device",
+                    device.name.as_str(),
+                ),
+                trail: crate::web::group_trail(&state.pool, device.group_id).await?,
+                device_id,
+                device_name: device.name.clone(),
+                sensor: Some((id, name)),
+            })
+        }
+        (None, Some(id)) => {
+            let device = devices.get(&id).ok_or(Error::NotFound)?;
+            Some(Scope {
+                param: format!("device={id}&"),
+                filter_key: format!("log-entries-device-{id}"),
+                title: t.get1("log-scope-device-title", "device", device.name.as_str()),
+                trail: crate::web::group_trail(&state.pool, device.group_id).await?,
+                device_id: id,
+                device_name: device.name.clone(),
+                sensor: None,
+            })
+        }
+        (None, None) => None,
+    };
     let now = now_ms();
     let mut entries = Vec::new();
     for e in status::problem_log(&state.pool).await? {
@@ -306,16 +366,26 @@ pub async fn log(
             ongoing,
         });
     }
+    match (query.sensor, query.device) {
+        (Some(id), _) => entries.retain(|e| e.sensor_id == Some(id)),
+        (None, Some(id)) => entries.retain(|e| e.device_id == Some(id)),
+        (None, None) => {}
+    }
     // Both lists are newest first; merge them by time (stable, so ties keep their order), then sort.
     entries.sort_by_key(|e| std::cmp::Reverse(e.ts_ms));
     sort_entries(&mut entries, key, dir);
+    let scope_param = scope.as_ref().map_or("", |s| s.param.as_str());
     let mut columns: Vec<Column> = SortKey::ALL
         .into_iter()
         .map(|k| {
             let next = if k == key { dir.flip() } else { k.first_dir() };
             Column {
                 label: t.get(k.label_id()),
-                href: Some(format!("/log?sort={}&dir={}", k.as_str(), next.as_str())),
+                href: Some(format!(
+                    "/log?{scope_param}sort={}&dir={}",
+                    k.as_str(),
+                    next.as_str()
+                )),
                 aria_sort: if k == key { dir.aria_sort() } else { "" },
                 right: false,
             }
@@ -334,6 +404,7 @@ pub async fn log(
     let page = LogTemplate {
         t,
         layout: user.layout(),
+        scope,
         columns,
         entries,
         kept: status::EVENTS_KEPT,
@@ -481,5 +552,93 @@ mod tests {
         // Unknown values fall back to the default.
         let odd = send(&h.app, get("/log?sort=nonsense&dir=up", Some(&viewer))).await;
         assert_eq!(names(&odd.body), ["Beta", "Beta", "Alpha", "Alpha"]);
+    }
+
+    #[tokio::test]
+    async fn the_log_of_one_device_or_sensor_is_opened_from_their_pages() {
+        let h = harness(true).await;
+        let pool = &h.state.pool;
+        let save = |name: &'static str, host: &'static str| {
+            crate::storage::devices::save_device(
+                pool,
+                None,
+                DeviceInput {
+                    kind: Default::default(),
+                    name: name.to_owned(),
+                    host: host.to_owned(),
+                    group_id: None,
+                    profile_id: None,
+                    polling: Polling::default(),
+                },
+            )
+        };
+        let router = save("Router", "192.0.2.1").await.unwrap();
+        let switch = save("Switch", "192.0.2.2").await.unwrap();
+        let ping = create_sensor(pool, router, "Ping", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let other = create_sensor(pool, router, "Ping 2", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let far = create_sensor(pool, switch, "Ping 3", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        for sensor in [ping, other, far] {
+            record_poll(pool, sensor, 1_000, &[], &Assessment::Healthy("OK".into()))
+                .await
+                .unwrap();
+            record_poll(pool, sensor, 61_000, &[], &Assessment::Failed("weg".into()))
+                .await
+                .unwrap();
+        }
+        let (viewer, _) = login(&h, "bert").await;
+
+        // Viewers find the buttons on the device and sensor pages.
+        let device_page = send(
+            &h.app,
+            get(&format!("/devices/{router}/sensors"), Some(&viewer)),
+        )
+        .await;
+        assert!(
+            device_page
+                .body
+                .contains(&format!("href=\"/log?device={router}\""))
+        );
+        let sensor_page = send(&h.app, get(&format!("/sensors/{ping}"), Some(&viewer))).await;
+        assert!(
+            sensor_page
+                .body
+                .contains(&format!("href=\"/log?sensor={ping}\""))
+        );
+
+        let rows = |body: &str| body.matches("<tr data-filter=").count();
+        let page = send(&h.app, get(&format!("/log?device={router}"), Some(&viewer))).await;
+        assert_eq!(rows(&page.body), 2, "{}", page.body);
+        assert!(!page.body.contains("Ping 3"));
+        assert!(page.body.contains("Gerät Router · 2 Einträge"));
+        assert!(page.body.contains(&format!(
+            "data-table-filter-key=\"log-entries-device-{router}\""
+        )));
+        assert!(page.body.contains(&format!(
+            "href=\"/log?device={router}&#38;sort=sensor&#38;dir=asc\""
+        )));
+        assert!(page.body.contains("<a href=\"/log\">Ganzes Protokoll</a>"));
+
+        let page = send(&h.app, get(&format!("/log?sensor={ping}"), Some(&viewer))).await;
+        assert_eq!(rows(&page.body), 1);
+        assert!(
+            page.body.contains("Sensor Ping auf Router · 1 Eintrag"),
+            "{}",
+            page.body
+        );
+        assert!(
+            page.body
+                .contains(&format!("<a href=\"/sensors/{ping}\">Ping</a>"))
+        );
+
+        let all = send(&h.app, get("/log", Some(&viewer))).await;
+        assert_eq!(rows(&all.body), 3);
+        let missing = send(&h.app, get("/log?device=999", Some(&viewer))).await;
+        assert_eq!(missing.status, axum::http::StatusCode::NOT_FOUND);
     }
 }

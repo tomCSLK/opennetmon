@@ -15,7 +15,8 @@
     var wrap = table.closest('.table-wrap') || table;
     var all = Array.prototype.slice.call(table.tBodies[0].rows);
     var rows = all.filter(function (row) { return !row.hasAttribute('data-filter-group'); });
-    var KEY = 'opennetmon-filter-' + id;
+    // Each scope (e.g. the log of one device) remembers its own text.
+    var KEY = 'opennetmon-filter-' + (input.getAttribute('data-table-filter-key') || id);
 
     function apply() {
       var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);

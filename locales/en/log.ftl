@@ -19,3 +19,6 @@ log-after = after { $duration }
 log-ongoing = ongoing
 log-filter = Search the log
 log-none-match = No entry matches the search.
+log-scope-device-title = Device { $device }
+log-scope-sensor = Sensor { $sensor } on { $device }
+log-show-all = Whole log

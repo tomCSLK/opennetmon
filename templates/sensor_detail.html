@@ -39,6 +39,7 @@
     <a class="button ghost" href="/pause/sensor/{{ sensor.id }}?back=sensor">{{ t.get("pause") }}</a>
     {% endif %}
     {% endif %}
+    <a class="button ghost" href="/log?sensor={{ sensor.id }}">{{ t.get("log") }}</a>
     {% include "refresh.html" %}
   </div>
 </div>

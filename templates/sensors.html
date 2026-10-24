@@ -26,6 +26,7 @@
     {% else %}
     <a class="button ghost" href="/pause/device/{{ device.id }}?back=device">{{ t.get("pause") }}</a>
     {% endif %}
+    <a class="button ghost" href="/log?device={{ device.id }}">{{ t.get("log") }}</a>
     {% if offer_server_values %}
     <a class="button secondary" href="/devices/{{ device.id }}/server">{{ t.get("local-find-values") }}</a>
     {% endif %}
@@ -46,6 +47,8 @@
       </button>
     </form>
     {% endif %}
+    {% else %}
+    <a class="button ghost" href="/log?device={{ device.id }}">{{ t.get("log") }}</a>
     {% endif %}
     {% include "refresh.html" %}
   </div>
