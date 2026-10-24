@@ -41,9 +41,10 @@ Umgesetzt (Details in `docs/`):
 - **Betrieb:** statisches musl-Binary, systemd-Unit mit Hardening, Installer, `.deb`-Paket, eingebautes HTTPS, Backup mit Timer, Proxy-Beispiele
   (`docs/operations.md`)
 
-Releases (alle Vorabversionen, x86_64): **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, Mehrsprachigkeit, .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS),
+Releases (x86_64; bis v0.4.3 Vorabversionen, ab v0.4.4 reguläre Releases): **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, Mehrsprachigkeit, .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS),
 **v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen),
-**v0.4.1** (2026-10-21, Sensoren „Dieser Server“), **v0.4.2** (2026-10-22, Gruppenseiten, Dokumentation auf Englisch).
+**v0.4.1** (2026-10-21, Sensoren „Dieser Server“), **v0.4.2** (2026-10-22, Gruppenseiten, Dokumentation auf Englisch),
+**v0.4.3** (2026-10-23, Intervall je Sensor, Messwerttabelle mit Rohwerten), **v0.4.4** (2026-10-24, Abmelden ohne Aktivität, MIB-Dateien nach Hersteller, Suche und Sortierung im Protokoll).
 
 ## Kontext
 

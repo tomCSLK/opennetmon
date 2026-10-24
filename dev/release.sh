@@ -3,23 +3,26 @@
 #
 #   dev/release.sh                                  # build and check only; result in target/dist/
 #   dev/release.sh --publish --notes notes.md       # additionally tag vX.Y.Z, push the tag, create the release
+#   dev/release.sh --publish --notes notes.md --prerelease   # the same, marked as pre-release (e.g. for a test version)
 #
 # The version comes from Cargo.toml (bump it there and commit first). Before anything is published the script
 # requires a clean work tree on main that matches origin/main, a version without an existing tag, passing
 # fmt/clippy/tests, an up-to-date THIRD-PARTY-LICENSES.txt, a successful installer dry run from the archive and the
 # expected files in the .deb (built with dev/deb.sh, needs cargo-deb).
-# 0.x versions are marked as pre-release.
+# Releases are regular releases since 0.4.4 (0.1.0 to 0.4.3 were pre-releases); --prerelease marks one as pre-release.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 TARGET=x86_64-unknown-linux-musl
 PUBLISH=no
 NOTES=""
+PRERELEASE=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --publish) PUBLISH=yes; shift ;;
     --notes) NOTES="${2:?--notes needs a file}"; shift 2 ;;
-    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --prerelease) PRERELEASE=(--prerelease); shift ;;
+    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -92,8 +95,6 @@ if [ "$PUBLISH" = no ]; then
 fi
 
 step "tagging $TAG and creating the GitHub release"
-PRERELEASE=()
-case "$VERSION" in 0.*) PRERELEASE=(--prerelease) ;; esac
 git tag -a "$TAG" -m "opennetmon $VERSION"
 git push -q origin "$TAG"
 gh release create "$TAG" --verify-tag "${PRERELEASE[@]}" --title "opennetmon $VERSION" --notes-file "$NOTES" \

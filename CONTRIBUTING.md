@@ -1,7 +1,7 @@
 # Contributing to opennetmon
 
-Thanks for your interest! opennetmon is a pre-release (0.x): it works and is tested on real hardware, but it has not yet run for a long time
-on many servers. Right now the most valuable contribution is **testing it** with your devices and telling us what breaks.
+Thanks for your interest! opennetmon works and is tested on real hardware, but so far mostly with devices of one vendor (TP-Link Omada).
+Right now the most valuable contribution is **testing it** with your devices and telling us what breaks.
 
 ## Reporting bugs and ideas
 

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-opennetmon is a pre-release (0.x). Security fixes go into the next release; only the latest release is supported.
+Security fixes go into the next release; only the latest release is supported.
 
 ## Reporting a vulnerability
 
