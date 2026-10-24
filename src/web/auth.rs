@@ -4,10 +4,10 @@ use askama::Template;
 use axum::Form;
 use std::net::SocketAddr;
 
-use axum::extract::{ConnectInfo, FromRequestParts, State};
+use axum::extract::{ConnectInfo, FromRequestParts, Query, State};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, StatusCode, header};
-use axum::response::{AppendHeaders, Html, IntoResponse, Redirect, Response};
+use axum::http::{HeaderMap, Method, StatusCode, header};
+use axum::response::{AppendHeaders, Html, IntoResponse, Json, Redirect, Response};
 use serde::Deserialize;
 
 use crate::auth::{self, Role, throttle};
@@ -18,6 +18,12 @@ use crate::web::{AppState, Layout};
 
 pub(crate) const SESSION_COOKIE: &str = "opennetmon_session";
 pub(crate) const LOGIN_CSRF_COOKIE: &str = "opennetmon_login";
+/// Set by `static/refresh.js` for its automatic reloads, which do not count as activity.
+pub(crate) const AUTO_RELOAD_COOKIE: &str = "opennetmon_auto";
+/// Where a session that was idle for too long ends up.
+const SIGNED_OUT_IDLE: &str = "/login?idle=1";
+/// Activity is written at most this often per session (seconds).
+const TOUCH_EVERY_SECS: i64 = 15;
 const LOGIN_CSRF_TTL_SECS: i64 = 3600;
 /// Bounds for credentials in a login request; keeps Argon2 work bounded.
 const MAX_LOGIN_USERNAME_LEN: usize = 64;
@@ -34,6 +40,8 @@ pub struct CurrentUser {
     /// The stored choice (`None`: follow the browser).
     pub language: Option<Lang>,
     pub csrf_token: String,
+    /// Seconds until the sign-out without activity (`None`: no limit for this user).
+    pub session_left: Option<i64>,
 }
 
 impl CurrentUser {
@@ -64,12 +72,13 @@ impl CurrentUser {
             role_label: self.lang.get(self.role.label_id()),
             csrf_token: self.csrf_token.clone(),
             is_admin: self.role.is_admin(),
+            session_left: self.session_left,
         }
     }
 }
 
 impl CurrentUser {
-    fn from_session(s: SessionUser, headers: &HeaderMap) -> Self {
+    fn from_session(s: SessionUser, headers: &HeaderMap, session_left: Option<i64>) -> Self {
         Self {
             id: s.user_id,
             username: s.username,
@@ -77,8 +86,26 @@ impl CurrentUser {
             lang: s.language.unwrap_or_else(|| browser_language(headers)),
             language: s.language,
             csrf_token: s.csrf_token,
+            session_left,
         }
     }
+}
+
+/// Whether a request is something the user did: a form sent (or the activity report of `static/session.js`),
+/// or a page opened. Requests of the scripts (charts, tables, the session check) and automatic reloads are not.
+fn is_activity(parts: &Parts) -> bool {
+    if parts.method != Method::GET && parts.method != Method::HEAD {
+        return true;
+    }
+    let page = match parts.headers.get("sec-fetch-mode") {
+        Some(mode) => mode == "navigate",
+        None => parts
+            .headers
+            .get(header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.contains("text/html")),
+    };
+    page && cookie_value(&parts.headers, AUTO_RELOAD_COOKIE).is_none()
 }
 
 /// The preferred supported language of the browser (`Accept-Language`), German otherwise.
@@ -99,17 +126,65 @@ impl FromRequestParts<AppState> for CurrentUser {
         let Some(token) = cookie_value(&parts.headers, SESSION_COOKIE) else {
             return Err(Redirect::to("/login").into_response());
         };
-        match users::find_session(&state.pool, &auth::token_hash(&token), auth::now_secs()).await {
-            Ok(Some(session)) => {
-                let user = Self::from_session(session, &parts.headers);
-                // Error pages of this request use the user's language as well.
-                i18n::set_current(user.lang);
-                Ok(user)
-            }
-            Ok(None) => Err(Redirect::to("/login").into_response()),
-            Err(e) => Err(e.into_response()),
+        let hash = auth::token_hash(&token);
+        let now = auth::now_secs();
+        let session = match users::find_session(&state.pool, &hash, now).await {
+            Ok(Some(session)) => session,
+            Ok(None) => return Err(Redirect::to("/login").into_response()),
+            Err(e) => return Err(e.into_response()),
+        };
+        let idle = state.session_idle_secs.filter(|_| !session.stay_signed_in);
+        let mut last_seen = session.last_seen_at;
+        if idle.is_some_and(|limit| now.saturating_sub(last_seen) >= limit) {
+            users::delete_session(&state.pool, &hash)
+                .await
+                .map_err(IntoResponse::into_response)?;
+            tracing::info!(user = %session.username, "signed out after a time without activity");
+            return Err((
+                AppendHeaders([(
+                    header::SET_COOKIE,
+                    set_cookie(SESSION_COOKIE, "", 0, state.cookie_secure),
+                )]),
+                Redirect::to(SIGNED_OUT_IDLE),
+            )
+                .into_response());
         }
+        if is_activity(parts) && now.saturating_sub(last_seen) >= TOUCH_EVERY_SECS {
+            users::touch_session(&state.pool, &hash, now)
+                .await
+                .map_err(IntoResponse::into_response)?;
+            last_seen = now;
+        }
+        let left = idle.map(|limit| limit.saturating_sub(now.saturating_sub(last_seen)));
+        let user = Self::from_session(session, &parts.headers, left);
+        // Error pages of this request use the user's language as well.
+        i18n::set_current(user.lang);
+        Ok(user)
     }
+}
+
+/// Answer of `/session` for `static/session.js`: seconds until the sign-out, `null` without a limit.
+#[derive(serde::Serialize)]
+pub struct SessionState {
+    left: Option<i64>,
+}
+
+/// How long the session lasts without further activity; does not count as activity itself.
+pub async fn session_state(user: CurrentUser) -> Json<SessionState> {
+    Json(SessionState {
+        left: user.session_left,
+    })
+}
+
+/// Activity in the browser (click, key press) that did not reach the server otherwise.
+pub async fn session_active(
+    user: CurrentUser,
+    Form(form): Form<CsrfForm>,
+) -> Result<Json<SessionState>> {
+    user.verify_csrf(&form.csrf_token)?;
+    Ok(Json(SessionState {
+        left: user.session_left,
+    }))
 }
 
 #[derive(Template)]
@@ -119,6 +194,8 @@ struct LoginTemplate<'a> {
     t: Lang,
     csrf_token: &'a str,
     error: Option<String>,
+    /// Why the user is here, e.g. signed out after a time without activity.
+    notice: Option<String>,
 }
 
 /// Deliberately has no `Debug`: the password must never end up in logs.
@@ -134,12 +211,26 @@ pub struct CsrfForm {
     pub(crate) csrf_token: String,
 }
 
-pub async fn login_form(State(state): State<AppState>) -> Result<Response> {
+#[derive(Deserialize)]
+pub struct LoginQuery {
+    idle: Option<String>,
+}
+
+pub async fn login_form(
+    State(state): State<AppState>,
+    Query(query): Query<LoginQuery>,
+) -> Result<Response> {
     let csrf = auth::random_token();
+    let t = i18n::current();
+    let notice = query
+        .idle
+        .and(state.session_idle_secs)
+        .map(|secs| t.get1("login-signed-out-idle", "minutes", secs / 60));
     let body = LoginTemplate {
-        t: i18n::current(),
+        t,
         csrf_token: &csrf,
         error: None,
+        notice,
     }
     .render()?;
     let cookie = set_cookie(
@@ -189,6 +280,7 @@ pub async fn login_submit(
             t,
             csrf_token: &cookie_csrf,
             error: Some(t.get1("login-throttled", "wait", wait_text(t, wait_ms))),
+            notice: None,
         }
         .render()?;
         let retry_after = ((wait_ms + 999) / 1000).max(1).to_string();
@@ -230,6 +322,7 @@ pub async fn login_submit(
                 t,
                 csrf_token: &cookie_csrf,
                 error: Some(t.get("login-failed")),
+                notice: None,
             }
             .render()?;
             return Ok((StatusCode::UNAUTHORIZED, Html(body)).into_response());
@@ -238,7 +331,7 @@ pub async fn login_submit(
 
     state.login_throttle.record_success(&form.username, ip);
     let now = auth::now_secs();
-    users::purge_expired_sessions(&state.pool, now).await?;
+    users::purge_expired_sessions(&state.pool, now, state.session_idle_secs).await?;
     let token = auth::random_token();
     let csrf = auth::random_token();
     users::create_session(
@@ -533,6 +626,7 @@ mod tests {
             lang: Lang::De,
             language: None,
             csrf_token: "t".to_owned(),
+            session_left: None,
         };
         assert!(user(Role::Admin).require_admin().is_ok());
         assert!(matches!(
@@ -744,5 +838,156 @@ mod tests {
     fn waiting_times_are_translated() {
         assert_eq!(wait_text(Lang::En, 1), "1 second");
         assert_eq!(wait_text(Lang::En, 120_000), "2 minutes");
+    }
+
+    /// Moves the last activity of all sessions `secs` into the past.
+    async fn idle_for(h: &Harness, secs: i64) {
+        sqlx::query("UPDATE sessions SET last_seen_at = ?")
+            .bind(auth::now_secs() - secs)
+            .execute(&h.state.pool)
+            .await
+            .unwrap();
+    }
+
+    async fn last_seen(h: &Harness) -> i64 {
+        sqlx::query_scalar("SELECT last_seen_at FROM sessions")
+            .fetch_one(&h.state.pool)
+            .await
+            .unwrap()
+    }
+
+    /// A request with extra headers, as a browser sends it.
+    fn with(
+        mut request: axum::http::Request<axum::body::Body>,
+        pairs: &[(&'static str, &str)],
+    ) -> axum::http::Request<axum::body::Body> {
+        for (name, value) in pairs {
+            request.headers_mut().append(*name, value.parse().unwrap());
+        }
+        request
+    }
+
+    #[tokio::test]
+    async fn idle_sessions_end_with_a_note_on_the_login_page() {
+        let h = harness(true).await;
+        let (session, _) = login(&h, "bert").await;
+        idle_for(&h, 29 * 60).await;
+        let page = send(&h.app, get("/", Some(&session))).await;
+        assert_eq!(page.status, StatusCode::OK);
+        // The page tells session.js how long is left (about a minute).
+        let left: i64 = page
+            .body
+            .split("data-session-left=\"")
+            .nth(1)
+            .and_then(|rest| rest.split('"').next())
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((55..=60).contains(&left), "{left}");
+
+        idle_for(&h, 30 * 60).await;
+        let reply = send(&h.app, get("/", Some(&session))).await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        assert_eq!(reply.location(), "/login?idle=1");
+        assert!(reply.set_cookies()[0].starts_with("opennetmon_session=;"));
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
+            .fetch_one(&h.state.pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        // Signed out for good: the old cookie does not come back to life.
+        let again = send(&h.app, get("/", Some(&session))).await;
+        assert_eq!(again.location(), "/login");
+
+        let login_page = send(&h.app, get("/login?idle=1", None)).await;
+        assert!(
+            login_page
+                .body
+                .contains("Du wurdest nach 30 Minuten ohne Aktivität abgemeldet."),
+            "{}",
+            login_page.body
+        );
+        let plain = send(&h.app, get("/login", None)).await;
+        assert!(!plain.body.contains("ohne Aktivität"));
+    }
+
+    #[tokio::test]
+    async fn only_what_the_user_does_counts_as_activity() {
+        let h = harness(true).await;
+        let (session, csrf) = login(&h, "bert").await;
+        let auto = format!("{session}; {AUTO_RELOAD_COOKIE}=1");
+        idle_for(&h, 600).await;
+        let before = last_seen(&h).await;
+
+        // Automatic reloads and requests of the scripts do not count.
+        let reload = with(
+            get("/", Some(&auto)),
+            &[("sec-fetch-mode", "navigate"), ("accept", "text/html")],
+        );
+        assert_eq!(send(&h.app, reload).await.status, StatusCode::OK);
+        let script = with(
+            get("/session", Some(&session)),
+            &[("sec-fetch-mode", "cors"), ("accept", "application/json")],
+        );
+        let state = send(&h.app, script).await;
+        assert_eq!(state.status, StatusCode::OK);
+        let left: i64 = state
+            .body
+            .strip_prefix("{\"left\":")
+            .and_then(|rest| rest.strip_suffix('}'))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1190..=1200).contains(&left), "{}", state.body);
+        assert_eq!(last_seen(&h).await, before);
+
+        // Opening a page does.
+        let page = with(
+            get("/", Some(&session)),
+            &[("sec-fetch-mode", "navigate"), ("accept", "text/html")],
+        );
+        send(&h.app, page).await;
+        assert!(last_seen(&h).await > before);
+
+        // So does the report of session.js, which needs the CSRF token.
+        idle_for(&h, 600).await;
+        let forged = send(&h.app, post("/session", Some(&session), "csrf_token=x")).await;
+        assert_eq!(forged.status, StatusCode::FORBIDDEN);
+        idle_for(&h, 600).await;
+        let report = send(
+            &h.app,
+            post("/session", Some(&session), &format!("csrf_token={csrf}")),
+        )
+        .await;
+        assert_eq!(report.status, StatusCode::OK);
+        assert_eq!(report.body, "{\"left\":1800}");
+    }
+
+    #[tokio::test]
+    async fn users_who_stay_signed_in_and_disabled_limits_have_no_idle_end() {
+        let h = harness(true).await;
+        let (session, _) = login(&h, "bert").await;
+        let bert = users::find_by_username(&h.state.pool, "bert")
+            .await
+            .unwrap()
+            .unwrap();
+        users::set_stay_signed_in(&h.state.pool, bert.id, true)
+            .await
+            .unwrap();
+        idle_for(&h, 24 * 3600).await;
+        let page = send(&h.app, get("/", Some(&session))).await;
+        assert_eq!(page.status, StatusCode::OK);
+        assert!(!page.body.contains("data-session-left"));
+        let state = send(&h.app, get("/session", Some(&session))).await;
+        assert_eq!(state.body, "{\"left\":null}");
+
+        let mut state = h.state.clone();
+        state.session_idle_secs = None;
+        let app = crate::web::router(state);
+        let (anna, _) = login(&h, "anna").await;
+        idle_for(&h, 24 * 3600).await;
+        let page = send(&app, get("/", Some(&anna))).await;
+        assert_eq!(page.status, StatusCode::OK);
+        assert!(!page.body.contains("data-session-left"));
     }
 }

@@ -51,6 +51,8 @@ struct EditTemplate {
     role_label: String,
     languages: Vec<LanguageOption>,
     is_me: bool,
+    /// Hint of the sign-out setting: the idle limit and session lifetime, or that the limit is off.
+    idle_hint: String,
     flash: Option<String>,
     error: Option<String>,
 }
@@ -77,6 +79,13 @@ pub struct LanguageForm {
     csrf_token: String,
     #[serde(default)]
     language: String,
+}
+
+#[derive(Deserialize)]
+pub struct IdleForm {
+    csrf_token: String,
+    /// Checkbox: present (`yes`) when ticked.
+    stay_signed_in: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -119,7 +128,7 @@ async fn render_list(
     role: Role,
     language: Option<Lang>,
 ) -> Result<String> {
-    let rows = store::list_user_infos(&state.pool, auth::now_secs())
+    let rows = store::list_user_infos(&state.pool, auth::now_secs(), state.session_idle_secs)
         .await?
         .into_iter()
         .map(|info| Row {
@@ -206,14 +215,27 @@ async fn load(state: &AppState, id: i64) -> Result<User> {
 }
 
 fn edit_page(
+    state: &AppState,
     user: &CurrentUser,
     target: User,
     flash: Option<String>,
     error: Option<String>,
 ) -> Result<String> {
+    let t = user.lang;
+    let idle_hint = match state.session_idle_secs {
+        Some(secs) => t.get2(
+            "user-idle-hint",
+            "minutes",
+            secs / 60,
+            "hours",
+            state.session_ttl_secs / 3600,
+        ),
+        None => t.get("user-idle-off"),
+    };
     let page = EditTemplate {
         layout: user.layout(),
-        t: user.lang,
+        t,
+        idle_hint,
         role_label: user.lang.get(target.role.label_id()),
         languages: language_options(user.lang, target.language),
         is_me: target.id == user.id,
@@ -233,6 +255,7 @@ pub async fn edit(
     user.require_admin()?;
     let target = load(&state, id).await?;
     Ok(Html(edit_page(
+        &state,
         &user,
         target,
         flash_message(user.lang, query.msg.as_deref()),
@@ -245,7 +268,7 @@ async fn refused(state: &AppState, user: &CurrentUser, id: i64, error: Error) ->
     match error {
         Error::Invalid(message) | Error::Conflict(message) => {
             let target = load(state, id).await?;
-            let html = edit_page(user, target, None, Some(user.lang.msg(&message)))?;
+            let html = edit_page(state, user, target, None, Some(user.lang.msg(&message)))?;
             Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
         }
         e => Err(e),
@@ -300,6 +323,20 @@ pub async fn set_language(
         }
         Err(e) => refused(&state, &user, id, e).await,
     }
+}
+
+pub async fn set_idle(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Form(form): Form<IdleForm>,
+) -> Result<Response> {
+    user.require_admin()?;
+    user.verify_csrf(&form.csrf_token)?;
+    let stay = form.stay_signed_in.as_deref() == Some("yes");
+    store::set_stay_signed_in(&state.pool, id, stay).await?;
+    tracing::info!(user = %user.username, target = id, stay_signed_in = stay, "user sign-out setting changed");
+    Ok(Redirect::to(&format!("/users/{id}?msg=user_idle_saved")).into_response())
 }
 
 pub async fn set_password(
@@ -706,5 +743,80 @@ mod tests {
         assert_eq!(reply.status, StatusCode::FORBIDDEN);
         let stored = store::get_user(&h.state.pool, 1).await.unwrap().unwrap();
         assert_eq!(stored.language, None);
+    }
+
+    #[tokio::test]
+    async fn admins_let_a_user_stay_signed_in() {
+        let h = harness(true).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let (viewer, vcsrf) = login(&h, "bert").await;
+        let bert = id_of(&h, "bert").await;
+        let page = send(&h.app, get(&format!("/users/{bert}"), Some(&admin))).await;
+        assert!(
+            page.body.contains("nach 30 Minuten ohne Klick"),
+            "{}",
+            page.body
+        );
+        assert!(page.body.contains("nach 168 Stunden"));
+
+        let path = format!("/users/{bert}/idle");
+        let refused = send(
+            &h.app,
+            post(
+                &path,
+                Some(&viewer),
+                &format!("csrf_token={vcsrf}&stay_signed_in=yes"),
+            ),
+        )
+        .await;
+        assert_eq!(refused.status, StatusCode::FORBIDDEN);
+        let reply = send(
+            &h.app,
+            post(
+                &path,
+                Some(&admin),
+                &format!("csrf_token={csrf}&stay_signed_in=yes"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/users/{bert}?msg=user_idle_saved")
+        );
+        assert!(
+            store::get_user(&h.state.pool, bert)
+                .await
+                .unwrap()
+                .unwrap()
+                .stay_signed_in
+        );
+        let list = send(&h.app, get("/users", Some(&admin))).await;
+        assert!(list.body.contains("bleibt angemeldet"));
+        let page = send(&h.app, get(&format!("/users/{bert}"), Some(&admin))).await;
+        assert!(page.body.contains("value=\"yes\" checked"));
+
+        // An unticked box is not sent at all.
+        send(
+            &h.app,
+            post(&path, Some(&admin), &format!("csrf_token={csrf}")),
+        )
+        .await;
+        assert!(
+            !store::get_user(&h.state.pool, bert)
+                .await
+                .unwrap()
+                .unwrap()
+                .stay_signed_in
+        );
+        let missing = send(
+            &h.app,
+            post(
+                "/users/99/idle",
+                Some(&admin),
+                &format!("csrf_token={csrf}"),
+            ),
+        )
+        .await;
+        assert_eq!(missing.status, StatusCode::NOT_FOUND);
     }
 }

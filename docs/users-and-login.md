@@ -13,13 +13,16 @@ Handlers that should only allow administrators call `CurrentUser::require_admin(
 
 Under **Settings → Users**:
 
-- **List** with role, language, creation time and number of open sessions; your own account is marked “(you)”.
+- **List** with role, language, creation time and number of open sessions; your own account is marked “(you)”, users exempt from the
+  automatic sign-out “stays signed in”.
 - **New user:** user name, role (viewer or administrator), the password twice and the language (default “Same as the browser”).
   After an error, name, role and language are kept, passwords never.
 - **Per user** (`/users/<id>`):
   - **Change role** – applies immediately, also in open sessions. The **last administrator** cannot become a viewer (checked in the same SQL statement,
     so that two simultaneous changes cannot both remove administrators). If you make yourself a viewer, you land on the overview.
   - **Language** – see below.
+  - **Automatic sign-out** – tick “Exception: stay signed in” for an account that only shows pages and is never touched, e.g. a wall display
+    (see [Sign-out without activity](#sign-out-without-activity)). Applies immediately, also in open sessions.
   - **Set password** – ends all sessions of the user; for your own account the current session stays signed in.
   - **Delete** – with a confirmation tick, signs out all sessions; never your own account and never the last administrator.
 - Actions are logged (who, what, which user), passwords never.
@@ -62,7 +65,8 @@ Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), pas
 - Passwords: Argon2id with a random salt. A hash is verified even for an unknown user, so that response time and message stay the same.
 - Session: a random 256-bit token in the cookie `opennetmon_session` (`HttpOnly`, `SameSite=Strict`, `Secure` according to the config). The database only
   holds the SHA-256 value of the token.
-- Lifetime: absolute `session_ttl_hours` (default 168 hours). Expired sessions are deleted at login.
+- Lifetime: absolute `session_ttl_hours` (default 168 hours), and a sign-out after `session_idle_minutes` without activity (default 30, see below).
+  Expired sessions are deleted when they are used and at every login.
 - CSRF: the login form uses a double-submit cookie (`opennetmon_login`), all other POST forms a token per session.
 - Response headers: `Content-Security-Policy` (own resources only), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
 - Passwords never appear in logs. Failed logins are logged without the user name.
@@ -72,8 +76,31 @@ Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), pas
 | Key | Default | Meaning |
 |---|---|---|
 | `cookie_secure` | `true` | Send cookies over HTTPS only. Set it to `false` only for development over plain HTTP |
-| `session_ttl_hours` | `168` | Session lifetime in hours (1 to 2160) |
+| `session_ttl_hours` | `168` | Session lifetime in hours (1 to 2160), for every user |
+| `session_idle_minutes` | `30` | Sign-out after this many minutes without activity (1 to 1440; `0` switches it off) |
 | `client_ip_header` | not set | Behind a reverse proxy: `"x-forwarded-for"` (last entry) or `"x-real-ip"`, so that the rate limiting sees the real client address (see below) |
+
+## Sign-out without activity
+
+A session ends after `session_idle_minutes` (default 30) without activity. The next request then lands on the login page with the note
+“You were signed out after 30 minutes without activity”, and the session is deleted on the server.
+
+What counts as activity:
+
+- opening a page (a click on a link, the browser's reload, a new tab),
+- sending a form,
+- a click, touch, scroll wheel or key press on a page: `static/session.js` reports it to `POST /session` (with the CSRF token), at most once a minute,
+  so that someone working in a long form or switching chart ranges stays signed in.
+
+What does not count: the **automatic refresh** every 30 seconds (`static/refresh.js` marks its reloads with the short-lived cookie
+`opennetmon_auto`, which `static/session.js` removes on the next page) and the requests of the scripts (chart data, table of values,
+`GET /session`). An open tab that nobody looks at is therefore signed out, even with “Automatic” on.
+
+When the time is up, `static/session.js` asks `GET /session` how much time is left (other tabs of the same session may have been active) and opens the
+login page once it is over, so that no data stays on the screen. The server records activity at most every 15 seconds per session.
+
+**Exception per user:** administrators can tick “Exception: stay signed in” on the user's page. Such accounts are never signed out for inactivity,
+only after `session_ttl_hours`; use it only for displays nobody works at, and give that account the viewer role.
 
 ## Limiting login attempts (`src/auth/throttle.rs`)
 

@@ -47,6 +47,8 @@ pub struct AppState {
     pub secrets: Arc<SecretBox>,
     pub cookie_secure: bool,
     pub session_ttl_secs: i64,
+    /// Sign-out after this time without activity (`None`: off).
+    pub session_idle_secs: Option<i64>,
     pub login_throttle: Arc<crate::auth::throttle::LoginThrottle>,
     pub client_ip_header: Option<crate::auth::throttle::ClientIpHeader>,
     /// Bundled plus uploaded MIBs; replaced as a whole after every upload or deletion.
@@ -64,6 +66,9 @@ impl AppState {
             mibs: Arc::new(std::sync::RwLock::new(crate::mib::bundled_index())),
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
                 .unwrap_or(i64::MAX),
+            session_idle_secs: (config.session_idle_minutes > 0)
+                .then(|| i64::try_from(config.session_idle_minutes.saturating_mul(60)).ok())
+                .flatten(),
         }
     }
 
@@ -104,6 +109,10 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(overview::home))
         .route("/login", get(auth::login_form).post(auth::login_submit))
         .route("/logout", post(auth::logout))
+        .route(
+            "/session",
+            get(auth::session_state).post(auth::session_active),
+        )
         .route(
             "/credentials",
             get(credentials::list).post(credentials::create),
@@ -170,6 +179,7 @@ pub fn router(state: AppState) -> Router {
         .route("/users/{id}/role", post(users::set_role))
         .route("/users/{id}/password", post(users::set_password))
         .route("/users/{id}/language", post(users::set_language))
+        .route("/users/{id}/idle", post(users::set_idle))
         .route("/users/{id}/delete", post(users::delete))
         .route("/templates", get(templates::list))
         .route(
@@ -377,6 +387,7 @@ pub fn flash_message(t: Lang, key: Option<&str>) -> Option<String> {
         "template_created" => "flash-template-created",
         "template_saved" => "flash-template-saved",
         "user_created" => "flash-user-created",
+        "user_idle_saved" => "flash-user-idle-saved",
         "account_password_saved" => "flash-account-password-saved",
         "user_role_saved" => "flash-user-role-saved",
         "user_password_saved" => "flash-user-password-saved",
@@ -451,6 +462,8 @@ pub struct Layout {
     pub role_label: String,
     pub csrf_token: String,
     pub is_admin: bool,
+    /// Seconds until the sign-out without activity (`None`: no limit); read by `static/session.js`.
+    pub session_left: Option<i64>,
 }
 
 impl Layout {

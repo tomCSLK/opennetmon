@@ -13,6 +13,7 @@ const ENV_DATABASE_PATH: &str = "OPENNETMON_DATABASE_PATH";
 const ENV_LOG_FILTER: &str = "OPENNETMON_LOG_FILTER";
 const ENV_SECRET_KEY_FILE: &str = "OPENNETMON_SECRET_KEY_FILE";
 const MAX_SESSION_TTL_HOURS: u64 = 24 * 90;
+const MAX_SESSION_IDLE_MINUTES: u64 = 24 * 60;
 const MAX_POLL_CONCURRENCY: usize = 256;
 
 #[derive(Debug, thiserror::Error)]
@@ -52,6 +53,9 @@ pub struct Config {
     pub cookie_secure: bool,
     /// Absolute session lifetime in hours.
     pub session_ttl_hours: u64,
+    /// Sign users out after this many minutes without a click or key press (automatic reloads do not count);
+    /// `0` switches it off. Users marked "stay signed in" are exempt; `session_ttl_hours` applies to everyone.
+    pub session_idle_minutes: u64,
     /// Header that carries the real client address behind a reverse proxy (`x-forwarded-for`, last entry, or
     /// `x-real-ip`). Only set it if the proxy always overwrites/appends it and the service is not reachable
     /// directly; the login throttling uses this address. Unset: the TCP peer address.
@@ -77,6 +81,7 @@ impl Default for Config {
             tls_key_file: None,
             cookie_secure: true,
             session_ttl_hours: 168,
+            session_idle_minutes: 30,
             client_ip_header: None,
             poller_enabled: true,
             poll_concurrency: 16,
@@ -170,6 +175,11 @@ impl Config {
         if !(1..=MAX_SESSION_TTL_HOURS).contains(&self.session_ttl_hours) {
             return Err(ConfigError::Invalid(
                 "session_ttl_hours must be between 1 and 2160",
+            ));
+        }
+        if self.session_idle_minutes > MAX_SESSION_IDLE_MINUTES {
+            return Err(ConfigError::Invalid(
+                "session_idle_minutes must be between 0 (off) and 1440",
             ));
         }
         if !(1..=MAX_POLL_CONCURRENCY).contains(&self.poll_concurrency) {
@@ -358,11 +368,18 @@ mod tests {
         let config = Config::from_sources(None, no_env).unwrap();
         assert!(config.cookie_secure);
         assert_eq!(config.session_ttl_hours, 168);
+        assert_eq!(config.session_idle_minutes, 30);
+        let config = Config::from_sources(Some("session_idle_minutes = 0"), no_env).unwrap();
+        assert_eq!(config.session_idle_minutes, 0);
 
         let config = Config::from_sources(Some("cookie_secure = false"), no_env).unwrap();
         assert!(!config.cookie_secure);
 
-        for bad in ["session_ttl_hours = 0", "session_ttl_hours = 2161"] {
+        for bad in [
+            "session_ttl_hours = 0",
+            "session_ttl_hours = 2161",
+            "session_idle_minutes = 1441",
+        ] {
             let err = Config::from_sources(Some(bad), no_env).unwrap_err();
             assert!(matches!(err, ConfigError::Invalid(_)), "{bad}");
         }

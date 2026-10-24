@@ -21,7 +21,8 @@ log_filter = "info"                         # journalctl -u opennetmon; e.g. "in
 secret_key_file = "/etc/opennetmon/secret.key"
 
 cookie_secure = true                        # keep true with HTTPS; false only for plain-HTTP testing
-session_ttl_hours = 168
+session_ttl_hours = 168                     # absolute session lifetime
+session_idle_minutes = 30                   # sign out after this time without activity; 0 = off
 
 # Only behind a reverse proxy: tell the login throttling where the real client address is: "x-forwarded-for" (the last
 # entry, appended by Caddy/nginx) or "x-real-ip". Only set it when the service is reachable through the proxy only;

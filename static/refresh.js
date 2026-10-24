@@ -11,8 +11,13 @@
   var left = box.querySelector('[data-refresh-left]');
   var loadedAt = Date.now(), remaining = PERIOD, dirty = false;
 
-  // A flash message ("?msg=…") belongs to the action before, not to every reload.
-  function reload() {
+  // A flash message ("?msg=…") belongs to the action before, not to every reload. Automatic reloads carry a
+  // short-lived cookie, so they do not count as activity for the sign-out (static/session.js removes it again).
+  function reload(automatic) {
+    if (automatic) {
+      document.cookie = 'opennetmon_auto=1; Path=/; Max-Age=30; SameSite=Strict' +
+        (location.protocol === 'https:' ? '; Secure' : '');
+    }
     var url = new URL(location.href);
     if (url.searchParams.has('msg')) {
       url.searchParams.delete('msg');
@@ -50,12 +55,12 @@
   setInterval(function () {
     if (auto.checked && !document.hidden && !busy()) {
       remaining -= 1;
-      if (remaining <= 0) { reload(); return; }
+      if (remaining <= 0) { reload(true); return; }
     }
     show();
   }, 1000);
   // Back to a tab that was hidden for longer than a period: reload right away.
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && auto.checked && !busy() && Date.now() - loadedAt > PERIOD * 1000) { reload(); }
+    if (!document.hidden && auto.checked && !busy() && Date.now() - loadedAt > PERIOD * 1000) { reload(true); }
   });
 })();

@@ -99,6 +99,7 @@ flash-template-created = Template saved. Use it when creating a device or with â
 flash-template-saved = Template saved.
 flash-template-deleted = Template deleted.
 flash-user-created = User created.
+flash-user-idle-saved = Sign-out setting saved.
 flash-user-role-saved = Role saved.
 flash-user-language-saved = Language saved.
 flash-user-password-saved = Password set.

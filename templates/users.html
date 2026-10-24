@@ -24,7 +24,7 @@
     {% for row in rows %}
       <tr>
         <td><a href="/users/{{ row.info.id }}"><strong>{{ row.info.username }}</strong></a>{% if row.is_me %} <span class="muted small">{{ t.get("users-me") }}</span>{% endif %}</td>
-        <td>{{ row.role_label }}</td>
+        <td>{{ row.role_label }}{% if row.info.stay_signed_in %} <span class="muted small">· {{ t.get("users-stays-signed-in") }}</span>{% endif %}</td>
         <td>{{ row.language_label }}</td>
         <td class="num">{{ row.created|safe }}</td>
         <td class="num right">{{ row.info.sessions }}</td>

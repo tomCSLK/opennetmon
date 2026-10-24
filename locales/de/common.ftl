@@ -99,6 +99,7 @@ flash-template-created = Vorlage gespeichert. Sie lässt sich beim Anlegen eines
 flash-template-saved = Vorlage gespeichert.
 flash-template-deleted = Vorlage gelöscht.
 flash-user-created = Benutzer angelegt.
+flash-user-idle-saved = Einstellung zum Abmelden gespeichert.
 flash-user-role-saved = Rolle gespeichert.
 flash-user-language-saved = Sprache gespeichert.
 flash-user-password-saved = Passwort gesetzt.

@@ -97,6 +97,7 @@ secret_key_file = "/etc/opennetmon/secret.key" # mode 0600, otherwise the server
 # tls_key_file = "/etc/opennetmon/tls-key.pem"   # and its key (mode 0600)
 cookie_secure = true                       # set to false only for development without TLS
 session_ttl_hours = 168
+session_idle_minutes = 30                  # sign out after 30 minutes without activity (0 = off)
 poller_enabled = true
 poll_concurrency = 16                      # devices polled at the same time
 retention_raw_days = 7
@@ -135,7 +136,7 @@ and Let's Encrypt), port 443, running behind Caddy or nginx instead, update, rol
 
 - SNMP is used **read-only**.
 - SNMP credentials are stored in the database encrypted with XChaCha20-Poly1305; the key is in a separate file. **Back up this file separately from the database** – without it the profiles are unusable.
-- Passwords with Argon2id, server-side sessions, CSRF protection on all forms, `HttpOnly`/`SameSite=Strict` cookies, a strict Content Security Policy (no inline scripts).
+- Passwords with Argon2id, server-side sessions (signed out after 30 minutes without activity, with an exception per user for wall displays), CSRF protection on all forms, `HttpOnly`/`SameSite=Strict` cookies, a strict Content Security Policy (no inline scripts).
 - Built-in HTTPS (rustls, TLS 1.2/1.3): when configured, the port speaks only HTTPS, and plain HTTP gets nothing but a redirect. Without TLS settings it listens on `127.0.0.1` only, for a reverse proxy in front.
 - Failed logins are slowed down per user name and per address (rejection with a waiting time, never a permanent lock). Behind a proxy, set `client_ip_header`.
 - The SMTP password is stored encrypted like the SNMP credentials and never shown.

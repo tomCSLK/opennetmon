@@ -14,6 +14,8 @@ pub struct User {
     pub role: Role,
     /// Chosen language; `None` follows the browser.
     pub language: Option<Lang>,
+    /// Exempt from the sign-out after a time without activity (e.g. a wall display).
+    pub stay_signed_in: bool,
 }
 
 #[derive(FromRow)]
@@ -23,6 +25,7 @@ struct UserRow {
     password_hash: String,
     role: String,
     language: Option<String>,
+    stay_signed_in: bool,
 }
 
 impl TryFrom<UserRow> for User {
@@ -37,9 +40,18 @@ impl TryFrom<UserRow> for User {
             password_hash: row.password_hash,
             role,
             language: row.language.as_deref().and_then(Lang::parse),
+            stay_signed_in: row.stay_signed_in,
         })
     }
 }
+
+/// Columns of [`UserRow`].
+const USER_COLUMNS: &str = "id, username, password_hash, role, language, stay_signed_in";
+
+/// SQL condition for sessions (alias `s`, owner `u`) still in use at `?1` (now): not past their lifetime and,
+/// with an idle limit `?2` (seconds, NULL: none), active within it unless the owner stays signed in.
+const SESSION_ALIVE: &str =
+    "s.expires_at > ?1 AND (?2 IS NULL OR u.stay_signed_in = 1 OR s.last_seen_at > ?1 - ?2)";
 
 /// Inserts a user; usernames are unique case-insensitively.
 pub async fn create_user(
@@ -71,9 +83,9 @@ pub async fn create_user(
 }
 
 pub async fn find_by_username(pool: &SqlitePool, username: &str) -> Result<Option<User>> {
-    sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, password_hash, role, language FROM users WHERE username = ?",
-    )
+    sqlx::query_as::<_, UserRow>(&format!(
+        "SELECT {USER_COLUMNS} FROM users WHERE username = ?"
+    ))
     .bind(username)
     .fetch_optional(pool)
     .await?
@@ -82,9 +94,9 @@ pub async fn find_by_username(pool: &SqlitePool, username: &str) -> Result<Optio
 }
 
 pub async fn list_users(pool: &SqlitePool) -> Result<Vec<User>> {
-    sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, password_hash, role, language FROM users ORDER BY username",
-    )
+    sqlx::query_as::<_, UserRow>(&format!(
+        "SELECT {USER_COLUMNS} FROM users ORDER BY username"
+    ))
     .fetch_all(pool)
     .await?
     .into_iter()
@@ -115,18 +127,24 @@ pub struct UserInfo {
     pub username: String,
     pub role: String,
     pub language: Option<String>,
+    pub stay_signed_in: bool,
     pub created_at: String,
     pub sessions: i64,
 }
 
-/// All users by name with their number of unexpired sessions.
-pub async fn list_user_infos(pool: &SqlitePool, now: i64) -> Result<Vec<UserInfo>> {
-    let mut list = sqlx::query_as::<_, UserInfo>(
-        "SELECT u.id, u.username, u.role, u.language, u.created_at, \
-         (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?) AS sessions \
-         FROM users u",
-    )
+/// All users by name with their number of sessions still in use (`idle_secs`: the idle limit, if any).
+pub async fn list_user_infos(
+    pool: &SqlitePool,
+    now: i64,
+    idle_secs: Option<i64>,
+) -> Result<Vec<UserInfo>> {
+    let mut list = sqlx::query_as::<_, UserInfo>(&format!(
+        "SELECT u.id, u.username, u.role, u.language, u.stay_signed_in, u.created_at, \
+         (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND {SESSION_ALIVE}) AS sessions \
+         FROM users u"
+    ))
     .bind(now)
+    .bind(idle_secs)
     .fetch_all(pool)
     .await?;
     list.sort_by(|a, b| crate::ordering::natural_cmp(&a.username, &b.username));
@@ -134,14 +152,12 @@ pub async fn list_user_infos(pool: &SqlitePool, now: i64) -> Result<Vec<UserInfo
 }
 
 pub async fn get_user(pool: &SqlitePool, id: i64) -> Result<Option<User>> {
-    sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, password_hash, role, language FROM users WHERE id = ?",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?
-    .map(User::try_from)
-    .transpose()
+    sqlx::query_as::<_, UserRow>(&format!("SELECT {USER_COLUMNS} FROM users WHERE id = ?"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
+        .map(User::try_from)
+        .transpose()
 }
 
 fn last_admin() -> Error {
@@ -225,6 +241,19 @@ pub async fn set_language(pool: &SqlitePool, id: i64, language: Option<Lang>) ->
     Ok(())
 }
 
+/// Sets whether a user is exempt from the sign-out after a time without activity.
+pub async fn set_stay_signed_in(pool: &SqlitePool, id: i64, stay: bool) -> Result<()> {
+    let done = sqlx::query("UPDATE users SET stay_signed_in = ? WHERE id = ?")
+        .bind(stay)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    if done.rows_affected() == 0 {
+        return Err(Error::NotFound);
+    }
+    Ok(())
+}
+
 /// The user and CSRF token behind a valid session.
 #[derive(Debug, Clone)]
 pub struct SessionUser {
@@ -232,7 +261,10 @@ pub struct SessionUser {
     pub username: String,
     pub role: Role,
     pub language: Option<Lang>,
+    pub stay_signed_in: bool,
     pub csrf_token: String,
+    /// Last activity (Unix seconds).
+    pub last_seen_at: i64,
 }
 
 #[derive(FromRow)]
@@ -241,7 +273,9 @@ struct SessionRow {
     username: String,
     role: String,
     language: Option<String>,
+    stay_signed_in: bool,
     csrf_token: String,
+    last_seen_at: i64,
 }
 
 pub async fn create_session(
@@ -253,7 +287,8 @@ pub async fn create_session(
     expires_at: i64,
 ) -> Result<()> {
     sqlx::query(
-        "INSERT INTO sessions (id, user_id, csrf_token, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (id, user_id, csrf_token, created_at, expires_at, last_seen_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?4)",
     )
     .bind(token_hash)
     .bind(user_id)
@@ -265,14 +300,15 @@ pub async fn create_session(
     Ok(())
 }
 
-/// Looks up an unexpired session by the hash of its cookie token.
+/// Looks up a session within its lifetime by the hash of its cookie token; the idle limit is up to the caller.
 pub async fn find_session(
     pool: &SqlitePool,
     token_hash: &str,
     now: i64,
 ) -> Result<Option<SessionUser>> {
     let row = sqlx::query_as::<_, SessionRow>(
-        "SELECT u.id AS user_id, u.username, u.role, u.language, s.csrf_token \
+        "SELECT u.id AS user_id, u.username, u.role, u.language, u.stay_signed_in, \
+         s.csrf_token, s.last_seen_at \
          FROM sessions s JOIN users u ON u.id = s.user_id \
          WHERE s.id = ? AND s.expires_at > ?",
     )
@@ -288,10 +324,22 @@ pub async fn find_session(
             username: r.username,
             role,
             language: r.language.as_deref().and_then(Lang::parse),
+            stay_signed_in: r.stay_signed_in,
             csrf_token: r.csrf_token,
+            last_seen_at: r.last_seen_at,
         })
     })
     .transpose()
+}
+
+/// Records activity of a session.
+pub async fn touch_session(pool: &SqlitePool, token_hash: &str, now: i64) -> Result<()> {
+    sqlx::query("UPDATE sessions SET last_seen_at = ? WHERE id = ?")
+        .bind(now)
+        .bind(token_hash)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 pub async fn delete_session(pool: &SqlitePool, token_hash: &str) -> Result<()> {
@@ -310,11 +358,20 @@ pub async fn delete_sessions_of_user(pool: &SqlitePool, username: &str) -> Resul
     Ok(())
 }
 
-pub async fn purge_expired_sessions(pool: &SqlitePool, now: i64) -> Result<()> {
-    sqlx::query("DELETE FROM sessions WHERE expires_at <= ?")
-        .bind(now)
-        .execute(pool)
-        .await?;
+/// Deletes sessions past their lifetime or, with an idle limit (`idle_secs`), unused for longer.
+pub async fn purge_expired_sessions(
+    pool: &SqlitePool,
+    now: i64,
+    idle_secs: Option<i64>,
+) -> Result<()> {
+    sqlx::query(&format!(
+        "DELETE FROM sessions AS s WHERE NOT EXISTS \
+         (SELECT 1 FROM users u WHERE u.id = s.user_id AND {SESSION_ALIVE})"
+    ))
+    .bind(now)
+    .bind(idle_secs)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -361,7 +418,7 @@ mod tests {
         assert!(find_session(&pool, "h1", 200).await.unwrap().is_none());
         assert!(find_session(&pool, "other", 150).await.unwrap().is_none());
 
-        purge_expired_sessions(&pool, 200).await.unwrap();
+        purge_expired_sessions(&pool, 200, None).await.unwrap();
         let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
             .fetch_one(&pool)
             .await
@@ -373,6 +430,59 @@ mod tests {
             .unwrap();
         delete_sessions_of_user(&pool, "anna").await.unwrap();
         assert!(find_session(&pool, "h2", 150).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn idle_sessions_end_unless_the_user_stays_signed_in() {
+        let (pool, _dir) = pool().await;
+        let anna = create_user(&pool, "anna", "h", Role::Admin, None)
+            .await
+            .unwrap();
+        let wall = create_user(&pool, "wall", "h", Role::Viewer, None)
+            .await
+            .unwrap();
+        set_stay_signed_in(&pool, wall, true).await.unwrap();
+        assert!(get_user(&pool, wall).await.unwrap().unwrap().stay_signed_in);
+        assert!(matches!(
+            set_stay_signed_in(&pool, 99, true).await,
+            Err(Error::NotFound)
+        ));
+        create_session(&pool, "a1", anna, "c", 1000, 9000)
+            .await
+            .unwrap();
+        create_session(&pool, "a2", anna, "c", 1000, 9000)
+            .await
+            .unwrap();
+        create_session(&pool, "w1", wall, "c", 1000, 9000)
+            .await
+            .unwrap();
+        touch_session(&pool, "a2", 1500).await.unwrap();
+        let a2 = find_session(&pool, "a2", 1600).await.unwrap().unwrap();
+        assert_eq!((a2.last_seen_at, a2.stay_signed_in), (1500, false));
+
+        // 30 minutes after 1000: a1 is idle, a2 was active later, the wall display is exempt.
+        let now = 1000 + 1800;
+        let sessions =
+            |infos: Vec<UserInfo>| -> Vec<i64> { infos.iter().map(|i| i.sessions).collect() };
+        assert_eq!(
+            sessions(list_user_infos(&pool, now, Some(1800)).await.unwrap()),
+            [1, 1]
+        );
+        assert_eq!(
+            sessions(list_user_infos(&pool, now, None).await.unwrap()),
+            [2, 1]
+        );
+        purge_expired_sessions(&pool, now, Some(1800))
+            .await
+            .unwrap();
+        assert!(find_session(&pool, "a1", now).await.unwrap().is_none());
+        assert!(find_session(&pool, "a2", now).await.unwrap().is_some());
+        assert!(find_session(&pool, "w1", now).await.unwrap().is_some());
+        // The lifetime applies to everyone.
+        purge_expired_sessions(&pool, 9000, Some(1800))
+            .await
+            .unwrap();
+        assert!(find_session(&pool, "w1", 8999).await.unwrap().is_none());
     }
 
     #[tokio::test]
@@ -416,7 +526,7 @@ mod tests {
         ));
         delete_user(&pool, a).await.unwrap();
         assert!(matches!(delete_user(&pool, a).await, Err(Error::NotFound)));
-        let infos = list_user_infos(&pool, 0).await.unwrap();
+        let infos = list_user_infos(&pool, 0, None).await.unwrap();
         assert_eq!(
             (infos.len(), infos[0].role.as_str(), infos[0].sessions),
             (1, "admin", 0)

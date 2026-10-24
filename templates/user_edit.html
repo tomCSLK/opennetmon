@@ -46,6 +46,16 @@
 </section>
 
 <section class="card">
+  <h2>{{ t.get("user-idle-title") }}</h2>
+  <form method="post" action="/users/{{ user.id }}/idle" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <label class="inline"><input type="checkbox" name="stay_signed_in" value="yes"{% if user.stay_signed_in %} checked{% endif %}> {{ t.get("user-stay-signed-in") }}</label>
+    <p class="hint">{{ idle_hint }}</p>
+    <div class="form-actions"><button type="submit">{{ t.get("save") }}</button></div>
+  </form>
+</section>
+
+<section class="card">
   <h2>{{ t.get("user-password-title") }}</h2>
   <form method="post" action="/users/{{ user.id }}/password" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">

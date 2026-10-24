@@ -8,6 +8,11 @@ login-submit = Anmelden
 login-free-software = opennetmon ist freie Software unter der AGPL-3.0
 login-failed = Benutzername oder Passwort ist falsch.
 login-throttled = Zu viele fehlgeschlagene Anmeldeversuche. Bitte in { $wait } erneut versuchen.
+login-signed-out-idle =
+    { $minutes ->
+        [one] Du wurdest nach { $minutes } Minute ohne Aktivität abgemeldet.
+       *[other] Du wurdest nach { $minutes } Minuten ohne Aktivität abgemeldet.
+    }
 login-wait-seconds =
     { $seconds ->
         [one] { $seconds } Sekunde
@@ -44,6 +49,7 @@ users-subtitle = Administratoren dürfen alles ändern, Leser nur ansehen.
 users-created = Angelegt
 users-sessions = Sitzungen
 users-me = (du)
+users-stays-signed-in = bleibt angemeldet
 users-new = Neuer Benutzer
 users-new-hint = Benutzername 3 bis 32 Zeichen (Buchstaben, Ziffern, . _ -), Passwort 10 bis 128 Zeichen. Das Passwort gibst du der Person auf einem sicheren Weg weiter.
 users-create = Benutzer anlegen
@@ -56,3 +62,11 @@ user-password-hint-other = Alle Sitzungen von { $name } werden beendet.
 user-delete = Benutzer löschen
 user-delete-confirm = { $name } wirklich löschen (meldet alle Sitzungen ab)
 user-delete-self = Das eigene Konto lässt sich nicht löschen; das muss ein anderer Administrator tun.
+user-idle-title = Automatisch abmelden
+user-stay-signed-in = Ausnahme: angemeldet bleiben (z. B. für einen Wandbildschirm)
+user-idle-hint =
+    { $minutes ->
+        [one] Ohne Haken wird der Benutzer nach { $minutes } Minute ohne Klick oder Eingabe abgemeldet
+       *[other] Ohne Haken wird der Benutzer nach { $minutes } Minuten ohne Klick oder Eingabe abgemeldet
+    }; das automatische Aktualisieren zählt nicht als Aktivität. Mit Haken bleibt er angemeldet, bis die Sitzung nach { $hours } Stunden abläuft. Nur für Anzeigen gedacht, an denen niemand arbeitet; gilt sofort, auch in offenen Sitzungen.
+user-idle-off = Das automatische Abmelden ist in der Konfiguration abgeschaltet (session_idle_minutes = 0). Die Ausnahme wirkt erst, wenn es eingeschaltet ist.

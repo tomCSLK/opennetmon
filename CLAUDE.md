@@ -171,6 +171,12 @@ Ein Binary, ein Prozess, Module:
 - Passwörter mit argon2; Session-Cookies `HttpOnly`, `SameSite=Strict`, `Secure` laut Config (`cookie_secure`, Standard `true`);
   CSRF-Schutz für alle POST-Formulare (Login: Double-Submit-Cookie, danach Token pro Sitzung)
 - Sitzungen serverseitig; in der DB steht nur der SHA-256-Wert des Cookie-Tokens; kein Standardbenutzer, erster Admin per CLI
+- Abmelden ohne Aktivität (Wunsch des Nutzers, 2026-10-24): Config `session_idle_minutes` (Standard 30, `0` = aus), zusätzlich zur festen Höchstdauer
+  `session_ttl_hours`; `sessions.last_seen_at` (Migration `0018`, höchstens alle 15 s geschrieben), Prüfung im `CurrentUser`-Extractor (abgelaufen: Sitzung
+  löschen, `/login?idle=1` mit Hinweis). Aktivität = Seitenaufruf (`Sec-Fetch-Mode: navigate`), POST und Klicks/Tasten über `static/session.js`
+  (`POST /session`, höchstens einmal pro Minute; `GET /session` liefert die Restzeit und zählt nicht); **automatisches Aktualisieren zählt nicht**
+  (Cookie `opennetmon_auto` von `static/refresh.js`), Skripte (Graph, Messwerte) auch nicht. Ausnahme je Benutzer `users.stay_signed_in`
+  („angemeldet bleiben“, z. B. Wandbildschirm; nur Admins auf `/users/<id>`, Route `/users/<id>/idle`)
 - Sicherheits-Header auf allen Antworten (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`); Fehler von Seitenaufrufen (Accept `text/html`) zeigt `web::error_page` als Seite im Design (mit Seitenleiste bzw. Anmeldekarte; Meldung aus `error::ErrorMessage`, sonst je Status, nie axums englische Texte), JSON-Abfragen bleiben Klartext
 - Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/users-and-login.md`)
 - Omada-SNMP ist nur authNoPriv/MD5 (keine Verschlüsselung, schwacher Hash): nur im privaten Netz, Passwort lang und einzigartig wählen

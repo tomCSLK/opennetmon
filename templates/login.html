@@ -7,6 +7,9 @@
     <div class="card">
       <h1>{{ t.get("login-title") }}</h1>
       <p class="muted">{{ t.get("login-tagline") }}</p>
+      {% if let Some(message) = notice %}
+      <p class="flash" role="status">{{ message }}</p>
+      {% endif %}
       {% if let Some(message) = error %}
       <p class="error" role="alert">{{ message }}</p>
       {% endif %}
