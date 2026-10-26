@@ -207,8 +207,9 @@ pub struct DeviceForm {
 
 #[derive(Deserialize)]
 pub struct DeleteForm {
-    csrf_token: String,
-    confirm: Option<String>,
+    pub(crate) csrf_token: String,
+    /// The ticked "Yes, delete …" box; deleting without it is refused.
+    pub(crate) confirm: Option<String>,
 }
 
 fn number<T: std::str::FromStr>(value: &str, invalid: &'static str) -> Result<T> {

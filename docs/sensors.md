@@ -108,12 +108,14 @@ Manually against real hardware: `cargo test --test omada_manual sensors_work -- 
     nothing there.
   - Paused sensors have no chart; on narrow screens (below 560 px) the column is hidden.
   The time of the last poll is on the detail page.
-  Administrators additionally see “Pause” and “Delete” per sensor, at the top “Pause device” or “Resume” (`docs/devices-and-groups.md`, “Pausing”), “Find
+  Administrators additionally see the icons “Pause” ‖ and “Delete” per sensor, at the top “Pause device” or “Resume” (`docs/devices-and-groups.md`, “Pausing”), “Find
   interfaces”, “Find values” (`docs/mibs.md`) and the form “Add sensor” (ping, uptime, custom OID with the mode value/counter and a factor, this server;
   a decimal comma is accepted). Errors appear on the same page, the input is kept.
 - **Order**: automatically by type (ping, uptime, traffic, interface status, then custom values), within a type by name with numbers by value (port 2 before
   port 10). “Change order” (`/devices/<id>/sensors/order`, administrators only) arranges them by hand by dragging, ↑/↓ or position number; the rules are the
   same as for devices (`docs/devices-and-groups.md`).
+- **Delete**: the trash icon in the list leads to the section “Delete sensor” at the end of the detail page (`/sensors/<id>#delete`, administrators only);
+  deleting needs the tick “Yes, delete this sensor” (`confirm=yes`, otherwise `422`) and removes the sensor with its measurements and events.
 - **Rename** on the detail page (section “Name”, administrators only, `POST /sensors/<id>/rename`): at most 64 characters, unique per device;
   values, chart, thresholds, status and events are kept.
 - **Interface discovery** (`POST /devices/<id>/discover`, administrators only, CSRF): `SnmpClient::walk` (GETBULK) reads `ifDescr`, `ifType`, `ifSpeed`,

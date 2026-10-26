@@ -182,6 +182,11 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 .breadcrumb a:hover { color: var(--accent); }
 .actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 .actions form { margin: 0; }
+/* "More actions" (page heads): on wide screens the buttons stand in the row, on small ones they form a menu
+   (static/app.js closes it there). */
+.more-actions > summary { display: none; }
+.more-items { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.more-items form { margin: 0; }
 .refresh { display: inline-flex; align-items: center; gap: .6rem; }
 .refresh-auto { display: inline-flex; align-items: center; gap: .35rem; margin: 0; color: var(--muted); font-size: .86rem;
   font-weight: 500; white-space: nowrap; cursor: pointer; }
@@ -282,6 +287,7 @@ a.pills:hover { text-decoration: none; }
 .pill.status-down { background: var(--down); }
 .pill.status-paused { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border-strong); }
 a.pills:hover .pill { filter: brightness(1.08); }
+.pill-short { display: none; }
 .tree-actions { display: flex; gap: .25rem; width: 5.7rem; flex: none; justify-content: flex-end; }
 .tree-actions form { margin: 0; }
 .tree-actions .icon-only { padding: .25rem; }
@@ -344,6 +350,10 @@ button.danger, .button.danger { background: var(--down); color: #fff; }
 button.danger:hover, .button.danger:hover { background: #b91c1c; color: #fff; }
 .button.icon-only, button.icon-only { padding: .55rem; }
 button.small, .button.small { padding: .32rem .6rem; font-size: .82rem; font-weight: 500; }
+/* Small icon buttons in table rows and card heads (`templates/icons.html`), square like those of the tree. */
+.button.small.icon-only, button.small.icon-only { padding: .3rem; }
+.small.icon-only svg.icon { width: 16px; height: 16px; }
+.button.danger-icon:hover, button.danger-icon:hover { color: var(--down); border-color: var(--down-soft); }
 button:disabled { opacity: .55; cursor: not-allowed; }
 
 /* ---------- forms ---------- */
@@ -414,8 +424,30 @@ table.samples th.n, table.samples td.n { text-align: right; font-variant-numeric
 table.samples td.nowrap { font-variant-numeric: tabular-nums; }
 table.samples tr.summary td { background: var(--surface-2); font-weight: 600; }
 table.samples tr.summary-last td { border-bottom: 2px solid var(--border-strong); }
+table.samples .head-short { display: none; }
 label.rows-select { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .85rem; font-weight: 500; color: var(--muted); }
 label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font-size: .85rem; }
+@media (max-width: 640px) {
+  table.samples .vol, table.samples tr.sum, table.samples .head-long { display: none; }
+  table.samples .head-short { display: inline; }
+  table.samples th, table.samples td { padding: .55rem .5rem; font-size: .85rem; }
+  table.samples th.n, table.samples td.nowrap { white-space: normal; }
+  table.samples thead th { text-transform: none; letter-spacing: 0; font-size: .74rem; }
+  .card-head { flex-wrap: wrap; padding-left: 1rem; padding-right: 1rem; }
+  .card table.samples th:first-child, .card table.samples td:first-child { padding-left: 1rem; }
+  .card table.samples th:last-child, .card table.samples td:last-child { padding-right: 1rem; }
+  /* Chart legend: values without fixed widths, time and channels side by side, wrapping as needed. */
+  .u-legend td.u-value, .u-legend tr:first-child td.u-value { min-width: 0; }
+  .u-legend { font-size: .8rem; }
+  .u-legend tbody { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .75rem; }
+  .u-legend.u-inline tr { display: flex; align-items: center; margin-right: 0; }
+  /* Range choice across the full width; latest values two per row. */
+  .page-head .ranges { display: flex; width: 100%; }
+  .ranges a { flex: 1; padding: .35rem .4rem; text-align: center; white-space: nowrap; }
+  .values { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .6rem; }
+  .value-tile { padding: .7rem .85rem; }
+  .value-tile .value { font-size: 1.2rem; }
+}
 
 /* ---------- login ---------- */
 .auth { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem;
@@ -439,7 +471,7 @@ a.button.secondary { color: var(--text); }
 
 /* ---------- small screens ---------- */
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .sidebar { position: sticky; z-index: 10; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center;
     gap: .5rem; padding: .6rem .9rem; }
   .menu-toggle { display: inline-flex; margin-left: auto; padding: .4rem .55rem; background: transparent;
@@ -452,18 +484,81 @@ a.button.secondary { color: var(--text); }
   .form-grid, .threshold-grid { grid-template-columns: 1fr; }
   .pills { width: 11rem; }
 }
+@media (max-width: 640px) {
+  .more-actions { position: relative; }
+  .more-actions > summary { display: inline-flex; list-style: none; }
+  .more-actions > summary::-webkit-details-marker { display: none; }
+  .more-actions[open] > summary { background: var(--surface-2); }
+  html.js .more-actions:not([data-ready]) > .more-items { display: none; }
+  .more-items { position: absolute; left: 0; top: calc(100% + .35rem); z-index: 20; flex-direction: column; align-items: stretch;
+    min-width: 15rem; padding: .45rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); }
+  /* In the menu all buttons look alike: a list of entries. */
+  .more-items > .button, .more-items > form > button { width: 100%; justify-content: flex-start; padding: .6rem .75rem;
+    color: var(--text); background: transparent; border-color: transparent; font-weight: 500; }
+  .more-items > .button:hover, .more-items > form > button:hover { background: var(--surface-2); color: var(--text); }
+}
 @media (max-width: 560px) {
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tree-meta { display: none; }
+  /* Status tiles as a compact block of three columns, so the tree starts on the first screen. */
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+  .tile { padding: .5rem .65rem .55rem .85rem; }
+  .tile-value { font-size: 1.3rem; }
+  .tile-label { margin-top: .1rem; font-size: .74rem; line-height: 1.25; }
+  /* Tree: names may wrap, pills show only numbers; the actions are on the group and device pages. */
+  .tree-meta, .tree-actions { display: none; }
+  .tree-row { padding-top: .3rem; padding-bottom: .3rem; }
+  .tree-name { white-space: normal; overflow-wrap: anywhere; }
   .pills { width: auto; }
+  .pill-long { display: none; }
+  .pill-short { display: inline; }
   h1 { font-size: 1.3rem; }
+}
+/* Tables marked .m-cards show each row as a small block on phones, laid out per table with grid areas
+   (cells carry m-name, m-status, m-value …; m-hide is left out). The head becomes a row of sort links,
+   or disappears when it has none. */
+@media (max-width: 640px) {
+  table.m-cards, table.m-cards thead, table.m-cards tbody { display: block; }
+  table.m-cards thead:not(:has(a.sort)) { display: none; }
+  table.m-cards thead tr { display: flex; flex-wrap: wrap; gap: .35rem 1rem; padding: .55rem 1rem; }
+  .card table.m-cards thead th { padding: 0; border: 0; background: none; }
+  table.m-cards thead th:not(:has(a.sort)) { display: none; }
+  table.m-cards thead { background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  table.m-cards tbody tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .3rem .75rem; align-items: center;
+    padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
+  table.m-cards tbody tr:last-child { border-bottom: 0; }
+  .card table.m-cards td, .card table.m-cards tbody th { display: block; min-width: 0; padding: 0; border: 0; text-align: left;
+    white-space: normal; overflow-wrap: anywhere; }
+  table.m-cards tbody tr[hidden], .card table.m-cards td.m-hide { display: none; }
+  table.m-cards tr.table-group { display: block; padding: .45rem 1rem; background: var(--surface-2); }
+  table.m-cards .m-name { grid-area: name; }
+  table.m-cards .m-status { grid-area: status; align-self: start; }
+  table.m-cards .m-msg { grid-area: msg; font-size: .86rem; }
+  table.m-cards .m-msg .badge { white-space: normal; overflow-wrap: anywhere; }
+  table.m-cards .m-device { grid-area: device; }
+  .card table.m-cards .m-value, .card table.m-cards .m-when, .card table.m-cards .m-dur { justify-self: end; text-align: right;
+    font-size: .86rem; white-space: nowrap; overflow-wrap: normal; }
+  table.m-cards .m-value { grid-area: value; font-size: .92rem; font-weight: 600; }
+  table.m-cards .m-when { grid-area: when; }
+  table.m-cards .m-dur { grid-area: dur; }
+  table.m-cards .m-act { grid-area: act; justify-self: end; }
+  table.m-cards .m-check { grid-area: check; }
+  table.m-sensors tbody tr { grid-template-areas: "name name value" "status msg act"; }
+  table.m-status-list tbody tr { grid-template-areas: "name name value" "status device device" "msg msg when"; }
+  table.m-log tbody tr { grid-template-areas: "name name when" "status device device" "msg msg dur"; }
+  table.m-inactive tbody tr { grid-template-areas: "check name status" ". msg msg"; }
+  table.m-events tbody tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name when" "msg msg"; }
+  table.m-simple tbody tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name act" "msg msg" "when when"; }
+  table.m-simple .m-value { grid-area: act; }
+  .card table.m-simple .m-when { justify-self: start; text-align: left; }
+  /* Touch targets: icon buttons in rows at least 40 px. */
+  table.m-cards .icon-only { min-width: 2.5rem; min-height: 2.5rem; }
 }
 .c-down { color: var(--down); } .c-warning { color: var(--warn); }
 
 /* MIB page */
 form.upload, form.search { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
 form.search input[type=text] { flex: 1; min-width: 220px; }
-input[type=file] { font: inherit; font-size: .9rem; color: var(--muted); }
+input[type=file] { max-width: 100%; font: inherit; font-size: .9rem; color: var(--muted); }
 input[type=file]::file-selector-button { margin-right: .7rem; padding: .45rem .8rem; font: inherit; font-weight: 600; cursor: pointer;
   color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
 ul.plain { margin: .3rem 0 0; padding-left: 1.1rem; }

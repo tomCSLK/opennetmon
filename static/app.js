@@ -87,6 +87,27 @@
     });
   }
 
+  // "More actions" in page heads (`details.more-actions`, rendered open): a menu on small screens,
+  // all buttons in one row on wide ones. Without JavaScript the buttons simply stay visible.
+  var mores = document.querySelectorAll('details.more-actions');
+  if (mores.length && window.matchMedia) {
+    var narrow = window.matchMedia('(max-width: 640px)');
+    var fit = function () {
+      for (var m = 0; m < mores.length; m++) { mores[m].open = !narrow.matches; mores[m].setAttribute('data-ready', ''); }
+    };
+    fit();
+    if (narrow.addEventListener) { narrow.addEventListener('change', fit); }
+    var closeMenus = function (except) {
+      if (!narrow.matches) { return; }
+      for (var m = 0; m < mores.length; m++) { if (mores[m] !== except) { mores[m].open = false; } }
+    };
+    document.addEventListener('click', function (e) {
+      var inside = e.target.closest ? e.target.closest('details.more-actions') : null;
+      closeMenus(inside);
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeMenus(null); } });
+  }
+
   var menu = document.querySelector('.menu-toggle');
   if (menu) {
     menu.addEventListener('click', function () {

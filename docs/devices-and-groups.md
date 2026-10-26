@@ -17,6 +17,18 @@ groups “Pause” ‖ or “Resume” ▶ (see below). Paused rows are dimmed a
 screens (below 560 px) address and interval are left out.
 The action messages (“Device created.” etc.) come in through `?msg=` and are only mapped to fixed texts.
 
+**Phones:** the pages are laid out for narrow screens (tested at 360–430 px), without scrolling sideways:
+- The buttons in the head of the overview, the group pages, the sensor page of a device and the detail page are an **“Actions”** menu (`details.more-actions`):
+  a row of buttons on wide screens, a drop-down on screens up to 640 px (`static/app.js`; without JavaScript it stays open as a row).
+- Row actions everywhere are icons with the name as tooltip (`templates/icons.html`: edit ✎, delete 🗑, pause ‖, order ↕); deleting a sensor or a device
+  always asks for confirmation, only an uploaded MIB file is deleted at once (it can be uploaded again).
+- Up to 560 px the tiles take three columns, the tree hides the row actions and the address line, and sensor labels show just their count.
+- Up to 640 px the lists (sensors, status lists, log, events, users, profiles, templates, MIB files) turn into one block per row (`table.m-cards`
+  with a layout class such as `m-sensors` or `m-log`, cells marked `m-name`, `m-status`, `m-value` …, `m-hide` for left-out columns); sortable column heads
+  become a bar of sort links. On the detail page the period selector spans the width, value tiles come two per row and the measurement table drops the
+  volume columns and the sum row.
+- The tables on the setup pages (interface and value discovery, “This server”, template rules) still scroll inside their frame.
+
 **Refresh:** the overview, the status lists, the sensor page of a device and the sensor detail page have a **“Refresh”** button at the top right (only the
 icon ↻, the name as a tooltip; reloads the page, dropping any `?msg=` message) and the switch **“Auto”**: the page then reloads every 30 s (as in PRTG), with a countdown next
 to it. The countdown waits (“paused”) while an input field has the focus or a form was changed (e.g. ticked sensors), and only runs while the tab is visible;
@@ -143,7 +155,7 @@ Passwords appear neither on the result page nor in the log (the log only names u
 
 - Tables `groups` and `devices` (migration `0004`), foreign keys with `ON DELETE RESTRICT` for group and profile.
 - Device type: column `devices.kind` (migration `0015`, text without `CHECK`, so that new types need no table rebuild; unknown values count as “Generic”),
-  in the code `devices::DeviceKind`; the icons are in the macro `device_icon` in `templates/home.html`. Forms without the field result in “Generic”.
+  in the code `devices::DeviceKind`; the icons are in the macro `device_icon` in `templates/tree.html`. Forms without the field result in “Generic”.
 - SNMP client `src/snmp/mod.rs`: `SnmpClient::connect` (including SNMPv3 engine discovery), `get` with timeout, retries on timeouts and a single retry after
   a v3 context update. The poller uses the same client.
 - `snmp2` with the feature `heap_buffers`: without it, a 64 KB buffer lives on the stack, which overflows in Tokio threads (2 MB stack) in debug builds.

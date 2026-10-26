@@ -1,4 +1,5 @@
 {% extends "app.html" %}
+{% import "icons.html" as icons %}
 {% block title %}{{ t.get("nav-users") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -18,17 +19,17 @@
 <section class="card flush">
   <div class="card-head"><h2>{{ t.get("nav-users") }}</h2><span class="muted small">{{ rows.len() }}</span></div>
   <div class="table-wrap">
-  <table>
+  <table class="m-cards m-simple">
     <thead><tr><th>{{ t.get("username") }}</th><th>{{ t.get("role") }}</th><th>{{ t.get("language") }}</th><th>{{ t.get("users-created") }}</th><th class="right">{{ t.get("users-sessions") }}</th><th></th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
-        <td><a href="/users/{{ row.info.id }}"><strong>{{ row.info.username }}</strong></a>{% if row.is_me %} <span class="muted small">{{ t.get("users-me") }}</span>{% endif %}</td>
-        <td>{{ row.role_label }}{% if row.info.stay_signed_in %} <span class="muted small">· {{ t.get("users-stays-signed-in") }}</span>{% endif %}</td>
-        <td>{{ row.language_label }}</td>
-        <td class="num">{{ row.created|safe }}</td>
-        <td class="num right">{{ row.info.sessions }}</td>
-        <td class="right"><a class="button ghost small" href="/users/{{ row.info.id }}">{{ t.get("edit") }}</a></td>
+        <td class="m-name"><a href="/users/{{ row.info.id }}"><strong>{{ row.info.username }}</strong></a>{% if row.is_me %} <span class="muted small">{{ t.get("users-me") }}</span>{% endif %}</td>
+        <td class="m-msg">{{ row.role_label }}{% if row.info.stay_signed_in %} <span class="muted small">· {{ t.get("users-stays-signed-in") }}</span>{% endif %}</td>
+        <td class="m-hide">{{ row.language_label }}</td>
+        <td class="num m-hide">{{ row.created|safe }}</td>
+        <td class="num right m-hide">{{ row.info.sessions }}</td>
+        <td class="right m-act">{% call icons::edit_link(("/users/" ~ row.info.id), t.get("edit"), t.get1("edit-named", "name", row.info.username.as_str())) %}{% endcall %}</td>
       </tr>
     {% endfor %}
     </tbody>

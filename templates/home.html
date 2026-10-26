@@ -1,5 +1,6 @@
 {% extends "app.html" %}
 {% import "tree.html" as tree %}
+{% import "icons.html" as icons %}
 {% block title %}{{ t.get("nav-overview") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -9,6 +10,9 @@
   </div>
   <div class="actions">
     {% if layout.is_admin %}
+    <details class="more-actions" open>
+      {% call icons::more_summary(t) %}{% endcall %}
+      <div class="more-items">
     {% if top_groups > 1 %}<a class="button ghost" href="/groups/0/order">{{ t.get("overview-order-groups") }}</a>{% endif %}
     <a class="button secondary" href="/groups/new">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
@@ -18,6 +22,8 @@
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       {{ t.get("device-new") }}
     </a>
+      </div>
+    </details>
     {% endif %}
     {% include "refresh.html" %}
   </div>

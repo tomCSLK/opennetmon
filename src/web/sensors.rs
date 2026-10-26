@@ -28,6 +28,7 @@ use crate::storage::measurements::{bucket_averages, latest_values};
 use crate::storage::sensors::{self as store, SensorRecord};
 use crate::storage::{devices, pauses, status as status_store};
 use crate::web::auth::{CsrfForm, CurrentUser};
+use crate::web::devices::DeleteForm;
 use crate::web::overview::FlashQuery;
 use crate::web::pause::{PauseNote, note};
 use crate::web::sensor_text::ValueFormat;
@@ -705,11 +706,14 @@ pub async fn delete(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(id): Path<i64>,
-    Form(form): Form<CsrfForm>,
+    Form(form): Form<DeleteForm>,
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let sensor = find_sensor(&state, id).await?;
+    if form.confirm.as_deref() != Some("yes") {
+        return Err(Error::invalid(Msg::new("confirm-delete")));
+    }
     store::delete_sensor(&state.pool, id).await?;
     tracing::info!(user = %user.username, sensor = id, "sensor deleted");
     Ok(Redirect::to(&format!(
@@ -1206,12 +1210,30 @@ mod tests {
                 .enabled
         );
 
-        let reply = send(
+        // Deleting asks first: without the ticked box nothing happens.
+        let unconfirmed = send(
             &h.app,
             post(
                 &format!("/sensors/{id}/delete"),
                 Some(&admin),
                 &csrf_only(&csrf),
+            ),
+        )
+        .await;
+        assert_eq!(unconfirmed.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(
+            store::get_sensor(&h.state.pool, id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/sensors/{id}/delete"),
+                Some(&admin),
+                &format!("csrf_token={csrf}&confirm=yes"),
             ),
         )
         .await;

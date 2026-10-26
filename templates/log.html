@@ -26,7 +26,7 @@
     <span class="muted small" data-table-filter-count></span>
   </div>
   <div class="table-wrap">
-  <table id="log-entries">
+  <table id="log-entries" class="m-cards m-log">
     <thead>
       <tr>
         {% for c in columns %}
@@ -37,12 +37,12 @@
     <tbody>
     {% for e in entries %}
       <tr data-filter="{{ e.filter_text() }}">
-        <td class="nowrap">{{ e.at|safe }}</td>
-        <td class="nowrap"><span class="badge status-{{ e.status_class }}">{{ e.status_label }}</span>{% if !e.before.is_empty() %}<span class="sub">{{ e.before }}</span>{% endif %}</td>
-        <td>{% if let Some(id) = e.sensor_id %}<a href="/sensors/{{ id }}"><strong>{{ e.sensor_name }}</strong></a>{% else %}<span class="muted">{{ e.scope }}</span>{% endif %}</td>
-        <td class="nowrap">{% if let Some(id) = e.device_id %}<a href="/devices/{{ id }}/sensors">{{ e.device_name }}</a>{% endif %}{% if !e.group.is_empty() %}<span class="sub">{{ e.group }}</span>{% endif %}</td>
-        <td class="wrap muted">{{ e.message }}{% if let Some(until) = e.until %} · {{ t.get("pause-until") }} {{ until|safe }}{% endif %}</td>
-        <td class="nowrap">{{ e.duration }}{% if e.ongoing %}<span class="sub">{{ t.get("log-ongoing") }}</span>{% endif %}</td>
+        <td class="nowrap m-when">{{ e.at|safe }}</td>
+        <td class="nowrap m-status"><span class="badge status-{{ e.status_class }}">{{ e.status_label }}</span>{% if !e.before.is_empty() %}<span class="sub">{{ e.before }}</span>{% endif %}</td>
+        <td class="m-name">{% if let Some(id) = e.sensor_id %}<a href="/sensors/{{ id }}"><strong>{{ e.sensor_name }}</strong></a>{% else %}<span class="muted">{{ e.scope }}</span>{% endif %}</td>
+        <td class="nowrap m-device">{% if let Some(id) = e.device_id %}<a href="/devices/{{ id }}/sensors">{{ e.device_name }}</a>{% endif %}{% if !e.group.is_empty() %}<span class="sub">{{ e.group }}</span>{% endif %}</td>
+        <td class="wrap muted m-msg">{{ e.message }}{% if let Some(until) = e.until %} · {{ t.get("pause-until") }} {{ until|safe }}{% endif %}</td>
+        <td class="nowrap m-dur">{{ e.duration }}{% if e.ongoing %}<span class="sub">{{ t.get("log-ongoing") }}</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

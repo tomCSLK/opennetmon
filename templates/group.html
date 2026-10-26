@@ -1,6 +1,7 @@
 {% extends "app.html" %}
 {% import "tree.html" as tree %}
 {% import "pause_note.html" as pause %}
+{% import "icons.html" as icons %}
 {% block title %}{{ summary.name }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -14,6 +15,9 @@
   </div>
   <div class="actions">
     {% if layout.is_admin %}
+    <details class="more-actions" open>
+      {% call icons::more_summary(t) %}{% endcall %}
+      <div class="more-items">
     <a class="button ghost" href="/groups/{{ summary.id }}/edit?back={{ back }}">{{ t.get("group-edit") }}</a>
     {% if summary.paused_itself %}
     <form method="post" action="/resume/group/{{ summary.id }}">
@@ -33,6 +37,8 @@
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       {{ t.get("device-new") }}
     </a>
+      </div>
+    </details>
     {% endif %}
     {% include "refresh.html" %}
   </div>

@@ -1,4 +1,5 @@
 {% extends "app.html" %}
+{% import "icons.html" as icons %}
 {% block title %}{{ t.get("nav-mibs") }} – opennetmon{% endblock %}
 {% block head %}<script src="/static/table-filter.js?v=2" defer></script>{% endblock %}
 {% block content %}
@@ -80,7 +81,7 @@
   <p class="empty small">{{ t.get("mibs-files-none-match") }}</p>
   {% else %}
   <div class="table-wrap scroll">
-  <table id="mib-files">
+  <table id="mib-files" class="m-cards m-simple">
     <thead><tr><th>{{ t.get("mibs-file") }}</th><th>{{ t.get("mibs-modules") }}</th><th>{{ t.get("mibs-uploaded-at") }}</th><th></th></tr></thead>
     <tbody>
     {% for f in files %}
@@ -88,19 +89,19 @@
       <tr class="table-group" data-filter-group><th colspan="4">{{ f.vendor.1 }} <span class="muted">· {{ count }}</span></th></tr>
       {% endif %}
       <tr data-filter="{{ f.filter_text }}">
-        <td><strong>{{ f.file_name }}</strong><span class="sub">{{ f.size_kb }}</span></td>
-        <td class="wrap">
+        <td class="m-name"><strong>{{ f.file_name }}</strong><span class="sub">{{ f.size_kb }}</span></td>
+        <td class="wrap m-msg">
           {% for m in f.modules %}
           <div>{% if m.ok %}<span class="badge status-up">{{ m.name }}</span>{% else %}<span class="badge status-warning">{{ m.name }}</span>{% endif %}
             <span class="muted small">{{ t.get1("count-objects", "count", m.objects) }}{% if !m.problem.is_empty() %} · {{ m.problem }}{% endif %}</span></div>
           {% endfor %}
         </td>
-        <td class="num">{{ f.uploaded_at|safe }}</td>
-        <td class="right">
+        <td class="num m-when">{{ f.uploaded_at|safe }}</td>
+        <td class="right m-act">
           <form method="post" action="/mibs/files/{{ f.id }}/delete">
             <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
             {% if !files_filter.is_empty() %}<input type="hidden" name="files" value="{{ files_filter }}">{% endif %}
-            <button type="submit" class="ghost small">{{ t.get("delete") }}</button>
+            {% call icons::delete_button(t, t.get1("delete-named", "name", f.file_name.as_str())) %}{% endcall %}
           </form>
         </td>
       </tr>

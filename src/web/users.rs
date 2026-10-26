@@ -682,9 +682,7 @@ mod tests {
             .unwrap();
         assert_eq!(stored.language, Some(Lang::En));
         let list = send(&h.app, get("/users", Some(&admin))).await;
-        assert!(
-            list.body.contains("<td>English</td>") && list.body.contains("<td>Wie im Browser</td>")
-        );
+        assert!(list.body.contains(">English</td>") && list.body.contains(">Wie im Browser</td>"));
 
         let path = format!("/users/{carla}/language");
         let saved = send(

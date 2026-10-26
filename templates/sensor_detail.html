@@ -1,5 +1,6 @@
 {% extends "app.html" %}
 {% import "pause_note.html" as pause %}
+{% import "icons.html" as icons %}
 {% block title %}{{ sensor.name }} – opennetmon{% endblock %}
 {% block head %}
   <link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css?v=2">
@@ -29,6 +30,9 @@
       {% endfor %}
     </nav>
     {% if layout.is_admin %}
+    <details class="more-actions" open>
+      {% call icons::more_summary(t) %}{% endcall %}
+      <div class="more-items">
     {% if paused_itself %}
     <form method="post" action="/resume/sensor/{{ sensor.id }}">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
@@ -38,8 +42,13 @@
     {% else %}
     <a class="button ghost" href="/pause/sensor/{{ sensor.id }}?back=sensor">{{ t.get("pause") }}</a>
     {% endif %}
-    {% endif %}
     <a class="button ghost" href="/log?sensor={{ sensor.id }}">{{ t.get("log") }}</a>
+    <a class="button ghost" href="#delete">{{ t.get("sensor-delete") }}</a>
+      </div>
+    </details>
+    {% else %}
+    <a class="button ghost" href="/log?sensor={{ sensor.id }}">{{ t.get("log") }}</a>
+    {% endif %}
     {% include "refresh.html" %}
   </div>
 </div>
@@ -190,15 +199,25 @@
   <p class="empty small">{{ t.get("detail-no-events") }}</p>
   {% else %}
   <div class="table-wrap">
-  <table>
+  <table class="m-cards m-events">
     <thead><tr><th>{{ t.get("detail-when") }}</th><th>{{ t.get("detail-change") }}</th><th>{{ t.get("message") }}</th></tr></thead>
     <tbody>
     {% for e in events %}
-      <tr><td class="num">{{ e.at|safe }}</td><td>{{ e.change }}</td><td class="wrap muted">{{ e.message }}</td></tr>
+      <tr><td class="num m-when">{{ e.at|safe }}</td><td class="m-name">{{ e.change }}</td><td class="wrap muted m-msg">{{ e.message }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
   {% endif %}
 </section>
+
+{% if layout.is_admin %}
+<form method="post" action="/sensors/{{ sensor.id }}/delete" class="delete" id="delete">
+  <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+  <h3>{{ t.get("sensor-delete") }}</h3>
+  <p class="muted small">{{ t.get("sensor-delete-hint") }}</p>
+  <label class="inline"><input type="checkbox" name="confirm" value="yes" required> {{ t.get("sensor-delete-confirm") }}</label>
+  <button type="submit" class="danger">{{ t.get("sensor-delete") }}</button>
+</form>
+{% endif %}
 {% endblock %}

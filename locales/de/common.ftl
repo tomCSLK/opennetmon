@@ -123,6 +123,7 @@ name = Name
 cancel = Abbrechen
 order = Reihenfolge
 edit-named = { $name } bearbeiten
+delete-named = { $name } löschen
 every-seconds = alle { $seconds } s
 count-devices =
     { $count ->

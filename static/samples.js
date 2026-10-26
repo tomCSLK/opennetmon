@@ -54,9 +54,9 @@
         cols.push({
           title: T('samples-volume', s.label),
           values: s.values.map(function (v, i) { return v === null ? null : v * dur[i] / 8; }),
-          fmt: F.bytes, sum: true
+          fmt: F.bytes, sum: true, cls: 'n vol'
         });
-        cols.push({ title: T('samples-speed', s.label), values: s.values,
+        cols.push({ title: T('samples-speed', s.label), short: s.label, values: s.values,
           fmt: function (v) { return F.value('bps', v); }, sum: false });
       } else {
         cols.push({ title: s.label + (s.unit_label ? ' (' + s.unit_label + ')' : ''), values: s.values,
@@ -97,7 +97,18 @@
     var head = el('thead');
     var hr = el('tr');
     hr.appendChild(el('th', null, T('samples-date-time')));
-    cols.forEach(function (c) { hr.appendChild(el('th', 'n', c.title)); });
+    // Volume columns (class "vol") and the sum row give way to the speeds on phones (app.css).
+    // A speed column is headed by just the channel name there ("short"), the volume being hidden.
+    cols.forEach(function (c) {
+      var th = el('th', c.cls || 'n');
+      if (c.short) {
+        th.appendChild(el('span', 'head-long', c.title));
+        th.appendChild(el('span', 'head-short', c.short));
+      } else {
+        th.textContent = c.title;
+      }
+      hr.appendChild(th);
+    });
     head.appendChild(hr);
     table.appendChild(head);
 
@@ -112,19 +123,19 @@
     var lastSummary = null;
     summary.forEach(function (row) {
       if (row.onlyIf && !row.onlyIf()) { return; }
-      var tr = el('tr', 'summary');
+      var tr = el('tr', row.onlyIf ? 'summary sum' : 'summary');
       lastSummary = tr;
       tr.appendChild(el('td', null, count === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, count)));
-      cols.forEach(function (c, i) { tr.appendChild(el('td', 'n', row.pick(st[i], c))); });
+      cols.forEach(function (c, i) { tr.appendChild(el('td', c.cls || 'n', row.pick(st[i], c))); });
       body.appendChild(tr);
     });
-    if (lastSummary) { lastSummary.className = 'summary summary-last'; }
+    if (lastSummary) { lastSummary.className += ' summary-last'; }
 
     for (var k = 0; k < count; k++) {
       var i = count - 1 - k; // newest first
       var tr = el('tr');
       tr.appendChild(el('td', 'nowrap', F.dateTime(data.ts[i], true)));
-      cols.forEach(function (c) { tr.appendChild(el('td', 'n', c.fmt(c.values[i]))); });
+      cols.forEach(function (c) { tr.appendChild(el('td', c.cls || 'n', c.fmt(c.values[i]))); });
       body.appendChild(tr);
     }
     table.appendChild(body);

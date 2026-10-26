@@ -159,4 +159,7 @@ sensor-device-missing = Das gewählte Gerät existiert nicht.
 states-rating-invalid = Ungültige Bewertung.
 states-label-invalid = Ungültiger Name eines Statuswerts.
 sensors-current = Aktuell
+sensor-delete = Sensor löschen
+sensor-delete-hint = Entfernt den Sensor mit allen Messwerten und seinem Verlauf. Das lässt sich nicht rückgängig machen.
+sensor-delete-confirm = Ja, diesen Sensor löschen
 sensors-trend-of = Verlauf der letzten Stunde: { $name }

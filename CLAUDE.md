@@ -39,7 +39,10 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
 - Design: `static/app.css` ist ein kleines Designsystem (Farb-Tokens für hell/dunkel, Seitenleiste, Kacheln, Karten, Badges, Tabellen, Formulare);
   Schema folgt dem System, Umschalter in der Seitenleiste (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js` für Umschalter, aktiven Menüpunkt
   und Handy-Menü). Keine Inline-Styles (CSP): Breiten z. B. des Statusbands der Mini-Graphen als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen
-  und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`)
+  und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`).
+  Handy (`docs/devices-and-groups.md`, „Phones“): Zeilenaktionen als Symbole aus den Makros in `templates/icons.html`; Knöpfe der Seitenköpfe im Menü
+  `details.more-actions` (breit eine Knopfreihe, bis 640 px Dropdown über `static/app.js`; `theme.js` setzt die Klasse `js` an `<html>`); Tabellen bis 640 px
+  als Blöcke (`table.m-cards` + Layoutklasse wie `m-sensors`/`m-log`/`m-simple`, Zellklassen `m-name`, `m-status`, `m-value`, `m-hide` …)
 - Statische Dateien (`web::assets`): `Cache-Control: no-cache` + ETag (SHA-256 des eingebetteten Inhalts), Antwort `304` bei unverändertem Stand –
   neue Versionen gelten nach einem Update sofort, ohne Versionsnummern in den Adressen pflegen zu müssen
 - SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
@@ -267,6 +270,9 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
+- Mobile Ansicht und Symbole statt Text in den Listen sind umgesetzt (2026-10-26, noch nicht released). Als Nächstes eingeplant: Abhängigkeiten wie in PRTG
+  (Objekte pausieren automatisch, wenn ein anderer Sensor ausfällt, z. B. Switches beim Ausfall des Router-Pings); Entwurf und die Entscheidungen des Nutzers
+  in `PLAN.md`, „Nächste Vorhaben“
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,

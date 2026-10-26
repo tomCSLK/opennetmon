@@ -13,6 +13,8 @@
     for (var i = 1; i < arguments.length; i++) { text = text.split('%' + i).join(String(arguments[i])); }
     return text;
   };
+  // Lets the CSS hide what scripts rearrange before they run (e.g. the "more actions" menu).
+  document.documentElement.classList.add('js');
   try {
     var t = localStorage.getItem('opennetmon-theme');
     if (t === 'light' || t === 'dark') { document.documentElement.setAttribute('data-theme', t); }

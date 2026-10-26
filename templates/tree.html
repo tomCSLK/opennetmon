@@ -1,8 +1,10 @@
 {# The device tree of the overview and the group pages (`web::overview`). `back` is where the edit and
    pause pages return to: "overview" or "group-<id>". -#}
 {% import "pause_note.html" as pause %}
+{% import "icons.html" as icons %}
 
-{% macro pills(list) %}{% for p in list %}<span class="pill status-{{ p.class }}" title="{{ p.title }}"><span aria-hidden="true">{{ p.glyph }}</span> {{ p.text }}</span>{% endfor %}{% endmacro %}
+{# On small screens a pill shows just its number (`count`); the title names it in full. #}
+{% macro pills(list) %}{% for p in list %}<span class="pill status-{{ p.class }}" title="{{ p.title }}"><span aria-hidden="true">{{ p.glyph }}</span> {% if p.text == p.count %}{{ p.text }}{% else %}<span class="pill-long">{{ p.text }}</span><span class="pill-short">{{ p.count }}</span>{% endif %}</span>{% endfor %}{% endmacro %}
 
 {# The icon of a device kind (`DeviceKind`); its name is the tooltip. #}
 {% macro device_icon(kind, t) %}<svg class="icon tree-icon" viewBox="0 0 24 24" role="img" aria-label="{{ t.get(kind.label_id()) }}"><title>{{ t.get(kind.label_id()) }}</title>
@@ -22,19 +24,6 @@
 {%- endmatch -%}
 </svg>{% endmacro %}
 
-{# Pause (link to the form) or, when paused by itself, resume (a button). #}
-{% macro pause_action(kind, id, paused_itself, layout, t, back) %}
-{%- if paused_itself -%}
-<form method="post" action="/resume/{{ kind }}/{{ id }}">
-  <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-  <input type="hidden" name="back" value="{{ back }}">
-  <button type="submit" class="ghost small icon-only" title="{{ t.get("resume") }}" aria-label="{{ t.get("resume") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 5 19 12 7 19 7 5"/></svg></button>
-</form>
-{%- else -%}
-<a class="button ghost small icon-only" href="/pause/{{ kind }}/{{ id }}?back={{ back }}" title="{{ t.get("pause") }}" aria-label="{{ t.get("pause") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="9" y1="6" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="18"/></svg></a>
-{%- endif -%}
-{% endmacro %}
-
 {% macro device_row(card, layout, t, back) %}
 <div class="node">
   <div class="tree-row{% if card.pause.is_some() %} paused{% endif %}">
@@ -53,8 +42,8 @@
         <button type="submit" class="ghost small icon-only" title="{{ t.get("device-test") }}" aria-label="{{ t.get("device-test") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 12 7 12 10 5 14 19 17 12 21 12"/></svg></button>
       </form>
       {% endif %}
-      {% call pause_action("device", card.device.id, card.paused_itself, layout, t, back) %}{% endcall %}
-      <a class="button ghost small icon-only" href="/devices/{{ card.device.id }}/edit?back={{ back }}" title="{{ t.get("edit") }}" aria-label="{{ t.get1("edit-named", "name", card.device.name) }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><line x1="13.5" y1="6.5" x2="17.5" y2="10.5"/></svg></a>
+      {% call icons::pause_action("device", card.device.id, card.paused_itself, layout, t, back) %}{% endcall %}
+      {% call icons::edit_link(("/devices/" ~ card.device.id ~ "/edit?back=" ~ back), t.get("edit"), t.get1("edit-named", "name", card.device.name.as_str())) %}{% endcall %}
       {% endif %}
     </span>
   </div>
@@ -72,8 +61,8 @@
     <span class="pills">{% call pills(s.pills.as_slice()) %}{% endcall %}</span>
     <span class="tree-actions">
       {% if layout.is_admin %}
-      <a class="button ghost small icon-only" href="/groups/{{ s.id }}/order?back={{ back }}" title="{{ t.get("order") }}" aria-label="{{ t.get("order") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="8 9 12 5 16 9"/><polyline points="8 15 12 19 16 15"/></svg></a>
-      {% if edit %}{% call pause_action("group", s.id, s.paused_itself, layout, t, back) %}{% endcall %}<a class="button ghost small icon-only" href="/groups/{{ s.id }}/edit?back={{ back }}" title="{{ t.get("group-edit") }}" aria-label="{{ t.get("group-edit") }}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><line x1="13.5" y1="6.5" x2="17.5" y2="10.5"/></svg></a>{% endif %}
+      {% call icons::order_link(("/groups/" ~ s.id ~ "/order?back=" ~ back), t.get("order")) %}{% endcall %}
+      {% if edit %}{% call icons::pause_action("group", s.id, s.paused_itself, layout, t, back) %}{% endcall %}{% call icons::edit_link(("/groups/" ~ s.id ~ "/edit?back=" ~ back), t.get("group-edit"), t.get("group-edit")) %}{% endcall %}{% endif %}
       {% endif %}
     </span>
   </summary>

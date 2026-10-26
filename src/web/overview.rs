@@ -96,6 +96,7 @@ impl Counts {
                 } else {
                     n.to_string()
                 },
+                count: n.to_string(),
                 title: t.get1(title, "count", n),
             })
             .collect()
@@ -107,6 +108,8 @@ pub struct Pill {
     pub class: &'static str,
     pub glyph: &'static str,
     pub text: String,
+    /// Just the number: shown instead of "N Sensoren" on small screens.
+    pub count: String,
     pub title: String,
 }
 

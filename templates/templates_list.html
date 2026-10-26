@@ -20,15 +20,15 @@
   </div>
   {% else %}
   <div class="table-wrap">
-  <table>
+  <table class="m-cards m-simple">
     <thead><tr><th>{{ t.get("template") }}</th><th>{{ t.get("template-contents") }}</th><th>{{ t.get("template-object-id") }}</th><th class="right">{{ t.get("order-devices") }}</th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
-        <td><a href="/templates/{{ row.id }}"><strong>{{ row.name }}</strong></a>{% if !row.source.is_empty() %}<span class="sub">{{ t.get1("template-from", "device", row.source.as_str()) }}</span>{% endif %}</td>
-        <td class="wrap">{{ row.summary }}</td>
-        <td class="num small">{% if row.object_id.is_empty() %}<span class="muted">{{ t.get("template-by-hand-only") }}</span>{% else %}{{ row.object_id }}{% endif %}</td>
-        <td class="num right">{{ row.devices }}</td>
+        <td class="m-name"><a href="/templates/{{ row.id }}"><strong>{{ row.name }}</strong></a>{% if !row.source.is_empty() %}<span class="sub">{{ t.get1("template-from", "device", row.source.as_str()) }}</span>{% endif %}</td>
+        <td class="wrap m-msg">{{ row.summary }}</td>
+        <td class="num small m-when">{% if row.object_id.is_empty() %}<span class="muted">{{ t.get("template-by-hand-only") }}</span>{% else %}{{ row.object_id }}{% endif %}</td>
+        <td class="num right m-value">{{ row.devices }}</td>
       </tr>
     {% endfor %}
     </tbody>

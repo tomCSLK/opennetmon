@@ -123,6 +123,7 @@ name = Name
 cancel = Cancel
 order = Order
 edit-named = Edit { $name }
+delete-named = Delete { $name }
 every-seconds = every { $seconds } s
 count-devices =
     { $count ->

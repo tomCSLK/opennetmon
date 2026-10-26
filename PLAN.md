@@ -3,11 +3,13 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-10-22, Release v0.4.2)
+## Stand (2026-10-26, Release v0.4.4)
 
-Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. Als Nächstes: **Installation auf dem echten Server**,
-Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest und Feinschliff. Geplant ist außerdem eine
-**Update-Möglichkeit** (Zeitpunkt offen).
+Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft seit v0.4.4 als `.deb` auf dem Ubuntu-Server des Nutzers;
+die Instanz auf dem Laptop dient nur noch zum Testen. Als Nächstes (Wunsch 2026-10-26, siehe „Nächste Vorhaben“): **mobile Ansicht überarbeiten**
+und **Abhängigkeiten wie in PRTG** (automatisch pausieren, wenn ein anderer Sensor ausfällt). Dazu Symbole statt Text bei den Zeilenaktionen
+der Listen, wie im Gerätebaum. Weiterhin offen: Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest, Feinschliff
+und eine **Update-Möglichkeit** (Zeitpunkt offen).
 
 Umgesetzt (Details in `docs/`):
 
@@ -165,7 +167,7 @@ opennetmon/
 12a. ✔ **Sensoren „Dieser Server“** (0.4.1): eingebauter Sensortyp statt snmpd auf dem Server.
 12b. ✔ **Gruppenseiten** (0.4.2): eigene Seite je Gruppe, Statuslisten mit Gruppenfilter; Dokumentation auf Englisch.
 13. **Offen:**
-    - Installation auf dem echten Ubuntu Server (Paket), `/healthz` und Login über HTTPS prüfen, die sieben Omada-Geräte einrichten
+    - Installation auf dem echten Ubuntu Server (Paket) ist erledigt (Betrieb in `Serveradmin`); dort noch die Omada-Geräte einrichten
     - Benachrichtigung mit dem echten Mailserver des Nutzers testen
     - Integrationstest Ende zu Ende gegen den lokalen `snmpd`: Gerät anlegen → Discovery → Messwerte nach 1–2 Intervallen → Agent stoppen → `Down`
       → Agent starten → `Up`
@@ -180,6 +182,118 @@ opennetmon/
 
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
+
+## Nächste Vorhaben (eingeplant 2026-10-26; A und C umgesetzt, B offen)
+
+### A. Mobile Ansicht überarbeiten – umgesetzt 2026-10-26 (noch nicht released)
+
+**Umgesetzt** (geprüft bei 360, 390 und 430 px, hell und dunkel, Desktop bei 1400 px unverändert; Beschreibung in `docs/devices-and-groups.md`,
+„Phones“): Kacheln dreispaltig und kompakt, Baum ohne Zeilenaktionen und Adresszeile, Plaketten nur mit Zahl (≤560 px); Menü „Aktionen“
+(`details.more-actions`, auf breiten Bildschirmen eine Knopfreihe, bis 640 px ein Dropdown); Tabellen als Blöcke (`table.m-cards` mit Layoutklasse
+und Zellklassen statt `data-label`), sortierbare Spaltenköpfe werden zu einer Leiste mit Sortier-Links; Sensordetail mit Zeitraumwahl über die volle
+Breite, Legende in einer Zeile, Messwerttabelle ohne Volumen und Summe; feste Grid-Zeilen, damit kurze Seiten die Kopfleiste nicht strecken.
+Bewusst nicht angepasst: die Tabellen der Einrichtungsseiten (Discovery, Werte suchen, „Dieser Server“, Vorlagenregeln) scrollen weiter in ihrem Rahmen.
+
+Ursprünglicher Befund:
+
+Wunsch des Nutzers: Die Ansicht auf dem Handy „schaut noch nicht so gut aus“. Befund vom 2026-10-26 im Browser mit einer Kopie der Testdaten, bei
+500 px Breite (schmaler lässt sich das Chrome-Fenster nicht ziehen; echte Handys haben 360–430 px, dort ist es noch enger):
+
+1. **Übersicht und Statuslisten, Kacheln:** Die fünf Kacheln stehen zweispaltig und hoch und füllen den ganzen ersten Bildschirm, der Gerätebaum
+   beginnt erst darunter. Ziel: eine kompakte Statusleiste (Zahl und Wort klein, eine oder zwei Zeilen).
+2. **Gerätebaum:** Die Sensorplaketten überdecken den ersten Aktionsknopf (Graph-Symbol), Gerätenamen werden abgeschnitten („Switch Wohnen …“),
+   jede Zeile hat drei Aktionsknöpfe. Ziel: auf dem Handy nur Plakette (kürzer, z. B. nur Zahl mit Symbol) und Name, Namen dürfen umbrechen;
+   die Aktionen auf den Gruppen- und Geräteseiten statt in jeder Zeile.
+3. **Werkzeugleisten** (Übersicht, Geräteseite, Sensordetail): Die Knöpfe brechen in bis zu drei Zeilen um (Gerät bearbeiten, Pausieren, Protokoll,
+   Verbindung testen, Werte suchen, Interfaces suchen, Automatisch, Aktualisieren). Ziel: die wichtigste Aktion sichtbar, der Rest in einem Menü
+   „Weitere Aktionen“ (`<details>`/`<summary>`, ohne neues Skript).
+4. **Tabellen** (Sensoren eines Geräts, Statuslisten, Protokoll, Messwerte): breiter als der Bildschirm, nur waagerecht scrollbar. Ausgerechnet
+   „Aktuell“, der Mini-Graph, die Aktionen, Gerät und Meldung bzw. die Raten der Messwerte liegen außerhalb des sichtbaren Bereichs.
+   Ziel: unterhalb von etwa 640 px jede Zeile als Block (oben Status und Name, rechts der aktuelle Wert, darunter Gerät bzw. Meldung), per CSS-Grid
+   mit `data-label` an den Zellen; die Sortierung über die Spaltenköpfe braucht dann einen Ersatz (z. B. Auswahlfeld „Sortieren nach“).
+5. **Sensordetail:** Die Legende des Graphen steht untereinander (drei Zeilen), der Graph ist niedrig; die Messwerttabelle zeigt nur das Volumen.
+   Ziel: Legende in einer Zeile, Graph über die volle Breite, in der Tabelle Zeit und Rate (Volumen erst beim Wischen oder umschaltbar).
+6. **Formulare** (Gerät bearbeiten): in Ordnung, nur mitprüfen.
+7. **Allgemein:** Touch-Ziele mindestens 44 px, Abstände und Schriftgrößen, Handy-Menü der Seitenleiste, hell und dunkel; prüfen bei 360, 390
+   und 430 px (dafür eine lokale Testseite mit `<iframe>` fester Breite oder den Gerätemodus der Entwicklerwerkzeuge).
+
+Umsetzung nur mit CSS in `static/app.css` und kleinen Template-Änderungen (Klassen, `data-label`, `<details>`); keine Inline-Styles (CSP), keine
+neue Abhängigkeit. Seite für Seite in kleinen Commits, jede im Browser geprüft (Memory „Check UI in browser“).
+
+### B. Abhängigkeiten wie in PRTG (automatisch pausieren)
+
+Wunsch des Nutzers (2026-10-26, präzisiert): Objekte sollen sich **in Abhängigkeit von einem anderen Sensor** automatisch pausieren, nicht nach
+ihrem eigenen Wert. Beispiel: Fällt der Ping-Sensor des Routers aus, werden alle Sensoren der Switches pausiert, statt dass jeder einzelne als
+Ausfall gemeldet wird. So bekommt man eine Mail für die Ursache (Router) statt einer je Sensor dahinter. Vorbild ist die Einstellung
+„Abhängigkeit“ in PRTG.
+
+Entwurf:
+
+- **Einstellung je Gruppe, Gerät und Sensor**, wie in PRTG:
+  - *vom übergeordneten Objekt übernehmen* (Standard; Vererbung Gruppe → Untergruppe → Gerät → Sensor, wie beim Pausieren)
+  - *von einem Sensor abhängig:* Auswahl eines beliebigen anderen Sensors (Gerät, dann Sensor), z. B. der Ping des Routers für die Gruppe „Switche“
+  - *keine Abhängigkeit* (beendet die Vererbung)
+  - zusätzlich am Sensor: *Master-Sensor für das Gerät* (typisch der Ping-Sensor): fällt er aus, sind die übrigen Sensoren seines Geräts pausiert;
+    er selbst wird weiter abgefragt
+- **Auslöser:** Der Sensor, von dem abhängig ist, steht auf „Ausfall“ (oder ist selbst pausiert, von Hand oder durch Abhängigkeit, damit Ketten
+  wie Router → Switch → Access Point funktionieren). „Warnung“ allein löst nicht aus.
+- **Wirkung:** Die abhängigen Objekte stehen auf „Pausiert“ mit dem Grund „durch Abhängigkeit von Ping (Router ER605)“, werden nicht abgefragt und
+  senden keine Mails. Der Sensor, von dem abhängig ist, wird immer weiter abgefragt.
+- **Rückkehr automatisch:** Steht der Sensor wieder auf „In Ordnung“, laufen die abhängigen Objekte von selbst weiter, wie nach einer Pause von Hand
+  ohne alten Zustand (keine nachträgliche Erholungsmail). Danach eine einstellbare Verzögerung (PRTG: „Abhängigkeitsverzögerung“), damit z. B. ein
+  Switch nach dem Router-Neustart erst hochfahren kann.
+- **Wettlauf vermeiden:** Router und Switch werden von verschiedenen Geräteaufgaben abgefragt. Antwortet der Switch nicht, während der Router-Ping
+  schon fehlschlägt (erst „Warnung“, ab der zweiten Abfrage „Ausfall“), darf der Switch keinen Ausfall melden: Fehlschläge abhängiger Sensoren
+  zählen nicht, solange der Sensor, von dem sie abhängen, nicht „In Ordnung“ ist; der `Notifier` verwirft gesammelte Wechsel von Sensoren, die
+  innerhalb seines 10-s-Fensters durch Abhängigkeit pausiert wurden.
+- **Umsetzung:** Die Abhängigkeit wird wie die Pausen-Vererbung berechnet, nicht als Pause gespeichert: `pause::Pauses` bekommt eine Quelle
+  `Source::Dependency` (Sensor-ID und Name), `storage::pauses::load` liest dazu den Zustand der Sensoren, von denen abhängig ist, aus
+  `sensor_status`. Migration `0019`: Spalten `dependency` (`parent`/`sensor`/`none`) und `dependency_sensor_id` (`ON DELETE SET NULL` →
+  wieder „übernehmen“) an `groups`, `devices` und `sensors`, dazu `sensors.dependency_master`; Zyklen (A hängt von B ab, B von A, auch über
+  Vererbung) beim Speichern ablehnen.
+- **Anzeige:** Status „Pausiert“ mit Grund überall, wo heute Pausen erscheinen (Baum, Statuslisten, Geräte- und Sensorseite); im Protokoll ein
+  Eintrag je Auslösung und Rückkehr („Abhängigkeit aktiv: 14 Sensoren pausiert“) statt einer Zeile je Sensor. Gerätevorlagen übernehmen die
+  Master-Markierung.
+- **Tests:** reine Logik (Vererbung, Auslösung, Ketten, Zyklen) als Unit-Tests, Poller mit dem Fake-Agenten (Router-Ping fällt aus → Switch
+  pausiert, keine Mail für den Switch → Router zurück → Switch läuft weiter), Handler, Übersetzungen DE/EN; Doku in `docs/devices-and-groups.md`.
+
+Entschieden vom Nutzer (2026-10-26), alle drei mit „ja“:
+
+1. **Mail:** Die Ausfallmail des Sensors, von dem abhängig ist, nennt in einer Zeile, was dadurch pausiert wurde (z. B. „14 Sensoren an 3 Geräten
+   pausiert“).
+2. **Verzögerung nach der Rückkehr** wird gleich mit eingebaut: je Gruppe, Gerät und Sensor in Sekunden (Standard 0, vererbt wie die
+   Abhängigkeit); Spalte `dependency_delay_secs` in Migration `0019`.
+3. **Pause von Hand:** Ist der Sensor, von dem abhängig ist, von Hand pausiert, sind die abhängigen Objekte ebenfalls pausiert.
+
+### C. Symbole statt Text bei den Zeilenaktionen – umgesetzt 2026-10-26 (noch nicht released)
+
+**Umgesetzt:** gemeinsame Makros in `templates/icons.html` (Stift, Papierkorb, Pause/Fortsetzen, Reihenfolge, Menüknopf), genutzt vom Baum und den
+Listen der Tabelle unten. Der Papierkorb der Sensorliste führt auf den Abschnitt „Sensor löschen“ am Ende der Detailseite (`#delete`, Häkchen
+`confirm=yes`, sonst 422); MIB-Dateien werden weiter sofort gelöscht, weil sie sich erneut hochladen lassen.
+
+Ursprünglicher Plan:
+
+Wunsch des Nutzers (2026-10-26): Die Textknöpfe rechts neben den Mini-Graphen der Sensorliste („Pausieren“, „Löschen“) und ähnliche Knöpfe
+in anderen Listen durch Symbole ersetzen, wie im Gerätebaum der Übersicht (`templates/tree.html`: `ghost small icon-only`, Inline-SVG, Name als
+`title` und `aria-label`). Gehört zur mobilen Ansicht (A), weil die Textknöpfe die Tabellen verbreitern.
+
+Bestand (Textknöpfe in Tabellenzeilen bzw. Kartenköpfen):
+
+| Seite | Knopf | Symbol |
+|---|---|---|
+| Sensoren eines Geräts (`sensors.html`), je Zeile | Pausieren, Löschen | ⏸ wie im Baum (bei pausierten ▶ Fortsetzen), Papierkorb |
+| Sensoren eines Geräts, Kopf der Karte | Reihenfolge ändern | ↕ wie im Baum |
+| SNMP-Profile (`credentials_list.html`), Benutzer (`users.html`) | Bearbeiten | Stift wie im Baum |
+| MIB-Dateien (`mibs.html`) | Löschen | Papierkorb |
+
+- Die SVG-Symbole und `pause_action` kommen aus gemeinsamen Makros (heute nur in `tree.html`), damit Baum und Listen dieselben Symbole nutzen;
+  `aria-label` mit dem Namen des Objekts (wie `edit-named`), neue Texte dafür in beiden Katalogen.
+- Auf dem Handy mindestens 44 px Tippfläche (siehe A, Punkt 7).
+- **Löschen absichern:** Ein Sensor wird heute mit einem Klick auf „Löschen“ samt Messwerten sofort gelöscht, ohne Rückfrage. Mit einem kleinen
+  Symbol, gerade auf dem Handy, wäre das zu leicht versehentlich ausgelöst. Deshalb führt der Papierkorb auf eine Bestätigung, wie beim Löschen von
+  Geräten und Gruppen (Häkchen „wirklich löschen“). Bei den MIB-Dateien ebenso prüfen.
+- Die großen Knöpfe in den Werkzeugleisten oben auf den Seiten (Gerät bearbeiten, Verbindung testen, Werte suchen …) behalten ihren Text; für
+  das Handy kommen sie in das Menü „Weitere Aktionen“ (A, Punkt 3).
 
 ## Bewusst nicht im MVP
 
