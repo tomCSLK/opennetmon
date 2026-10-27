@@ -470,3 +470,44 @@ fn modules_belong_to_the_enterprise_of_their_objects_or_of_their_importers() {
     assert_eq!(vendor("MY-BRIDGE-MIB"), Some(Vendor::Standard));
     assert_eq!(vendor("IF-MIB"), Some(Vendor::Standard));
 }
+
+/// `a0` = enterprises.99999 (seven arcs), each `a<i>` one arc below `a<i-1>`; `reversed` lists the
+/// deepest definition first, so resolving it recurses all the way down.
+fn chain(n: usize, reversed: bool) -> String {
+    let mut defs: Vec<String> = (1..n)
+        .map(|i| format!("a{i} OBJECT IDENTIFIER ::= {{ a{} 1 }}", i - 1))
+        .collect();
+    defs.insert(
+        0,
+        "a0 OBJECT IDENTIFIER ::= { enterprises 99999 }".to_owned(),
+    );
+    if reversed {
+        defs.reverse();
+    }
+    format!(
+        "CHAIN-MIB DEFINITIONS ::= BEGIN\nIMPORTS enterprises FROM SNMPv2-SMI;\n{}\nEND\n",
+        defs.join("\n")
+    )
+}
+
+#[test]
+fn long_chains_of_definitions_stop_at_the_longest_oid() {
+    // A file like this once took gigabytes (each OID as long as the chain) or overflowed the stack.
+    for reversed in [false, true] {
+        let text = chain(5000, reversed);
+        let index = MibIndex::build(&[Source {
+            origin: Origin::Imported(1),
+            text: &text,
+        }]);
+        let report = index
+            .reports()
+            .iter()
+            .find(|r| r.name == "CHAIN-MIB")
+            .unwrap();
+        // a0 … a121 have 7 to 128 arcs; deeper ones are no valid OIDs.
+        assert_eq!(report.objects, 122, "reversed: {reversed}");
+        assert_eq!(report.unresolved.len(), 5000 - 122);
+        assert_eq!(object(&index, "a121").oid.len(), MAX_OID_ARCS);
+        assert!(index.by_name("a122", None).is_empty());
+    }
+}

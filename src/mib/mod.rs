@@ -14,6 +14,7 @@ use parser::{DefKind, Module, OidDef, OidPart, Syntax, SyntaxKind, TypeDef};
 use rust_embed::RustEmbed;
 
 use crate::i18n::{Lang, Msg};
+use crate::sensors::spec::MAX_OID_ARCS;
 
 #[derive(RustEmbed)]
 #[folder = "mibs/"]
@@ -234,6 +235,9 @@ struct Resolver<'a> {
     global_defs: HashMap<&'a str, Vec<(&'a str, &'a OidDef)>>,
     memo: HashMap<(String, String), Option<Vec<u64>>>,
     in_progress: HashSet<(String, String)>,
+    /// Set when a resolution gave up at [`MAX_OID_ARCS`] levels: what it found on the way depends on where it
+    /// started, so none of it is memoized.
+    truncated: bool,
 }
 
 impl<'a> Resolver<'a> {
@@ -245,6 +249,7 @@ impl<'a> Resolver<'a> {
             global_defs: HashMap::new(),
             memo: HashMap::new(),
             in_progress: HashSet::new(),
+            truncated: false,
         };
         for l in loaded {
             let name = l.module.name.as_str();
@@ -321,10 +326,23 @@ impl<'a> Resolver<'a> {
         self.resolve_def(def_module, def)
     }
 
+    /// The OID of one definition of `module`, as the index needs it.
+    fn resolve(&mut self, module: &'a str, def: &'a OidDef) -> Option<Vec<u64>> {
+        self.truncated = false;
+        self.resolve_def(module, def)
+    }
+
+    /// Resolves through the definitions a value names. OIDs have at most [`MAX_OID_ARCS`] arcs, which
+    /// also bounds the recursion and the memory: an uploaded file with a long chain of definitions
+    /// (`a1 ::= { a0 1 }`, `a2 ::= { a1 1 }` …) would otherwise need memory quadratic in its length.
     fn resolve_def(&mut self, module: &'a str, def: &'a OidDef) -> Option<Vec<u64>> {
         let key = (module.to_owned(), def.name.clone());
         if let Some(done) = self.memo.get(&key) {
             return done.clone();
+        }
+        if self.in_progress.len() >= MAX_OID_ARCS {
+            self.truncated = true;
+            return None;
         }
         if !self.in_progress.insert(key.clone()) {
             return None; // cycle
@@ -342,9 +360,11 @@ impl<'a> Resolver<'a> {
                 OidPart::Name(_) => oid = None,
             }
         }
-        let oid = oid.filter(|o| !o.is_empty());
+        let oid = oid.filter(|o| !o.is_empty() && o.len() <= MAX_OID_ARCS);
         self.in_progress.remove(&key);
-        self.memo.insert(key, oid.clone());
+        if !self.truncated {
+            self.memo.insert(key, oid.clone());
+        }
         oid
     }
 
@@ -495,7 +515,7 @@ impl MibIndex {
             report.missing_modules.dedup();
             let first = index.objects.len();
             for def in &l.module.defs {
-                let Some(oid) = resolver.resolve_def(module, def) else {
+                let Some(oid) = resolver.resolve(module, def) else {
                     report.unresolved.push(def.name.clone());
                     continue;
                 };

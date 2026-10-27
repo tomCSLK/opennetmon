@@ -15,6 +15,7 @@ INET-ADDRESS-MIB, ENTITY-MIB and ENTITY-SENSOR-MIB (temperatures and the like). 
   For the TP-Link switches this is the package “TP-Link_L2 Switch_MIB” (`L2-tplinkMibs.zip`, 104 files) from the model's Omada support page.
 - Every file is checked: text with at least one module (“… DEFINITIONS ::= BEGIN”), at most 2 MB per file, 300 files and 20 MB per upload.
   Files that only contain a bundled module (e.g. TP-Link's `RFC1213-MIB.mib`) are skipped.
+- Objects whose OID would have more than 128 arcs (the SNMP limit) count as unresolved; this also bounds the memory a file with long chains of definitions can take.
 - If a new file contains a module that is already loaded, it **replaces** the older version.
 - The list shows the modules of each file with the number of objects and any problems: **missing: X-MIB** (an imported file is still missing – upload it),
   **n definitions cannot be resolved** (e.g. a reference to a node defined nowhere – as for 19 product identifiers in TP-Link's `tplink-products.mib`,
