@@ -76,14 +76,14 @@
     <p class="muted small">{{ t.get("detail-states-unrated") }}</p>
     {% endif %}
     <div class="table-wrap">
-    <table>
+    <table class="ratings">
       <thead><tr><th>{{ t.get("detail-value") }}</th><th>{{ t.get("detail-rating") }}</th></tr></thead>
       <tbody>
       {% for row in st.rows %}
         <tr>
           <td><strong>{{ row.label }}</strong> <span class="muted">({{ row.value }})</span></td>
           <td>
-            <select name="st_{{ row.value }}" aria-label="{{ t.get1("detail-rating-for", "value", row.label.as_str()) }}" class="compact">
+            <select name="st_{{ row.value }}" aria-label="{{ t.get1("detail-rating-for", "value", row.label.as_str()) }}">
               <option value="up"{% if row.status == "up" %} selected{% endif %}>{{ t.get("status-up") }}</option>
               <option value="warning"{% if row.status == "warning" %} selected{% endif %}>{{ t.get("status-warning") }}</option>
               <option value="down"{% if row.status == "down" %} selected{% endif %}>{{ t.get("status-down") }}</option>

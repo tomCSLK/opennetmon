@@ -1585,7 +1585,7 @@ mod tests {
         )
         .await;
         assert!(page.body.contains("Standard: nur „up“ ist in Ordnung"));
-        assert!(page.body.contains("<select name=\"st_2\" aria-label=\"Bewertung für down\" class=\"compact\">\n              <option value=\"up\">In Ordnung</option>\n              <option value=\"warning\">Warnung</option>\n              <option value=\"down\" selected>"));
+        assert!(page.body.contains("<select name=\"st_2\" aria-label=\"Bewertung für down\">\n              <option value=\"up\">In Ordnung</option>\n              <option value=\"warning\">Warnung</option>\n              <option value=\"down\" selected>"));
         let form = format!(
             "csrf_token={csrf}&st_1=up&st_2=warning&st_3=down&st_4=down&st_5=down&st_6=down&st_7=down"
         );

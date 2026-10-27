@@ -634,6 +634,10 @@ form.inline-form input.narrow-input { flex: 0 0 auto; width: 7rem; min-width: 0;
 /* Dependency page: the hint or select of a choice sits under its label, in line with the text. */
 .choices .choice-hint { margin: 0 0 .5rem 1.65rem; }
 .choices select { max-width: 100%; }
+/* Ratings of named values: the select keeps the width of its longest option, the value wraps instead. */
+table.ratings th:last-child, table.ratings td:last-child { width: 1%; white-space: nowrap; }
+table.ratings td:first-child { overflow-wrap: break-word; }
+table.ratings select { width: auto; }
 
 /* Reached from a breadcrumb: mark the group. */
 details[data-group]:target > summary { background: var(--accent-soft); }
