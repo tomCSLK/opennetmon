@@ -250,8 +250,8 @@ mod tests {
     async fn unreadable_forms_get_a_readable_message_instead_of_axums_text() {
         let h = harness(true).await;
         let (admin, _) = login(&h, "anna").await;
-        // The rename form without its fields: axum rejects it before the handler runs.
-        let reply = send(&h.app, page(post("/sensors/1/rename", Some(&admin), "x=1"))).await;
+        // The delete form without its fields: axum rejects it before the handler runs.
+        let reply = send(&h.app, page(post("/sensors/1/delete", Some(&admin), "x=1"))).await;
         assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
         assert!(
             reply.body.contains("<h1>Eingabe nicht möglich</h1>"),

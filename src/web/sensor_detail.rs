@@ -1,11 +1,11 @@
-//! Sensor detail page: current values, chart (uPlot, data from a JSON endpoint), thresholds, events.
+//! Sensor detail page: current values, chart (uPlot, data from a JSON endpoint), events. Name,
+//! interval, settings, thresholds and ratings are changed on the settings page (`web::sensor_settings`).
 
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use askama::Template;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::{Form, Json};
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use crate::devices::Device;
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::sensors::Unit;
-use crate::sensors::format::{channel_label, input_unit, parse_threshold, threshold_input};
+use crate::sensors::format::{channel_label, parse_threshold, threshold_input};
 use crate::sensors::spec::SensorSpec;
 use crate::status::{Status, Thresholds, ValueState};
 use crate::storage::devices;
@@ -47,29 +47,24 @@ impl RangeQuery {
 }
 
 struct ChannelView {
-    id: i64,
     label: String,
     latest: String,
     latest_at: String,
-    /// Threshold inputs: warn above, warn below, down above, down below (in `input_unit`).
-    fields: [String; 4],
-    unit_label: String,
-    has_thresholds: bool,
 }
 
-struct StateRow {
-    value: i64,
-    label: String,
+pub(crate) struct StateRow {
+    pub value: i64,
+    pub label: String,
     /// `up`, `warning` or `down`.
-    status: &'static str,
+    pub status: &'static str,
 }
 
 /// The rating form for sensors whose values have names (MIB enumeration).
-struct StatesView {
-    rows: Vec<StateRow>,
+pub(crate) struct StatesView {
+    pub rows: Vec<StateRow>,
     /// Ratings are stored; otherwise the rows show a suggestion (or the interface default).
-    stored: bool,
-    interface: bool,
+    pub stored: bool,
+    pub interface: bool,
 }
 
 /// A choice how far back the table of values reaches.
@@ -98,8 +93,6 @@ struct DetailTemplate {
     layout: Layout,
     sensor: SensorRecord,
     description: String,
-    /// Offer the settings page (`sensors::edit_form`).
-    has_settings: bool,
     device: Device,
     /// Groups above the device, for the breadcrumbs.
     trail: Vec<Crumb>,
@@ -120,15 +113,9 @@ struct DetailTemplate {
     range: &'static str,
     events: Vec<EventView>,
     flash: Option<String>,
-    error: Option<String>,
-    /// Name field of the rename form (the rejected input after an error).
-    new_name: String,
-    rename_failed: bool,
     /// The interval the sensor is polled at (its own or the device's).
     interval: u32,
-    /// Interval field of its form: the own interval, empty for the device's, or the rejected input.
-    interval_field: String,
-    interval_failed: bool,
+    /// The ratings of named status values, shown to readers (admins change them in the settings).
     states: Option<StatesView>,
     /// Availability for 24 h, 7 and 30 days: (label, value, downtime).
     availability: Vec<(String, String, String)>,
@@ -140,7 +127,7 @@ fn now_ms() -> i64 {
         .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
-async fn load(state: &AppState, id: i64) -> Result<(SensorRecord, Device)> {
+pub(crate) async fn load(state: &AppState, id: i64) -> Result<(SensorRecord, Device)> {
     let sensor = store::get_sensor(&state.pool, id)
         .await?
         .ok_or(Error::NotFound)?;
@@ -150,21 +137,8 @@ async fn load(state: &AppState, id: i64) -> Result<(SensorRecord, Device)> {
     Ok((sensor, device))
 }
 
-fn fields_of(lang: Lang, t: &Thresholds, unit: Unit) -> [String; 4] {
+pub(crate) fn fields_of(lang: Lang, t: &Thresholds, unit: Unit) -> [String; 4] {
     [t.warn_above, t.warn_below, t.down_above, t.down_below].map(|v| threshold_input(lang, v, unit))
-}
-
-/// Variable parts of the page.
-struct View<'a> {
-    range: Range,
-    flash: Option<String>,
-    error: Option<String>,
-    /// Rejected threshold input to echo back (by field name).
-    submitted: Option<&'a HashMap<String, String>>,
-    /// Rejected new name to echo back.
-    rejected_name: Option<String>,
-    /// Rejected interval input to echo back.
-    rejected_interval: Option<String>,
 }
 
 async fn render(
@@ -172,16 +146,9 @@ async fn render(
     user: &CurrentUser,
     sensor: SensorRecord,
     device: Device,
-    view: View<'_>,
+    range: Range,
+    flash: Option<String>,
 ) -> Result<String> {
-    let View {
-        range,
-        flash,
-        error,
-        submitted,
-        rejected_name,
-        rejected_interval,
-    } = view;
     let latest = latest_values(&state.pool, &sensor.channels).await?;
     let mibs = state.mib_index();
     let value_format = ValueFormat::for_sensor(&sensor.spec, &mibs);
@@ -189,33 +156,15 @@ async fn render(
     let channels = sensor
         .channels
         .iter()
-        .map(|c| {
-            let fields = match submitted {
-                Some(form) => ["wa", "wb", "da", "db"].map(|p| {
-                    form.get(&format!("{p}_{}", c.id))
-                        .cloned()
-                        .unwrap_or_default()
-                }),
-                None => fields_of(user.lang, &c.thresholds, c.unit),
-            };
-            ChannelView {
-                id: c.id,
-                label: user.lang.msg(&channel_label(&c.key)),
-                latest: latest.get(&c.id).map_or_else(
-                    || "–".to_owned(),
-                    |(_, v)| value_format.format(user.lang, c.unit, *v),
-                ),
-                latest_at: latest
-                    .get(&c.id)
-                    .map_or_else(String::new, |(ts, _)| time_html(*ts)),
-                fields,
-                unit_label: match (&value_format.unit_label, c.unit) {
-                    (Some(label), Unit::PerSecond) => format!("{label}/s"),
-                    (Some(label), Unit::Count) => label.clone(),
-                    _ => input_unit(c.unit).to_owned(),
-                },
-                has_thresholds: c.unit != Unit::State,
-            }
+        .map(|c| ChannelView {
+            label: user.lang.msg(&channel_label(&c.key)),
+            latest: latest.get(&c.id).map_or_else(
+                || "–".to_owned(),
+                |(_, v)| value_format.format(user.lang, c.unit, *v),
+            ),
+            latest_at: latest
+                .get(&c.id)
+                .map_or_else(String::new, |(ts, _)| time_html(*ts)),
         })
         .collect();
     let state_row = status_store::get_state(&state.pool, sensor.id).await?;
@@ -253,7 +202,6 @@ async fn render(
         layout: user.layout(),
         t: user.lang,
         description: crate::web::sensor_text::describe(user.lang, &sensor.spec, &mibs),
-        has_settings: crate::web::sensors::has_settings(&sensor.spec),
         status_label: user.lang.get(status.label_id()),
         status_class: status.as_str(),
         message: state_row
@@ -287,17 +235,8 @@ async fn render(
         range: range.as_str(),
         events,
         flash,
-        error,
-        rename_failed: rejected_name.is_some(),
-        interval_failed: rejected_interval.is_some(),
         interval: sensor.interval(device.polling.interval_secs),
-        interval_field: rejected_interval.unwrap_or_else(|| {
-            sensor
-                .interval_secs
-                .map_or_else(String::new, |s| s.to_string())
-        }),
         states,
-        new_name: rejected_name.unwrap_or_else(|| sensor.name.clone()),
         sensor,
         trail: group_trail(&state.pool, device.group_id).await?,
         device,
@@ -346,7 +285,7 @@ fn dependency_lines(
 
 /// The channel whose values can be rated: the single channel of an OID value with named values or
 /// of an interface status sensor.
-fn rated_channel(sensor: &SensorRecord) -> Option<&ChannelRecord> {
+pub(crate) fn rated_channel(sensor: &SensorRecord) -> Option<&ChannelRecord> {
     match sensor.spec {
         SensorSpec::InterfaceStatus { .. } => sensor.channels.first(),
         SensorSpec::Oid { .. } => sensor.channels.first().filter(|c| c.unit == Unit::Count),
@@ -355,7 +294,7 @@ fn rated_channel(sensor: &SensorRecord) -> Option<&ChannelRecord> {
 }
 
 /// Named values: the MIB enumeration plus stored ratings of values the MIB does not (or no longer) list.
-fn named_values(channel: &ChannelRecord, format: &ValueFormat) -> Vec<(i64, String)> {
+pub(crate) fn named_values(channel: &ChannelRecord, format: &ValueFormat) -> Vec<(i64, String)> {
     let mut values = format.labels.clone();
     for s in &channel.states {
         if !values.iter().any(|(v, _)| *v == s.value) {
@@ -366,7 +305,7 @@ fn named_values(channel: &ChannelRecord, format: &ValueFormat) -> Vec<(i64, Stri
     values
 }
 
-fn states_view(sensor: &SensorRecord, format: &ValueFormat) -> Option<StatesView> {
+pub(crate) fn states_view(sensor: &SensorRecord, format: &ValueFormat) -> Option<StatesView> {
     let channel = rated_channel(sensor)?;
     let values = named_values(channel, format);
     if values.is_empty() {
@@ -416,14 +355,8 @@ pub async fn detail(
             &user,
             sensor,
             device,
-            View {
-                range: query.range(),
-                flash: flash_message(user.lang, query.msg.as_deref()),
-                error: None,
-                submitted: None,
-                rejected_name: None,
-                rejected_interval: None,
-            },
+            query.range(),
+            flash_message(user.lang, query.msg.as_deref()),
         )
         .await?,
     ))
@@ -580,7 +513,7 @@ async fn audit_changed(
 }
 
 /// Parses the threshold fields of every channel from the submitted form.
-fn parse_limits(
+pub(crate) fn parse_limits(
     channels: &[ChannelRecord],
     form: &HashMap<String, String>,
 ) -> Result<Vec<(i64, Thresholds)>> {
@@ -612,48 +545,30 @@ fn parse_limits(
         .collect()
 }
 
-pub async fn save_thresholds(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    Path(id): Path<i64>,
-    Form(form): Form<HashMap<String, String>>,
-) -> Result<Response> {
-    user.require_admin()?;
-    user.verify_csrf(form.get("csrf_token").map_or("", String::as_str))?;
-    let (sensor, device) = load(&state, id).await?;
-    match parse_limits(&sensor.channels, &form) {
-        Ok(limits) => {
-            store::set_thresholds(&state.pool, id, &limits).await?;
-            tracing::info!(user = %user.username, sensor = id, "thresholds saved");
-            let mut changes = Changes::new();
-            for (channel, new) in &limits {
-                if let Some(c) = sensor.channels.iter().find(|c| c.id == *channel) {
-                    changes = changes.limits(channel_label(&c.key), c.unit, &c.thresholds, new);
-                }
-            }
-            audit_changed(&state, &user, &sensor, &sensor.name, changes).await;
-            Ok(Redirect::to(&format!("/sensors/{id}?msg=thresholds_saved")).into_response())
+/// The changed ratings of status values for the audit log.
+pub(crate) fn states_changes(old: &[ValueState], new: &[ValueState]) -> Changes {
+    let rating = |list: &[ValueState], value: i64| {
+        list.iter()
+            .find(|s| s.value == value)
+            .map_or("audit-not-rated", |s| s.status.label_id())
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut changes = Changes::new();
+    for value in old.iter().chain(new) {
+        if !seen.insert(value.value) {
+            continue;
         }
-        Err(Error::Invalid(message)) => {
-            let html = render(
-                &state,
-                &user,
-                sensor,
-                device,
-                View {
-                    range: Range::Day,
-                    flash: None,
-                    error: Some(user.lang.msg(&message)),
-                    submitted: Some(&form),
-                    rejected_name: None,
-                    rejected_interval: None,
-                },
-            )
-            .await?;
-            Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
+        let (before, after) = (rating(old, value.value), rating(new, value.value));
+        if before != after {
+            changes = changes.note(
+                Msg::new("audit-change")
+                    .with("field", value.label.as_str())
+                    .with("old", Msg::new(before))
+                    .with("new", Msg::new(after)),
+            );
         }
-        Err(e) => Err(e),
     }
+    changes
 }
 
 /// Saves (`action=save`, fields `st_<value>` = `up`/`warning`/`down`) or removes (`action=reset`)
@@ -698,30 +613,7 @@ pub async fn save_states(
     }
     store::set_value_states(&state.pool, id, channel.id, &states).await?;
     tracing::info!(user = %user.username, sensor = id, rated = states.len(), "status value ratings saved");
-    let rating = |list: &[ValueState], value: i64| {
-        list.iter()
-            .find(|s| s.value == value)
-            .map_or("audit-not-rated", |s| s.status.label_id())
-    };
-    let mut seen = std::collections::HashSet::new();
-    let mut changes = Changes::new();
-    for value in channel.states.iter().chain(&states) {
-        if !seen.insert(value.value) {
-            continue;
-        }
-        let (old, new) = (
-            rating(&channel.states, value.value),
-            rating(&states, value.value),
-        );
-        if old != new {
-            changes = changes.note(
-                Msg::new("audit-change")
-                    .with("field", value.label.as_str())
-                    .with("old", Msg::new(old))
-                    .with("new", Msg::new(new)),
-            );
-        }
-    }
+    let changes = states_changes(&channel.states, &states);
     audit_changed(&state, &user, &sensor, &sensor.name, changes).await;
     let msg = if states.is_empty() {
         "states_reset"
@@ -729,116 +621,6 @@ pub async fn save_states(
         "states_saved"
     };
     Ok(Redirect::to(&format!("/sensors/{id}?msg={msg}")).into_response())
-}
-
-#[derive(Deserialize)]
-pub struct RenameForm {
-    csrf_token: String,
-    name: String,
-}
-
-pub async fn rename(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    Path(id): Path<i64>,
-    Form(form): Form<RenameForm>,
-) -> Result<Response> {
-    user.require_admin()?;
-    user.verify_csrf(&form.csrf_token)?;
-    let (sensor, device) = load(&state, id).await?;
-    match store::rename_sensor(&state.pool, id, &form.name).await {
-        Ok(()) => {
-            tracing::info!(user = %user.username, sensor = id, "sensor renamed");
-            let new = form.name.trim();
-            let changes = Changes::new().field("audit-field-name", &sensor.name, new);
-            audit_changed(&state, &user, &sensor, new, changes).await;
-            Ok(Redirect::to(&format!("/sensors/{id}?msg=sensor_renamed")).into_response())
-        }
-        Err(Error::Invalid(message) | Error::Conflict(message)) => {
-            let html = render(
-                &state,
-                &user,
-                sensor,
-                device,
-                View {
-                    range: Range::Day,
-                    flash: None,
-                    error: Some(user.lang.msg(&message)),
-                    submitted: None,
-                    rejected_name: Some(form.name),
-                    rejected_interval: None,
-                },
-            )
-            .await?;
-            Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
-        }
-        Err(e) => Err(e),
-    }
-}
-
-#[derive(Deserialize)]
-pub struct IntervalForm {
-    csrf_token: String,
-    #[serde(default)]
-    interval: String,
-}
-
-/// Sets the sensor's own polling interval; an empty field returns to the device's.
-pub async fn set_interval(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    Path(id): Path<i64>,
-    Form(form): Form<IntervalForm>,
-) -> Result<Response> {
-    user.require_admin()?;
-    user.verify_csrf(&form.csrf_token)?;
-    let (sensor, device) = load(&state, id).await?;
-    let input = form.interval.trim();
-    let saved = match input {
-        "" => Ok(None),
-        text => text
-            .parse::<u32>()
-            .map(Some)
-            .map_err(|_| Error::invalid(Msg::new("detail-interval-invalid"))),
-    };
-    let saved = match saved {
-        Ok(secs) => store::set_interval(&state.pool, id, secs, &device.polling)
-            .await
-            .map(|()| secs),
-        Err(e) => Err(e),
-    };
-    match saved {
-        Ok(secs) => {
-            tracing::info!(user = %user.username, sensor = id, interval = ?secs, "sensor interval set");
-            let shown = |s: Option<u32>| s.map_or_else(String::new, |s| s.to_string());
-            let changes = Changes::new().field(
-                "audit-field-interval",
-                shown(sensor.interval_secs),
-                shown(secs),
-            );
-            audit_changed(&state, &user, &sensor, &sensor.name, changes).await;
-            Ok(Redirect::to(&format!("/sensors/{id}?msg=interval_saved")).into_response())
-        }
-        Err(Error::Invalid(message)) => {
-            let html = render(
-                &state,
-                &user,
-                sensor,
-                device,
-                View {
-                    range: Range::Day,
-                    flash: None,
-                    error: Some(user.lang.msg(&message)),
-                    submitted: None,
-                    rejected_name: None,
-                    rejected_interval: Some(input.to_owned()),
-                },
-            )
-            .await?;
-            Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
-        }
-        Err(e) => Err(e),
-    }
 }
 
 #[cfg(test)]
@@ -851,7 +633,7 @@ mod tests {
     use crate::storage::sensors::{Sample, create_sensor, get_sensor, insert_samples};
     use crate::storage::status::record_poll;
     use crate::web::testutil::*;
-    use axum::http::header;
+    use axum::http::{StatusCode, header};
 
     /// A traffic sensor with samples; returns (sensor id, [in channel, out channel]).
     async fn traffic_sensor(h: &Harness) -> (i64, Vec<i64>) {
@@ -997,10 +779,9 @@ mod tests {
             );
         }
         assert!(
-            !page.body.contains("name=\"csrf_token\"") || !page.body.contains("/thresholds"),
-            "viewers get no form"
+            !page.body.contains(&format!("/sensors/{sensor}/edit")),
+            "viewers get no settings"
         );
-        assert!(page.body.contains("nur Administratoren"));
 
         let week = send(
             &h.app,
@@ -1178,7 +959,11 @@ mod tests {
         let h = harness(true).await;
         let (sensor, channels) = traffic_sensor(&h).await;
         let (admin, csrf) = login(&h, "anna").await;
-        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
         assert!(
             page.body.contains(&format!("name=\"wa_{}\"", channels[0]))
                 && page.body.contains("in Mbit/s")
@@ -1190,16 +975,12 @@ mod tests {
         );
         let reply = send(
             &h.app,
-            post(
-                &format!("/sensors/{sensor}/thresholds"),
-                Some(&admin),
-                &body,
-            ),
+            post(&format!("/sensors/{sensor}/edit"), Some(&admin), &body),
         )
         .await;
         assert_eq!(
             reply.location(),
-            format!("/sensors/{sensor}?msg=thresholds_saved")
+            format!("/sensors/{sensor}?msg=sensor_settings_saved")
         );
         let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
         assert_eq!(stored.channels[0].thresholds.warn_above, Some(80_500_000.0));
@@ -1209,13 +990,94 @@ mod tests {
         let page = send(
             &h.app,
             get(
-                &format!("/sensors/{sensor}?msg=thresholds_saved"),
+                &format!("/sensors/{sensor}?msg=sensor_settings_saved"),
                 Some(&admin),
             ),
         )
         .await;
+        assert!(page.body.contains("Einstellungen gespeichert."));
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
+        assert!(page.body.contains("value=\"80,5\""));
+    }
+
+    #[tokio::test]
+    async fn the_settings_form_saves_everything_at_once_or_nothing() {
+        let h = harness(true).await;
+        let (sensor, channels) = traffic_sensor(&h).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let path = format!("/sensors/{sensor}/edit");
+        let all = |name: &str, interval: &str, warn: &str| {
+            format!(
+                "csrf_token={csrf}&name={name}&interval={interval}&wa_{0}={warn}&wb_{0}=&da_{0}=&db_{0}=\
+                 &wa_{1}=&wb_{1}=&da_{1}=&db_{1}=",
+                channels[0], channels[1]
+            )
+        };
+        // One field wrong: nothing is saved, every input is shown again.
+        let page = send(
+            &h.app,
+            post(&path, Some(&admin), &all("Uplink", "30", "viel")),
+        )
+        .await;
+        assert_eq!(page.status, StatusCode::UNPROCESSABLE_ENTITY);
+        for part in ["value=\"Uplink\"", "value=\"30\"", "value=\"viel\""] {
+            assert!(page.body.contains(part), "{part}");
+        }
+        let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
+        assert_eq!(
+            (stored.name.as_str(), stored.interval_secs),
+            ("Traffic Port 1", None)
+        );
+        // All fine: everything saved, one entry in the audit log.
+        let reply = send(
+            &h.app,
+            post(&path, Some(&admin), &all("Uplink", "30", "80")),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/sensors/{sensor}?msg=sensor_settings_saved")
+        );
+        let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
+        assert_eq!(
+            (stored.name.as_str(), stored.interval_secs),
+            ("Uplink", Some(30))
+        );
+        assert_eq!(stored.channels[0].thresholds.warn_above, Some(80_000_000.0));
+        let audit = crate::storage::audit::list(&h.state.pool, 10)
+            .await
+            .unwrap();
+        let changed: Vec<_> = audit
+            .iter()
+            .filter(|e| e.action == crate::audit::Action::Changed)
+            .collect();
+        assert_eq!(changed.len(), 1);
+        let text = Lang::De.msg(&changed[0].detail);
         assert!(
-            page.body.contains("Schwellwerte gespeichert.") && page.body.contains("value=\"80,5\"")
+            text.contains("Name: Traffic Port 1 → Uplink")
+                && text.contains("Intervall (s): – → 30")
+                && text.contains("Warnung über"),
+            "{text}"
+        );
+        // Saved again unchanged: no further entry.
+        send(
+            &h.app,
+            post(&path, Some(&admin), &all("Uplink", "30", "80")),
+        )
+        .await;
+        let audit = crate::storage::audit::list(&h.state.pool, 10)
+            .await
+            .unwrap();
+        assert_eq!(
+            audit
+                .iter()
+                .filter(|e| e.action == crate::audit::Action::Changed)
+                .count(),
+            1
         );
     }
 
@@ -1224,7 +1086,7 @@ mod tests {
         let h = harness(true).await;
         let (sensor, channels) = traffic_sensor(&h).await;
         let (admin, csrf) = login(&h, "anna").await;
-        let path = format!("/sensors/{sensor}/thresholds");
+        let path = format!("/sensors/{sensor}/edit");
         for (fields, expected) in [
             ("wa_{0}=abc".to_owned(), "Zahl"),
             ("wa_{0}=90&da_{0}=50".to_owned(), "Ausfallgrenze"),
@@ -1260,7 +1122,7 @@ mod tests {
     async fn only_admins_with_a_valid_token_may_save_thresholds() {
         let h = harness(true).await;
         let (sensor, channels) = traffic_sensor(&h).await;
-        let path = format!("/sensors/{sensor}/thresholds");
+        let path = format!("/sensors/{sensor}/edit");
         let (viewer, vcsrf) = login(&h, "bert").await;
         let body = |csrf: &str| format!("csrf_token={csrf}&wa_{}=1", channels[0]);
         assert_eq!(
@@ -1311,12 +1173,16 @@ mod tests {
         .await
         .unwrap();
         let (admin, csrf) = login(&h, "anna").await;
-        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
-        assert!(!page.body.contains("name=\"wa_"));
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
+        assert!(page.status == StatusCode::OK && !page.body.contains("name=\"wa_"));
         let reply = send(
             &h.app,
             post(
-                &format!("/sensors/{sensor}/thresholds"),
+                &format!("/sensors/{sensor}/edit"),
                 Some(&admin),
                 &format!("csrf_token={csrf}"),
             ),
@@ -1361,10 +1227,16 @@ mod tests {
         let (admin, csrf) = login(&h, "anna").await;
         let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
         assert!(page.body.contains("· alle 60 s"), "{}", page.body);
-        assert!(page.body.contains("action=\"/sensors/1/interval\""));
-        assert!(page.body.contains("placeholder=\"60\""));
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
+        assert!(
+            page.body.contains("name=\"interval\"") && page.body.contains("placeholder=\"60\"")
+        );
 
-        let path = format!("/sensors/{sensor}/interval");
+        let path = format!("/sensors/{sensor}/edit");
         let reply = send(
             &h.app,
             post(
@@ -1375,11 +1247,17 @@ mod tests {
         )
         .await;
         assert_eq!(reply.status, StatusCode::SEE_OTHER);
-        assert!(reply.location().ends_with("msg=interval_saved"));
+        assert!(reply.location().ends_with("msg=sensor_settings_saved"));
         let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
         assert_eq!(stored.interval_secs, Some(10));
         let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
-        assert!(page.body.contains("· alle 10 s") && page.body.contains("eigenes Intervall"));
+        assert!(page.body.contains("· alle 10 s"));
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
+        assert!(page.body.contains("eigenes Intervall"));
         let list = send(
             &h.app,
             get(
@@ -1461,13 +1339,17 @@ mod tests {
             .await
             .unwrap();
         let (admin, csrf) = login(&h, "anna").await;
-        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
         assert!(
-            page.body.contains("action=\"/sensors/1/rename\"")
+            page.body.contains("action=\"/sensors/1/edit\"")
                 && page.body.contains("value=\"Traffic Port 1\"")
         );
 
-        let path = format!("/sensors/{sensor}/rename");
+        let path = format!("/sensors/{sensor}/edit");
         let reply = send(
             &h.app,
             post(
@@ -1478,7 +1360,7 @@ mod tests {
         )
         .await;
         assert_eq!(reply.status, StatusCode::SEE_OTHER);
-        assert!(reply.location().ends_with("msg=sensor_renamed"));
+        assert!(reply.location().ends_with("msg=sensor_settings_saved"));
         let renamed = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
         assert_eq!(
             (renamed.name.as_str(), renamed.channels.len()),
@@ -1505,7 +1387,7 @@ mod tests {
 
         let (viewer, vcsrf) = login(&h, "bert").await;
         let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&viewer))).await;
-        assert!(!page.body.contains("/rename"));
+        assert!(!page.body.contains("/edit\""));
         assert_eq!(
             send(
                 &h.app,
@@ -1559,7 +1441,11 @@ mod tests {
             .await
             .unwrap();
         let (admin, csrf) = login(&h, "anna").await;
-        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
         for needle in [
             "Noch nicht bewertet",
             "<select name=\"st_1\"",
@@ -1570,8 +1456,31 @@ mod tests {
             assert!(page.body.contains(needle), "{needle}: {}", page.body);
         }
 
+        // Saving the page unchanged (its suggestions as shown) keeps the values unrated.
+        let mut unchanged = format!("csrf_token={csrf}");
+        for value in 1..=7 {
+            let select = format!("<select name=\"st_{value}\"");
+            let rest = &page.body[page.body.find(&select).unwrap()..];
+            let rest = &rest[..rest.find("</select>").unwrap()];
+            let chosen = rest
+                .split("<option value=\"")
+                .skip(1)
+                .find(|o| o.contains("selected"))
+                .unwrap();
+            let rating = &chosen[..chosen.find('"').unwrap()];
+            unchanged.push_str(&format!("&st_{value}={rating}"));
+        }
+        let edit = format!("/sensors/{sensor}/edit");
+        let reply = send(&h.app, post(&edit, Some(&admin), &unchanged)).await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
+        assert!(
+            stored.channels[0].states.is_empty(),
+            "suggestions are not stored"
+        );
+
         let path = format!("/sensors/{sensor}/states");
-        let mut form = format!("csrf_token={csrf}&action=save");
+        let mut form = format!("csrf_token={csrf}");
         for value in 1..=7 {
             let rating = match value {
                 1 | 5 => "up",
@@ -1580,10 +1489,10 @@ mod tests {
             };
             form.push_str(&format!("&st_{value}={rating}"));
         }
-        let reply = send(&h.app, post(&path, Some(&admin), &form)).await;
+        let reply = send(&h.app, post(&edit, Some(&admin), &form)).await;
         assert_eq!(
             reply.location(),
-            format!("/sensors/{sensor}?msg=states_saved")
+            format!("/sensors/{sensor}?msg=sensor_settings_saved")
         );
         let stored = get_sensor(&h.state.pool, sensor).await.unwrap().unwrap();
         let states = &stored.channels[0].states;
@@ -1592,18 +1501,16 @@ mod tests {
             (states[1].label.as_str(), states[1].status),
             ("down", Status::Warning)
         );
-        let page = send(&h.app, get(reply.location(), Some(&admin))).await;
+        let page = send(&h.app, get(&edit, Some(&admin))).await;
         assert!(
-            page.body.contains("bewertet</span>") && page.body.contains("Bewertung ausschalten")
+            page.body.contains("bewertet</span>")
+                && page.body.contains("Bewertung ausschalten")
+                && page.body.contains("form=\"states-reset\"")
         );
 
         let incomplete = send(
             &h.app,
-            post(
-                &path,
-                Some(&admin),
-                &format!("csrf_token={csrf}&action=save&st_1=up"),
-            ),
+            post(&edit, Some(&admin), &format!("csrf_token={csrf}&st_1=up")),
         )
         .await;
         assert_eq!(incomplete.status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1645,7 +1552,7 @@ mod tests {
         let ping = create_sensor(&h.state.pool, dev, "Ping", &SensorSpec::Ping)
             .await
             .unwrap();
-        let page = send(&h.app, get(&format!("/sensors/{ping}"), Some(&admin))).await;
+        let page = send(&h.app, get(&format!("/sensors/{ping}/edit"), Some(&admin))).await;
         assert!(!page.body.contains("Statuswerte"));
         let reply = send(
             &h.app,
@@ -1672,18 +1579,26 @@ mod tests {
         .await
         .unwrap();
         let (admin, csrf) = login(&h, "anna").await;
-        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
         assert!(page.body.contains("Standard: nur „up“ ist in Ordnung"));
         assert!(page.body.contains("<select name=\"st_2\" aria-label=\"Bewertung für down\" class=\"compact\">\n              <option value=\"up\">In Ordnung</option>\n              <option value=\"warning\">Warnung</option>\n              <option value=\"down\" selected>"));
         let form = format!(
-            "csrf_token={csrf}&action=save&st_1=up&st_2=warning&st_3=down&st_4=down&st_5=down&st_6=down&st_7=down"
+            "csrf_token={csrf}&st_1=up&st_2=warning&st_3=down&st_4=down&st_5=down&st_6=down&st_7=down"
         );
         send(
             &h.app,
-            post(&format!("/sensors/{sensor}/states"), Some(&admin), &form),
+            post(&format!("/sensors/{sensor}/edit"), Some(&admin), &form),
         )
         .await;
-        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
+        let page = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
         assert!(page.body.contains("Standard wiederherstellen"));
     }
 
@@ -1701,8 +1616,6 @@ mod tests {
             "Inbound",
             "12.5 Mbit/s",
             "first poll: OK",
-            "Warning above",
-            "Save thresholds",
             "\"decimal\":\".\"",
             "\"samples-sum\":\"Sum\"",
         ] {
@@ -1714,14 +1627,18 @@ mod tests {
         )
         .await;
         assert!(data.body.contains("\"label\":\"Inbound\""), "{}", data.body);
+        let settings = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/edit"), Some(&admin)),
+        )
+        .await;
+        for text in ["Warning above", "General", "Settings"] {
+            assert!(settings.body.contains(text), "{text} missing");
+        }
         let form = format!("csrf_token={csrf}&wa_{}=abc", channels[0]);
         let refused = send(
             &h.app,
-            post(
-                &format!("/sensors/{sensor}/thresholds"),
-                Some(&admin),
-                &form,
-            ),
+            post(&format!("/sensors/{sensor}/edit"), Some(&admin), &form),
         )
         .await;
         assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);

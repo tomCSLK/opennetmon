@@ -232,6 +232,12 @@ impl Changes {
         self
     }
 
+    /// Appends the changes of `other`.
+    pub fn merge(mut self, other: Changes) -> Self {
+        self.0.extend(other.0);
+        self
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

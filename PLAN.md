@@ -627,7 +627,11 @@ eine Zeile, dort wären es nur 0 oder 100 %).
 Seite „Einstellungen“ (`/sensors/<id>/edit`, nur Admins, im Menü „⋯ Aktionen“ der Sensorseite) für Sensoren mit eigenen Einstellungen: eigene OID (OID,
 Auswertung, Faktor, Einheit) und Dienste (HTTP(S), TCP, DNS, TLS). Dieselben Felder wie „Sensor hinzufügen“ (`templates/sensor_fields.html`),
 `storage::sensors::update_spec` (Typ bleibt, Name/Grenzwerte/Verlauf bleiben, bei Wechsel Wert ↔ Zähler die Einheit des Kanals), Änderungsprotokoll je Feld.
-Ping, Uptime, Interfaces und „Dieser Server“ haben keine Einstellungen (Name und Intervall stehen schon auf der Sensorseite).
+Danach (Wunsch des Nutzers, „wirkt einheitlicher“): Name, Abfrageintervall, Grenzwerte und Statusbewertungen ebenfalls auf dieser Seite, für jeden
+Sensor, in **einem** Formular mit einem „Speichern“ (`web::sensor_settings`: erst alles prüfen, dann schreiben, Name zuerst wegen Namenskonflikten;
+Abschnitte nur, wenn ihre Felder gesendet werden; unverändert gespeicherte Vorschläge für Statuswerte bleiben unbewertet; ein Eintrag im Änderungsprotokoll).
+Die Formulare auf der Sensorseite und die Routen `/rename`, `/interval`, `/thresholds` sind entfallen; `/states` bleibt für „Bewertung ausschalten“.
+Leser sehen auf der Sensorseite weiterhin die Bewertungen der Statuswerte.
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
@@ -650,7 +654,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (544, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (545, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

@@ -261,7 +261,7 @@ mod tests {
         let form = format!("csrf_token={csrf}&name=Laufzeit");
         let reply = send(
             &h.app,
-            post(&format!("/sensors/{sensor}/rename"), Some(&admin), &form),
+            post(&format!("/sensors/{sensor}/edit"), Some(&admin), &form),
         )
         .await;
         ok(reply.status);

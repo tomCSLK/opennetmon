@@ -3,8 +3,20 @@
 ## Detail page (`/sensors/<id>`, all signed-in users)
 
 A header with type, device, status, message and last poll; the time range switch **1 hour / 24 hours / 7 days / 30 days** (`?range=1h|24h|7d|30d`,
-invalid values result in 24 hours); the chart; a table with the latest value per channel; the name (rename, administrators only); thresholds; the last 20
-status changes of this sensor. The sensor list of a device (`/devices/<id>/sensors`) links every sensor there.
+invalid values result in 24 hours); the chart; a table with the latest value per channel; the last 20 status changes of this sensor. The sensor list of
+a device (`/devices/<id>/sensors`) links every sensor there. Name, interval, what the sensor checks, thresholds and ratings are changed on the settings page.
+
+## Settings page (`/sensors/<id>/edit`, administrators only)
+
+“Settings” in the menu “⋯ Actions” of the detail page (`web::sensor_settings`). One form with one “Save”, like the settings tab of a PRTG sensor:
+
+- **General:** name (at most 64 characters, unique per device) and the sensor's own polling interval (empty = the device's; `docs/devices-and-groups.md`).
+- **What is checked** (custom OID and service sensors only): the fields the sensor was added with (`docs/sensors.md`, “User interface”).
+- **Thresholds** per channel (below), **status values** for sensors with named values (below).
+
+The whole form is checked before anything is written: one wrong field changes nothing, the page shows the message with all input. A section only changes
+when its fields are sent (the page always sends all of them). Saving the page unchanged writes nothing and adds no audit entry; saved changes are one
+audit entry. Values, chart and events are always kept. Readers do not see the page; the detail page shows them the ratings of status values.
 
 ## Chart (uPlot)
 
@@ -53,7 +65,7 @@ kept like the raw values (`retention_raw_days`). Paused times have no rows: a pa
 - Sum, average, minimum and maximum cover exactly the rows shown. The table reloads together with the chart every 30 s (`static/samples.js`, shared
   formatting in `static/format.js`).
 - After a restart of opennetmon a traffic sensor misses one value, because a rate needs two counter readings.
-- Not yet as in PRTG: columns for downtime and coverage (failed polls are not stored as rows; gaps are visible in the chart).
+- Not taken over from PRTG: columns for downtime and coverage (PRTG shows them for averaged historic data; with one row per poll they would only be 0 or 100 %).
 
 ## Times in tables
 
@@ -71,13 +83,13 @@ Per channel (not for status channels) four optional limits: **warning above / be
 - Warning → sensor status `Warning`, down limit → `Down`, each **immediately without debouncing** (unlike poll errors, see `docs/poller.md`);
   the message names channel, value and limit (“Inbound: 90 Mbit/s is above the down limit 80 Mbit/s”).
 - Validation: down limits must not be milder than warning limits, the upper limit must not be below the lower one, everything finite. Errors appear on the
-  page, the input stays. Only administrators can save (CSRF-protected).
+  settings page, the input stays. Only administrators can save (CSRF-protected).
 - Effective from the next cycle (the poller reads the limits anew every time).
 
 ## Rating status values
 
 Sensors with named status values – custom OID sensors whose MIB object is an enumeration (e.g. `tpPoePowerStatus`: off, on, overload, short,
-hardware-fault …, `entPhySensorOperStatus`, `ifOperStatus`), and the interface status sensor – have the section **“Status values”** on the detail page:
+hardware-fault …, `entPhySensorOperStatus`, `ifOperStatus`), and the interface status sensor – have the section **“Status values”** on the settings page:
 per value **OK**, **Warning** or **Down** (stored in `value_states`, migration `0012`).
 
 - **Rated:** the measured value determines the status immediately (like thresholds, without debouncing); the message names the value
@@ -88,7 +100,7 @@ per value **OK**, **Warning** or **Down** (stored in `value_states`, migration `
   `warn`, `degraded`, `unavailable`, `testing`, `nonstandard`, `voltage-high/-low`, `unknown` → warning; everything else (`ok`, `on`, `off`, `enabled`,
   `disable` …) → OK. Negations such as `noError` stay OK. If all values are harmless, the sensor stays unrated.
 - **Existing sensors** stay unrated (the value does not change the status) until the rating is saved; the form shows the suggestion for this.
-  “Switch rating off” removes it again.
+  Saving the settings unchanged keeps them unrated. “Switch rating off” removes the rating again (`POST /sensors/<id>/states`, `action=reset`).
 - **Interface status:** without a rating of its own, the rule “only up is OK, everything else is down” applies as before; with a rating, e.g. “down” can be
   only a warning. “Restore default” returns to the built-in rule.
 - Device templates take over the ratings (`docs/device-templates.md`). Viewers see the rating, only administrators change it.

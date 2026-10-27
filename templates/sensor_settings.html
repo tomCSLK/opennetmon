@@ -1,0 +1,115 @@
+{% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
+{% block title %}{{ t.get("sensor-settings") }} {{ sensor_name }} – opennetmon{% endblock %}
+{% block head %}
+  <script src="/static/oid-help.js?v=2" defer></script>
+  <script src="/static/sensor-form.js" defer></script>
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb">{% include "device_trail.html" %}<a href="/devices/{{ device.id }}/sensors">{{ device.name }}</a><span>›</span><a href="/sensors/{{ sensor_id }}">{{ sensor_name }}</a><span>›</span><span>{{ t.get("sensor-settings") }}</span></div>
+    <h1>{{ sensor_name }}</h1>
+    <p class="subtitle">{{ t.get("sensor-settings-intro") }}</p>
+  </div>
+</div>
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+<form method="post" action="/sensors/{{ sensor_id }}/edit" class="sections">
+  <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+
+  <section class="card">
+    <h2>{{ t.get("sensor-settings-general") }}</h2>
+    <div class="form-grid">
+      <div>
+        <label for="name">{{ t.get("name") }}</label>
+        <input id="name" name="name" type="text" value="{{ name }}" maxlength="64" required>
+        <p class="hint">{{ t.get("detail-rename-hint") }}</p>
+      </div>
+      <div>
+        <label for="interval">{{ t.get("detail-interval-seconds") }}{% if own_interval %} <span class="badge">{{ t.get("detail-interval-own") }}</span>{% endif %}</label>
+        <input id="interval" name="interval" type="text" inputmode="numeric" value="{{ interval }}" placeholder="{{ device.polling.interval_secs }}" maxlength="5" class="narrow-input">
+        <p class="hint">{{ t.get1("detail-interval-hint", "seconds", device.polling.interval_secs) }}</p>
+      </div>
+    </div>
+  </section>
+
+  {% if let Some(form) = form %}
+  <section class="card">
+    <h2>{{ t.get("sensor-settings-check") }}</h2>
+    <input type="hidden" id="kind" name="kind" value="{{ form.kind }}">
+    {% include "sensor_fields.html" %}
+  </section>
+  {% endif %}
+
+  {% if !limits.is_empty() %}
+  <section class="card">
+    <h2>{{ t.get("detail-thresholds") }}</h2>
+    <p class="muted small">{{ t.get("detail-thresholds-hint") }}</p>
+    {% for c in limits %}
+    <fieldset>
+      <legend>{{ c.label }}{% if !c.unit_label.is_empty() %} {{ t.get1("detail-in-unit", "unit", c.unit_label.as_str()) }}{% endif %}</legend>
+      <div class="threshold-grid">
+        <div><label for="wa_{{ c.id }}">{{ t.get("threshold-warn-above") }}</label>
+          <input id="wa_{{ c.id }}" name="wa_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[0] }}" maxlength="24"></div>
+        <div><label for="wb_{{ c.id }}">{{ t.get("threshold-warn-below") }}</label>
+          <input id="wb_{{ c.id }}" name="wb_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[1] }}" maxlength="24"></div>
+        <div><label for="da_{{ c.id }}">{{ t.get("threshold-down-above") }}</label>
+          <input id="da_{{ c.id }}" name="da_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[2] }}" maxlength="24"></div>
+        <div><label for="db_{{ c.id }}">{{ t.get("threshold-down-below") }}</label>
+          <input id="db_{{ c.id }}" name="db_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[3] }}" maxlength="24"></div>
+      </div>
+    </fieldset>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if let Some(st) = states %}
+  <section class="card">
+    <h2>{{ t.get("detail-states") }}{% if st.stored %} <span class="badge">{{ t.get("detail-states-rated") }}</span>{% endif %}</h2>
+    {% if st.stored %}
+    <p class="muted small">{{ t.get("detail-states-stored") }}</p>
+    {% else if st.interface %}
+    <p class="muted small">{{ t.get("detail-states-interface") }}</p>
+    {% else %}
+    <p class="muted small">{{ t.get("detail-states-unrated") }}</p>
+    {% endif %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>{{ t.get("detail-value") }}</th><th>{{ t.get("detail-rating") }}</th></tr></thead>
+      <tbody>
+      {% for row in st.rows %}
+        <tr>
+          <td><strong>{{ row.label }}</strong> <span class="muted">({{ row.value }})</span></td>
+          <td>
+            <select name="st_{{ row.value }}" aria-label="{{ t.get1("detail-rating-for", "value", row.label.as_str()) }}" class="compact">
+              <option value="up"{% if row.status == "up" %} selected{% endif %}>{{ t.get("status-up") }}</option>
+              <option value="warning"{% if row.status == "warning" %} selected{% endif %}>{{ t.get("status-warning") }}</option>
+              <option value="down"{% if row.status == "down" %} selected{% endif %}>{{ t.get("status-down") }}</option>
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if st.stored %}
+    <div class="form-actions">
+      <button type="submit" form="states-reset" name="action" value="reset" class="ghost">{% if st.interface %}{{ t.get("detail-states-restore") }}{% else %}{{ t.get("detail-states-off") }}{% endif %}</button>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit">{{ t.get("save") }}</button>
+    <a class="button secondary" href="/sensors/{{ sensor_id }}">{{ t.get("cancel") }}</a>
+  </div>
+</form>
+{% if let Some(st) = states %}{% if st.stored %}
+<form method="post" action="/sensors/{{ sensor_id }}/states" id="states-reset">
+  <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+</form>
+{% endif %}{% endif %}
+{% endblock %}

@@ -174,7 +174,7 @@ Omada controller or a server update pause the objects instead of causing outage 
 | Retries | 0–5, default 1 |
 
 In addition, **timeout × (retries + 1) ≤ interval** must hold, so that polls of a device never overlap.
-A single sensor can be polled at its **own interval** (sensor detail page, “Polling interval”; e.g. ping every 10 s on a device polled every 60 s); the same
+A single sensor can be polled at its **own interval** (settings page of the sensor, “General”; e.g. ping every 10 s on a device polled every 60 s); the same
 limits apply, including the rule above with the device's timeout and retries. An empty field returns to the device's interval. The sensor page shows an own
 interval after the description (“· every 10 s”); sensor lists (also the paused sensors) show only the name, so long OIDs do not widen the table.
 All checks run on the server; after an error the entered values stay in the form (there are no passwords here).

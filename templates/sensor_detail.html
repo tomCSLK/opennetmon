@@ -47,9 +47,7 @@
     <details class="more-actions setup" open>
       {% call icons::more_summary(t) %}{% endcall %}
       <div class="more-items">
-    {% if has_settings %}
     <a class="button ghost" href="/sensors/{{ sensor.id }}/edit">{{ t.get("sensor-settings") }}</a>
-    {% endif %}
     <a class="button ghost" href="/dependency/sensor/{{ sensor.id }}">{{ t.get("dependency") }}</a>
     <a class="button ghost" href="/maintenance/sensor/{{ sensor.id }}">{{ t.get("maintenance") }}</a>
     <a class="button ghost" href="#delete">{{ t.get("sensor-delete") }}</a>
@@ -66,9 +64,6 @@
 
 {% if let Some(message) = flash %}
 <p class="flash" role="status">{{ message }}</p>
-{% endif %}
-{% if let Some(message) = error %}
-<p class="error" role="alert">{{ message }}</p>
 {% endif %}
 
 <section class="values" aria-label="{{ t.get("detail-latest") }}">
@@ -116,105 +111,14 @@
   <noscript><p class="empty small">{{ t.get("detail-table-needs-js") }}</p></noscript>
 </section>
 
-{% if layout.is_admin %}
-<div class="panel-row">
-<details class="card panel"{% if rename_failed %} open{% endif %}>
-  <summary><h2>{{ t.get("name") }}</h2></summary>
-  <form method="post" action="/sensors/{{ sensor.id }}/rename" class="inline-form">
-    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <label for="new-name" class="visually-hidden">{{ t.get("detail-new-name") }}</label>
-    <input id="new-name" name="name" type="text" value="{{ new_name }}" maxlength="64" required>
-    <button type="submit">{{ t.get("detail-rename") }}</button>
-  </form>
-  <p class="hint">{{ t.get("detail-rename-hint") }}</p>
-</details>
-
-<details class="card panel"{% if interval_failed %} open{% endif %}>
-  <summary><h2>{{ t.get("detail-interval") }}{% if sensor.interval_secs.is_some() %} <span class="badge">{{ t.get("detail-interval-own") }}</span>{% endif %}</h2></summary>
-  <form method="post" action="/sensors/{{ sensor.id }}/interval" class="inline-form">
-    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <label for="interval" class="visually-hidden">{{ t.get("detail-interval-seconds") }}</label>
-    <input id="interval" name="interval" type="text" inputmode="numeric" value="{{ interval_field }}" placeholder="{{ device.polling.interval_secs }}" maxlength="5" class="narrow-input">
-    <span class="muted">s</span>
-    <button type="submit">{{ t.get("save") }}</button>
-  </form>
-  <p class="hint">{{ t.get1("detail-interval-hint", "seconds", device.polling.interval_secs) }}</p>
-</details>
-</div>
-{% endif %}
-
+{% if !layout.is_admin %}
 {% if let Some(st) = states %}
-<details class="card panel"{% if !st.stored && !st.interface %} open{% endif %}>
+<details class="card panel">
   <summary><h2>{{ t.get("detail-states") }}{% if st.stored %} <span class="badge">{{ t.get("detail-states-rated") }}</span>{% endif %}</h2></summary>
-  {% if st.stored %}
-  <p class="muted small">{{ t.get("detail-states-stored") }}</p>
-  {% else if st.interface %}
-  <p class="muted small">{{ t.get("detail-states-interface") }}</p>
-  {% else %}
-  <p class="muted small">{{ t.get("detail-states-unrated") }}</p>
-  {% endif %}
-  {% if layout.is_admin %}
-  <form method="post" action="/sensors/{{ sensor.id }}/states" class="stack">
-    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    <div class="table-wrap">
-    <table>
-      <thead><tr><th>{{ t.get("detail-value") }}</th><th>{{ t.get("detail-rating") }}</th></tr></thead>
-      <tbody>
-      {% for row in st.rows %}
-        <tr>
-          <td><strong>{{ row.label }}</strong> <span class="muted">({{ row.value }})</span></td>
-          <td>
-            <select name="st_{{ row.value }}" aria-label="{{ t.get1("detail-rating-for", "value", row.label.as_str()) }}" class="compact">
-              <option value="up"{% if row.status == "up" %} selected{% endif %}>{{ t.get("status-up") }}</option>
-              <option value="warning"{% if row.status == "warning" %} selected{% endif %}>{{ t.get("status-warning") }}</option>
-              <option value="down"{% if row.status == "down" %} selected{% endif %}>{{ t.get("status-down") }}</option>
-            </select>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    </div>
-    <div class="form-actions">
-      <button type="submit" name="action" value="save">{{ t.get("save") }}</button>
-      {% if st.stored %}<button type="submit" name="action" value="reset" class="ghost">{% if st.interface %}{{ t.get("detail-states-restore") }}{% else %}{{ t.get("detail-states-off") }}{% endif %}</button>{% endif %}
-    </div>
-  </form>
-  {% else %}
   <ul class="plain">{% for row in st.rows %}<li>{{ row.label }} ({{ row.value }}): {% if row.status == "up" %}{{ t.get("status-up") }}{% else if row.status == "warning" %}{{ t.get("status-warning") }}{% else %}{{ t.get("status-down") }}{% endif %}</li>{% endfor %}</ul>
-  {% endif %}
 </details>
 {% endif %}
-
-<details class="card panel"{% if error.is_some() && !rename_failed && !interval_failed %} open{% endif %}>
-  <summary><h2>{{ t.get("detail-thresholds") }}</h2></summary>
-  {% if layout.is_admin %}
-  <p class="muted small">{{ t.get("detail-thresholds-hint") }}</p>
-  <form method="post" action="/sensors/{{ sensor.id }}/thresholds" class="stack">
-    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-    {% for c in channels %}
-    {% if c.has_thresholds %}
-    <fieldset>
-      <legend>{{ c.label }}{% if !c.unit_label.is_empty() %} {{ t.get1("detail-in-unit", "unit", c.unit_label.as_str()) }}{% endif %}</legend>
-      <div class="threshold-grid">
-        <div><label for="wa_{{ c.id }}">{{ t.get("threshold-warn-above") }}</label>
-          <input id="wa_{{ c.id }}" name="wa_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[0] }}" maxlength="24"></div>
-        <div><label for="wb_{{ c.id }}">{{ t.get("threshold-warn-below") }}</label>
-          <input id="wb_{{ c.id }}" name="wb_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[1] }}" maxlength="24"></div>
-        <div><label for="da_{{ c.id }}">{{ t.get("threshold-down-above") }}</label>
-          <input id="da_{{ c.id }}" name="da_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[2] }}" maxlength="24"></div>
-        <div><label for="db_{{ c.id }}">{{ t.get("threshold-down-below") }}</label>
-          <input id="db_{{ c.id }}" name="db_{{ c.id }}" type="text" inputmode="decimal" value="{{ c.fields[3] }}" maxlength="24"></div>
-      </div>
-    </fieldset>
-    {% endif %}
-    {% endfor %}
-    <button type="submit">{{ t.get("detail-thresholds-save") }}</button>
-  </form>
-  {% else %}
-  <p class="muted">{{ t.get("detail-thresholds-admins") }}</p>
-  {% endif %}
-</details>
+{% endif %}
 
 <section class="card flush">
   <div class="card-head"><h2>{{ t.get("detail-events") }}</h2></div>

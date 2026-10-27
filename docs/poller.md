@@ -10,7 +10,7 @@ device is deleted, the task ends.
 - **Start times** are spread deterministically across the interval per device (at most 30 s offset): no burst at the full minute.
   The first values therefore appear up to 30 s after the start.
 - **Concurrency:** a global `Semaphore` (`poll_concurrency`, default 16); a slow device never blocks others.
-- **Interval per sensor:** a sensor is polled at the device's interval unless it has its own (sensor detail page, “Polling interval”; column
+- **Interval per sensor:** a sensor is polled at the device's interval unless it has its own (settings page of the sensor; column
   `sensors.interval_secs`, migration `0017`; GitHub issue #1). The device task keeps the time each sensor is due next: a cycle polls only the due
   sensors (one SNMP session for them), then the task sleeps until the next one is due, but at most one device interval, so new or resumed sensors
   start soon. A shortened interval applies within one new interval.

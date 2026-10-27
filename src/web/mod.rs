@@ -18,6 +18,7 @@ pub mod pause;
 pub mod reports;
 pub mod schedules;
 pub mod sensor_detail;
+pub mod sensor_settings;
 pub mod sensor_text;
 pub mod sensor_values;
 pub mod sensors;
@@ -202,10 +203,6 @@ pub fn router(state: AppState) -> Router {
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))
         .route("/sensors/{id}/samples", get(sensor_detail::samples))
-        .route(
-            "/sensors/{id}/thresholds",
-            post(sensor_detail::save_thresholds),
-        )
         .route("/devices/{id}/template/new", get(templates::new_form))
         .route("/devices/{id}/template", post(templates::create))
         .route(
@@ -228,12 +225,10 @@ pub fn router(state: AppState) -> Router {
             get(templates::detail).post(templates::update),
         )
         .route("/templates/{id}/delete", post(templates::delete))
-        .route("/sensors/{id}/rename", post(sensor_detail::rename))
         .route(
             "/sensors/{id}/edit",
-            get(sensors::edit_form).post(sensors::save_settings),
+            get(sensor_settings::edit_form).post(sensor_settings::save),
         )
-        .route("/sensors/{id}/interval", post(sensor_detail::set_interval))
         .route("/sensors/{id}/states", post(sensor_detail::save_states))
         .route("/pause/{kind}/{id}", get(pause::form).post(pause::pause))
         .route("/resume/{kind}/{id}", post(pause::resume))
@@ -446,10 +441,7 @@ pub fn flash_message(t: Lang, key: Option<&str>) -> Option<String> {
         "values_added_active" => "flash-values-added-active",
         "sensors_activated" => "flash-sensors-activated",
         "sensors_deleted" => "flash-sensors-deleted",
-        "thresholds_saved" => "flash-thresholds-saved",
-        "sensor_renamed" => "flash-sensor-renamed",
         "sensor_settings_saved" => "flash-sensor-settings-saved",
-        "interval_saved" => "flash-interval-saved",
         "dependency_saved" => "flash-dependency-saved",
         "maintenance_saved" => "flash-maintenance-saved",
         "schedule_created" => "flash-schedule-created",
