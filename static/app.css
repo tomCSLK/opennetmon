@@ -417,6 +417,8 @@ form.inline-note .muted { font-size: .85rem; }
 .ranges a:hover { color: var(--text); text-decoration: none; }
 .ranges a[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .values { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .9rem; }
+/* Five tiles (ping) in one row rather than four and one left over */
+@media (min-width: 1100px) { .values:has(> :nth-child(5):last-child) { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .value-tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
   padding: .95rem 1.1rem; }
 .value-tile .label { color: var(--muted); font-size: .82rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
@@ -432,6 +434,17 @@ form.inline-note .muted { font-size: .85rem; }
 /* Fixed value widths so the legend does not shift while the pointer moves over the chart */
 .u-legend td.u-value { min-width: 7rem; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .u-legend tr:first-child td.u-value { min-width: 10.5rem; }
+/* Three channels or more (ping): the time on a line of its own, the channels below in columns of one width,
+   centred, instead of a line that wraps somewhere in the middle */
+.u-legend.u-inline tbody:has(> tr:nth-child(4)) { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .75rem; }
+.u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr { display: flex; align-items: center; width: 12.5rem; margin-right: 0; }
+.u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr:first-child { width: 100%; justify-content: center; }
+.u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr > th { white-space: nowrap; }
+.u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr:not(:first-child) > td.u-value { min-width: 5.5rem; }
+/* where four columns do not fit next to each other, two per row (2 × 2) rather than three and one */
+@media (max-width: 1199px) {
+  .u-legend.u-inline tbody:has(> tr:nth-child(4)) { max-width: 25.75rem; margin: 0 auto; }
+}
 details.panel > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
 details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
@@ -480,6 +493,10 @@ label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font
   .u-legend { font-size: .8rem; }
   .u-legend tbody { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .75rem; }
   .u-legend.u-inline tr { display: flex; align-items: center; margin-right: 0; }
+  .u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr { width: calc(50% - .375rem); }
+  .u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr:first-child { width: 100%; }
+  /* five tiles: two per row, the last across both */
+  .values > :nth-child(5):last-child { grid-column: 1 / -1; }
   /* Range choice across the full width; latest values two per row. */
   .page-head .ranges { display: flex; width: 100%; }
   .ranges a { flex: 1; padding: .35rem .4rem; text-align: center; white-space: nowrap; }

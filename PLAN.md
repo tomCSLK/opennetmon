@@ -672,7 +672,9 @@ CHECK-Regel der Tabelle `sensors` verboten, deshalb baut `storage::current_senso
 `ping`, kopiert jetzt auch `params`; Test aus dem Zustand des ersten 0.5.5-Testpakets); Listen und Mini-Graphen zeigen nur die Antwortzeit, auf dem Handy
 blendet die Tabelle Minimum, Maximum und Jitter aus (Paketverlust bleibt); Startwert der Laufnummer zufällig je Sensor. Geprüft mit einer Kopie der
 Entwicklungsdaten (Migration und Neuaufbau aus dem Stand 0.5.5, echte Pings an 1.1.1.1, 8.8.8.8 und localhost) und im Browser (Sensorseite, Einstellungen,
-Liste, 390 px, dunkel).
+Liste, 390 px, dunkel). Danach (Wunsch des Nutzers, „schaut so sehr unsymmetrisch aus“): Legende der Graphen ab drei Kanälen mit „Zeit“ in eigener Zeile und
+den Kanälen in gleich breiten Spalten (ab 1200 px vier in einer Reihe, darunter zentriert 2 × 2), fünf Kacheln der letzten Werte ab 1100 px in einer Reihe
+(auf dem Handy die fünfte über die ganze Breite); geprüft bei 1280/1200/1100/900/700/390/360 px, Traffic mit zwei Kanälen unverändert.
 
 Anlass: Der Ping-Sensor schickt je Abfrage **ein** Paket und hat nur den Kanal `rtt`; die Messwerttabelle wirkt leer, und ein einzelnes verlorenes
 Paket macht die ganze Abfrage zum Fehlschlag (Warnung). Künftig wie PRTG mehrere Pakete je Abfrage:
