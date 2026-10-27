@@ -2,9 +2,10 @@
 // newest first, with average/minimum/maximum (and the summed volume for traffic) on top. Polls that
 // warned or failed are tinted like in PRTG; a failed poll has no values and shows its message. Always raw
 // values, also where the chart shows averages; the viewer picks how far back
-// the table reaches (#samples-span, minutes) and the summary covers exactly those rows. Loads from
-// #samples[data-src] whenever static/chart.js has loaded new data (event "opennetmon:data"), so both
-// refresh together.
+// the table reaches (#samples-span, minutes) and the summary covers exactly those rows. The rows are
+// shown in pages (#samples-rows rows each, #samples-pager); the summary stays that of the whole span.
+// Loads from #samples[data-src] whenever static/chart.js has loaded new data (event "opennetmon:data"),
+// so both refresh together.
 (function () {
   'use strict';
   var box = document.getElementById('samples');
@@ -13,7 +14,12 @@
   var F = window.opennetmonFormat;
   var T = window.opennetmonText;
   var select = document.getElementById('samples-span');
+  var rowsSelect = document.getElementById('samples-rows');
+  var pager = document.getElementById('samples-pager');
   var data = null;
+  // First row shown (0 = newest) and the time of that row: a refresh keeps the same row on top
+  // instead of letting every new poll shift the page by one. On page 1 new polls come in on top.
+  var start = 0, anchor = null;
 
   // The chosen span is remembered per range, a per-viewer convenience; storage may be blocked.
   if (select) {
@@ -24,9 +30,47 @@
     } catch (e) { /* default */ }
     select.addEventListener('change', function () {
       try { localStorage.setItem(key, select.value); } catch (e) { /* not remembered */ }
+      firstPage();
       load();
     });
   }
+
+  function pageSize() {
+    var n = rowsSelect ? parseInt(rowsSelect.value, 10) : 0;
+    return n > 0 ? n : 50;
+  }
+  if (rowsSelect) {
+    try {
+      var rows = localStorage.getItem('opennetmon-samples-rows');
+      if (rows && rowsSelect.querySelector('option[value="' + rows + '"]')) { rowsSelect.value = rows; }
+    } catch (e) { /* default */ }
+    rowsSelect.addEventListener('change', function () {
+      try { localStorage.setItem('opennetmon-samples-rows', rowsSelect.value); } catch (e) { /* not remembered */ }
+      firstPage();
+      render();
+    });
+  }
+
+  // "Automatisch" (static/refresh.js) reloads the whole page: the page shown survives a reload of
+  // this tab, but a new visit starts on page 1.
+  var placeKey = 'opennetmon-samples-at-' + location.pathname + '-' + (box.getAttribute('data-src') || '');
+  function reloaded() {
+    try {
+      var nav = performance.getEntriesByType('navigation')[0];
+      return nav ? nav.type === 'reload' : false;
+    } catch (e) { return false; }
+  }
+  try {
+    var place = reloaded() ? parseInt(sessionStorage.getItem(placeKey), 10) : NaN;
+    if (place > 0) { anchor = place; start = 1; }
+  } catch (e) { /* page 1 */ }
+  function remember() {
+    try {
+      if (start > 0 && anchor !== null) { sessionStorage.setItem(placeKey, String(anchor)); }
+      else { sessionStorage.removeItem(placeKey); }
+    } catch (e) { /* not remembered */ }
+  }
+  function firstPage() { start = 0; anchor = null; remember(); }
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -84,11 +128,24 @@
     if (!data || !data.ts.length) {
       box.appendChild(el('p', 'empty small', box.getAttribute('data-empty') || ''));
       if (info) { info.textContent = ''; }
+      if (pager) { pager.hidden = true; }
       return;
     }
     var dur = durations(data);
     var cols = columns(data, dur);
     var count = data.ts.length;
+    var size = pageSize();
+    var pages = Math.ceil(count / size);
+    if (start > 0 && anchor !== null) {
+      // The row shown on top before, or the next older one if it is gone.
+      var k = 0;
+      while (k < count && data.ts[count - 1 - k] > anchor) { k++; }
+      start = k;
+    }
+    if (start > count - 1) { start = (pages - 1) * size; }
+    if (start < 0) { start = 0; }
+    anchor = start > 0 ? data.ts[count - 1 - start] : null;
+    remember();
     var states = data.states || [];
     var messages = data.messages || [];
     // Rows with at least one value: what the average, minimum and maximum are made of.
@@ -139,7 +196,8 @@
     });
     if (lastSummary) { lastSummary.className += ' summary-last'; }
 
-    for (var k = 0; k < count; k++) {
+    var end = Math.min(count, start + size);
+    for (var k = start; k < end; k++) {
       var i = count - 1 - k; // newest first
       var tr = el('tr', states[i] ? 'state-' + states[i] : null);
       tr.appendChild(el('td', 'nowrap', F.dateTime(data.ts[i], true)));
@@ -156,6 +214,44 @@
     }
     table.appendChild(body);
     box.appendChild(table);
+    renderPager(count, size, end);
+  }
+
+  function goTo(first) {
+    start = Math.max(0, first);
+    anchor = null;
+    if (start > 0 && data) { anchor = data.ts[data.ts.length - 1 - start]; }
+    render();
+  }
+
+  function pagerButton(label, title, first, disabled) {
+    var b = el('button', 'secondary small', label);
+    b.type = 'button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.disabled = disabled;
+    b.addEventListener('click', function () { goTo(first); });
+    return b;
+  }
+
+  // "Rows 101–150 of 1440" and « ‹ Page 3 of 29 › »; hidden while everything fits on one page.
+  function renderPager(count, size, end) {
+    if (!pager) { return; }
+    pager.textContent = '';
+    if (count <= size) { pager.hidden = true; return; }
+    var pages = Math.ceil(count / size);
+    var page = Math.min(pages, Math.floor(start / size) + 1);
+    var last = (pages - 1) * size;
+    var atStart = start === 0, atEnd = end >= count;
+    pager.appendChild(el('span', 'muted small pager-rows', T('samples-rows', start + 1, end, count)));
+    var nav = el('span', 'pager-buttons');
+    nav.appendChild(pagerButton('«', T('samples-first'), 0, atStart));
+    nav.appendChild(pagerButton('‹', T('samples-previous'), Math.max(0, start - size), atStart));
+    nav.appendChild(el('span', 'pager-page', T('samples-page', page, pages)));
+    nav.appendChild(pagerButton('›', T('samples-next'), start + size, atEnd));
+    nav.appendChild(pagerButton('»', T('samples-last'), last, atEnd || start >= last));
+    pager.appendChild(nav);
+    pager.hidden = false;
   }
 
   // The newest request wins; an older reply arriving late is dropped.

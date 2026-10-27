@@ -105,9 +105,17 @@
         </select>
       </label>
       {% endif %}
+      <label class="rows-select" for="samples-rows">{{ t.get("detail-rows") }}
+        <select id="samples-rows">
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="250">250</option>
+        </select>
+      </label>
     </div>
   </div>
   <div id="samples" class="table-wrap" data-src="/sensors/{{ sensor.id }}/samples?range={{ range }}" data-empty="{{ t.get("detail-no-samples") }}" aria-live="polite"></div>
+  <nav id="samples-pager" class="pager" aria-label="{{ t.get("detail-pages") }}" hidden></nav>
   <noscript><p class="empty small">{{ t.get("detail-table-needs-js") }}</p></noscript>
 </section>
 

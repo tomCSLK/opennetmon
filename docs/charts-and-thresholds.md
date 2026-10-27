@@ -62,8 +62,12 @@ kept like the raw values (`retention_raw_days`). Paused times have no rows: a pa
   a longer gap would otherwise inflate the volume). It is therefore an approximation; PRTG calculates with the counter readings
   themselves.
 - Above the rows are **sum** (volumes only), **average**, **minimum** and **maximum**, each “of N values”. Status channels show the name (`up`, `down` …).
-- Sum, average, minimum and maximum cover exactly the rows shown. The table reloads together with the chart every 30 s (`static/samples.js`, shared
-  formatting in `static/format.js`).
+- Sum, average, minimum and maximum cover all rows of the chosen span, on every page. The table reloads together with the chart every 30 s
+  (`static/samples.js`, shared formatting in `static/format.js`).
+- **Pages:** the rows are shown in pages of 50, 100 or 250 (“Rows”, remembered per browser), with « ‹ Page 3 of 29 › » and “Rows 101–150 of 1440”
+  below the table; the bar is hidden while everything fits on one page. On page 1 new polls come in on top; on a later page a refresh keeps the
+  same row on top (the newer polls push the page number up instead of shifting the rows). The page shown survives a reload of the tab, also the
+  automatic one; a new visit and a change of span or page size start on page 1. All rows are still loaded; only the page shown is drawn.
 - After a restart of opennetmon a traffic sensor misses one value, because a rate needs two counter readings.
 - Not taken over from PRTG: columns for downtime and coverage (PRTG shows them for averaged historic data; with one row per poll they would only be 0 or 100 %).
 

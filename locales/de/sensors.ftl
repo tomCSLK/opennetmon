@@ -113,6 +113,8 @@ detail-no-value = noch kein Messwert
 detail-no-samples = Noch keine Messwerte im gewählten Zeitraum.
 detail-chart-needs-js = Für den Graphen wird JavaScript benötigt.
 detail-samples = Messwerte
+detail-rows = Zeilen
+detail-pages = Seiten der Messwerte
 # Wie weit die Tabelle der Messwerte zurückreicht ($minutes: 15, 30, 60, 360, 1440 oder 10080).
 detail-span = { $minutes ->
     [60] letzte Stunde

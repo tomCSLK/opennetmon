@@ -457,6 +457,13 @@ table.samples tr.state-down td.problem { color: var(--down); }
 table.samples tr.state-warning td.problem { color: var(--warn); }
 label.rows-select { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .85rem; font-weight: 500; color: var(--muted); }
 label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font-size: .85rem; }
+/* pages of the table of values: rows shown on the left, buttons on the right */
+.pager { display: flex; align-items: center; justify-content: space-between; gap: .5rem .75rem; flex-wrap: wrap;
+  padding: .7rem 1.35rem; border-top: 1px solid var(--border); }
+.pager[hidden] { display: none; }
+.pager-buttons { display: inline-flex; align-items: center; gap: .35rem; }
+.pager-buttons button { min-width: 2rem; }
+.pager-page { padding: 0 .4rem; font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 640px) {
   table.samples .vol, table.samples tr.sum, table.samples .head-long { display: none; }
   table.samples .head-short { display: inline; }
@@ -466,6 +473,8 @@ label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font
   .card-head { flex-wrap: wrap; padding-left: 1rem; padding-right: 1rem; }
   .card table.samples th:first-child, .card table.samples td:first-child { padding-left: 1rem; }
   .card table.samples th:last-child, .card table.samples td:last-child { padding-right: 1rem; }
+  .pager { padding: .6rem 1rem; justify-content: center; }
+  .pager-rows { flex-basis: 100%; text-align: center; }
   /* Chart legend: values without fixed widths, time and channels side by side, wrapping as needed. */
   .u-legend td.u-value, .u-legend tr:first-child td.u-value { min-width: 0; }
   .u-legend { font-size: .8rem; }

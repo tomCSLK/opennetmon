@@ -11,8 +11,8 @@ Update auf 0.5.0 offen); die Instanz auf dem Laptop dient nur noch zum Testen. I
 der Seitenköpfe (D) und aus den Vorhaben E–M (2026-10-27) Dienst-Sensoren (E), Verfügbarkeit und Berichte (G), `cargo audit` in der CI (H),
 Update-Hinweis (I), Wartungsfenster (J) und das Änderungsprotokoll (M), dazu fehlgeschlagene Abfragen in der Messwerttabelle und eine
 Einstellungsseite je Sensor. Gepusht am 2026-10-27; Version **0.5.5** als Test-Paket (`dev/deb.sh`, kein Tag, kein Release) für den Test des
-Nutzers auf dem Ubuntu-Server – das Release folgt erst, wenn alle Tests des Nutzers bestanden sind. **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Weiterhin offen: Test mit dem
-**echten Mailserver** des Nutzers und ein Ende-zu-Ende-Integrationstest.
+Nutzers auf dem Ubuntu-Server – das Release folgt erst, wenn alle Tests des Nutzers bestanden sind. **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Der Mailversand mit dem
+**echten Mailserver** des Nutzers funktioniert, ebenso der Ablauf Ende zu Ende im Betrieb und die Omada-Geräte (vom Nutzer getestet, 2026-10-27).
 
 Umgesetzt (Details in `docs/`):
 
@@ -38,8 +38,8 @@ Umgesetzt (Details in `docs/`):
 - **Pausieren wie in PRTG:** Gruppen, Geräte und Sensoren bis zum Fortsetzen oder 15 min bis 1 Woche, mit Grund; Vererbung nach unten, Ablauf durch den
   Poller, Neustart ohne alten Zustand (keine nachträgliche Erholungsmail) (`docs/devices-and-groups.md`, „Pausieren“)
 - **Protokoll** (`/log`): Warnungen, Ausfälle und ihr Ende, gemischt mit Pausen (je die neuesten 500)
-- **Benachrichtigung:** E-Mail bei Statuswechsel, Einstellungen in der Oberfläche, Testmail, Sendelog (`docs/notifications.md`; getestet nur gegen
-  Test-SMTP-Server)
+- **Benachrichtigung:** E-Mail bei Statuswechsel, Einstellungen in der Oberfläche, Testmail, Sendelog (`docs/notifications.md`; vom Nutzer mit seinem
+  echten Mailserver getestet, 2026-10-27)
 - **Benutzer:** Login, Rollen Admin/Leser, Benutzerverwaltung in der Oberfläche, „Mein Konto“, Begrenzung der Anmeldeversuche (`docs/users-and-login.md`)
 - **Mehrsprachigkeit:** Oberfläche Deutsch/Englisch je Benutzer, Mails in einer einstellbaren Sprache, README auf Englisch (`docs/translations.md`)
 - **Oberfläche:** Seitenleiste, Kacheln, hell/dunkel, alle Zeiten in der Browser-Zeitzone; rein serverseitig gerendert, wenige eigene Skripte in `static/`
@@ -172,11 +172,10 @@ opennetmon/
 12a. ✔ **Sensoren „Dieser Server“** (0.4.1): eingebauter Sensortyp statt snmpd auf dem Server.
 12b. ✔ **Gruppenseiten** (0.4.2): eigene Seite je Gruppe, Statuslisten mit Gruppenfilter; Dokumentation auf Englisch.
 13. **Offen:**
-    - Installation auf dem echten Ubuntu Server (Paket) ist erledigt (Betrieb in `Serveradmin`); dort noch die Omada-Geräte einrichten
-    - Benachrichtigung mit dem echten Mailserver des Nutzers testen
-    - Integrationstest Ende zu Ende gegen den lokalen `snmpd`: Gerät anlegen → Discovery → Messwerte nach 1–2 Intervallen → Agent stoppen → `Down`
-      → Agent starten → `Up`
-    - Feinschliff nach den ersten Tagen im Betrieb
+    - ✔ Installation auf dem echten Ubuntu Server (Paket, Betrieb in `Serveradmin`), Omada-Geräte dort eingerichtet (2026-10-27, vom Nutzer)
+    - ✔ Benachrichtigung mit dem echten Mailserver des Nutzers getestet (2026-10-27, vom Nutzer)
+    - ✔ Ablauf Ende zu Ende (Gerät anlegen → Messwerte → Ausfall → Rückkehr, Mail) vom Nutzer im Betrieb geprüft (2026-10-27)
+    - Feinschliff im Betrieb (laufend, z. B. Messwerttabelle in Seiten und Ping mit mehreren Paketen)
     - Sensoren „Dieser Server“ erweitern, wenn gewünscht: ausstehende Updates, „Neustart nötig“, Zustand wichtiger systemd-Dienste (bräuchte
       D-Bus bzw. apt-Daten und lockerere Rechte der Unit; bewusst noch nicht umgesetzt)
     - **Update-Möglichkeit** (Wunsch 2026-10-21, Zeitpunkt offen): heute per neuem `.deb` mit `apt install ./…deb` (Daten und Config bleiben).
@@ -424,7 +423,7 @@ Zu entscheiden:
 
 ### F. Push-Benachrichtigungen zusätzlich zur Mail
 
-Ziel: Ausfälle schneller aufs Handy bringen und nicht nur vom (noch nicht mit dem echten Server getesteten) Mailversand abhängen.
+Ziel: Ausfälle schneller aufs Handy bringen und nicht nur vom Mailversand abhängen.
 
 - **Kanäle**, beliebig viele, je an/aus: **ntfy** (Server-URL, Topic, optional Token; Priorität hoch bei Ausfall), **Gotify** (URL, App-Token),
   **Telegram** (Bot-Token, Chat-ID), **Webhook** (URL, JSON mit den Ereignissen, optional `Authorization: Bearer`).
@@ -635,12 +634,63 @@ Abschnitte nur, wenn ihre Felder gesendet werden; unverändert gespeicherte Vors
 Die Formulare auf der Sensorseite und die Routen `/rename`, `/interval`, `/thresholds` sind entfallen; `/states` bleibt für „Bewertung ausschalten“.
 Leser sehen auf der Sensorseite weiterhin die Bewertungen der Statuswerte.
 
+### Messwerttabelle in Seiten – umgesetzt 2026-10-27 (Wunsch des Nutzers, Empfehlung freigegeben)
+
+**Umgesetzt** wie unten geplant (`static/samples.js`, Auswahl `#samples-rows`, Leiste `#samples-pager`, `docs/charts-and-thresholds.md`). Ergänzung:
+„Automatisch“ (`static/refresh.js`) lädt die ganze Seite neu; die gezeigte Seite (Zeitpunkt der obersten Zeile) liegt deshalb in `sessionStorage` und
+wird nur bei einem Neuladen des Tabs wiederhergestellt (`performance` Navigationstyp `reload`), ein neuer Besuch beginnt auf Seite 1. Im Browser geprüft
+(ferngesteuertes Chrome): Blättern, neuer Messwert auf Seite 3 (oberste Zeile bleibt), Neuladen, letzte Seite, Wechsel der Seitengröße, neuer Besuch,
+hell/dunkel, 360/430/1280 px.
+
+Anlass: Die Tabelle „Messwerte“ auf der Sensorseite zeichnet alle Zeilen des gewählten Zeitraums (bis `TABLE_ROWS_MAX` = 20 000; bei 24 h und 60 s
+schon 1 440, bei 7 Tagen über 10 000), die Seite wird sehr lang. Entscheidung: **Seiten im Browser** – der Server liefert weiter alle Zeilen,
+`static/samples.js` zeichnet nur eine Seite; Server, Endpoint `/sensors/<id>/samples` und Datenbank bleiben unverändert.
+
+1. **Seitengröße:** Auswahl „Zeilen“ (50 / 100 / 250, Standard 50) neben „Zeitraum“, wie dieser per `localStorage` gemerkt (in `try/catch`).
+2. **Blätterleiste** unter der Tabelle (`id="samples-pager"`): `« ‹ Seite 3 von 29 › »` und „Zeilen 101–150 von 1 440“; Knöpfe am Anfang/Ende
+   deaktiviert, mit `aria-label`; bei nur einer Seite keine Leiste; auf dem Handy einzeilig (Pfeile + Seitenzahl).
+3. **Zusammenfassung** (Summe, Mittelwert, Minimum, Maximum) bleibt über den **ganzen Zeitraum** gerechnet und steht auf jeder Seite oben
+   („aus N Werten“ macht das klar).
+4. **Automatisches Aktualisieren** (Event `opennetmon:data`): auf Seite 1 kommen neue Werte oben dazu; auf späteren Seiten bleibt dieselbe Zeile oben
+   (Zeitstempel der obersten Zeile merken, danach die Seite neu bestimmen), sonst rutschte die Ansicht bei jedem Neuladen; fallen Werte heraus,
+   höchstens auf die letzte Seite.
+5. Wechsel von Zeitraum oder Seitengröße → Seite 1.
+6. Dateien: `static/samples.js`, `templates/sensor_detail.html` (Auswahl, Platz für die Leiste), `static/app.css` (Leiste wie `label.rows-select`,
+   Handybreite), `locales/de|en/js.ftl` (`js-samples-page`, `js-samples-rows`, Knopfbeschriftungen), Test in `src/web/sensor_detail.rs`
+   (Seite enthält die neuen Elemente), `docs/charts-and-thresholds.md`, CLAUDE.md.
+7. Prüfen: fmt/clippy/Tests (Katalogtests decken die neuen `js-…`-Texte ab), im Browser mit Wegwerfkopie und einem Sensor mit > 1 000 Werten
+   (Blättern, Aktualisieren, Zeitraumwechsel, dunkel, 360/390/430 px); danach Test-.deb 0.5.5 neu bauen (Version bleibt, kein Release).
+
+Verworfen: nur feste Höhe mit eigenem Scrollbalken (`.table-wrap.scroll`; Seite kurz, aber keine Seiten, weiter alle Zeilen im DOM); Seiten auf dem
+Server (`?before=<ts>&limit=`; die Zusammenfassung müsste dann der Server rechnen – erst nötig, wenn die Datenmenge selbst zu groß wird).
+
+### Ping mit mehreren Paketen wie in PRTG – geplant 2026-10-27 (Wunsch des Nutzers, Fragen beantwortet)
+
+Anlass: Der Ping-Sensor schickt je Abfrage **ein** Paket und hat nur den Kanal `rtt`; die Messwerttabelle wirkt leer, und ein einzelnes verlorenes
+Paket macht die ganze Abfrage zum Fehlschlag (Warnung). Künftig wie PRTG mehrere Pakete je Abfrage:
+
+1. **Messen (`sensors::ping`):** N Pakete (Standard **5**) nacheinander im Abstand von ~200 ms, je eigene Laufnummer und Wartezeit; alles zusammen muss
+   in die Zeitgrenze des Geräts passen (Abstand × N + Timeout; Validierung beim Speichern). Aus den Antworten: Mittelwert, Minimum, Maximum, Verlust,
+   Jitter (mittlere Abweichung aufeinanderfolgender Antworten). `SensorError::Unreachable` nur, wenn **alle** Pakete verloren sind; Teilverlust ist
+   ein Messwert.
+2. **Kanäle (`sensors::spec`):** `rtt` (Mittelwert, Schlüssel bleibt → Verlauf läuft weiter), `rtt_min`, `rtt_max`, `jitter` (ms), `loss` (%).
+3. **Bestehende Ping-Sensoren:** neue Migration `0024` legt die fehlenden Kanäle an (der Poller übergeht Werte ohne Kanal), **ohne Grenzwerte** –
+   die setzt der Nutzer bei den bestehenden Sensoren selbst.
+4. **Grenzwerte:** wie bei jedem Kanal auf der Einstellungsseite des Sensors einstellbar; neue Ping-Sensoren bekommen über `default_thresholds`
+   einen Vorschlag für `loss` (Warnung über 20 %).
+5. **Paketanzahl einstellbar** (gleich mit umsetzen): Feld „Pakete je Abfrage“ (1–10, Standard 5) auf der Einstellungsseite und beim Anlegen
+   (`templates/sensor_fields.html`), gespeichert in `sensors.params` wie bei den Dienst-Sensoren (`has_settings` für Ping, `update_spec`); fehlt
+   der Wert (bestehende Sensoren), gilt 5. Änderungsprotokoll je Feld; Gerätevorlagen übernehmen den Wert.
+6. **Anzeige:** Tabelle, aktuelle Werte und Zusammenfassung zeigen die neuen Kanäle ohne Zusatzarbeit; prüfen, dass der Graph % und ms nicht auf
+   einer Achse zeigt; auf dem Handy Minimum, Maximum und Jitter ausblenden (wie das Volumen beim Traffic, Spaltenklasse in `static/samples.js`).
+7. Texte in `locales/de|en` (Kanalnamen, Feld, Fehlermeldungen), `docs/sensors.md`, CLAUDE.md; Tests: Berechnung (5/5, 3/5, 0/5 Antworten, Jitter,
+   Verlust in %), Migration (vorhandene Ping-Sensoren bekommen die Kanäle, Verlauf bleibt), Einstellungsformular (Paketanzahl gültig/ungültig);
+   im Browser prüfen (Tabelle, Graph, Einstellungen, Handybreiten), danach Test-.deb 0.5.5 neu bauen.
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
-- Test mit dem echten Mailserver des Nutzers (braucht den Nutzer), Ende-zu-Ende-Integrationstest (Server starten, Gerät gegen lokalen `snmpd`, Poller,
-  Statuswechsel, Mail an einen Test-SMTP-Server).
 - Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen außer dem Master noch nicht.
-- ER605 zusätzlich über die Omada-API (nicht im MVP, nur auf Wunsch).
+- ER605: liefert inzwischen viele Werte, nicht mehr nur Ping (laut Nutzer, 2026-10-27); die Omada-API ist dafür nicht nötig.
 
 ## Bewusst nicht im MVP
 
@@ -681,7 +731,6 @@ Begrenzung der Anmeldeversuche (`auth::throttle`).
 
 ## Offene Punkte (vom Nutzer zu klären)
 
-- ER605: läuft als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt (geplant als Vorhaben L)
 - Update-Möglichkeit: Weg und Zeitpunkt (erster Schritt geplant als Vorhaben I)
 

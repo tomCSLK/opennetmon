@@ -113,6 +113,8 @@ detail-no-value = no value yet
 detail-no-samples = No values in the chosen time range yet.
 detail-chart-needs-js = The chart needs JavaScript.
 detail-samples = Values
+detail-rows = Rows
+detail-pages = Pages of values
 # How far back the table of values reaches ($minutes: 15, 30, 60, 360, 1440 or 10080).
 detail-span = { $minutes ->
     [60] last hour
