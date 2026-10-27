@@ -874,7 +874,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let sensor = sensors::create_sensor(pool, device, "Ping", &SensorSpec::Ping)
+        let sensor = sensors::create_sensor(pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let id = store::create(pool, "Nachts").await.unwrap();

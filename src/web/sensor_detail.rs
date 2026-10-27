@@ -371,6 +371,8 @@ struct SeriesJson {
     /// Enumeration labels from the MIB as `[value, "label"]` pairs.
     labels: Vec<(i64, String)>,
     unit: &'static str,
+    /// A channel the table of values hides on phones (ping: minimum, maximum, jitter).
+    minor: bool,
     values: Vec<Option<f64>>,
 }
 
@@ -418,6 +420,7 @@ fn series_json(
             unit_label: value_format.unit_label.clone(),
             labels: value_format.labels.clone(),
             unit: s.unit.as_str(),
+            minor: sensor.spec.minor(&s.key),
             key: s.key,
             values: s.values,
         })
@@ -1338,7 +1341,7 @@ mod tests {
             .unwrap()
             .unwrap()
             .device_id;
-        create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
+        create_sensor(&h.state.pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let (admin, csrf) = login(&h, "anna").await;
@@ -1552,7 +1555,7 @@ mod tests {
         assert!(stored.channels[0].states.is_empty());
 
         // Sensors without named values have no ratings.
-        let ping = create_sensor(&h.state.pool, dev, "Ping", &SensorSpec::Ping)
+        let ping = create_sensor(&h.state.pool, dev, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let page = send(&h.app, get(&format!("/sensors/{ping}/edit"), Some(&admin))).await;

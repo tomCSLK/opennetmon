@@ -90,7 +90,11 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
             .ok_or_else(|| corrupt("if_index"))
     };
     Ok(match r.kind.as_str() {
-        "ping" => SensorSpec::Ping,
+        // Ping sensors from before 0.5.5 have no settings: the default number of packets.
+        "ping" => match r.params.as_deref() {
+            None => SensorSpec::ping(),
+            Some(p) => SensorSpec::from_params("ping", p).ok_or_else(|| corrupt("params"))?,
+        },
         "uptime" => SensorSpec::Uptime,
         "if_traffic" => SensorSpec::InterfaceTraffic {
             if_index: if_index()?,
@@ -388,7 +392,7 @@ pub async fn create_sensor_with_state(
             Some(*scale),
             unit.as_deref().map(str::trim),
         ),
-        SensorSpec::Ping
+        SensorSpec::Ping(_)
         | SensorSpec::Uptime
         | SensorSpec::Local(_)
         | SensorSpec::Http(_)
@@ -646,7 +650,7 @@ mod tests {
     async fn every_kind_round_trips_with_its_channels() {
         let (_dir, pool, device) = setup().await;
         let specs = [
-            ("Ping", SensorSpec::Ping),
+            ("Ping", SensorSpec::ping()),
             ("Uptime", SensorSpec::Uptime),
             (
                 "Traffic 1",
@@ -680,7 +684,7 @@ mod tests {
     #[tokio::test]
     async fn names_are_unique_per_device_and_case_insensitive() {
         let (_dir, pool, device) = setup().await;
-        create_sensor(&pool, device, "Ping", &SensorSpec::Ping)
+        create_sensor(&pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let err = create_sensor(&pool, device, "PING", &SensorSpec::Uptime)
@@ -693,9 +697,9 @@ mod tests {
     async fn invalid_input_and_unknown_device_are_rejected() {
         let (_dir, pool, device) = setup().await;
         for (id, name, spec) in [
-            (device, "", SensorSpec::Ping),
+            (device, "", SensorSpec::ping()),
             (device, "x", SensorSpec::InterfaceStatus { if_index: 0 }),
-            (device + 1, "x", SensorSpec::Ping),
+            (device + 1, "x", SensorSpec::ping()),
         ] {
             let err = create_sensor(&pool, id, name, &spec).await.unwrap_err();
             assert!(matches!(err, Error::Invalid(_)), "{err:?}");
@@ -706,10 +710,10 @@ mod tests {
     #[tokio::test]
     async fn thresholds_are_stored_validated_and_scoped_to_the_sensor() {
         let (_dir, pool, device) = setup().await;
-        let a = create_sensor(&pool, device, "A", &SensorSpec::Ping)
+        let a = create_sensor(&pool, device, "A", &SensorSpec::ping())
             .await
             .unwrap();
-        let b = create_sensor(&pool, device, "B", &SensorSpec::Ping)
+        let b = create_sensor(&pool, device, "B", &SensorSpec::ping())
             .await
             .unwrap();
         let a_channel = get_sensor(&pool, a).await.unwrap().unwrap().channels[0].id;
@@ -777,13 +781,13 @@ mod tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        let a = create_sensor_with_state(&pool, device, "A", &SensorSpec::Ping, false)
+        let a = create_sensor_with_state(&pool, device, "A", &SensorSpec::ping(), false)
             .await
             .unwrap();
         let b = create_sensor_with_state(&pool, device, "B", &SensorSpec::Uptime, false)
             .await
             .unwrap();
-        let foreign = create_sensor_with_state(&pool, other, "C", &SensorSpec::Ping, false)
+        let foreign = create_sensor_with_state(&pool, other, "C", &SensorSpec::ping(), false)
             .await
             .unwrap();
         assert!(
@@ -802,7 +806,7 @@ mod tests {
     #[tokio::test]
     async fn disabled_sensors_are_not_listed_for_polling() {
         let (_dir, pool, device) = setup().await;
-        let a = create_sensor(&pool, device, "A", &SensorSpec::Ping)
+        let a = create_sensor(&pool, device, "A", &SensorSpec::ping())
             .await
             .unwrap();
         create_sensor(&pool, device, "B", &SensorSpec::Uptime)
@@ -903,7 +907,7 @@ mod tests {
                 SensorSpec::InterfaceTraffic { if_index: 2 },
             ),
             ("Uptime", SensorSpec::Uptime),
-            ("Zz Ping", SensorSpec::Ping),
+            ("Zz Ping", SensorSpec::ping()),
         ] {
             ids.insert(
                 name,
@@ -960,7 +964,7 @@ mod tests {
     #[tokio::test]
     async fn renaming_keeps_the_sensor_and_checks_the_name() {
         let (_dir, pool, device) = setup().await;
-        let a = create_sensor(&pool, device, "A", &SensorSpec::Ping)
+        let a = create_sensor(&pool, device, "A", &SensorSpec::ping())
             .await
             .unwrap();
         create_sensor(&pool, device, "B", &SensorSpec::Uptime)
@@ -970,7 +974,7 @@ mod tests {
         let sensor = get_sensor(&pool, a).await.unwrap().unwrap();
         assert_eq!(
             (sensor.name.as_str(), sensor.channels.len()),
-            ("Erreichbarkeit", 1)
+            ("Erreichbarkeit", 5)
         );
         assert!(matches!(
             rename_sensor(&pool, a, "B").await,

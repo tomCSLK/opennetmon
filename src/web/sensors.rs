@@ -75,9 +75,11 @@ pub(crate) struct SensorFormValues {
     pub(crate) editing: bool,
 }
 
-/// The fields of the service sensors (HTTP, TCP, DNS, TLS), as typed.
+/// The fields of the ping and service sensors (HTTP, TCP, DNS, TLS), as typed.
 #[derive(Clone, Deserialize)]
 pub(crate) struct ServiceFields {
+    #[serde(default)]
+    pub(crate) ping_packets: String,
     #[serde(default)]
     pub(crate) url: String,
     #[serde(default)]
@@ -112,6 +114,7 @@ impl Default for ServiceFields {
     fn default() -> Self {
         let on = Some("on".to_owned());
         Self {
+            ping_packets: crate::sensors::ping::DEFAULT_PACKETS.to_string(),
             url: String::new(),
             expect: String::new(),
             keyword: String::new(),
@@ -263,6 +266,7 @@ impl SensorFormValues {
                 f.follow = on(c.follow_redirects);
                 f.verify = on(c.verify_tls);
             }
+            SensorSpec::Ping(c) => f.ping_packets = c.packets.to_string(),
             SensorSpec::Tcp(c) => f.tcp_port = c.port.to_string(),
             SensorSpec::Dns(c) => {
                 f.dns_name = c.name.clone();
@@ -286,12 +290,13 @@ impl SensorFormValues {
     }
 }
 
-/// Whether the sensor has settings to change on its settings page (custom OID and the service
-/// sensors; the others are fixed by their type, interface or value).
+/// Whether the sensor has settings to change on its settings page (ping, custom OID and the
+/// service sensors; the others are fixed by their type, interface or value).
 pub(crate) fn has_settings(spec: &SensorSpec) -> bool {
     matches!(
         spec,
-        SensorSpec::Oid { .. }
+        SensorSpec::Ping(_)
+            | SensorSpec::Oid { .. }
             | SensorSpec::Http(_)
             | SensorSpec::Tcp(_)
             | SensorSpec::Dns(_)
@@ -397,6 +402,7 @@ impl SensorForm {
             scale: text("scale"),
             unit: text("unit"),
             service: ServiceFields {
+                ping_packets: text("ping_packets"),
                 url: text("url"),
                 expect: text("expect"),
                 keyword: text("keyword"),
@@ -438,7 +444,20 @@ impl SensorForm {
     ) -> Result<(String, SensorSpec)> {
         let invalid = |id: &'static str| Error::invalid(Msg::new(id));
         let (default_name, spec) = match self.kind.as_str() {
-            "ping" => ("Ping".to_owned(), SensorSpec::Ping),
+            "ping" => {
+                let packets = match self.service.ping_packets.trim() {
+                    "" => crate::sensors::ping::DEFAULT_PACKETS,
+                    text => text.parse().map_err(|_| {
+                        Error::invalid(
+                            Msg::new("ping-packets-invalid")
+                                .with("max", u32::from(crate::sensors::ping::MAX_PACKETS)),
+                        )
+                    })?,
+                };
+                let check = crate::sensors::ping::PingCheck { packets };
+                check.validate().map_err(Error::invalid)?;
+                ("Ping".to_owned(), SensorSpec::Ping(check))
+            }
             kind @ ("http" | "tcp" | "dns" | "tls") => self.service.to_spec(t, kind, host)?,
             "uptime" => ("Uptime".to_owned(), SensorSpec::Uptime),
             "oid" => {
@@ -536,7 +555,11 @@ async fn recent(
         let (bucket, count) = sparkline::buckets(sensor.interval(device.polling.interval_secs));
         let from = now - bucket * i64::try_from(count).unwrap_or(0);
         let mut series = Vec::new();
-        for channel in &sensor.channels {
+        for channel in sensor
+            .channels
+            .iter()
+            .filter(|c| sensor.spec.in_lists(&c.key))
+        {
             series.push(bucket_averages(pool, channel.id, from, bucket, count).await?);
         }
         match sparkline::lines(&series) {
@@ -573,7 +596,11 @@ pub(crate) async fn fresh_values(
     let latest = latest_values(pool, &sensor.channels).await?;
     let format = ValueFormat::for_sensor(&sensor.spec, mibs);
     let (mut shown, mut titled, mut total) = (Vec::new(), Vec::new(), None);
-    for channel in &sensor.channels {
+    for channel in sensor
+        .channels
+        .iter()
+        .filter(|c| sensor.spec.in_lists(&c.key))
+    {
         if let Some((ts, value)) = latest.get(&channel.id)
             && *ts >= fresh_from
         {
@@ -1105,7 +1132,7 @@ mod tests {
             &h.state.pool,
             device,
             "Ping",
-            &crate::sensors::spec::SensorSpec::Ping,
+            &crate::sensors::spec::SensorSpec::ping(),
         )
         .await
         .unwrap();
@@ -1447,10 +1474,46 @@ mod tests {
                 .body
                 .contains(&format!("href=\"/sensors/{web}/edit\""))
         );
-        // Ping has settings too (name, interval, limits), but nothing type-specific.
+        // Ping: the packets per poll besides name, interval and limits (also for the loss).
         let page = send(&h.app, get(&format!("/sensors/{ping}/edit"), Some(&admin))).await;
         assert_eq!(page.status, StatusCode::OK);
-        assert!(page.body.contains("name=\"wa_") && !page.body.contains("id=\"kind\""));
+        for part in [
+            "name=\"wa_",
+            "id=\"kind\" name=\"kind\" value=\"ping\"",
+            "name=\"ping_packets\" type=\"text\" value=\"5\"",
+            "Paketverlust",
+        ] {
+            assert!(page.body.contains(part), "{part}");
+        }
+        let body = format!("csrf_token={csrf}&kind=ping&ping_packets=11");
+        let reply = send(
+            &h.app,
+            post(&format!("/sensors/{ping}/edit"), Some(&admin), &body),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(reply.body.contains("zwischen 1 und 10"), "{}", reply.body);
+        let body = format!("csrf_token={csrf}&kind=ping&ping_packets=3");
+        let reply = send(
+            &h.app,
+            post(&format!("/sensors/{ping}/edit"), Some(&admin), &body),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/sensors/{ping}?msg=sensor_settings_saved")
+        );
+        let saved = store::get_sensor(&h.state.pool, ping)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            saved.spec,
+            SensorSpec::Ping(crate::sensors::ping::PingCheck { packets: 3 })
+        );
+        let audit = crate::storage::audit::list(&h.state.pool, 1).await.unwrap();
+        let text = Lang::De.msg(&audit[0].detail);
+        assert!(text.contains("Pakete je Abfrage: 5 → 3"), "{text}");
 
         // Saved with a new name; type and channels stay, the kind field cannot change the type.
         let body = format!(
@@ -1796,7 +1859,7 @@ mod tests {
         let h = harness(true).await;
         let device = device_on(&h, 161).await;
         let (admin, csrf) = login(&h, "anna").await;
-        let id = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
+        let id = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let page = send(
@@ -1895,7 +1958,7 @@ mod tests {
         let home = send(&h.app, get("/", Some(&admin))).await;
         assert!(home.body.contains("keine Sensoren") && home.body.contains("0 Sensoren"));
 
-        let sensor = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
+        let sensor = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         crate::storage::status::record_poll(
@@ -1936,7 +1999,7 @@ mod tests {
         let device = device_on(&h, 161).await;
         let (viewer, _) = login(&h, "bert").await;
         let now = now_ms();
-        let ping = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
+        let ping = store::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let rtt = store::get_sensor(&h.state.pool, ping)

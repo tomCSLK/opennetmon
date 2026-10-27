@@ -521,7 +521,7 @@ async fn render_new(
         .filter(|s| {
             matches!(
                 s.spec,
-                SensorSpec::Ping
+                SensorSpec::Ping(_)
                     | SensorSpec::Uptime
                     | SensorSpec::Oid { .. }
                     | SensorSpec::Http(_)
@@ -1001,7 +1001,7 @@ mod tests {
     async fn configured_source(h: &Harness, port: u16, profile: i64) -> i64 {
         let dev = device_on(h, "Switch Büro", port, profile).await;
         let pool = &h.state.pool;
-        let ping = create_sensor_with_state(pool, dev, "Ping", &SensorSpec::Ping, true)
+        let ping = create_sensor_with_state(pool, dev, "Ping", &SensorSpec::ping(), true)
             .await
             .unwrap();
         let channel = crate::storage::sensors::get_sensor(pool, ping)

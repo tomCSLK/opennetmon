@@ -664,7 +664,15 @@ schon 1 440, bei 7 Tagen über 10 000), die Seite wird sehr lang. Entscheidung: 
 Verworfen: nur feste Höhe mit eigenem Scrollbalken (`.table-wrap.scroll`; Seite kurz, aber keine Seiten, weiter alle Zeilen im DOM); Seiten auf dem
 Server (`?before=<ts>&limit=`; die Zusammenfassung müsste dann der Server rechnen – erst nötig, wenn die Datenmenge selbst zu groß wird).
 
-### Ping mit mehreren Paketen wie in PRTG – geplant 2026-10-27 (Wunsch des Nutzers, Fragen beantwortet)
+### Ping mit mehreren Paketen wie in PRTG – umgesetzt 2026-10-27 (Wunsch des Nutzers, Fragen beantwortet)
+
+**Umgesetzt** wie unten geplant (`sensors::ping`, Migration `0024`, `docs/sensors.md`, „Ping“). Abweichungen und Befunde: Abstand 100 ms statt 200 ms, die
+Pakete warten parallel (eine Abfrage dauert höchstens Timeout + 0,9 s und bleibt in der Frist des Pollers, Timeout + 2 s); `params` war für Ping durch die
+CHECK-Regel der Tabelle `sensors` verboten, deshalb baut `storage::current_sensors_table` die Tabelle noch einmal neu (erkannt an der fehlenden Zeile für
+`ping`, kopiert jetzt auch `params`; Test aus dem Zustand des ersten 0.5.5-Testpakets); Listen und Mini-Graphen zeigen nur die Antwortzeit, auf dem Handy
+blendet die Tabelle Minimum, Maximum und Jitter aus (Paketverlust bleibt); Startwert der Laufnummer zufällig je Sensor. Geprüft mit einer Kopie der
+Entwicklungsdaten (Migration und Neuaufbau aus dem Stand 0.5.5, echte Pings an 1.1.1.1, 8.8.8.8 und localhost) und im Browser (Sensorseite, Einstellungen,
+Liste, 390 px, dunkel).
 
 Anlass: Der Ping-Sensor schickt je Abfrage **ein** Paket und hat nur den Kanal `rtt`; die Messwerttabelle wirkt leer, und ein einzelnes verlorenes
 Paket macht die ganze Abfrage zum Fehlschlag (Warnung). Künftig wie PRTG mehrere Pakete je Abfrage:

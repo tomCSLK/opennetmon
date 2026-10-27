@@ -537,7 +537,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let sensor = create_sensor(pool, device, "Gateway", &SensorSpec::Ping)
+        let sensor = create_sensor(pool, device, "Gateway", &SensorSpec::ping())
             .await
             .unwrap();
         let ok = || Assessment::Healthy("OK".into());
@@ -597,12 +597,12 @@ mod tests {
                 .unwrap(),
             );
         }
-        let router_ping = create_sensor(pool, ids[0], "Ping", &SensorSpec::Ping)
+        let router_ping = create_sensor(pool, ids[0], "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let mut switch_sensors = Vec::new();
         for name in ["Ping", "Uptime"] {
-            let id = create_sensor(pool, ids[1], name, &SensorSpec::Ping)
+            let id = create_sensor(pool, ids[1], name, &SensorSpec::ping())
                 .await
                 .unwrap();
             record_poll(pool, id, 1_000, &[], &Assessment::Healthy("OK".into()))
@@ -687,10 +687,10 @@ mod tests {
         )
         .await
         .unwrap();
-        let alpha = create_sensor(pool, device, "Alpha", &SensorSpec::Ping)
+        let alpha = create_sensor(pool, device, "Alpha", &SensorSpec::ping())
             .await
             .unwrap();
-        let beta = create_sensor(pool, device, "Beta", &SensorSpec::Ping)
+        let beta = create_sensor(pool, device, "Beta", &SensorSpec::ping())
             .await
             .unwrap();
         let ok = || Assessment::Healthy("OK".into());
@@ -765,13 +765,13 @@ mod tests {
         };
         let router = save("Router", "192.0.2.1").await.unwrap();
         let switch = save("Switch", "192.0.2.2").await.unwrap();
-        let ping = create_sensor(pool, router, "Ping", &SensorSpec::Ping)
+        let ping = create_sensor(pool, router, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
-        let other = create_sensor(pool, router, "Ping 2", &SensorSpec::Ping)
+        let other = create_sensor(pool, router, "Ping 2", &SensorSpec::ping())
             .await
             .unwrap();
-        let far = create_sensor(pool, switch, "Ping 3", &SensorSpec::Ping)
+        let far = create_sensor(pool, switch, "Ping 3", &SensorSpec::ping())
             .await
             .unwrap();
         for sensor in [ping, other, far] {

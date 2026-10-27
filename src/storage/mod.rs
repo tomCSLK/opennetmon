@@ -119,19 +119,27 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
 
 /// The `sensors` table of migration 0005 has a check on `kind` that later sensor types do not fit:
 /// sensors of the machine opennetmon runs on (kind `local`, measured value in `target`, e.g.
-/// `disk:/var`) and service sensors (`http`, `tcp`, `dns`, `tls`, settings as JSON in `params`).
+/// `disk:/var`), service sensors (`http`, `tcp`, `dns`, `tls`, settings as JSON in `params`) and,
+/// since 0.5.5, ping sensors with settings in `params` (the number of packets).
 /// Like [`allow_devices_without_profile`], the check only changes by rebuilding the table outside a
-/// migration transaction; it runs once per schema change (detected by the newest column) and copies
-/// the columns the old table has. Later migrations that add columns to `sensors` must add them here
-/// as well, and a new sensor type needs a new newest column (or another check) to trigger it.
+/// migration transaction; it runs once per schema change (detected by the newest column or by the
+/// rule for `ping` in the table's definition) and copies the columns the old table has. Later
+/// migrations that add columns to `sensors` must add them here as well, and a new sensor type needs
+/// a new newest column (or another check) to trigger it.
 async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
+    const PING_RULE: &str = "WHEN 'ping'";
     let existing: Vec<String> = sqlx::query_scalar("SELECT name FROM pragma_table_info('sensors')")
         .fetch_all(pool)
         .await?;
-    if existing.iter().any(|c| c == "params") {
+    let definition: String = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sensors'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if existing.iter().any(|c| c == "params") && definition.contains(PING_RULE) {
         return Ok(());
     }
-    const COLUMNS: [&str; 20] = [
+    const COLUMNS: [&str; 21] = [
         "id",
         "device_id",
         "name",
@@ -152,6 +160,7 @@ async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
         "dependency_sensor_id",
         "dependency_delay_secs",
         "dependency_master",
+        "params",
     ];
     let copied = COLUMNS
         .iter()
@@ -179,7 +188,7 @@ async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
                     pause_reason   TEXT NOT NULL DEFAULT '',
                     -- what a local sensor measures, e.g. 'cpu' or 'disk:/var'
                     target         TEXT,
-                    -- settings of a service sensor (JSON, checked by the program)
+                    -- settings of a ping or service sensor (JSON, checked by the program)
                     params         TEXT CHECK (params IS NULL OR json_valid(params)),
                     -- own polling interval (migration 0017); NULL = the device's
                     interval_secs  INTEGER CHECK (interval_secs IS NULL OR interval_secs BETWEEN 10 AND 3600),
@@ -192,6 +201,7 @@ async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
                     -- Exactly the columns that belong to the kind are set.
                     CHECK (
                         CASE kind
+                            WHEN 'ping'       THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
                             WHEN 'if_traffic' THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL
                             WHEN 'if_status'  THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL
                             WHEN 'oid'        THEN if_index IS NULL AND oid IS NOT NULL AND oid_mode IS NOT NULL AND scale IS NOT NULL AND target IS NULL AND params IS NULL
@@ -491,6 +501,139 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(left, (0, 0), "cascade");
+    }
+
+    #[tokio::test]
+    async fn existing_ping_sensors_get_the_new_channels_and_keep_their_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = connect(&dir.path().join("old.db")).await.unwrap();
+        // The state of 0.5.0: everything before migration 0024, ping with one channel.
+        let mut before = sqlx::migrate!("./migrations");
+        before.migrations = before
+            .migrations
+            .iter()
+            .filter(|m| m.version < 24)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into();
+        before.run(&pool).await.unwrap();
+        migrate_rebuilds(&pool).await;
+        for statement in [
+            "INSERT INTO devices (name, host, profile_id) VALUES ('gw', '192.0.2.1', NULL)",
+            "INSERT INTO sensors (device_id, name, kind) VALUES (1, 'Ping', 'ping')",
+            "INSERT INTO sensors (device_id, name, kind) VALUES (1, 'Uptime', 'uptime')",
+            "INSERT INTO channels (sensor_id, key, unit, warn_above) VALUES (1, 'rtt', 'ms', 50)",
+            "INSERT INTO channels (sensor_id, key, unit) VALUES (2, 'uptime', 's')",
+            "INSERT INTO samples (channel_id, ts, value) VALUES (1, 1000, 2.5)",
+        ] {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+
+        migrate(&pool).await.unwrap();
+        let channels: Vec<(i64, String, String, Option<f64>)> =
+            sqlx::query_as("SELECT sensor_id, key, unit, warn_above FROM channels ORDER BY id")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        let ping: Vec<_> = channels
+            .iter()
+            .filter(|c| c.0 == 1)
+            .map(|c| (c.1.as_str(), c.2.as_str(), c.3))
+            .collect();
+        assert_eq!(
+            ping,
+            [
+                ("rtt", "ms", Some(50.0)),
+                ("rtt_min", "ms", None),
+                ("rtt_max", "ms", None),
+                ("jitter", "ms", None),
+                ("loss", "percent", None),
+            ],
+            "new channels without thresholds"
+        );
+        assert_eq!(
+            channels.iter().filter(|c| c.0 == 2).count(),
+            1,
+            "uptime unchanged"
+        );
+        let samples: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM samples WHERE channel_id = 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(samples, 1);
+        let sensor = crate::storage::sensors::get_sensor(&pool, 1)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(sensor.spec, crate::sensors::spec::SensorSpec::ping());
+        assert_eq!(sensor.channels.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn the_table_of_the_first_055_packages_is_rebuilt_for_ping_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = connect(&dir.path().join("old.db")).await.unwrap();
+        migrate(&pool).await.unwrap();
+        // The table as the first 0.5.5 packages left it: `params` for service sensors only.
+        let current: String = sqlx::query_scalar(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sensors'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let open = current.find('(').unwrap();
+        let older: String = current[open..]
+            .lines()
+            .filter(|l| !l.contains("WHEN 'ping'"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        rebuild_without_foreign_keys(&pool, "sensors", |tx| {
+            Box::pin(async move {
+                for statement in [
+                    format!("CREATE TABLE sensors_old {older}"),
+                    "INSERT INTO sensors_old SELECT * FROM sensors".to_owned(),
+                    "DROP TABLE sensors".to_owned(),
+                    "ALTER TABLE sensors_old RENAME TO sensors".to_owned(),
+                ] {
+                    sqlx::query(&statement).execute(&mut **tx).await?;
+                }
+                Ok(())
+            })
+        })
+        .await
+        .unwrap();
+        for statement in [
+            "INSERT INTO devices (name, host, profile_id) VALUES ('web', '192.0.2.1', NULL)",
+            "INSERT INTO sensors (device_id, name, kind, params) VALUES (1, 'TCP', 'tcp', '{\"port\":22}')",
+            "INSERT INTO sensors (device_id, name, kind) VALUES (1, 'Ping', 'ping')",
+        ] {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+        let with_params = "UPDATE sensors SET params = '{\"packets\":3}' WHERE kind = 'ping'";
+        assert!(sqlx::query(with_params).execute(&pool).await.is_err());
+
+        migrate(&pool).await.unwrap();
+        migrate(&pool).await.unwrap(); // a second start changes nothing
+        sqlx::query(with_params).execute(&pool).await.unwrap();
+        let params: Vec<(String, Option<String>)> =
+            sqlx::query_as("SELECT kind, params FROM sensors ORDER BY id")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            params,
+            [
+                ("tcp".to_owned(), Some("{\"port\":22}".to_owned())),
+                ("ping".to_owned(), Some("{\"packets\":3}".to_owned())),
+            ],
+            "the settings of the service sensors survive the rebuild"
+        );
+    }
+
+    /// The rebuilds `migrate` does after the sqlx migrations, for a database at an older migration.
+    async fn migrate_rebuilds(pool: &SqlitePool) {
+        allow_devices_without_profile(pool).await.unwrap();
+        current_sensors_table(pool).await.unwrap();
     }
 
     #[tokio::test]

@@ -444,12 +444,14 @@ mod tests {
             .unwrap();
         let router = device(&h, "Router", None).await;
         let switch = device(&h, "Switch", Some(group)).await;
-        let router_ping = sensors::create_sensor(&h.state.pool, router, "Ping", &SensorSpec::Ping)
-            .await
-            .unwrap();
-        let switch_ping = sensors::create_sensor(&h.state.pool, switch, "Ping", &SensorSpec::Ping)
-            .await
-            .unwrap();
+        let router_ping =
+            sensors::create_sensor(&h.state.pool, router, "Ping", &SensorSpec::ping())
+                .await
+                .unwrap();
+        let switch_ping =
+            sensors::create_sensor(&h.state.pool, switch, "Ping", &SensorSpec::ping())
+                .await
+                .unwrap();
         let (viewer, vcsrf) = login(&h, "bert").await;
         let (admin, csrf) = login(&h, "anna").await;
         let path = format!("/dependency/group/{group}");

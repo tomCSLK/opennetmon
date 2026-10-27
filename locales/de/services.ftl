@@ -61,3 +61,17 @@ value-days =
         [one] { $days } Tag
        *[other] { $days } Tage
     }
+
+# Ping (mehrere Echoanfragen je Abfrage)
+ping-fields = Ping
+ping-packets = Pakete je Abfrage
+ping-packets-hint = 1 bis 10 Echoanfragen im Abstand von 0,1 s. Die Abfrage schlägt erst fehl, wenn keine Antwort kommt; einzelne verlorene Pakete zeigt der Kanal „Paketverlust“, für den sich ein Grenzwert setzen lässt (neue Sensoren: Warnung über 20 %).
+ping-packets-invalid = Die Zahl der Pakete muss zwischen 1 und { $max } liegen.
+ping-describe = Ping ({ $packets ->
+    [one] 1 Paket
+   *[other] { $packets } Pakete
+})
+channel-rtt-min = Minimum
+channel-rtt-max = Maximum
+channel-jitter = Jitter
+channel-loss = Paketverlust

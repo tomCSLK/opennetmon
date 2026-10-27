@@ -448,7 +448,7 @@ async fn save(
     match outcome {
         Ok(saved) if id.is_none() && form.profile_id.trim() == "none" => {
             // A ping-only device gets its only sensor right away.
-            sensors::create_sensor(&state.pool, saved, "Ping", &SensorSpec::Ping).await?;
+            sensors::create_sensor(&state.pool, saved, "Ping", &SensorSpec::ping()).await?;
             tracing::info!(user = %user.username, device = saved, "ping-only device created");
             audit_saved(state, user, None, saved).await?;
             Ok(
@@ -1377,7 +1377,7 @@ mod tests {
         assert_eq!(sensors.len(), 1);
         assert_eq!(
             (sensors[0].name.as_str(), &sensors[0].spec),
-            ("Ping", &SensorSpec::Ping)
+            ("Ping", &SensorSpec::ping())
         );
 
         let page = send(&h.app, get(reply.location(), Some(&admin))).await;

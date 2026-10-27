@@ -14,6 +14,7 @@ use crate::devices::MAX_NAME_LEN;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::Error;
 use crate::i18n::{Lang, Msg};
+use crate::sensors::ping::PingCheck;
 use crate::sensors::service::{DnsCheck, HttpCheck, TcpCheck, TlsCheck};
 use crate::sensors::snmp::{OidMode, numeric};
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
@@ -109,15 +110,6 @@ pub enum BasicKind {
     Uptime,
 }
 
-impl BasicKind {
-    fn spec(self) -> SensorSpec {
-        match self {
-            Self::Ping => SensorSpec::Ping,
-            Self::Uptime => SensorSpec::Uptime,
-        }
-    }
-}
-
 /// Ping or uptime.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Basic {
@@ -129,6 +121,21 @@ pub struct Basic {
     /// The master sensor of the device (see [`crate::pause`]).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub master: bool,
+    /// Echo requests per poll of a ping sensor; templates from before 0.5.5 have none (default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub packets: Option<u8>,
+}
+
+impl Basic {
+    fn spec(&self) -> SensorSpec {
+        match self.kind {
+            BasicKind::Ping => SensorSpec::Ping(
+                self.packets
+                    .map_or_else(PingCheck::default, |packets| PingCheck { packets }),
+            ),
+            BasicKind::Uptime => SensorSpec::Uptime,
+        }
+    }
 }
 
 /// Which interfaces get a traffic or status sensor.
@@ -342,6 +349,7 @@ impl Body {
         for b in &self.basics {
             check_name(&b.name)?;
             check_limits(&b.name, &b.limits)?;
+            b.spec().validate()?;
         }
         for rule in self.rules() {
             check_limits("Interfaces", &rule.limits)?;
@@ -541,8 +549,8 @@ pub fn build(
     for s in sensors.iter().filter(|s| options.include.contains(&s.id)) {
         let limits = limits_of(&s.channels);
         match &s.spec {
-            SensorSpec::Ping | SensorSpec::Uptime => body.basics.push(Basic {
-                kind: if s.spec == SensorSpec::Ping {
+            SensorSpec::Ping(_) | SensorSpec::Uptime => body.basics.push(Basic {
+                kind: if matches!(s.spec, SensorSpec::Ping(_)) {
                     BasicKind::Ping
                 } else {
                     BasicKind::Uptime
@@ -551,6 +559,10 @@ pub fn build(
                 enabled: s.enabled,
                 limits,
                 master: options.master == Some(s.id),
+                packets: match &s.spec {
+                    SensorSpec::Ping(c) => Some(c.packets),
+                    _ => None,
+                },
             }),
             SensorSpec::Oid {
                 oid,
@@ -697,7 +709,7 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
     let mut oids = existing_oids(facts.existing);
 
     for b in &body.basics {
-        let spec = b.kind.spec();
+        let spec = b.spec();
         if !kinds.insert(spec.kind()) {
             out.present += 1;
             continue;
@@ -1015,7 +1027,7 @@ mod tests {
 
     /// A configured switch: ping (with a limit), uptime, traffic on two ports, status on one, two PoE values.
     fn source() -> (Vec<SensorRecord>, Vec<DiscoveredInterface>) {
-        let mut ping = sensor(1, "Ping", SensorSpec::Ping, true);
+        let mut ping = sensor(1, "Ping", SensorSpec::ping(), true);
         ping.channels[0].thresholds.warn_above = Some(50.0);
         let sensors = vec![
             ping,
@@ -1071,6 +1083,16 @@ mod tests {
         .unwrap();
         assert_eq!(body.basics.len(), 2);
         assert_eq!(body.basics[0].limits[0].warn_above, Some(50.0));
+        assert_eq!(body.basics[0].packets, Some(5), "ping keeps its packets");
+        let mut fewer = body.basics[0].clone();
+        fewer.packets = Some(3);
+        assert_eq!(fewer.spec(), SensorSpec::Ping(PingCheck { packets: 3 }));
+        fewer.packets = None; // a template from before 0.5.5
+        assert_eq!(fewer.spec(), SensorSpec::ping());
+        fewer.packets = Some(0);
+        let mut broken = body.clone();
+        broken.basics[0] = fewer;
+        assert!(broken.validate().is_err());
         let traffic = body.traffic.as_ref().unwrap();
         assert_eq!(traffic.selection, PortSelection::Same);
         assert_eq!(
@@ -1287,7 +1309,7 @@ mod tests {
             iface(49156, "gigabitEthernet 1/0/4", 6, false),
         ];
         let existing = vec![
-            sensor(20, "Erreichbarkeit", SensorSpec::Ping, true),
+            sensor(20, "Erreichbarkeit", SensorSpec::ping(), true),
             poe(21, &[1, 3, 6, 1, 9], "uptime"),
         ];
         let answering: HashSet<Vec<u64>> = [POE_1.to_vec()].into();

@@ -129,7 +129,7 @@ async fn sensors_work_on_switch_and_access_point() {
             SensorSpec::Uptime,
             SensorSpec::InterfaceStatus { if_index: 1 },
             SensorSpec::InterfaceTraffic { if_index: 1 },
-            SensorSpec::Ping,
+            SensorSpec::ping(),
         ] {
             let mut sensor = spec.build();
             let last = poll_twice(&host, sensor.as_mut()).await;
@@ -196,7 +196,7 @@ async fn poller_cycle_against_real_devices() {
         .unwrap();
         let mut ids = Vec::new();
         for (sensor_name, spec) in [
-            ("Ping", SensorSpec::Ping),
+            ("Ping", SensorSpec::ping()),
             ("Uptime", SensorSpec::Uptime),
             ("Port 1 status", SensorSpec::InterfaceStatus { if_index: 1 }),
             (

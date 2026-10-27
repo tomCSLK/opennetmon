@@ -569,7 +569,7 @@ mod tests {
             Assessment::Healthy(_)
         ));
         assert!(matches!(
-            assess(&SensorSpec::Ping, &ok, &none),
+            assess(&SensorSpec::ping(), &ok, &none),
             Assessment::Healthy(_)
         ));
     }
@@ -584,7 +584,7 @@ mod tests {
         );
         let err = Err(SensorError::Unreachable("x".to_owned()));
         assert!(
-            matches!(assess(&SensorSpec::Ping, &err, &none), Assessment::Failed(m) if de(&m).starts_with("Nicht erreichbar"))
+            matches!(assess(&SensorSpec::ping(), &err, &none), Assessment::Failed(m) if de(&m).starts_with("Nicht erreichbar"))
         );
     }
 
@@ -639,7 +639,7 @@ mod tests {
 
     #[test]
     fn thresholds_turn_values_into_warning_and_down() {
-        let spec = SensorSpec::Ping;
+        let spec = SensorSpec::ping();
         assert!(matches!(
             assess(&spec, &rtt(10.0), &rtt_limits),
             Assessment::Healthy(_)

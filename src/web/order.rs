@@ -349,7 +349,7 @@ mod tests {
         let profile = add_v2c_profile(&h, "P", "public").await;
         let dev = device(&h, "Switch", None, profile).await;
         let other = device(&h, "Anderes", None, profile).await;
-        let ping = create_sensor(&h.state.pool, dev, "Ping", &SensorSpec::Ping)
+        let ping = create_sensor(&h.state.pool, dev, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let up = create_sensor(&h.state.pool, dev, "Uptime", &SensorSpec::Uptime)
@@ -363,7 +363,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let foreign = create_sensor(&h.state.pool, other, "Ping", &SensorSpec::Ping)
+        let foreign = create_sensor(&h.state.pool, other, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         let (admin, csrf) = login(&h, "anna").await;

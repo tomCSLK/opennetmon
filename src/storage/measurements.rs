@@ -509,7 +509,7 @@ mod tests {
     async fn failed_polls_are_rows_of_the_table_with_their_message() {
         use crate::status::Assessment;
         use crate::storage::status::record_poll;
-        let (_dir, pool, ch) = setup(&SensorSpec::Ping).await;
+        let (_dir, pool, ch) = setup(&SensorSpec::ping()).await;
         let sensor = sensor_of(&pool, &ch).await;
         let now = 30 * 24 * HOUR_MS;
         // Up, then three failed polls (warning, then down) and up again, a minute apart.
@@ -569,7 +569,7 @@ mod tests {
 
     #[tokio::test]
     async fn bucket_averages_leave_gaps_empty() {
-        let (_dir, pool, ch) = setup(&SensorSpec::Ping).await;
+        let (_dir, pool, ch) = setup(&SensorSpec::ping()).await;
         let from = 1_000_000;
         insert_samples(
             &pool,
@@ -617,7 +617,7 @@ mod tests {
 
     #[tokio::test]
     async fn averaged_ranges_show_120_points() {
-        let (_dir, pool, ch) = setup(&SensorSpec::Ping).await;
+        let (_dir, pool, ch) = setup(&SensorSpec::ping()).await;
         let now = 400 * 24 * HOUR_MS + 1_234_567;
         // One sample per minute over the last 31 days, so every range is covered with room to spare.
         let samples: Vec<Sample> = (0..31 * 24 * 60)

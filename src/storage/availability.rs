@@ -157,7 +157,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let sensor = create_sensor(&pool, device, "Ping", &SensorSpec::Ping)
+        let sensor = create_sensor(&pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         (dir, pool, sensor)

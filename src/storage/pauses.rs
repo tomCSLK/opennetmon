@@ -736,7 +736,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let sensor = sensors::create_sensor(&pool, device, "Ping", &SensorSpec::Ping)
+        let sensor = sensors::create_sensor(&pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         Env {
@@ -931,7 +931,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let router_ping = sensors::create_sensor(&env.pool, router, "Ping", &SensorSpec::Ping)
+        let router_ping = sensors::create_sensor(&env.pool, router, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         poll(&env, router_ping, 1_000, true).await;

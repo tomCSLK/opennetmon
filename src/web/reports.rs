@@ -256,7 +256,7 @@ async fn lines(state: &AppState, t: Lang, s: &Settings, from: i64, to: i64) -> R
                     .map(|r| Part {
                         sensor_id: r.id,
                         master: master == Some(r.id),
-                        ping: matches!(r.spec, SensorSpec::Ping),
+                        ping: matches!(r.spec, SensorSpec::Ping(_)),
                         totals: totals.get(&r.id).copied().unwrap_or_default(),
                     })
                     .collect();
@@ -629,7 +629,7 @@ mod handler_tests {
         )
         .await
         .unwrap();
-        let ping = create_sensor(pool, device, "Ping", &SensorSpec::Ping)
+        let ping = create_sensor(pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         create_sensor(pool, device, "Uptime", &SensorSpec::Uptime)

@@ -61,3 +61,17 @@ value-days =
         [one] { $days } day
        *[other] { $days } days
     }
+
+# Ping (several echo requests per poll)
+ping-fields = Ping
+ping-packets = Packets per poll
+ping-packets-hint = 1 to 10 echo requests, 0.1 s apart. The poll fails only when no reply comes back; single lost packets show in the channel “Packet loss”, which can have a threshold (new sensors: warning above 20 %).
+ping-packets-invalid = The number of packets must be between 1 and { $max }.
+ping-describe = Ping ({ $packets ->
+    [one] 1 packet
+   *[other] { $packets } packets
+})
+channel-rtt-min = Minimum
+channel-rtt-max = Maximum
+channel-jitter = Jitter
+channel-loss = Packet loss

@@ -2,7 +2,7 @@
 //! Messages are user-facing (German).
 
 use super::local::{LocalMetric, LocalSensor, Paths};
-use super::ping::PingSensor;
+use super::ping::{PingCheck, PingSensor};
 use super::service::{
     DnsCheck, DnsSensor, HttpCheck, HttpSensor, TcpCheck, TcpSensor, TlsCheck, TlsSensor,
 };
@@ -19,7 +19,8 @@ pub const MAX_IF_INDEX: u32 = i32::MAX as u32;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SensorSpec {
-    Ping,
+    /// Echo requests to the device (several per poll).
+    Ping(PingCheck),
     Uptime,
     InterfaceTraffic {
         if_index: u32,
@@ -45,6 +46,9 @@ pub enum SensorSpec {
     /// The TLS certificate a port of the device presents.
     Tls(TlsCheck),
 }
+
+/// Packet loss above which a new ping sensor warns (percent; changeable per channel).
+pub const PING_WARN_LOSS: f64 = 20.0;
 
 /// Days before expiry at which a certificate sensor warns or fails (defaults, changeable per channel).
 pub const TLS_WARN_DAYS: f64 = 14.0;
@@ -94,10 +98,15 @@ impl Unit {
 }
 
 impl SensorSpec {
+    /// A ping sensor with the default settings.
+    pub fn ping() -> Self {
+        Self::Ping(PingCheck::default())
+    }
+
     /// Stable identifier stored in the database.
     pub fn kind(&self) -> &'static str {
         match self {
-            Self::Ping => "ping",
+            Self::Ping(_) => "ping",
             Self::Uptime => "uptime",
             Self::InterfaceTraffic { .. } => "if_traffic",
             Self::InterfaceStatus { .. } => "if_status",
@@ -110,9 +119,11 @@ impl SensorSpec {
         }
     }
 
-    /// Settings of the service sensors as stored in `sensors.params` (JSON); `None` for the others.
+    /// Settings of the ping and service sensors as stored in `sensors.params` (JSON); `None` for
+    /// the others.
     pub fn params(&self) -> Option<String> {
         match self {
+            Self::Ping(c) => serde_json::to_string(c).ok(),
             Self::Http(c) => serde_json::to_string(c).ok(),
             Self::Tcp(c) => serde_json::to_string(c).ok(),
             Self::Dns(c) => serde_json::to_string(c).ok(),
@@ -121,9 +132,10 @@ impl SensorSpec {
         }
     }
 
-    /// The service sensor of `kind` with the stored `params`; `None` if they do not fit.
+    /// The ping or service sensor of `kind` with the stored `params`; `None` if they do not fit.
     pub fn from_params(kind: &str, params: &str) -> Option<Self> {
         Some(match kind {
+            "ping" => Self::Ping(serde_json::from_str(params).ok()?),
             "http" => Self::Http(serde_json::from_str(params).ok()?),
             "tcp" => Self::Tcp(serde_json::from_str(params).ok()?),
             "dns" => Self::Dns(serde_json::from_str(params).ok()?),
@@ -140,6 +152,10 @@ impl SensorSpec {
                 down_below: Some(TLS_DOWN_DAYS),
                 ..Thresholds::default()
             },
+            (Self::Ping(_), "loss") => Thresholds {
+                warn_above: Some(PING_WARN_LOSS),
+                ..Thresholds::default()
+            },
             _ => Thresholds::default(),
         }
     }
@@ -147,7 +163,7 @@ impl SensorSpec {
     /// Short description for lists, e.g. `Interface-Traffic (Index 49153)`.
     pub fn describe(&self, t: Lang) -> String {
         match self {
-            Self::Ping => "Ping".to_owned(),
+            Self::Ping(c) => t.get1("ping-describe", "packets", u32::from(c.packets)),
             Self::Uptime => "Uptime".to_owned(),
             Self::InterfaceTraffic { if_index } => {
                 t.get1("sensor-describe-traffic", "index", *if_index)
@@ -215,7 +231,16 @@ impl SensorSpec {
     pub fn channels(&self) -> Vec<ChannelDef> {
         let one = |key, unit| vec![ChannelDef { key, unit }];
         match self {
-            Self::Ping => one("rtt", Unit::Milliseconds),
+            Self::Ping(_) => [
+                ("rtt", Unit::Milliseconds),
+                ("rtt_min", Unit::Milliseconds),
+                ("rtt_max", Unit::Milliseconds),
+                ("jitter", Unit::Milliseconds),
+                ("loss", Unit::Percent),
+            ]
+            .into_iter()
+            .map(|(key, unit)| ChannelDef { key, unit })
+            .collect(),
             Self::Uptime => one("uptime", Unit::Seconds),
             Self::InterfaceTraffic { .. } => vec![
                 ChannelDef {
@@ -240,6 +265,24 @@ impl SensorSpec {
             Self::Http(_) | Self::Tcp(_) | Self::Dns(_) => one("rtt", Unit::Milliseconds),
             Self::Tls(_) => one("days", Unit::Days),
         }
+    }
+
+    /// Whether channel `key` shows in lists and their small charts. A ping sensor shows only its
+    /// average there; minimum, maximum, jitter and loss are on its own page.
+    pub fn in_lists(&self, key: &str) -> bool {
+        !matches!(
+            (self, key),
+            (Self::Ping(_), "rtt_min" | "rtt_max" | "jitter" | "loss")
+        )
+    }
+
+    /// Whether channel `key` gives way on phones in the table of values (ping: minimum, maximum
+    /// and jitter; the average and the loss stay).
+    pub fn minor(&self, key: &str) -> bool {
+        matches!(
+            (self, key),
+            (Self::Ping(_), "rtt_min" | "rtt_max" | "jitter")
+        )
     }
 
     /// Whether the sensor needs an SNMP session (ping, local and service sensors do not).
@@ -277,6 +320,7 @@ impl SensorSpec {
                 Ok(())
             }
             Self::Local(metric) => metric.validate(),
+            Self::Ping(c) => c.validate(),
             Self::Http(c) => c.validate(),
             Self::Tcp(c) => c.validate(),
             Self::Dns(c) => c.validate(),
@@ -288,7 +332,7 @@ impl SensorSpec {
     /// A fresh sensor instance (counter state starts empty).
     pub fn build(&self) -> Box<dyn Sensor> {
         match self {
-            Self::Ping => Box::new(PingSensor::new()),
+            Self::Ping(c) => Box::new(PingSensor::new(*c)),
             Self::Uptime => Box::new(UptimeSensor),
             Self::InterfaceTraffic { if_index } => Box::new(InterfaceTrafficSensor::new(*if_index)),
             Self::InterfaceStatus { if_index } => Box::new(InterfaceStatusSensor::new(*if_index)),
@@ -420,13 +464,21 @@ mod tests {
     #[test]
     fn channel_layout_matches_kind() {
         let keys = |s: SensorSpec| s.channels().iter().map(|c| c.key).collect::<Vec<_>>();
-        assert_eq!(keys(SensorSpec::Ping), ["rtt"]);
+        assert_eq!(
+            keys(SensorSpec::ping()),
+            ["rtt", "rtt_min", "rtt_max", "jitter", "loss"]
+        );
         assert_eq!(
             keys(SensorSpec::InterfaceTraffic { if_index: 1 }),
             ["in", "out"]
         );
         assert_eq!(SensorSpec::Uptime.kind(), "uptime");
-        assert!(!SensorSpec::Ping.uses_snmp());
+        assert!(!SensorSpec::ping().uses_snmp());
+        let ping = SensorSpec::ping();
+        assert_eq!(
+            SensorSpec::from_params("ping", &ping.params().unwrap()),
+            Some(ping)
+        );
         assert!(SensorSpec::Uptime.uses_snmp());
         let disk = SensorSpec::Local(LocalMetric::Disk { mount: "/".into() });
         assert_eq!((disk.kind(), disk.uses_snmp()), ("local", false));

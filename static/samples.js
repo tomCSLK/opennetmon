@@ -105,7 +105,8 @@
           fmt: function (v) { return F.value('bps', v); }, sum: false });
       } else {
         cols.push({ title: s.label + (s.unit_label ? ' (' + s.unit_label + ')' : ''), values: s.values,
-          fmt: F.forSeries(s), sum: false, state: s.unit === 'state' || (s.labels || []).length > 0 });
+          fmt: F.forSeries(s), sum: false, state: s.unit === 'state' || (s.labels || []).length > 0,
+          cls: s.minor ? 'n minor' : null });
       }
     });
     return cols;
@@ -162,7 +163,8 @@
     var head = el('thead');
     var hr = el('tr');
     hr.appendChild(el('th', null, T('samples-date-time')));
-    // Volume columns (class "vol") and the sum row give way to the speeds on phones (app.css).
+    // Volume columns (class "vol"), minor channels (class "minor", e.g. the minimum of a ping) and the
+    // sum row give way on phones (app.css).
     // A speed column is headed by just the channel name there ("short"), the volume being hidden.
     cols.forEach(function (c) {
       var th = el('th', c.cls || 'n');

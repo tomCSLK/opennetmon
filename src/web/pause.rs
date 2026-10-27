@@ -372,7 +372,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let sensor = sensors::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::Ping)
+        let sensor = sensors::create_sensor(&h.state.pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
         (group, device, sensor)

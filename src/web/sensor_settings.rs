@@ -434,6 +434,9 @@ fn settings_changes(old: &SensorSpec, new: &SensorSpec) -> Changes {
                 yes_no(n.verify_tls),
             )
             .label("service-head", yes_no(o.head), yes_no(n.head)),
+        (SensorSpec::Ping(o), SensorSpec::Ping(n)) => {
+            changes.field("ping-packets", o.packets, n.packets)
+        }
         (SensorSpec::Tcp(o), SensorSpec::Tcp(n)) => changes.field("service-port", o.port, n.port),
         (SensorSpec::Dns(o), SensorSpec::Dns(n)) => {
             let ip = |a: &Option<std::net::IpAddr>| a.map(|a| a.to_string()).unwrap_or_default();

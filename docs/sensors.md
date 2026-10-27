@@ -5,7 +5,7 @@ All sensor types implement the trait `Sensor` (`src/sensors/mod.rs`); the poller
 
 | Type (`kind`) | Channels | Query |
 |---|---|---|
-| Ping (`ping`) | `rtt` (ms) | ICMP echo, timeout as configured on the device |
+| Ping (`ping`) | `rtt`, `rtt_min`, `rtt_max`, `jitter` (ms), `loss` (%) | 5 ICMP echo requests per poll (1–10), timeout as configured on the device |
 | Uptime (`uptime`) | `uptime` (s) | `sysUpTime.0` |
 | Interface traffic (`if_traffic`) | `in`, `out` (bit/s) | `ifHCInOctets`/`ifHCOutOctets` (64 bit), otherwise `ifInOctets`/`ifOutOctets` (32 bit) |
 | Interface status (`if_status`) | `oper_status` (code) | `ifOperStatus` (1 = up, 2 = down, 3 = testing, 5 = dormant, 7 = lowerLayerDown) |
@@ -117,6 +117,22 @@ factor finite and not 0. On the switches the index is not consecutive (e.g. 4915
 `surge-ping` with unprivileged ICMP sockets (`net.ipv4.ping_group_range`); without the permission, the address family stays unusable and the ping fails with
 a clear message. On the server: set `ping_group_range` or `AmbientCapabilities=CAP_NET_RAW` in the systemd unit.
 
+Like PRTG, a ping sensor sends **several echo requests per poll** (since 0.5.5; “Packets per poll”, 1 to 10, default 5, on “Add sensor” and the settings
+page, stored as JSON in `sensors.params`). The requests go out 0.1 s apart and wait for their replies side by side, each up to the device's timeout, so a poll
+takes at most the timeout plus 0.9 s. Channels:
+
+| Channel | Meaning |
+|---|---|
+| Response time (`rtt`) | average of the replies (before 0.5.5 the time of the single reply; the history goes on) |
+| Minimum, Maximum (`rtt_min`, `rtt_max`) | fastest and slowest reply of the poll |
+| Jitter (`jitter`) | mean difference between consecutive replies; no value with fewer than two replies |
+| Packet loss (`loss`) | lost requests in percent |
+
+A poll **fails only when no reply comes back** (then as before: the first failure is a warning, the second in a row down). Single lost packets are a value of
+the channel “Packet loss”; new ping sensors warn above 20 % (`PING_WARN_LOSS`), changeable like every threshold. Ping sensors from before 0.5.5 get the new
+channels without thresholds (migration `0024`) and send 5 packets. Lists and their small charts show only the response time; the sensor page shows all
+channels, the table of values hides minimum, maximum and jitter on phones. Device templates keep the number of packets (`Basic.packets`).
+
 ## Tests
 
 Unit tests against the fake agent (`src/snmp/testagent.rs`, with a settable OID table), storage tests with a temporary database.
@@ -158,8 +174,8 @@ Manually against real hardware: `cargo test --test omada_manual sensors_work -- 
   factor, unit) or a service sensor (URL, ports, names, checks) also the fields it was added with, the same fieldsets as “Add sensor”
   (`templates/sensor_fields.html`, saved by `storage::sensors::update_spec`). Renaming keeps values, chart, thresholds, status and events; the type
   cannot change. The poller uses new settings from its next cycle (a changed setting builds a new sensor instance, so a counter starts afresh).
-  Changing an OID sensor between value and counter changes the unit of its channel; older values keep the old meaning. Ping, uptime, interface and
-  “This server” sensors have nothing type-specific (their interface or value is what they are). Changes appear field by field in the audit log.
+  Changing an OID sensor between value and counter changes the unit of its channel; older values keep the old meaning. A ping sensor has its packets
+  per poll. Uptime, interface and “This server” sensors have nothing type-specific (their interface or value is what they are). Changes appear field by field in the audit log.
 - **Interface discovery** (`POST /devices/<id>/discover`, administrators only, CSRF): `SnmpClient::walk` (GETBULK) reads `ifDescr`, `ifType`, `ifSpeed`,
   `ifOperStatus`, `ifName`, `ifHighSpeed` and `ifAlias` (`src/discovery.rs`) and merges them per `ifIndex`. Name = `ifName`, otherwise `ifDescr`
   (access points have no `ifXTable`), otherwise “Interface N”. The page shows two ticks per interface (traffic, status). **Preselected** is traffic for

@@ -656,13 +656,13 @@ mod tests {
         .await
         .unwrap();
         let pool = &h.state.pool;
-        let ok = create_sensor(pool, device, "Ping", &SensorSpec::Ping)
+        let ok = create_sensor(pool, device, "Ping", &SensorSpec::ping())
             .await
             .unwrap();
-        let down = create_sensor(pool, device, "Gateway", &SensorSpec::Ping)
+        let down = create_sensor(pool, device, "Gateway", &SensorSpec::ping())
             .await
             .unwrap();
-        let paused = create_sensor(pool, device, "Alt", &SensorSpec::Ping)
+        let paused = create_sensor(pool, device, "Alt", &SensorSpec::ping())
             .await
             .unwrap();
         set_enabled(pool, paused, false).await.unwrap();
