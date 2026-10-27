@@ -130,6 +130,7 @@ opennetmon/
     templates.rs        # Gerätevorlagen
     ordering.rs         # Anzeigereihenfolge
     pause.rs            # Pausen und ihre Vererbung
+    schedule.rs         # Wartungsfenster: Fenster, Zeitzone
     sensors/            # Trait Sensor, ping, snmp, local (Dieser Server), spec, counter, format
     status.rs           # Schwellwerte, Bewertungen, Zustandsautomat
     poller.rs           # Supervisor, eine Aufgabe je Gerät
@@ -141,7 +142,7 @@ opennetmon/
   static/               # app.css, eigene Skripte (theme, app, chart, refresh, order, samples, time, …), vendor/uplot
   locales/              # de/, en/ (Fluent)
   mibs/                 # mitgelieferte Standard-MIBs
-  migrations/           # 0001–0016
+  migrations/           # 0001–0020
   examples/snmp_probe.rs
   tests/                # snmp_local.rs (lokaler snmpd), omada_manual.rs (echte Hardware, #[ignore])
   deploy/               # Unit, Installer, Backup, sysctl, Proxy-Beispiele, deb/ (Maintainer-Skripte)
@@ -506,7 +507,15 @@ Unit bewusst ohne Rechte läuft.
 
 Zu entscheiden: Standard an oder aus? Empfehlung: in der ausgelieferten Config **an** mit Kommentar, im Code-Standard aus.
 
-### J. Wartungsfenster nach Zeitplan
+### J. Wartungsfenster nach Zeitplan – umgesetzt 2026-10-27
+
+**Umgesetzt** (`src/schedule.rs`, `storage::schedules`, `web::schedules`, Migration `0020`; Beschreibung in `docs/devices-and-groups.md`,
+„Maintenance windows“): Zeitpläne `/schedules` mit wöchentlichen und einmaligen Fenstern, Zuordnung `/maintenance/<kind>/<id>` (übernehmen, Zeitplan,
+keiner), Wirkung über `Source::Schedule` in `pause::Pauses` (Pause von Hand geht vor, Abhängige folgen), Protokoll `schedule_log` (ein Eintrag je Fenster),
+Zeitzone mit `jiff` 0.2 (Entscheidung 1; MIT/Unlicense, unter Linux nur `jiff` und `jiff-core`), Config `time_zone`. Abweichungen: Zuordnungen in einer
+eigenen Tabelle `schedule_assignments` statt Spalten (kein Neuaufbau von `sensors`); „nächstes Wartungsfenster“ steht auf der Zuordnungsseite und in der
+Zeitplanliste, nicht auf jeder Gruppen-, Geräte- und Sensorseite; Gerätevorlagen übernehmen keine Zeitpläne; Zeiten auf den Zeitplanseiten in der Zeitzone
+des Servers (sonst überall die des Browsers).
 
 Ziel: geplante Unterbrechungen (z. B. nächtliches Omada-Backup, Neustarts, Updates am Server) ohne Ausfallmails, ohne jedes Mal von Hand zu pausieren.
 
@@ -612,7 +621,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (516, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (527, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

@@ -49,6 +49,8 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
   neue Versionen gelten nach einem Update sofort, ohne Versionsnummern in den Adressen pflegen zu müssen
 - SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
   auf dem Stack und überläuft in Tokio-Threads mit 2 MB Stack)
+- Zeitzonen: `jiff` 0.2 (Wartungsfenster in Ortszeit über Sommerzeitwechsel hinweg; Zone aus `/etc/localtime` bzw. Config `time_zone`, tzdb aus
+  `/usr/share/zoneinfo`)
 - Dateisysteme: `rustix` (Feature `fs`, sicheres `statvfs` ohne `unsafe`; war über tempfile schon im Lock) für die Sensoren „Dieser Server“
 - Ping: `surge-ping` (0.9, ein Socket je Adressfamilie für alle Ziele); bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
@@ -149,6 +151,13 @@ Ein Binary, ein Prozess, Module:
   ein Master je Gerät), `dependency_entries` fürs Protokoll (ein Eintrag je Auslösung statt je Sensor). `alerting::deliver` verwirft Wechsel durch
   Abhängigkeit pausierter Sensoren, die Ausfallmail nennt die pausierten Objekte (`paused_dependents`). Seite `web::dependency` (`/dependency/<kind>/<id>`,
   nur Admins, `templates/dependency_form.html`), Knopf „Abhängigkeit“ auf Gruppen-, Geräte- und Sensorseite; Gerätevorlagen übernehmen den Master (`master`)
+- Wartungsfenster wie die Zeitpläne in PRTG (2026-10-27, `docs/devices-and-groups.md`, „Maintenance windows“): `schedule` (reine Logik: `Window`
+  `Weekly`/`Once`, `active_until`/`next_start` in der Zone `schedule::time_zone()`, gesetzt beim Start aus Config `time_zone`, sonst System; `Assignment`
+  `Parent`/`Schedule`/`None`; Formularparser), `storage::schedules` (Migration `0020`: `schedules`, `schedule_windows`, `schedule_assignments` je
+  Gruppe/Gerät/Sensor als eigene Tabelle, `schedule_log`; `load_into` füllt `Pauses` mit `ScheduleInfo.open_until`, `log_windows` aus `pauses::sync`),
+  in `pause::Pauses` als `Source::Schedule` nach der Pause von Hand und vor den Abhängigkeiten (`group_by_hand`/`device_by_hand`, `maintenance`,
+  `schedule_of`, `schedule_roots`); Seiten `web::schedules` (`/schedules`, `/schedules/<id>` mit Fenstern, `/maintenance/<kind>/<id>`, Knopf
+  „Wartungsfenster“ im Menü „⋯ Aktionen“), Protokolleinträge in `web::log`
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum; `DeviceKind`: Gerätetyp, nur fürs Symbol in der Übersicht, Spalte `kind`, Migration `0015`); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - Geräte ohne SNMP: `Device.profile_id` ist `Option` (`None` = „Kein SNMP – nur Ping“, `has_snmp()`, `profile_label()`); interaktive SNMP-Aktionen holen die Zugangsdaten über `web::snmp_credentials` (Fehlermeldung für Ping-Geräte). Die Spalte wurde nachträglich nullbar: `storage::migrate` baut `devices` einmalig mit abgeschalteten Fremdschlüsseln neu auf (`allow_devices_without_profile`), weil das in einer sqlx-Migration (immer Transaktion) nicht geht
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::pauses` für Pausen, Abhängigkeiten und ihr Protokoll, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
@@ -307,6 +316,8 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B) und die Behebungen aus dem Sicherheitstest vom 2026-10-27
   (`PLAN.md`, „Verifikation“). Nach v0.5.0 umgesetzt (noch nicht released): Knopfleisten der Geräte-, Gruppen- und Sensorseite mit
   Pausieren/Fortsetzen und Protokoll sichtbar, die Einrichtung im Menü „⋯ Aktionen“ auf jeder Breite (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, D)
+- Umgesetzt nach v0.5.0 (noch nicht released, 2026-10-27): E Dienst-Sensoren, H `cargo audit` in der CI, I Hinweis auf neue Versionen,
+  J Wartungsfenster
 - Geplant (2026-10-27, `PLAN.md`, „Weitere Vorhaben E–M“; E, G, H, I, J, M jetzt, F, K, L in einer späteren Version): E Sensoren HTTP(S)/TCP/DNS/TLS-Zertifikat,
   F Push (ntfy, Gotify, Telegram, Webhook), G Verfügbarkeit und Berichte, H `cargo audit` in der CI, I Hinweis auf neue Versionen, J Wartungsfenster nach Zeitplan,
   K Zwei-Faktor-Anmeldung (TOTP), L Rotation von `secret.key`, M Änderungsprotokoll

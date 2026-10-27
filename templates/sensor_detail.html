@@ -48,6 +48,7 @@
       {% call icons::more_summary(t) %}{% endcall %}
       <div class="more-items">
     <a class="button ghost" href="/dependency/sensor/{{ sensor.id }}">{{ t.get("dependency") }}</a>
+    <a class="button ghost" href="/maintenance/sensor/{{ sensor.id }}">{{ t.get("maintenance") }}</a>
     <a class="button ghost" href="#delete">{{ t.get("sensor-delete") }}</a>
       </div>
     </details>

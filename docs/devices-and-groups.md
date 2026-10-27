@@ -110,6 +110,36 @@ router instead of one per switch sensor.
 - **Database** (migration `0019`): `dependency` (`parent`/`sensor`/`none`), `dependency_sensor_id` (`ON DELETE SET NULL`: a deleted sensor means
   “inherit” again) and `dependency_delay_secs` on `groups`, `devices` and `sensors`, plus `sensors.dependency_master`.
 
+## Maintenance windows (administrators only)
+
+Like the schedules of PRTG (`src/schedule.rs`, `storage::schedules`, pages `web::schedules`): planned interruptions such as the nightly backup of the
+Omada controller or a server update pause the objects instead of causing outage mails, without pausing them by hand each time.
+
+- **Schedules** on the page “Maintenance windows” (`/schedules`, sidebar): named, each with any number of **windows**:
+  - *weekly*: weekdays, start time and duration in minutes (1 minute to one week), e.g. “Mon–Fri from 03:00, 15 min”; a window over midnight belongs
+    to the day it starts on;
+  - *once*: start and end, e.g. “2026-10-31 10:00 to 2026-10-31 11:00”.
+
+  The list shows the windows of every schedule, whether one is open (“open until …”) or when the next starts, and to how many objects it is assigned.
+- **Time zone:** the times are in the time zone of the server, so a daily window stays at 03:00 across daylight saving changes (on the day the clocks
+  go forward, a start in the skipped hour moves to after the gap). It is the zone of the system (`/etc/localtime`, `timedatectl`; Ubuntu servers often
+  run in UTC) unless the config sets `time_zone = "Europe/Berlin"`; the pages and the log at startup name it. Times on the schedule pages are in this
+  zone, all other times of the interface in the browser's.
+- **Assignment** `/maintenance/<group|device|sensor>/<id>` (button “Maintenance window” in the menu “⋯ Actions” of the group page, the sensor page of a
+  device and the sensor detail page), like a dependency: *inherit from the parent object* (default), *use this schedule*, or *no maintenance window*
+  (stops the inheritance, e.g. for the ping of the router during the backup of the controller). The form says what applies now, where it comes from and
+  when its next window starts.
+- **Effect:** while a window is open, the objects are paused like by hand: not polled, no mail, “Paused” with “Maintenance window “Nightly”” and the
+  end of the window in the overview, the status lists and the sensor pages. A pause by hand comes first; objects that depend on a paused sensor follow
+  through their dependency. Afterwards the sensors start afresh (no belated “OK again” mail). Nothing is stored as a pause: the poller checks the windows
+  whenever it loads the pauses and every 15 s (`pauses::sync_all`), so a window starts and ends within 15 s.
+- **Log:** one entry when a window starts pausing (“Maintenance window – “Nightly”: 14 sensors on 3 devices paused”) and one when it ends (table
+  `schedule_log`, the newest 500 entries).
+- Deleting a schedule makes the objects it was assigned to inherit again. Device templates do not carry schedules.
+- **Database** (migration `0020`): `schedules`, `schedule_windows` (`kind` `weekly` with `weekdays` as a bit mask Monday = 1 … Sunday = 64,
+  `start_minute`, `duration_minutes`; `once` with `start_ms`/`end_ms` in UTC), `schedule_assignments` (one row per object; no row = inherit, no
+  `schedule_id` = none) and `schedule_log`.
+
 ## Order (administrators only)
 
 - **Automatic** (the default): by name, case-insensitive, numbers by value (“Switch 2” before “Switch 10”).
@@ -197,6 +227,8 @@ Passwords appear neither on the result page nor in the log (the log only names u
 
 ## Tests
 
+- Maintenance windows: the computation of windows (`schedule::tests`, also over midnight and on both days of the daylight saving change in
+  Europe/Berlin), inheritance and precedence (`pause::tests`), storage and the pages (`storage::schedules`, `web::schedules`).
 - Unit and handler tests use a small **fake SNMPv2c agent** (`src/snmp/testagent.rs`) which, like real agents, stays silent on a wrong community.
 - `tests/snmp_local.rs`: integration tests against the local `snmpd` (v2c, v3 with `OPENNETMON_TEST_V3_*`); they skip themselves when the agent or the variables
   are missing.

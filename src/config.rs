@@ -71,6 +71,8 @@ pub struct Config {
     /// Look once a day on GitHub whether a newer release exists and tell administrators in the sidebar
     /// (GitHub sees the address of the server; nothing else is sent). Off unless set; the shipped config sets it.
     pub update_check: bool,
+    /// Time zone of the weekly maintenance windows, e.g. `Europe/Berlin`; unset = the system's (`/etc/localtime`).
+    pub time_zone: Option<String>,
 }
 
 impl Default for Config {
@@ -91,6 +93,7 @@ impl Default for Config {
             retention_raw_days: 7,
             retention_hourly_days: 365,
             update_check: false,
+            time_zone: None,
         }
     }
 }
@@ -201,6 +204,13 @@ impl Config {
                 "retention_hourly_days must be between retention_raw_days and 36500",
             ));
         }
+        if let Some(zone) = &self.time_zone
+            && jiff::tz::TimeZone::get(zone).is_err()
+        {
+            return Err(ConfigError::Invalid(
+                "time_zone is not a known time zone (e.g. \"Europe/Berlin\", see timedatectl list-timezones)",
+            ));
+        }
         Ok(())
     }
 }
@@ -233,6 +243,14 @@ mod tests {
         assert!(!Config::from_sources(None, no_env).unwrap().update_check);
         let on = Config::from_sources(Some("update_check = true"), no_env).unwrap();
         assert!(on.update_check);
+    }
+
+    #[test]
+    fn the_time_zone_must_exist() {
+        assert_eq!(Config::from_sources(None, no_env).unwrap().time_zone, None);
+        let berlin = Config::from_sources(Some("time_zone = \"Europe/Berlin\""), no_env).unwrap();
+        assert_eq!(berlin.time_zone.as_deref(), Some("Europe/Berlin"));
+        assert!(Config::from_sources(Some("time_zone = \"Mars/Olympus\""), no_env).is_err());
     }
 
     #[test]

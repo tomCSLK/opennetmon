@@ -36,6 +36,7 @@
       <div class="more-items">
     <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
     <a class="button ghost" href="/dependency/device/{{ device.id }}">{{ t.get("dependency") }}</a>
+    <a class="button ghost" href="/maintenance/device/{{ device.id }}">{{ t.get("maintenance") }}</a>
     {% if offer_server_values %}
     <a class="button secondary" href="/devices/{{ device.id }}/server">{{ t.get("local-find-values") }}</a>
     {% endif %}

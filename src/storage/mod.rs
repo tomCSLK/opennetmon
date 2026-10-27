@@ -7,6 +7,7 @@ pub mod mail;
 pub mod measurements;
 pub mod mibs;
 pub mod pauses;
+pub mod schedules;
 pub mod sensors;
 pub mod status;
 pub mod templates;

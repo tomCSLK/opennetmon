@@ -172,7 +172,7 @@ async fn supervise(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             Ok(ended) => tracing::info!(ended, "timed pauses ended"),
             Err(e) => tracing::error!(error = %e, "ending timed pauses failed"),
         }
-        // Delays after a dependency end by time alone.
+        // Delays after a dependency and maintenance windows start and end by time alone.
         if let Err(e) = crate::storage::pauses::sync_all(&shared.pool, now_ms()).await {
             tracing::error!(error = %e, "updating dependencies failed");
         }

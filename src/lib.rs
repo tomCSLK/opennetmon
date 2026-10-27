@@ -16,6 +16,7 @@ pub mod mib;
 pub mod ordering;
 pub mod pause;
 pub mod poller;
+pub mod schedule;
 pub mod sensors;
 pub mod snmp;
 pub mod status;

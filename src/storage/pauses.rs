@@ -198,6 +198,7 @@ pub async fn load(conn: &mut SqliteConnection, now_ms: i64) -> Result<Pauses> {
             },
         );
     }
+    crate::storage::schedules::load_into(conn, &mut pauses, now_ms).await?;
     Ok(pauses)
 }
 
@@ -243,9 +244,9 @@ async fn log(
     Ok(())
 }
 
-/// Marks every polled sensor that is paused now (by itself, its device, a group or a dependency) but
-/// not stored as paused yet, see [`crate::storage::status::mark_paused`], and logs when a sensor starts
-/// or stops pausing others through dependencies. Marking one sensor can pause the next in a chain,
+/// Marks every polled sensor that is paused now (by itself, its device, a group, a maintenance window
+/// or a dependency) but not stored as paused yet, see [`crate::storage::status::mark_paused`], and logs
+/// when a sensor starts or stops pausing others through dependencies and when a window opens and closes. Marking one sensor can pause the next in a chain,
 /// so it repeats until nothing changes.
 pub(crate) async fn sync(conn: &mut SqliteConnection, now_ms: i64) -> Result<()> {
     let mut pauses = load(conn, now_ms).await?;
@@ -268,7 +269,8 @@ pub(crate) async fn sync(conn: &mut SqliteConnection, now_ms: i64) -> Result<()>
         }
         pauses = load(conn, now_ms).await?;
     }
-    log_dependencies(conn, &pauses, now_ms).await
+    log_dependencies(conn, &pauses, now_ms).await?;
+    crate::storage::schedules::log_windows(conn, &pauses, now_ms).await
 }
 
 /// Sensors whose last dependency entry says they pause others.

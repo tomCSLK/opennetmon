@@ -7,10 +7,14 @@
 //! own dependency, so chains like router → switch → access point work), and for a delay after it is
 //! fine again. The setting is inherited from group to subgroup, device and sensor like a pause; a
 //! master sensor pauses the other sensors of its device. The sensor depended on is always polled.
+//!
+//! Maintenance windows ([`crate::schedule`]) pause the objects their schedule applies to (inherited
+//! like a dependency) while a window is open; a manual pause comes first.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::i18n::Msg;
+use crate::schedule::Assignment;
 use crate::status::Status;
 
 pub const MAX_REASON_LEN: usize = 200;
@@ -81,6 +85,8 @@ pub enum Source {
         sensor: String,
         device: String,
     },
+    /// A window of a schedule that applies to it is open.
+    Schedule { id: i64, name: String },
 }
 
 /// Why an object is paused.
@@ -101,6 +107,7 @@ impl Why {
             Source::Dependency { sensor, device, .. } => Msg::new("pause-note-dependency")
                 .with("sensor", sensor)
                 .with("device", device),
+            Source::Schedule { name, .. } => Msg::new("pause-note-schedule").with("name", name),
         }
     }
 
@@ -111,6 +118,22 @@ impl Why {
             _ => None,
         }
     }
+
+    /// The schedule whose window pauses the object.
+    pub fn schedule(&self) -> Option<i64> {
+        match self.source {
+            Source::Schedule { id, .. } => Some(id),
+            _ => None,
+        }
+    }
+}
+
+/// A schedule as pauses see it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduleInfo {
+    pub name: String,
+    /// The end of the window open now, if one is.
+    pub open_until: Option<i64>,
 }
 
 /// The dependency setting of a group, device or sensor.
@@ -240,6 +263,11 @@ pub struct Pauses {
     pub(crate) device_settings: HashMap<i64, Setting>,
     /// Every sensor, with its dependency settings and last state.
     pub(crate) sensor_info: HashMap<i64, SensorInfo>,
+    /// Every schedule, and which applies to which object (missing = like the object above).
+    pub(crate) schedules: HashMap<i64, ScheduleInfo>,
+    pub(crate) group_schedules: HashMap<i64, Assignment>,
+    pub(crate) device_schedules: HashMap<i64, Assignment>,
+    pub(crate) sensor_schedules: HashMap<i64, Assignment>,
 }
 
 impl Pauses {
@@ -247,8 +275,15 @@ impl Pauses {
         pause.filter(|p| p.active_at(self.now_ms)).cloned()
     }
 
-    /// The pause of a group: its own, else the nearest paused group above it.
+    /// The pause of a group: its own, else the nearest paused group above it, else an open window
+    /// of its schedule.
     pub fn group(&self, id: i64) -> Option<Why> {
+        self.group_by_hand(id)
+            .or_else(|| self.maintenance(Target::Group(id)))
+    }
+
+    /// A pause by hand of the group or a group above it.
+    fn group_by_hand(&self, id: i64) -> Option<Why> {
         let mut current = Some(id);
         // At most as many steps as there are groups, so corrupted cyclic data terminates.
         for _ in 0..=self.groups.len() {
@@ -266,8 +301,14 @@ impl Pauses {
         None
     }
 
-    /// The pause of a device: its own, else one of its groups.
+    /// The pause of a device: its own, else one of its groups, else an open window of its schedule.
     pub fn device(&self, id: i64) -> Option<Why> {
+        self.device_by_hand(id)
+            .or_else(|| self.maintenance(Target::Device(id)))
+    }
+
+    /// A pause by hand of the device or one of its groups.
+    fn device_by_hand(&self, id: i64) -> Option<Why> {
         let (group, pause) = self.devices.get(&id)?;
         if let Some(pause) = self.active(pause.as_ref()) {
             return Some(Why {
@@ -275,7 +316,7 @@ impl Pauses {
                 pause,
             });
         }
-        let why = self.group((*group)?)?;
+        let why = self.group_by_hand((*group)?)?;
         Some(Why {
             source: match why.source {
                 Source::Own => Source::Group(self.groups.get(&(*group)?)?.0.clone()),
@@ -285,8 +326,8 @@ impl Pauses {
         })
     }
 
-    /// The pause of a sensor: its own, else its device's (or a group's), else one through a
-    /// dependency.
+    /// The pause of a sensor: its own, else its device's (or a group's), else an open window of its
+    /// schedule, else one through a dependency.
     pub fn sensor(&self, id: i64, device_id: i64) -> Option<Why> {
         self.sensor_on_path(id, device_id, &mut Vec::new())
     }
@@ -299,7 +340,7 @@ impl Pauses {
                 pause,
             });
         }
-        if let Some(why) = self.device(device_id) {
+        if let Some(why) = self.device_by_hand(device_id) {
             return Some(Why {
                 source: match why.source {
                     Source::Own => Source::Device,
@@ -307,6 +348,9 @@ impl Pauses {
                 },
                 pause: why.pause,
             });
+        }
+        if let Some(why) = self.maintenance(Target::Sensor(id)) {
+            return Some(why);
         }
         if path.contains(&id) {
             return None;
@@ -440,6 +484,121 @@ impl Pauses {
             delay_secs,
             delay_from,
         }
+    }
+
+    /// The schedule assignments an object inherits from, nearest first, starting with itself.
+    fn schedule_chain(&self, target: Target) -> Vec<(Origin, Assignment)> {
+        let mut chain = Vec::new();
+        let mut group = match target {
+            Target::Sensor(id) => {
+                chain.push((
+                    Origin::Own,
+                    self.sensor_schedules.get(&id).copied().unwrap_or_default(),
+                ));
+                let Some(device) = self.sensor_info.get(&id).map(|i| i.device_id) else {
+                    return chain;
+                };
+                chain.push((
+                    Origin::Device,
+                    self.device_schedules
+                        .get(&device)
+                        .copied()
+                        .unwrap_or_default(),
+                ));
+                self.devices.get(&device).and_then(|(g, _)| *g)
+            }
+            Target::Device(id) => {
+                chain.push((
+                    Origin::Own,
+                    self.device_schedules.get(&id).copied().unwrap_or_default(),
+                ));
+                self.devices.get(&id).and_then(|(g, _)| *g)
+            }
+            Target::Group(id) => Some(id),
+        };
+        for _ in 0..=self.groups.len() {
+            let Some(id) = group else { break };
+            let Some((name, parent, _)) = self.groups.get(&id) else {
+                break;
+            };
+            let origin = if target == Target::Group(id) {
+                Origin::Own
+            } else {
+                Origin::Group(name.clone())
+            };
+            chain.push((
+                origin,
+                self.group_schedules.get(&id).copied().unwrap_or_default(),
+            ));
+            group = *parent;
+        }
+        chain
+    }
+
+    /// The schedule that applies to an object (its own or the nearest above) and where it comes from.
+    pub fn schedule_of(&self, target: Target) -> (Option<i64>, Origin) {
+        self.schedule_chain(target)
+            .into_iter()
+            .find(|(_, a)| *a != Assignment::Parent)
+            .map_or((None, Origin::Default), |(origin, a)| {
+                (a.schedule_id(), origin)
+            })
+    }
+
+    /// What an object would inherit with no schedule setting of its own.
+    pub fn schedule_inherited(&self, target: Target) -> (Option<i64>, Origin) {
+        self.schedule_chain(target)
+            .into_iter()
+            .skip(1)
+            .find(|(_, a)| *a != Assignment::Parent)
+            .map_or((None, Origin::Default), |(origin, a)| {
+                (a.schedule_id(), origin)
+            })
+    }
+
+    /// The own schedule setting of an object.
+    pub fn schedule_setting(&self, target: Target) -> Assignment {
+        match target {
+            Target::Group(id) => self.group_schedules.get(&id),
+            Target::Device(id) => self.device_schedules.get(&id),
+            Target::Sensor(id) => self.sensor_schedules.get(&id),
+        }
+        .copied()
+        .unwrap_or_default()
+    }
+
+    pub fn schedule_info(&self, id: i64) -> Option<&ScheduleInfo> {
+        self.schedules.get(&id)
+    }
+
+    /// The pause through an open window of the object's schedule.
+    fn maintenance(&self, target: Target) -> Option<Why> {
+        let id = self.schedule_of(target).0?;
+        let info = self.schedules.get(&id)?;
+        let until = info.open_until.filter(|until| *until > self.now_ms)?;
+        Some(Why {
+            source: Source::Schedule {
+                id,
+                name: info.name.clone(),
+            },
+            pause: Pause {
+                until_ms: Some(until),
+                reason: String::new(),
+            },
+        })
+    }
+
+    /// Per schedule with an open window: how many sensors it pauses and on how many devices.
+    pub fn schedule_roots(&self) -> HashMap<i64, Affected> {
+        let mut roots: HashMap<i64, Affected> = HashMap::new();
+        for (id, info) in &self.sensor_info {
+            if let Some(schedule) = self.sensor(*id, info.device_id).and_then(|w| w.schedule()) {
+                let affected = roots.entry(schedule).or_default();
+                affected.sensors += 1;
+                affected.devices.insert(info.device_id);
+            }
+        }
+        roots
     }
 
     /// The own dependency setting of an object.
@@ -723,6 +882,65 @@ mod tests {
             );
         }
         p
+    }
+
+    #[test]
+    fn an_open_window_pauses_what_its_schedule_applies_to() {
+        let mut p = with_sensors();
+        p.schedules.insert(
+            7,
+            ScheduleInfo {
+                name: "Nachts".into(),
+                open_until: Some(5_000),
+            },
+        );
+        p.schedules.insert(
+            8,
+            ScheduleInfo {
+                name: "Nie offen".into(),
+                open_until: None,
+            },
+        );
+        p.group_schedules.insert(2, Assignment::Schedule(7));
+        let night = Source::Schedule {
+            id: 7,
+            name: "Nachts".into(),
+        };
+        let why = p.sensor(100, 10).unwrap();
+        assert_eq!(why.source, night, "inherited from Switche through Rack");
+        assert_eq!(why.pause.until_ms, Some(5_000));
+        assert_eq!(p.group(3).unwrap().source, night);
+        assert_eq!(p.device(11).unwrap().source, night);
+        assert_eq!(p.group(1), None, "not upwards");
+        assert_eq!(p.sensor(130, 13), None);
+        assert_eq!(
+            p.schedule_of(Target::Sensor(110)),
+            (Some(7), Origin::Group("Switche".into()))
+        );
+
+        // "None" ends the inheritance; a closed schedule pauses nothing.
+        p.device_schedules.insert(11, Assignment::None);
+        assert_eq!(p.sensor(110, 11), None);
+        assert_eq!(p.device(11), None);
+        assert_eq!(p.schedule_inherited(Target::Device(11)).0, Some(7));
+        p.sensor_schedules.insert(111, Assignment::Schedule(8));
+        assert_eq!(p.sensor(111, 11), None);
+
+        // A pause by hand comes first; dependents follow the sensor in its window.
+        p.devices.get_mut(&10).unwrap().1 = pause(None, "Umbau");
+        assert_eq!(p.sensor(100, 10).unwrap().source, Source::Device);
+        p.sensor_info.get_mut(&120).unwrap().setting = depend(110);
+        p.device_schedules.remove(&11);
+        assert_eq!(paused_by(&p, 120), Some(110));
+        let roots = p.schedule_roots();
+        assert_eq!(
+            roots[&7].sensors, 1,
+            "only 110; 100 is paused by hand, 111 has its own"
+        );
+        // The window closes.
+        p.now_ms = 5_000;
+        assert_eq!(p.sensor(110, 11), None);
+        assert!(p.schedule_roots().is_empty());
     }
 
     fn depend(on: i64) -> Setting {

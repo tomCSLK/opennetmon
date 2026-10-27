@@ -414,6 +414,53 @@ pub async fn log(
             ongoing,
         });
     }
+    for w in crate::storage::schedules::log_entries(&state.pool).await? {
+        let name = w.schedule.as_str();
+        let (status, status_label, message) = if w.started {
+            (
+                Status::Paused,
+                t.get("log-schedule-started"),
+                t.fmt(
+                    "log-schedule-started-message",
+                    &[
+                        ("name", name.into()),
+                        ("sensors", w.sensors.into()),
+                        ("devices", w.devices.into()),
+                    ],
+                ),
+            )
+        } else {
+            (
+                Status::Up,
+                t.get("log-schedule-ended"),
+                t.get1("log-schedule-ended-message", "name", name),
+            )
+        };
+        let (duration_ms, ongoing) = match (w.started, w.end_ms) {
+            (true, Some(end)) => (Some(end - w.ts_ms), false),
+            (true, None) => (Some(now - w.ts_ms), true),
+            (false, _) => (None, false),
+        };
+        entries.push(Entry {
+            ts_ms: w.ts_ms,
+            at: time_html(w.ts_ms),
+            status,
+            status_class: status.as_str(),
+            status_label,
+            before: String::new(),
+            sensor_id: None,
+            sensor_name: String::new(),
+            scope: t.get("log-scope-schedule"),
+            device_id: None,
+            device_name: String::new(),
+            group: String::new(),
+            message,
+            until: None,
+            duration: duration_ms.map_or_else(String::new, |ms| duration(t, ms)),
+            duration_ms,
+            ongoing,
+        });
+    }
     match (query.sensor, query.device) {
         (Some(id), _) => entries.retain(|e| e.sensor_id == Some(id)),
         (None, Some(id)) => entries.retain(|e| e.device_id == Some(id)),

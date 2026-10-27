@@ -1,0 +1,46 @@
+{% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
+{% block title %}{{ heading }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb">{% for c in trail %}<a href="{{ c.href }}">{{ c.name }}</a><span>›</span>{% endfor %}<span>{{ t.get("maintenance") }}</span></div>
+    <h1>{{ heading }}</h1>
+    <p class="subtitle">{{ t.get1("maintenance-applies", "value", current.as_str()) }}</p>
+  </div>
+</div>
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+<section class="card">
+  <form method="post" action="{{ action }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <p class="muted">{{ t.get("maintenance-intro") }}</p>
+    <fieldset class="choices">
+      <legend>{{ t.get("maintenance") }}</legend>
+      <label class="inline"><input type="radio" name="choice" value="parent"{% if choice == "parent" %} checked{% endif %}> <span>{{ t.get("maintenance-parent") }}</span></label>
+      <p class="hint choice-hint">{{ t.get1("dependency-current", "value", inherited.as_str()) }}</p>
+      <label class="inline"><input type="radio" name="choice" value="schedule"{% if choice == "schedule" %} checked{% endif %}> <span>{{ t.get("maintenance-schedule") }}</span></label>
+      <div class="choice-hint">
+        {% if schedules.is_empty() %}
+        <p class="hint">{{ t.get("maintenance-no-schedules") }} <a href="/schedules">{{ t.get("nav-schedules") }}</a></p>
+        {% else %}
+        <select name="schedule" aria-label="{{ t.get("maintenance-schedule") }}">
+          <option value="">{{ t.get("maintenance-choose") }}</option>
+          {% for s in schedules %}
+          <option value="{{ s.id }}"{% if s.selected %} selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </div>
+      <label class="inline"><input type="radio" name="choice" value="none"{% if choice == "none" %} checked{% endif %}> <span>{{ t.get("maintenance-none") }}</span></label>
+      <p class="hint choice-hint">{{ t.get("maintenance-none-hint") }}</p>
+    </fieldset>
+    <p class="hint">{{ t.get1("schedule-zone", "zone", zone.as_str()) }}</p>
+    <div class="form-actions">
+      <button type="submit">{{ t.get("save") }}</button>
+      <a class="button secondary" href="{{ cancel_href }}">{{ t.get("cancel") }}</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

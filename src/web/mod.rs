@@ -14,6 +14,7 @@ pub mod mibs;
 pub mod order;
 pub mod overview;
 pub mod pause;
+pub mod schedules;
 pub mod sensor_detail;
 pub mod sensor_text;
 pub mod sensor_values;
@@ -231,6 +232,21 @@ pub fn router(state: AppState) -> Router {
             "/dependency/{kind}/{id}",
             get(dependency::form).post(dependency::save),
         )
+        .route(
+            "/maintenance/{kind}/{id}",
+            get(schedules::assign_form).post(schedules::assign),
+        )
+        .route("/schedules", get(schedules::list).post(schedules::create))
+        .route(
+            "/schedules/{id}",
+            get(schedules::detail).post(schedules::rename),
+        )
+        .route("/schedules/{id}/delete", post(schedules::delete))
+        .route("/schedules/{id}/windows", post(schedules::add_window))
+        .route(
+            "/schedules/{id}/windows/{window}/delete",
+            post(schedules::delete_window),
+        )
         .route("/sensors/{id}/delete", post(sensors::delete))
         .route(
             "/settings/mail",
@@ -425,6 +441,12 @@ pub fn flash_message(t: Lang, key: Option<&str>) -> Option<String> {
         "sensor_renamed" => "flash-sensor-renamed",
         "interval_saved" => "flash-interval-saved",
         "dependency_saved" => "flash-dependency-saved",
+        "maintenance_saved" => "flash-maintenance-saved",
+        "schedule_created" => "flash-schedule-created",
+        "schedule_saved" => "flash-schedule-saved",
+        "schedule_deleted" => "flash-schedule-deleted",
+        "window_added" => "flash-window-added",
+        "window_deleted" => "flash-window-deleted",
         "states_saved" => "flash-states-saved",
         "states_reset" => "flash-states-reset",
         "order_saved" => "flash-order-saved",

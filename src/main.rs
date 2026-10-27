@@ -242,6 +242,12 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
     }
     tracing::info!(listen = %config.listen, db = %config.database_path.display(), "opennetmon started");
 
+    opennetmon::schedule::set_time_zone(config.time_zone.as_deref()).map_err(anyhow::Error::msg)?;
+    tracing::info!(
+        time_zone = %opennetmon::schedule::zone_name(opennetmon::schedule::time_zone()),
+        "maintenance windows use this time zone"
+    );
+
     let secrets = Arc::new(secrets);
     let poller = if config.poller_enabled {
         Some(Poller::spawn(

@@ -1,0 +1,60 @@
+{% extends "app.html" %}
+{% block title %}{{ t.get("nav-schedules") }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ t.get("nav-schedules") }}</h1>
+    <p class="subtitle">{{ t.get("schedules-subtitle") }} · {{ t.get1("schedule-zone", "zone", zone.as_str()) }}</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="card flush">
+  {% if rows.is_empty() %}
+  <div class="empty">
+    <strong>{{ t.get("schedules-none") }}</strong>
+    {{ t.get("schedules-none-hint") }}
+  </div>
+  {% else %}
+  <div class="table-wrap">
+  <table class="m-cards m-simple">
+    <thead><tr><th>{{ t.get("schedule") }}</th><th>{{ t.get("schedule-windows") }}</th><th>{{ t.get("status") }}</th><th class="right">{{ t.get("schedule-used") }}</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td class="m-name"><a href="/schedules/{{ row.id }}"><strong>{{ row.name }}</strong></a></td>
+        <td class="wrap m-msg">{{ row.windows }}</td>
+        <td class="m-status">{% if row.open %}<span class="badge status-paused">{{ row.state }}</span>{% else %}<span class="muted small">{{ row.state }}</span>{% endif %}</td>
+        <td class="num right m-value">{{ row.used }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>{{ t.get("schedule-new") }}</h2>
+  <form method="post" action="/schedules" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <input name="name" type="text" value="{{ name }}" maxlength="100" required aria-label="{{ t.get("name") }}" placeholder="{{ t.get("schedule-name-placeholder") }}">
+    <button type="submit">{{ t.get("schedule-create") }}</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ t.get("schedules-how") }}</h2>
+  <ul class="plain">
+    <li>{{ t.get("schedules-how-windows") }}</li>
+    <li>{{ t.get("schedules-how-assign") }}</li>
+    <li>{{ t.get("schedules-how-effect") }}</li>
+  </ul>
+</section>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "app.html" %}
+{% import "icons.html" as icons %}
+{% block title %}{{ schedule_name }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb"><a href="/schedules">{{ t.get("nav-schedules") }}</a><span>›</span><span>{{ schedule_name }}</span></div>
+    <h1>{{ schedule_name }}</h1>
+    <p class="subtitle">{% if open %}<span class="badge status-paused">{{ state }}</span>{% else %}{{ state }}{% endif %} · {{ t.get1("schedule-used-count", "count", used) }} · {{ t.get1("schedule-zone", "zone", zone.as_str()) }}</p>
+  </div>
+</div>
+
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+
+<section class="card flush">
+  <div class="card-head"><h2>{{ t.get("schedule-windows") }}</h2><span class="muted small">{{ t.get1("count-entries", "count", windows.len()) }}</span></div>
+  {% if windows.is_empty() %}
+  <div class="empty">
+    <strong>{{ t.get("schedule-no-windows") }}</strong>
+    {{ t.get("schedule-no-windows-hint") }}
+  </div>
+  {% else %}
+  <div class="table-wrap">
+  <table class="m-cards m-simple">
+    <thead><tr><th>{{ t.get("schedule-window") }}</th><th>{{ t.get("status") }}</th><th></th></tr></thead>
+    <tbody>
+    {% for w in windows %}
+      <tr>
+        <td class="m-name"><strong>{{ w.text }}</strong></td>
+        <td class="m-status">{% if w.open %}<span class="badge status-paused">{{ w.state }}</span>{% else %}<span class="muted small">{{ w.state }}</span>{% endif %}</td>
+        <td class="right m-act">
+          <form method="post" action="/schedules/{{ schedule_id }}/windows/{{ w.id }}/delete">
+            <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+            {% call icons::delete_button(t, t.get1("delete-named", "name", w.text.as_str())) %}{% endcall %}
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>{{ t.get("schedule-add-weekly") }}</h2>
+  <form method="post" action="/schedules/{{ schedule_id }}/windows" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <input type="hidden" name="kind" value="weekly">
+    <fieldset class="choices weekdays">
+      <legend>{{ t.get("schedule-weekdays") }}</legend>
+      {% for (value, label, checked) in weekdays %}
+      <label class="inline"><input type="checkbox" name="weekday" value="{{ value }}"{% if *checked %} checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+    </fieldset>
+    <div class="form-grid">
+      <div>
+        <label for="time">{{ t.get("schedule-start-time") }}</label>
+        <input id="time" name="time" type="time" value="{{ values.time }}" required>
+      </div>
+      <div>
+        <label for="duration">{{ t.get("schedule-duration") }}</label>
+        <input id="duration" name="duration" type="number" min="1" max="10080" step="1" inputmode="numeric" value="{{ values.duration }}" required>
+      </div>
+    </div>
+    <p class="hint">{{ t.get("schedule-weekly-hint") }}</p>
+    <div class="form-actions"><button type="submit">{{ t.get("schedule-add") }}</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ t.get("schedule-add-once") }}</h2>
+  <form method="post" action="/schedules/{{ schedule_id }}/windows" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <input type="hidden" name="kind" value="once">
+    <div class="form-grid">
+      <div>
+        <label for="start">{{ t.get("schedule-start") }}</label>
+        <input id="start" name="start" type="datetime-local" value="{{ values.start }}" required>
+      </div>
+      <div>
+        <label for="end">{{ t.get("schedule-end") }}</label>
+        <input id="end" name="end" type="datetime-local" value="{{ values.end }}" required>
+      </div>
+    </div>
+    <div class="form-actions"><button type="submit">{{ t.get("schedule-add") }}</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ t.get("name") }}</h2>
+  <form method="post" action="/schedules/{{ schedule_id }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <input name="name" type="text" value="{{ name }}" maxlength="100" required aria-label="{{ t.get("name") }}">
+    <button type="submit">{{ t.get("save") }}</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ t.get("delete") }}</h2>
+  <p class="muted">{{ t.get("schedule-delete-hint") }}</p>
+  <form method="post" action="/schedules/{{ schedule_id }}/delete">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <button type="submit" class="ghost">{{ t.get("schedule-delete") }}</button>
+  </form>
+</section>
+{% endblock %}

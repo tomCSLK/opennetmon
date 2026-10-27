@@ -35,6 +35,10 @@ poll_concurrency = 16                       # devices polled at the same time
 retention_raw_days = 7                      # raw measurements
 retention_hourly_days = 365                 # hourly rollups and status events; daily rollups are kept forever
 
+# Time zone of the weekly maintenance windows ("daily at 03:00"); unset = the zone of the system
+# (`timedatectl`; Ubuntu servers often run in UTC). Names as in `timedatectl list-timezones`.
+# time_zone = "Europe/Berlin"
+
 # Look once a day on GitHub for a newer release and show "Version x.y.z available" to administrators in the sidebar.
 # GitHub sees the address of this server once a day; nothing else is sent. Nothing is installed automatically.
 update_check = true

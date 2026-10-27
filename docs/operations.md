@@ -264,6 +264,8 @@ In general: the server should not be reachable from the internet unless necessar
 
 `/etc/opennetmon/config.toml`; all keys are explained in `deploy/config.example.toml`. After changes, `sudo systemctl restart opennetmon`.
 Only **behind a reverse proxy**, additionally set `client_ip_header = "x-forwarded-for"` (see above).
+Weekly maintenance windows use the time zone of the system (`timedatectl`; many Ubuntu servers run in UTC) unless `time_zone = "Europe/Berlin"` is set;
+the log at startup says which zone is in use.
 The e-mail settings are **not** in the file but in the user interface (“E-mail”, see `docs/notifications.md`) and take effect immediately.
 
 You also create the devices' credentials (SNMP profiles) in the user interface. For TP-Link Omada devices: SNMPv3, authNoPriv, MD5, user as in the
@@ -394,4 +396,5 @@ sudo systemctl daemon-reload
 - [ ] SNMP passwords of the devices long and unique (Omada: only authNoPriv/MD5, therefore only in a private network)
 - [ ] Backups copied to another machine regularly, a restore tried once
 - [ ] Test e-mail received
+- [ ] Time zone of the server (`timedatectl`) or `time_zone` right for the maintenance windows
 - [ ] `update_check` as wanted (on: GitHub sees the server address once a day)
