@@ -1224,7 +1224,11 @@ mod tests {
             ),
         )
         .await;
-        assert!(list.body.contains("· alle 10 s"), "{}", list.body);
+        assert!(
+            list.body.contains(&format!("/sensors/{sensor}\""))
+                && !list.body.contains("· alle 10 s"),
+            "the list leaves the description to the sensor page"
+        );
 
         // Not a number, or outside 10 to 3600 seconds: explained, the input is kept.
         for (input, message) in [

@@ -110,8 +110,8 @@ As in PRTG, **groups, devices and individual sensors can be paused** (`src/pause
 
 In addition, **timeout × (retries + 1) ≤ interval** must hold, so that polls of a device never overlap.
 A single sensor can be polled at its **own interval** (sensor detail page, “Polling interval”; e.g. ping every 10 s on a device polled every 60 s); the same
-limits apply, including the rule above with the device's timeout and retries. An empty field returns to the device's interval. Sensor lists show an own
-interval after the description (“· every 10 s”).
+limits apply, including the rule above with the device's timeout and retries. An empty field returns to the device's interval. The sensor page shows an own
+interval after the description (“· every 10 s”); sensor lists (also the paused sensors) show only the name, so long OIDs do not widen the table.
 All checks run on the server; after an error the entered values stay in the form (there are no passwords here).
 
 “Edit device” shows the groups and the device in the path (a link to its sensor page). “Cancel” and “Save” return to the page from which the form was opened:

@@ -45,7 +45,6 @@ const MAX_NAME_CHARS: usize = 64;
 struct SensorRowView {
     id: i64,
     name: String,
-    description: String,
     status_label: String,
     status_class: &'static str,
     message: String,
@@ -354,7 +353,6 @@ async fn render_sensors(
         let row = SensorRowView {
             id: r.id,
             name: r.name.clone(),
-            description: crate::web::sensor_text::describe_sensor(user.lang, r, &mibs),
             status_label: user.lang.get(status.label_id()),
             status_class: status.as_str(),
             message: state
@@ -906,7 +904,16 @@ mod tests {
         )
         .await;
         assert!(page.body.contains("Sensor angelegt."));
-        assert!(page.body.contains("OID 1.3.6.1.4.1.99.1.0"));
+        assert!(
+            !page.body.contains("OID 1.3.6.1.4.1.99.1.0"),
+            "the list leaves the description to the sensor page"
+        );
+        let detail = send(
+            &h.app,
+            get(&format!("/sensors/{}", stored[2].id), Some(&admin)),
+        )
+        .await;
+        assert!(detail.body.contains("OID 1.3.6.1.4.1.99.1.0"));
         assert!(page.body.contains("Unbekannt"), "never polled yet");
     }
 

@@ -984,8 +984,9 @@ END
             }
         ));
 
-        // The list shows MIB names instead of numbers.
-        let page = send(&h.app, get(&path, Some(&admin))).await;
+        // The sensor page shows MIB names instead of numbers.
+        let sensor = find("vendorTemperature.0").id;
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&admin))).await;
         assert!(
             page.body
                 .contains("vendorTemperature.0 (VENDOR-MIB) · Wert, Einheit Grad Celsius"),

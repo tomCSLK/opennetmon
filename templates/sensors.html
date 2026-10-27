@@ -90,7 +90,7 @@
     {% for row in rows %}
       <tr>
         <td class="m-status"><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
-        <td class="m-name"><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
+        <td class="m-name"><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a></td>
         <td class="wrap muted m-msg">{% if let Some(n) = row.pause %}{% call pause::note(n, t) %}{% endcall %}{% else %}{{ row.message }}{% endif %}</td>
         <td class="num right current-values m-value"{% if !row.value_title.is_empty() %} title="{{ row.value_title }}"{% endif %}>{% for value in row.values %}<span>{{ value }}</span>{% else %}–{% endfor %}</td>
         <td class="col-trend m-hide">
@@ -135,7 +135,7 @@
       {% for row in inactive %}
         <tr>
           {% if layout.is_admin %}<td class="m-check"><input type="checkbox" name="s_{{ row.id }}" value="on" aria-label="{{ t.get1("select-named", "name", row.name.as_str()) }}"></td>{% endif %}
-          <td class="m-name"><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a><span class="sub">{{ row.description }}</span></td>
+          <td class="m-name"><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a></td>
           <td class="m-status"><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
           <td class="wrap muted m-msg">{% if let Some(n) = row.pause %}{% call pause::note(n, t) %}{% endcall %}{% endif %}</td>
         </tr>

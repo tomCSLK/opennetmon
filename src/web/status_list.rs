@@ -197,7 +197,6 @@ pub(crate) fn rank(status: Status) -> u8 {
 struct Row {
     id: i64,
     name: String,
-    description: String,
     device_id: i64,
     device_name: String,
     /// Groups above the device, top level first (empty without a group).
@@ -460,7 +459,6 @@ pub async fn list(
         let total = total.map(|v| (rank, v));
         rows.push(Row {
             id: sensor.id,
-            description: crate::web::sensor_text::describe_sensor(t, &sensor, &mibs),
             name: sensor.name,
             device_id: device.id,
             device_name: device.name.clone(),
@@ -548,7 +546,6 @@ mod tests {
         Row {
             id,
             name: name.to_owned(),
-            description: String::new(),
             device_id: id,
             device_name: device.to_owned(),
             group: String::new(),

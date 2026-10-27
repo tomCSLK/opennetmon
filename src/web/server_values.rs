@@ -448,7 +448,8 @@ mod tests {
         .await;
         assert!(sensors_page.body.contains(&format!("href=\"{path}\"")));
         assert!(sensors_page.body.contains("<option value=\"server\">"));
-        assert!(sensors_page.body.contains("Dieser Server: Dateisystem /"));
+        let disk_page = send(&h.app, get(&format!("/sensors/{}", disk.id), Some(&admin))).await;
+        assert!(disk_page.body.contains("Dieser Server: Dateisystem /"));
     }
 
     #[tokio::test]
