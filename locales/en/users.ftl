@@ -7,6 +7,7 @@ login-tagline = Network monitoring
 login-submit = Sign in
 login-free-software = opennetmon is free software under the AGPL-3.0
 login-failed = Wrong user name or password.
+login-busy = Too many sign-ins are being checked right now. Please try again in a few seconds.
 login-throttled = Too many failed sign-in attempts. Please try again in { $wait }.
 login-signed-out-idle =
     { $minutes ->

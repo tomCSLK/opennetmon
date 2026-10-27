@@ -273,7 +273,11 @@ pub async fn login_submit(
         state.client_ip_header,
     );
     let now_ms = auth::now_secs().saturating_mul(1000);
-    if let Err(wait_ms) = state.login_throttle.check(now_ms, &form.username, ip) {
+    // Counts as failed until the password is verified, see `LoginThrottle::begin_attempt`.
+    if let Err(wait_ms) = state
+        .login_throttle
+        .begin_attempt(now_ms, &form.username, ip)
+    {
         tracing::warn!(?ip, wait_ms, "login attempt refused (too many failures)");
         let t = i18n::current();
         let body = LoginTemplate {
@@ -305,17 +309,27 @@ pub async fn login_submit(
         || auth::dummy_hash().to_owned(),
         |u| u.password_hash.clone(),
     );
-    let password = form.password;
-    let verified = tokio::task::spawn_blocking(move || auth::verify_password(&hash, &password))
-        .await
-        .map_err(|e| Error::Internal(format!("password check task failed: {e}")))?;
+    let Some(verified) = state.check_password(hash, form.password).await? else {
+        tracing::warn!(?ip, "login refused: too many password checks at once");
+        let t = i18n::current();
+        let body = LoginTemplate {
+            t,
+            csrf_token: &cookie_csrf,
+            error: Some(t.get("login-busy")),
+            notice: None,
+        }
+        .render()?;
+        return Ok((
+            StatusCode::SERVICE_UNAVAILABLE,
+            AppendHeaders([(header::RETRY_AFTER, "5")]),
+            Html(body),
+        )
+            .into_response());
+    };
 
     let user = match user {
         Some(user) if verified => user,
         _ => {
-            state
-                .login_throttle
-                .record_failure(now_ms, &form.username, ip);
             tracing::info!(?ip, "failed login attempt");
             let t = i18n::current();
             let body = LoginTemplate {
@@ -414,6 +428,7 @@ fn set_cookie(name: &str, value: &str, max_age_secs: i64, secure: bool) -> Strin
 mod tests {
     use super::*;
     use crate::web::testutil::*;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn anonymous_home_redirects_to_login() {
@@ -654,6 +669,67 @@ mod tests {
         }
         let body = format!("username={user}&password={password}&csrf_token={csrf}");
         send(app, request.body(axum::body::Body::from(body)).unwrap()).await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn attempts_sent_at_once_are_refused_like_one_after_the_other() {
+        // Each attempt is counted before its password check, so a burst cannot slip past the throttle
+        // (once 123 of 200 got through where 10 should).
+        let h = harness(true).await;
+        let (cookie, csrf) = open_login(&h).await;
+        let attempts: Vec<_> = (0..20)
+            .map(|_| {
+                let (app, cookie, csrf) = (h.app.clone(), cookie.clone(), csrf.clone());
+                tokio::spawn(async move {
+                    attempt(&app, &cookie, &csrf, "anna", "falsch", None)
+                        .await
+                        .status
+                })
+            })
+            .collect();
+        let mut refused = 0;
+        let mut checked = 0;
+        for a in attempts {
+            match a.await.unwrap() {
+                StatusCode::UNAUTHORIZED => checked += 1,
+                StatusCode::TOO_MANY_REQUESTS => refused += 1,
+                other => panic!("{other}"),
+            }
+        }
+        assert_eq!((checked, refused), (5, 15));
+    }
+
+    #[tokio::test]
+    async fn sign_ins_wait_for_a_free_password_check() {
+        let h = harness(true).await;
+        let (cookie, csrf) = open_login(&h).await;
+        let all = u32::try_from(crate::web::PASSWORD_CHECKS).unwrap();
+        let busy = Arc::clone(&h.state.password_checks)
+            .acquire_many_owned(all)
+            .await
+            .unwrap();
+        let app = h.app.clone();
+        let (c, t) = (cookie.clone(), csrf.clone());
+        let pending =
+            tokio::spawn(async move { attempt(&app, &c, &t, "anna", PASSWORD, None).await });
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(!pending.is_finished(), "no check without a free slot");
+        drop(busy);
+        assert_eq!(pending.await.unwrap().status, StatusCode::SEE_OTHER);
+
+        // Without a free slot for a while the attempt is turned away instead of piling up.
+        let _busy = Arc::clone(&h.state.password_checks)
+            .acquire_many_owned(all)
+            .await
+            .unwrap();
+        tokio::time::pause();
+        assert_eq!(
+            h.state
+                .check_password(auth::dummy_hash().to_owned(), "x".to_owned())
+                .await
+                .unwrap(),
+            None
+        );
     }
 
     #[tokio::test]

@@ -42,6 +42,11 @@ use crate::crypto::SecretBox;
 use crate::i18n::Lang;
 use crate::storage;
 
+/// Password checks that may run at the same time (see [`AppState::check_password`]).
+pub(crate) const PASSWORD_CHECKS: usize = 4;
+/// How long a password check waits for a free slot before the request is turned away.
+const PASSWORD_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
 #[derive(Clone)]
 pub struct AppState {
     pub pool: SqlitePool,
@@ -51,6 +56,8 @@ pub struct AppState {
     /// Sign-out after this time without activity (`None`: off).
     pub session_idle_secs: Option<i64>,
     pub login_throttle: Arc<crate::auth::throttle::LoginThrottle>,
+    /// Slots for password checks, see [`AppState::check_password`].
+    password_checks: Arc<tokio::sync::Semaphore>,
     pub client_ip_header: Option<crate::auth::throttle::ClientIpHeader>,
     /// Bundled plus uploaded MIBs; replaced as a whole after every upload or deletion.
     mibs: Arc<std::sync::RwLock<Arc<crate::mib::MibIndex>>>,
@@ -63,6 +70,7 @@ impl AppState {
             secrets,
             cookie_secure: config.cookie_secure,
             login_throttle: Arc::default(),
+            password_checks: Arc::new(tokio::sync::Semaphore::new(PASSWORD_CHECKS)),
             client_ip_header: config.client_ip_header,
             mibs: Arc::new(std::sync::RwLock::new(crate::mib::bundled_index())),
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
@@ -71,6 +79,29 @@ impl AppState {
                 .then(|| i64::try_from(config.session_idle_minutes.saturating_mul(60)).ok())
                 .flatten(),
         }
+    }
+
+    /// Verifies a password against an Argon2 hash on the blocking pool, at most [`PASSWORD_CHECKS`] at a
+    /// time: each check takes about 19 MiB, and sign-in attempts need no account, so without a limit a
+    /// burst of them (200 at once took 2.4 GB) could exhaust the memory of the host. `None` when no slot
+    /// became free within [`PASSWORD_WAIT`]. The slot stays taken until the check is done, even if
+    /// the client gives up earlier.
+    pub async fn check_password(
+        &self,
+        hash: String,
+        password: String,
+    ) -> crate::error::Result<Option<bool>> {
+        let slot = Arc::clone(&self.password_checks).acquire_owned();
+        let Ok(Ok(slot)) = tokio::time::timeout(PASSWORD_WAIT, slot).await else {
+            return Ok(None);
+        };
+        let verified = tokio::task::spawn_blocking(move || {
+            let _slot = slot;
+            crate::auth::verify_password(&hash, &password)
+        })
+        .await
+        .map_err(|e| crate::error::Error::Internal(format!("password check task failed: {e}")))?;
+        Ok(Some(verified))
     }
 
     /// The current MIB index (cheap: shares the index).

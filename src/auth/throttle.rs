@@ -123,16 +123,44 @@ fn remaining<K: std::hash::Hash + Eq>(
     })
 }
 
+fn wait_ms(state: &State, now_ms: i64, username: &str, ip: Option<IpAddr>) -> i64 {
+    remaining(&state.users, &user_key(username), USER_POLICY, now_ms).max(remaining(
+        &state.addresses,
+        &address_key(ip),
+        ADDRESS_POLICY,
+        now_ms,
+    ))
+}
+
 impl LoginThrottle {
     /// `Err(milliseconds to wait)` if an attempt for this user name from this address must be refused now.
     pub fn check(&self, now_ms: i64, username: &str, ip: Option<IpAddr>) -> Result<(), i64> {
         let Ok(state) = self.state.lock() else {
             return Ok(()); // a poisoned lock must never lock everybody out
         };
-        let wait = remaining(&state.users, &user_key(username), USER_POLICY, now_ms).max(
-            remaining(&state.addresses, &address_key(ip), ADDRESS_POLICY, now_ms),
-        );
+        let wait = wait_ms(&state, now_ms, username, ip);
         if wait > 0 { Err(wait) } else { Ok(()) }
+    }
+
+    /// Like [`check`](Self::check), and if the attempt may go ahead, counts it as failed right away (under
+    /// the same lock) until [`record_success`](Self::record_success) clears it: attempts sent at the same
+    /// time then cannot all pass before the first of them has failed.
+    pub fn begin_attempt(
+        &self,
+        now_ms: i64,
+        username: &str,
+        ip: Option<IpAddr>,
+    ) -> Result<(), i64> {
+        let Ok(mut state) = self.state.lock() else {
+            return Ok(());
+        };
+        let wait = wait_ms(&state, now_ms, username, ip);
+        if wait > 0 {
+            return Err(wait);
+        }
+        bump(&mut state.users, user_key(username), now_ms);
+        bump(&mut state.addresses, address_key(ip), now_ms);
+        Ok(())
     }
 
     pub fn record_failure(&self, now_ms: i64, username: &str, ip: Option<IpAddr>) {
@@ -360,5 +388,16 @@ mod tests {
             client_ip(peer, &v6, Some(ClientIpHeader::XRealIp)),
             ip("2001:db8::1")
         );
+    }
+
+    #[test]
+    fn an_attempt_counts_as_failed_until_it_succeeds() {
+        let t = LoginThrottle::default();
+        for i in 0..5 {
+            assert_eq!(t.begin_attempt(T0 + i, "anna", ip("192.0.2.1")), Ok(()));
+        }
+        assert!(t.begin_attempt(T0 + 5, "anna", ip("192.0.2.1")).is_err());
+        t.record_success("anna", ip("192.0.2.1"));
+        assert_eq!(t.begin_attempt(T0 + 6, "anna", ip("192.0.2.1")), Ok(()));
     }
 }

@@ -102,9 +102,10 @@ pub async fn change_password(
             .into_response())
     };
     let now_ms = auth::now_secs().saturating_mul(1000);
+    // Counts as failed until verified, like a sign-in (`LoginThrottle::begin_attempt`).
     if state
         .login_throttle
-        .check(now_ms, &user.username, None)
+        .begin_attempt(now_ms, &user.username, None)
         .is_err()
     {
         return refuse(user.lang.get("account-too-many-attempts"));
@@ -112,18 +113,17 @@ pub async fn change_password(
     let stored = store::get_user(&state.pool, user.id)
         .await?
         .ok_or(Error::NotFound)?;
-    let current = form.current.clone();
-    let verified =
-        tokio::task::spawn_blocking(move || auth::verify_password(&stored.password_hash, &current))
-            .await
-            .map_err(|e| Error::Internal(format!("password check task failed: {e}")))?;
+    let Some(verified) = state
+        .check_password(stored.password_hash, form.current.clone())
+        .await?
+    else {
+        return refuse(user.lang.get("login-busy"));
+    };
     if !verified {
-        state
-            .login_throttle
-            .record_failure(now_ms, &user.username, None);
         tracing::info!(user = %user.username, "own password change refused: wrong current password");
         return refuse(user.lang.get("account-current-wrong"));
     }
+    state.login_throttle.record_success(&user.username, None);
     if let Err(message) = auth::validate_password(&form.password) {
         return refuse(user.lang.msg(&message));
     }
@@ -136,7 +136,6 @@ pub async fn change_password(
     let hash = auth::hash_password(&form.password)?;
     let keep = cookie_value(&headers, SESSION_COOKIE).map(|t| auth::token_hash(&t));
     store::change_password(&state.pool, user.id, &hash, keep.as_deref()).await?;
-    state.login_throttle.record_success(&user.username, None);
     tracing::info!(user = %user.username, "own password changed");
     Ok(Redirect::to("/account?msg=account_password_saved").into_response())
 }

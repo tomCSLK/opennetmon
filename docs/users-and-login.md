@@ -116,6 +116,12 @@ The user name is deliberately only **slowed down, never locked**: an attacker ca
 changing addresses, and gets about one password per minute. The stricter address limit prevents a single machine from trying many accounts.
 A successful login resets the counters of user name and address; so does a restart of the server (the state is kept only in memory and is bounded).
 The rejecting response is the same for correct and wrong user names, so accounts cannot be guessed through it.
+Every attempt counts as a failure from the moment it passes the check until its password is verified, so attempts sent at the same time
+are refused exactly like attempts one after the other.
+
+At most **four password checks** run at the same time (Argon2 takes about 19 MiB each, and sign-in attempts need no account). Further attempts wait
+for a free slot; after 10 seconds without one they are turned away with HTTP 503 and “try again in a few seconds”. A burst of sign-ins therefore
+costs time, not the memory of the host.
 
 **Behind a reverse proxy** the server only sees the proxy's address. With `client_ip_header = "x-forwarded-for"` (Caddy and nginx append the client address;
 the *last* entry is used, i.e. the one from your own proxy) or `"x-real-ip"`, the real address is taken instead. Only set this if the service is reachable

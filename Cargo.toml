@@ -46,7 +46,7 @@ unic-langid = "0.9"
 base64 = "0.23.1"
 http-body-util = "0.1.5"
 tempfile = "3.27.0"
-tokio = { version = "1", features = ["io-util"] }
+tokio = { version = "1", features = ["io-util", "test-util"] }
 
 # Argon2 is far too slow unoptimized; keep debug builds and tests usable.
 [profile.dev.package.argon2]
