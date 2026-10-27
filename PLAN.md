@@ -183,9 +183,9 @@ opennetmon/
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
 
-## Nächste Vorhaben (eingeplant 2026-10-26; alle drei umgesetzt, noch nicht released)
+## Nächste Vorhaben (eingeplant 2026-10-26; alle drei umgesetzt, in v0.5.0)
 
-### A. Mobile Ansicht überarbeiten – umgesetzt 2026-10-26 (noch nicht released)
+### A. Mobile Ansicht überarbeiten – umgesetzt 2026-10-26 (in v0.5.0)
 
 **Umgesetzt** (geprüft bei 360, 390 und 430 px, hell und dunkel, Desktop bei 1400 px unverändert; Beschreibung in `docs/devices-and-groups.md`,
 „Phones“): Kacheln dreispaltig und kompakt, Baum ohne Zeilenaktionen und Adresszeile, Plaketten nur mit Zahl (≤560 px); Menü „Aktionen“
@@ -220,7 +220,7 @@ Wunsch des Nutzers: Die Ansicht auf dem Handy „schaut noch nicht so gut aus“
 Umsetzung nur mit CSS in `static/app.css` und kleinen Template-Änderungen (Klassen, `data-label`, `<details>`); keine Inline-Styles (CSP), keine
 neue Abhängigkeit. Seite für Seite in kleinen Commits, jede im Browser geprüft (Memory „Check UI in browser“).
 
-### B. Abhängigkeiten wie in PRTG (automatisch pausieren) – umgesetzt 2026-10-27 (noch nicht released)
+### B. Abhängigkeiten wie in PRTG (automatisch pausieren) – umgesetzt 2026-10-27 (in v0.5.0)
 
 **Umgesetzt** wie im Entwurf unten, mit den drei Entscheidungen des Nutzers (Beschreibung in `docs/devices-and-groups.md`, „Dependencies“;
 Architektur in CLAUDE.md). Abweichungen und Ergänzungen zum Entwurf:
@@ -278,7 +278,7 @@ Entschieden vom Nutzer (2026-10-26), alle drei mit „ja“:
    Abhängigkeit); Spalte `dependency_delay_secs` in Migration `0019`.
 3. **Pause von Hand:** Ist der Sensor, von dem abhängig ist, von Hand pausiert, sind die abhängigen Objekte ebenfalls pausiert.
 
-### C. Symbole statt Text bei den Zeilenaktionen – umgesetzt 2026-10-26 (noch nicht released)
+### C. Symbole statt Text bei den Zeilenaktionen – umgesetzt 2026-10-26 (in v0.5.0)
 
 **Umgesetzt:** gemeinsame Makros in `templates/icons.html` (Stift, Papierkorb, Pause/Fortsetzen, Reihenfolge, Menüknopf), genutzt vom Baum und den
 Listen der Tabelle unten. Der Papierkorb der Sensorliste führt auf den Abschnitt „Sensor löschen“ am Ende der Detailseite (`#delete`, Häkchen

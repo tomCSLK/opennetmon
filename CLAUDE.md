@@ -273,7 +273,7 @@ cargo build --release --target x86_64-unknown-linux-musl
 ```
 
 Releases: Version in `Cargo.toml` erhöhen und committen, dann `dev/release.sh --publish --notes <datei>` (Release-Notizen auf **Englisch** seit 2026-10-22; v0.1.0–v0.4.1 sind zweisprachig, Englisch oben; prüft sauberen,
-gepushten Stand, fmt/clippy/Tests, Fremdlizenzen, Installer-Probelauf aus dem Archiv, Inhalt des .deb; seit 0.4.4 reguläre Releases, Wunsch des Nutzers – vorher alle als Vorabversion; `--prerelease` markiert bei Bedarf eine als Vorabversion). Bisher: **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, erstmals mit .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS), **v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln; Repo privat), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen), **v0.4.1** (2026-10-21, Sensoren „Dieser Server“), **v0.4.2** (2026-10-22, Gruppenseiten, Doku auf Englisch), **v0.4.3** (2026-10-23, Intervall je Sensor, Messwerttabelle mit Rohwerten, Fehlerseiten im Design), **v0.4.4** (2026-10-24, erstes reguläres Release: Abmelden ohne Aktivität, MIB-Dateien nach Hersteller, Suche und Sortierung im Protokoll).
+gepushten Stand, fmt/clippy/Tests, Fremdlizenzen, Installer-Probelauf aus dem Archiv, Inhalt des .deb; seit 0.4.4 reguläre Releases, Wunsch des Nutzers – vorher alle als Vorabversion; `--prerelease` markiert bei Bedarf eine als Vorabversion). Bisher: **v0.1.0** (2026-10-19), **v0.2.0** (2026-10-20, erstmals mit .deb), **v0.3.0** (2026-10-20, eingebautes HTTPS), **v0.3.1** (2026-10-20, Statuslisten hinter den Kacheln; Repo privat), **v0.4.0** (2026-10-21, Pausieren, Protokoll, Gerätebaum mit Gerätetypen), **v0.4.1** (2026-10-21, Sensoren „Dieser Server“), **v0.4.2** (2026-10-22, Gruppenseiten, Doku auf Englisch), **v0.4.3** (2026-10-23, Intervall je Sensor, Messwerttabelle mit Rohwerten, Fehlerseiten im Design), **v0.4.4** (2026-10-24, erstes reguläres Release: Abmelden ohne Aktivität, MIB-Dateien nach Hersteller, Suche und Sortierung im Protokoll), **v0.5.0** (2026-10-27, Abhängigkeiten wie in PRTG, Handy-Ansicht, Symbole in den Listen, Behebungen aus dem Sicherheitstest).
 
 `README.md` (GitHub-Startseite) ist seit 2026-10-19 **nur noch Englisch** und wird nur auf Englisch gepflegt; bei Meilensteinen mitpflegen: Status-Tabelle, Konfigurationsbeispiel und Dokumentationsliste müssen zum Code passen.
 
@@ -287,10 +287,10 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
-- Noch nicht released: mobile Ansicht und Symbole statt Text in den Listen (2026-10-26), Sensorlisten nur mit dem Namen (Beschreibung nur auf der
-  Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B). Auf der Geräteseite bricht die Knopfleiste durch den Knopf
-  „Abhängigkeit“ unterhalb von etwa 1570 px in zwei Zeilen um (Automatisch/Aktualisieren eigene Zeile); ggf. später ins Menü „Aktionen“ verschieben.
-  Außerdem die Behebungen aus dem Sicherheitstest vom 2026-10-27 (`PLAN.md`, „Verifikation“)
+- In v0.5.0: mobile Ansicht und Symbole statt Text in den Listen (2026-10-26), Sensorlisten nur mit dem Namen (Beschreibung nur auf der
+  Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B) und die Behebungen aus dem Sicherheitstest vom 2026-10-27
+  (`PLAN.md`, „Verifikation“). Offen: Auf der Geräteseite bricht die Knopfleiste durch den Knopf „Abhängigkeit“ unterhalb von etwa 1570 px in zwei
+  Zeilen um (Automatisch/Aktualisieren eigene Zeile); ggf. später ins Menü „Aktionen“ verschieben
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,
