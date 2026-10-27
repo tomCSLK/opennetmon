@@ -9,10 +9,12 @@ use axum::Form;
 use axum::extract::{Path, Query, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
+use crate::audit::{Action, Changes, Kind};
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::ordering::{positions_from_form, reorder};
 use crate::storage::{devices, groups, sensors};
+use crate::web::audit::{self, Object};
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout, back_to_group};
 
@@ -203,6 +205,16 @@ fn wants_reset(fields: &HashMap<String, String>) -> Result<bool> {
     }
 }
 
+fn order_note(reset: bool, top_level: bool) -> Changes {
+    let id = match (reset, top_level) {
+        (false, false) => "audit-order-saved",
+        (true, false) => "audit-order-reset",
+        (false, true) => "audit-order-saved-top",
+        (true, true) => "audit-order-reset-top",
+    };
+    Changes::new().note(Msg::new(id))
+}
+
 pub async fn save_group(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -211,7 +223,8 @@ pub async fn save_group(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
-    let parent = group_scope(&state, id).await?.map(|g| g.id);
+    let scope = group_scope(&state, id).await?;
+    let parent = scope.as_ref().map(|g| g.id);
     let reset = wants_reset(&fields)?;
     let (group_ids, device_ids) = if reset {
         (Vec::new(), Vec::new())
@@ -236,6 +249,22 @@ pub async fn save_group(
     groups::set_positions(&state.pool, parent, &group_ids).await?;
     devices::set_positions(&state.pool, parent, &device_ids).await?;
     tracing::info!(user = %user.username, group = id, reset, "order of groups and devices saved");
+    let object = match &scope {
+        Some(group) => Object::new(Kind::Group, group.id, &group.name),
+        None => Object {
+            kind: Kind::Group,
+            id: None,
+            name: "",
+        },
+    };
+    audit::record(
+        &state,
+        &user,
+        Action::Changed,
+        object,
+        order_note(reset, scope.is_none()),
+    )
+    .await;
     let msg = if reset { "order_reset" } else { "order_saved" };
     let (page, _) = group_back(fields.get("back").map_or("", String::as_str));
     Ok(Redirect::to(&format!("{page}?msg={msg}")).into_response())
@@ -249,7 +278,7 @@ pub async fn save_sensors(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
-    devices::get_device(&state.pool, id)
+    let device = devices::get_device(&state.pool, id)
         .await?
         .ok_or(Error::NotFound)?;
     let reset = wants_reset(&fields)?;
@@ -265,6 +294,15 @@ pub async fn save_sensors(
     };
     sensors::set_positions(&state.pool, id, &ids).await?;
     tracing::info!(user = %user.username, device = id, reset, "order of sensors saved");
+    let object = Object::new(Kind::Device, id, &device.name);
+    audit::record(
+        &state,
+        &user,
+        Action::Changed,
+        object,
+        order_note(reset, false),
+    )
+    .await;
     let msg = if reset { "order_reset" } else { "order_saved" };
     Ok(Redirect::to(&format!("/devices/{id}/sensors?msg={msg}")).into_response())
 }

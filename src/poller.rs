@@ -1313,6 +1313,7 @@ mod tests {
             Retention {
                 raw_days: 7,
                 hourly_days: 365,
+                audit_days: 365,
             },
         );
         tokio::time::sleep(Duration::from_millis(100)).await;

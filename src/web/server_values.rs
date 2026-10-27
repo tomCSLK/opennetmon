@@ -278,7 +278,7 @@ pub async fn create(
         .find(|(k, _)| k == "csrf_token")
         .map_or("", |(_, v)| v.as_str());
     user.verify_csrf(csrf)?;
-    load_device(&state, id).await?;
+    let device = load_device(&state, id).await?;
     if fields.len() > MAX_FIELDS {
         return Err(Error::invalid(Msg::new("form-too-large")));
     }
@@ -304,6 +304,10 @@ pub async fn create(
             let mut limits = c.metric.default_limits();
             limits.extend(c.limits.iter().copied());
             set_limits(&state, sensor, &limits).await?;
+            let name = store::get_sensor(&state.pool, sensor)
+                .await?
+                .map_or_else(|| c.name.clone(), |s| s.name);
+            crate::web::sensors::audit_created(&state, &user, sensor, &name, &device).await;
             existing.insert(target);
             created += 1;
         }

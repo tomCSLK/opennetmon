@@ -7,10 +7,12 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
-use crate::devices::subtree_ids;
+use crate::audit::{Action, Changes, Kind};
+use crate::devices::{Group, subtree_ids};
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::storage::groups as store;
+use crate::web::audit::{self, Object};
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout, SelectOption, back_to_group, group_options};
 
@@ -149,6 +151,7 @@ async fn save(
     id: Option<i64>,
     form: &GroupForm,
 ) -> Result<Response> {
+    let before = store::list_groups(&state.pool).await?;
     let outcome = match parse_optional_id(&form.parent_id) {
         Ok(parent) => match id {
             Some(id) => store::update_group(&state.pool, id, &form.name, parent)
@@ -161,6 +164,8 @@ async fn save(
     match outcome {
         Ok(saved) => {
             tracing::info!(user = %user.username, group = saved, "group saved");
+            let after = store::list_groups(&state.pool).await?;
+            audit_saved(state, user, &before, &after, id, saved).await;
             let msg = if id.is_some() {
                 "group_updated"
             } else {
@@ -201,6 +206,58 @@ async fn save(
     }
 }
 
+/// The audit entry of a created (`id` = `None`) or changed group.
+async fn audit_saved(
+    state: &AppState,
+    user: &CurrentUser,
+    before: &[Group],
+    after: &[Group],
+    id: Option<i64>,
+    saved: i64,
+) {
+    let find =
+        |list: &[Group], g: Option<i64>| g.and_then(|g| list.iter().find(|x| x.id == g).cloned());
+    let parent = |list: &[Group], g: Option<&Group>| {
+        find(list, g.and_then(|g| g.parent_id)).map_or_else(String::new, |p| p.name)
+    };
+    let new = find(after, Some(saved));
+    let name = new.as_ref().map_or_else(String::new, |g| g.name.clone());
+    let (action, changes) = match id {
+        Some(_) => {
+            let old = find(before, Some(saved));
+            let changes = Changes::new()
+                .field(
+                    "audit-field-name",
+                    old.as_ref().map_or("", |g| g.name.as_str()),
+                    &name,
+                )
+                .field(
+                    "audit-field-parent",
+                    parent(before, old.as_ref()),
+                    parent(after, new.as_ref()),
+                );
+            (Action::Changed, changes)
+        }
+        None => {
+            let p = parent(after, new.as_ref());
+            let changes = if p.is_empty() {
+                Changes::new()
+            } else {
+                Changes::new().value("audit-field-parent", p)
+            };
+            (Action::Created, changes)
+        }
+    };
+    audit::record(
+        state,
+        user,
+        action,
+        Object::new(Kind::Group, saved, &name),
+        changes,
+    )
+    .await;
+}
+
 pub async fn delete(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -212,8 +269,22 @@ pub async fn delete(
     if form.confirm.as_deref() != Some("yes") {
         return Err(Error::invalid(Msg::new("confirm-delete")));
     }
+    let name = store::list_groups(&state.pool)
+        .await?
+        .into_iter()
+        .find(|g| g.id == id)
+        .map(|g| g.name)
+        .unwrap_or_default();
     store::delete_group(&state.pool, id).await?;
     tracing::info!(user = %user.username, group = id, "group deleted");
+    audit::record(
+        &state,
+        &user,
+        Action::Deleted,
+        Object::new(Kind::Group, id, &name),
+        Changes::new(),
+    )
+    .await;
     Ok(Redirect::to("/?msg=group_deleted").into_response())
 }
 

@@ -8,11 +8,13 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes};
 use crate::auth;
 use crate::error::{Error, Result};
 use crate::i18n::Lang;
 use crate::storage::users as store;
 use crate::web::auth::{CurrentUser, SESSION_COOKIE, cookie_value};
+use crate::web::users::{audit_user, language_change};
 use crate::web::{
     AppState, LanguageOption, Layout, flash_message, language_options, parse_language_choice,
 };
@@ -76,6 +78,16 @@ pub async fn set_language(
     match parse_language_choice(&form.language) {
         Ok(language) => {
             store::set_language(&state.pool, user.id, language).await?;
+            let changes = language_change(user.language, language);
+            audit_user(
+                &state,
+                &user,
+                Action::Changed,
+                user.id,
+                &user.username,
+                changes,
+            )
+            .await;
             Ok(Redirect::to("/account?msg=language_saved").into_response())
         }
         Err(Error::Invalid(message)) => Ok((
@@ -137,6 +149,16 @@ pub async fn change_password(
     let keep = cookie_value(&headers, SESSION_COOKIE).map(|t| auth::token_hash(&t));
     store::change_password(&state.pool, user.id, &hash, keep.as_deref()).await?;
     tracing::info!(user = %user.username, "own password changed");
+    let changes = Changes::new().secret("audit-field-password", true);
+    audit_user(
+        &state,
+        &user,
+        Action::Changed,
+        user.id,
+        &user.username,
+        changes,
+    )
+    .await;
     Ok(Redirect::to("/account?msg=account_password_saved").into_response())
 }
 

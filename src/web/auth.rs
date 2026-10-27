@@ -10,11 +10,20 @@ use axum::http::{HeaderMap, Method, StatusCode, header};
 use axum::response::{AppendHeaders, Html, IntoResponse, Json, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Kind};
 use crate::auth::{self, Role, throttle};
 use crate::error::{Error, Result};
-use crate::i18n::{self, Lang};
+use crate::i18n::{self, Lang, Msg};
 use crate::storage::users::{self, SessionUser};
+use crate::web::audit::{self, Object};
 use crate::web::{AppState, Layout};
+
+/// The object of sign-in and sign-out entries in the audit log.
+const SESSION: Object<'static> = Object {
+    kind: Kind::Session,
+    id: None,
+    name: "",
+};
 
 pub(crate) const SESSION_COOKIE: &str = "opennetmon_session";
 pub(crate) const LOGIN_CSRF_COOKIE: &str = "opennetmon_login";
@@ -44,6 +53,8 @@ pub struct CurrentUser {
     pub session_left: Option<i64>,
     /// A newer release (administrators only), see [`crate::update_check`].
     pub update: Option<crate::update_check::Release>,
+    /// Address of the client (behind a proxy from `client_ip_header`), for the audit log.
+    pub address: Option<std::net::IpAddr>,
 }
 
 impl CurrentUser {
@@ -91,6 +102,7 @@ impl CurrentUser {
             csrf_token: s.csrf_token,
             session_left,
             update: None,
+            address: None,
         }
     }
 }
@@ -137,6 +149,14 @@ impl FromRequestParts<AppState> for CurrentUser {
             Ok(None) => return Err(Redirect::to("/login").into_response()),
             Err(e) => return Err(e.into_response()),
         };
+        let address = throttle::client_ip(
+            parts
+                .extensions
+                .get::<ConnectInfo<SocketAddr>>()
+                .map(|ConnectInfo(addr)| addr.ip()),
+            &parts.headers,
+            state.client_ip_header,
+        );
         let idle = state.session_idle_secs.filter(|_| !session.stay_signed_in);
         let mut last_seen = session.last_seen_at;
         if idle.is_some_and(|limit| now.saturating_sub(last_seen) >= limit) {
@@ -144,6 +164,15 @@ impl FromRequestParts<AppState> for CurrentUser {
                 .await
                 .map_err(IntoResponse::into_response)?;
             tracing::info!(user = %session.username, "signed out after a time without activity");
+            audit::write(
+                state,
+                &session.username,
+                address.map(|a| a.to_string()),
+                Action::SignedOut,
+                SESSION,
+                &Msg::new("audit-signed-out-idle"),
+            )
+            .await;
             return Err((
                 AppendHeaders([(
                     header::SET_COOKIE,
@@ -161,6 +190,7 @@ impl FromRequestParts<AppState> for CurrentUser {
         }
         let left = idle.map(|limit| limit.saturating_sub(now.saturating_sub(last_seen)));
         let mut user = Self::from_session(session, &parts.headers, left);
+        user.address = address;
         if user.role.is_admin() {
             user.update = state.latest_release.get();
         }
@@ -338,6 +368,21 @@ pub async fn login_submit(
         Some(user) if verified => user,
         _ => {
             tracing::info!(?ip, "failed login attempt");
+            // Only a known user name goes into the audit log: what was typed might be a password.
+            let (name, detail) = match &user {
+                Some(user) => (user.username.as_str(), Msg::new("audit-wrong-password")),
+                None => ("", Msg::new("audit-unknown-user")),
+            };
+            let address = ip.map(|a| a.to_string());
+            audit::write(
+                &state,
+                name,
+                address,
+                Action::SignInFailed,
+                SESSION,
+                &detail,
+            )
+            .await;
             let t = i18n::current();
             let body = LoginTemplate {
                 t,
@@ -365,6 +410,17 @@ pub async fn login_submit(
     )
     .await?;
     tracing::info!(user = %user.username, "login succeeded");
+    let address = ip.map(|a| a.to_string());
+    let detail = Msg::List(Vec::new());
+    audit::write(
+        &state,
+        &user.username,
+        address,
+        Action::SignedIn,
+        SESSION,
+        &detail,
+    )
+    .await;
 
     Ok((
         AppendHeaders([
@@ -398,6 +454,17 @@ pub async fn logout(
         users::delete_session(&state.pool, &auth::token_hash(&token)).await?;
     }
     tracing::info!(user = %user.username, "logout");
+    let address = user.address.map(|a| a.to_string());
+    let detail = Msg::List(Vec::new());
+    audit::write(
+        &state,
+        &user.username,
+        address,
+        Action::SignedOut,
+        SESSION,
+        &detail,
+    )
+    .await;
     Ok((
         AppendHeaders([(
             header::SET_COOKIE,
@@ -680,6 +747,7 @@ mod tests {
             csrf_token: "t".to_owned(),
             session_left: None,
             update: None,
+            address: None,
         };
         assert!(user(Role::Admin).require_admin().is_ok());
         assert!(matches!(

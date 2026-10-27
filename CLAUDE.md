@@ -163,6 +163,12 @@ Ein Binary, ein Prozess, Module:
   Mittel), `storage::availability` (Migration `0021`: `availability_1h`/`_1d`; `count` aus `storage::status::record_poll` in derselben Transaktion, `rollup`
   und `apply_retention` aus `maintenance`, `totals` stundengenau mit Tagen als Rückfall), Seite `web::reports` (`/reports`, `/reports.csv`, alle Benutzer;
   Monate in `schedule::time_zone()`; `percent_text` rundet ab), Kacheln auf der Sensorseite (`reports::sensor_summary`)
+- Änderungsprotokoll (2026-10-27, `docs/users-and-login.md`, „Audit log“): `audit` (`Action`, `Kind` mit `href`, `Changes`: `field` alt → neu nur bei
+  Unterschied, `label`/`value_label` für Katalog-IDs, `limits` für Grenzwerte, `secret` nur „geändert“, `note`; `into_msg` → `Msg::List`), `storage::audit`
+  (Migration `0022`: `audit_log`; `insert`, `list`, `apply_retention` aus `maintenance`, Config `retention_audit_days`), `web::audit` (`record` aus den
+  Admin-Handlern **nach** der Änderung, übergeht „geändert“ ohne Unterschied; `write` für An-/Abmeldungen ohne `CurrentUser`; `Object::target` für
+  Pausenziele; Seite `/audit` nur Admins, `?user=`). `CurrentUser.address` (Client-Adresse über `throttle::client_ip`). Fehlgeschlagene Anmeldungen nur
+  mit dem Namen eines vorhandenen Kontos. Neue Admin-Handler müssen `audit::record` aufrufen; Secrets nie als Wert
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum; `DeviceKind`: Gerätetyp, nur fürs Symbol in der Übersicht, Spalte `kind`, Migration `0015`); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - Geräte ohne SNMP: `Device.profile_id` ist `Option` (`None` = „Kein SNMP – nur Ping“, `has_snmp()`, `profile_label()`); interaktive SNMP-Aktionen holen die Zugangsdaten über `web::snmp_credentials` (Fehlermeldung für Ping-Geräte). Die Spalte wurde nachträglich nullbar: `storage::migrate` baut `devices` einmalig mit abgeschalteten Fremdschlüsseln neu auf (`allow_devices_without_profile`), weil das in einer sqlx-Migration (immer Transaktion) nicht geht
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::pauses` für Pausen, Abhängigkeiten und ihr Protokoll, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
@@ -212,7 +218,7 @@ Ein Binary, ein Prozess, Module:
 - SNMP-Community/v3-Passwörter verschlüsselt in der DB (XChaCha20-Poly1305, Spaltenkontext als AAD); Schlüssel aus Datei mit Rechten 0600
   (`secret_key_file`, Server startet sonst nicht, Erzeugung mit `opennetmon key generate`); Entschlüsselung nur für den Poller;
   Profil-Seiten nur für Administratoren
-- Secrets niemals loggen, nie in HTML ausgeben (Formulare zeigen nur „gesetzt/nicht gesetzt")
+- Secrets niemals loggen, nie in HTML ausgeben (Formulare zeigen nur „gesetzt/nicht gesetzt"), nie ins Änderungsprotokoll (nur „geändert“)
 - Passwörter mit argon2; Session-Cookies `HttpOnly`, `SameSite=Strict`, `Secure` laut Config (`cookie_secure`, Standard `true`);
   CSRF-Schutz für alle POST-Formulare (Login: Double-Submit-Cookie, danach Token pro Sitzung)
 - Sitzungen serverseitig; in der DB steht nur der SHA-256-Wert des Cookie-Tokens; kein Standardbenutzer, erster Admin per CLI
@@ -322,7 +328,7 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   (`PLAN.md`, „Verifikation“). Nach v0.5.0 umgesetzt (noch nicht released): Knopfleisten der Geräte-, Gruppen- und Sensorseite mit
   Pausieren/Fortsetzen und Protokoll sichtbar, die Einrichtung im Menü „⋯ Aktionen“ auf jeder Breite (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, D)
 - Umgesetzt nach v0.5.0 (noch nicht released, 2026-10-27): E Dienst-Sensoren, H `cargo audit` in der CI, I Hinweis auf neue Versionen,
-  J Wartungsfenster, G Verfügbarkeit und Berichte (ohne Monatsmail)
+  J Wartungsfenster, G Verfügbarkeit und Berichte (ohne Monatsmail), M Änderungsprotokoll
 - Geplant (2026-10-27, `PLAN.md`, „Weitere Vorhaben E–M“; E, G, H, I, J, M jetzt, F, K, L in einer späteren Version): E Sensoren HTTP(S)/TCP/DNS/TLS-Zertifikat,
   F Push (ntfy, Gotify, Telegram, Webhook), G Verfügbarkeit und Berichte, H `cargo audit` in der CI, I Hinweis auf neue Versionen, J Wartungsfenster nach Zeitplan,
   K Zwei-Faktor-Anmeldung (TOTP), L Rotation von `secret.key`, M Änderungsprotokoll

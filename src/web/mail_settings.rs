@@ -9,11 +9,13 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes, Kind as AuditKind};
 use crate::credentials::Secret;
 use crate::error::Result;
 use crate::i18n::{Lang, Msg};
 use crate::mail::{self, MailInput, Security};
 use crate::storage::mail::{self as store, Kind, MailView};
+use crate::web::audit::{self, Object};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::overview::FlashQuery;
 use crate::web::{AppState, Layout, flash_message, time_html};
@@ -246,6 +248,42 @@ pub async fn show(
     ))
 }
 
+/// The changed mail settings; the password only as "changed".
+fn mail_changes(old: &MailView, new: &MailView, password_changed: bool) -> Changes {
+    let yes_no = |b: bool| if b { "audit-yes" } else { "audit-no" };
+    Changes::new()
+        .label(
+            "audit-field-enabled",
+            yes_no(old.enabled),
+            yes_no(new.enabled),
+        )
+        .field("audit-field-smtp-host", &old.host, &new.host)
+        .field("audit-field-port", old.port, new.port)
+        .label(
+            "audit-field-security",
+            old.security.label_id(),
+            new.security.label_id(),
+        )
+        .field("audit-field-username", &old.username, &new.username)
+        .secret("audit-field-password", password_changed)
+        .field("audit-field-from", &old.from_address, &new.from_address)
+        .field(
+            "audit-field-recipients",
+            old.recipients.replace('\n', ", "),
+            new.recipients.replace('\n', ", "),
+        )
+        .label(
+            "audit-field-notify-warnings",
+            yes_no(old.notify_warnings),
+            yes_no(new.notify_warnings),
+        )
+        .field(
+            "audit-field-language",
+            old.language.native_name(),
+            new.language.native_name(),
+        )
+}
+
 pub async fn save(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -256,8 +294,24 @@ pub async fn save(
     let checked = form.to_input().and_then(|input| input.check());
     match checked {
         Ok(checked) => {
+            let before = store::get_view(&state.pool).await?;
             store::save(&state.pool, &state.secrets, &checked).await?;
             tracing::info!(user = %user.username, enabled = checked.enabled, "mail settings saved");
+            let after = store::get_view(&state.pool).await?;
+            let password_changed =
+                checked.password.is_some() || before.password_set != after.password_set;
+            audit::record(
+                &state,
+                &user,
+                Action::Changed,
+                Object {
+                    kind: AuditKind::Mail,
+                    id: None,
+                    name: "",
+                },
+                mail_changes(&before, &after, password_changed),
+            )
+            .await;
             Ok(Redirect::to("/settings/mail?msg=mail_saved").into_response())
         }
         Err(message) => {

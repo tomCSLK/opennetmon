@@ -68,6 +68,8 @@ pub struct Config {
     pub retention_raw_days: u32,
     /// Days hourly rollups and status events are kept (at least `retention_raw_days`); daily rollups are kept forever.
     pub retention_hourly_days: u32,
+    /// Days entries of the audit log (changes, sign-ins) are kept (1 to 36500).
+    pub retention_audit_days: u32,
     /// Look once a day on GitHub whether a newer release exists and tell administrators in the sidebar
     /// (GitHub sees the address of the server; nothing else is sent). Off unless set; the shipped config sets it.
     pub update_check: bool,
@@ -92,6 +94,7 @@ impl Default for Config {
             poll_concurrency: 16,
             retention_raw_days: 7,
             retention_hourly_days: 365,
+            retention_audit_days: 365,
             update_check: false,
             time_zone: None,
         }
@@ -204,6 +207,11 @@ impl Config {
                 "retention_hourly_days must be between retention_raw_days and 36500",
             ));
         }
+        if !(1..=36_500).contains(&self.retention_audit_days) {
+            return Err(ConfigError::Invalid(
+                "retention_audit_days must be between 1 and 36500",
+            ));
+        }
         if let Some(zone) = &self.time_zone
             && jiff::tz::TimeZone::get(zone).is_err()
         {
@@ -243,6 +251,17 @@ mod tests {
         assert!(!Config::from_sources(None, no_env).unwrap().update_check);
         let on = Config::from_sources(Some("update_check = true"), no_env).unwrap();
         assert!(on.update_check);
+    }
+
+    #[test]
+    fn the_audit_log_is_kept_for_a_year_by_default() {
+        assert_eq!(
+            Config::from_sources(None, no_env)
+                .unwrap()
+                .retention_audit_days,
+            365
+        );
+        assert!(Config::from_sources(Some("retention_audit_days = 0"), no_env).is_err());
     }
 
     #[test]

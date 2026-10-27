@@ -11,6 +11,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes, Kind};
 use crate::devices::Device;
 use crate::discovery::discover_interfaces;
 use crate::error::{Error, Result};
@@ -29,6 +30,7 @@ use crate::status::{device_status, shown_status};
 use crate::storage::measurements::{bucket_averages, latest_values};
 use crate::storage::sensors::{self as store, SensorRecord};
 use crate::storage::{devices, pauses, status as status_store};
+use crate::web::audit::{self, Object};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::devices::DeleteForm;
 use crate::web::overview::FlashQuery;
@@ -600,15 +602,16 @@ pub async fn create(
             Ok(sensor) => {
                 crate::web::sensor_text::rate_new_sensor(&state.pool, sensor, &spec, &mibs)
                     .await
-                    .map(|()| sensor)
+                    .map(|()| (sensor, name))
             }
             Err(e) => Err(e),
         },
         Err(e) => Err(e),
     };
     match outcome {
-        Ok(sensor) => {
+        Ok((sensor, name)) => {
             tracing::info!(user = %user.username, device = id, sensor, "sensor created");
+            audit_created(&state, &user, sensor, &name, &device).await;
             Ok(Redirect::to(&format!("/devices/{id}/sensors?msg=sensor_created")).into_response())
         }
         Err(Error::Invalid(message) | Error::Conflict(message)) => {
@@ -730,7 +733,7 @@ pub async fn create_interfaces(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
-    load_device(&state, id).await?;
+    let device = load_device(&state, id).await?;
     if fields.len() > MAX_FORM_FIELDS {
         return Err(Error::invalid(Msg::new("form-too-large")));
     }
@@ -780,11 +783,15 @@ pub async fn create_interfaces(
                     .chars()
                     .take(MAX_NAME_CHARS - suffix.chars().count())
                     .collect();
-                store::create_sensor(&state.pool, id, &format!("{short}{suffix}"), &spec).await
+                let name = format!("{short}{suffix}");
+                store::create_sensor(&state.pool, id, &name, &spec)
+                    .await
+                    .map(|sensor| (sensor, name))
             }
-            other => other,
+            other => other.map(|sensor| (sensor, name)),
         };
-        result?;
+        let (sensor, name) = result?;
+        audit_created(&state, &user, sensor, &name, &device).await;
         if let Some(k) = key {
             taken.insert(k);
         }
@@ -803,6 +810,40 @@ fn key_of(spec: &SensorSpec) -> Option<InterfaceKey> {
         .or_else(|| status_index(spec).map(|i| (false, i)))
 }
 
+/// The audit entry of a new sensor (also used by the other pages that create sensors).
+pub async fn audit_created(
+    state: &AppState,
+    user: &CurrentUser,
+    sensor: i64,
+    name: &str,
+    device: &Device,
+) {
+    audit::record(
+        state,
+        user,
+        Action::Created,
+        Object::new(Kind::Sensor, sensor, name),
+        Changes::new().value("audit-field-device", &device.name),
+    )
+    .await;
+}
+
+async fn audit_deleted(
+    state: &AppState,
+    user: &CurrentUser,
+    sensor: &SensorRecord,
+    device: &Device,
+) {
+    audit::record(
+        state,
+        user,
+        Action::Deleted,
+        Object::new(Kind::Sensor, sensor.id, &sensor.name),
+        Changes::new().value("audit-field-device", &device.name),
+    )
+    .await;
+}
+
 async fn find_sensor(state: &AppState, id: i64) -> Result<SensorRecord> {
     store::get_sensor(&state.pool, id)
         .await?
@@ -819,7 +860,7 @@ pub async fn bulk(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
-    load_device(&state, id).await?;
+    let device = load_device(&state, id).await?;
     let own = store::list_sensors(&state.pool, id).await?;
     let action = fields.get("action").map_or("", String::as_str);
     let ids: Vec<i64> = if action == "activate_all" {
@@ -848,10 +889,13 @@ pub async fn bulk(
             }
             (resumed, "sensors_activated")
         }
-        "delete" => (
-            store::delete_many(&state.pool, id, &ids).await?,
-            "sensors_deleted",
-        ),
+        "delete" => {
+            let deleted = store::delete_many(&state.pool, id, &ids).await?;
+            for sensor in own.iter().filter(|s| ids.contains(&s.id)) {
+                audit_deleted(&state, &user, sensor, &device).await;
+            }
+            (deleted, "sensors_deleted")
+        }
         _ => return Err(Error::invalid(Msg::new("unknown-action"))),
     };
     tracing::info!(user = %user.username, device = id, action, changed, "bulk sensor change");
@@ -872,6 +916,9 @@ pub async fn delete(
     }
     store::delete_sensor(&state.pool, id).await?;
     tracing::info!(user = %user.username, sensor = id, "sensor deleted");
+    if let Some(device) = devices::get_device(&state.pool, sensor.device_id).await? {
+        audit_deleted(&state, &user, &sensor, &device).await;
+    }
     Ok(Redirect::to(&format!(
         "/devices/{}/sensors?msg=sensor_deleted",
         sensor.device_id

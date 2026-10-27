@@ -274,7 +274,7 @@ pub async fn create(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(fields.get("csrf_token").map_or("", String::as_str))?;
-    load_device(&state, id).await?;
+    let device = load_device(&state, id).await?;
     if fields.len() > MAX_FIELDS {
         return Err(Error::invalid(Msg::new("form-too-large")));
     }
@@ -292,8 +292,9 @@ pub async fn create(
         if !existing.insert(oid.clone()) {
             continue; // already monitored
         }
+        let mut name = p.name.clone();
         let mut result =
-            store::create_sensor_with_state(&state.pool, id, &p.name, &p.spec, activate).await;
+            store::create_sensor_with_state(&state.pool, id, &name, &p.spec, activate).await;
         // Same name already used on this device: number it.
         let mut n = 2;
         while matches!(result, Err(Error::Conflict(_))) && n < 100 {
@@ -303,18 +304,15 @@ pub async fn create(
                 .chars()
                 .take(crate::devices::MAX_NAME_LEN - suffix.chars().count())
                 .collect();
-            result = store::create_sensor_with_state(
-                &state.pool,
-                id,
-                &format!("{base}{suffix}"),
-                &p.spec,
-                activate,
-            )
-            .await;
+            name = format!("{base}{suffix}");
+            result =
+                store::create_sensor_with_state(&state.pool, id, &name, &p.spec, activate).await;
             n += 1;
         }
-        crate::web::sensor_text::rate_new_sensor(&state.pool, result?, &p.spec, &state.mib_index())
+        let sensor = result?;
+        crate::web::sensor_text::rate_new_sensor(&state.pool, sensor, &p.spec, &state.mib_index())
             .await?;
+        crate::web::sensors::audit_created(&state, &user, sensor, &name, &device).await;
         created += 1;
     }
     tracing::info!(user = %user.username, device = id, created, activate, "sensors created from value discovery");

@@ -257,6 +257,7 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
             Retention {
                 raw_days: config.retention_raw_days,
                 hourly_days: config.retention_hourly_days,
+                audit_days: config.retention_audit_days,
             },
         ))
     } else {

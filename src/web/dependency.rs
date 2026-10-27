@@ -11,12 +11,14 @@ use serde::Deserialize;
 
 use std::collections::HashMap;
 
+use crate::audit::{Action, Changes};
 use crate::devices::{Group, flatten_groups};
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::pause::{Dependency, Effective, Origin, Pauses, Setting, Target, parse_delay};
 use crate::storage::pauses::{self, DependencyError};
 use crate::storage::{devices, groups, sensors};
+use crate::web::audit::{self, Object as AuditObject};
 use crate::web::auth::CurrentUser;
 use crate::web::pause::{Object, object};
 use crate::web::sensors::now_ms;
@@ -238,6 +240,37 @@ fn parse(form: &DependencyForm) -> std::result::Result<Setting, Msg> {
     })
 }
 
+/// The saved setting for the audit log (new values only).
+async fn dependency_changes(
+    state: &AppState,
+    setting: Setting,
+    master: Option<bool>,
+) -> Result<Changes> {
+    let dependency = match setting.dependency {
+        Dependency::Parent => {
+            Changes::new().value_label("audit-field-dependency", "dependency-parent")
+        }
+        Dependency::None => Changes::new().value_label("audit-field-dependency", "dependency-none"),
+        Dependency::Sensor(sensor) => {
+            let name = sensors::get_sensor(&state.pool, sensor)
+                .await?
+                .map_or_else(|| sensor.to_string(), |s| s.name);
+            Changes::new().value("audit-field-dependency", name)
+        }
+    };
+    let changes = match setting.delay_secs {
+        Some(secs) => dependency.value("audit-field-delay", secs),
+        None => dependency.value_label("audit-field-delay", "audit-inherited"),
+    };
+    Ok(match master {
+        Some(master) => changes.value_label(
+            "audit-field-master",
+            if master { "audit-yes" } else { "audit-no" },
+        ),
+        None => changes,
+    })
+}
+
 pub async fn save(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -268,6 +301,15 @@ pub async fn save(
                 ?master,
                 "dependency saved"
             );
+            let changes = dependency_changes(&state, setting, master).await?;
+            audit::record(
+                &state,
+                &user,
+                Action::Changed,
+                AuditObject::target(target, &obj.name),
+                changes,
+            )
+            .await;
             return Ok(Redirect::to(&href(&obj, Some("dependency_saved"))).into_response());
         }
         Err(DependencyError::Invalid(msg)) => msg,

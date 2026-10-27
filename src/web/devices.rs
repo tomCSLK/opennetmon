@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes, Kind};
 use crate::devices::{
     DEFAULT_INTERVAL_SECS, DEFAULT_PORT, DEFAULT_RETRIES, DEFAULT_TIMEOUT_SECS, Device,
     DeviceInput, DeviceKind, Polling,
@@ -18,6 +19,7 @@ use crate::i18n::{Lang, Msg};
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{self, SnmpTarget, format_uptime};
 use crate::storage::{credentials, devices as store, groups, sensors};
+use crate::web::audit::{self, Object};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::{
     AppState, Crumb, Layout, SelectOption, back_to_group, group_options, group_trail,
@@ -432,6 +434,10 @@ async fn save(
     id: Option<i64>,
     form: &DeviceForm,
 ) -> Result<Response> {
+    let before = match id {
+        Some(id) => store::get_device(&state.pool, id).await?,
+        None => None,
+    };
     let outcome = match form.to_input() {
         Ok(input) => match snmp_sensors_left(state, id, &input).await {
             Ok(()) => store::save_device(&state.pool, id, input).await,
@@ -444,6 +450,7 @@ async fn save(
             // A ping-only device gets its only sensor right away.
             sensors::create_sensor(&state.pool, saved, "Ping", &SensorSpec::Ping).await?;
             tracing::info!(user = %user.username, device = saved, "ping-only device created");
+            audit_saved(state, user, None, saved).await?;
             Ok(
                 Redirect::to(&format!("/devices/{saved}/sensors?msg=device_created_ping"))
                     .into_response(),
@@ -451,6 +458,7 @@ async fn save(
         }
         Ok(saved) => {
             tracing::info!(user = %user.username, device = saved, "device saved");
+            audit_saved(state, user, before.as_ref(), saved).await?;
             let choice = match form.template.trim() {
                 _ if id.is_some() => None,
                 "" => None,
@@ -506,6 +514,76 @@ async fn save(
     }
 }
 
+/// The audit entry of a created (`before` = `None`) or changed device.
+async fn audit_saved(
+    state: &AppState,
+    user: &CurrentUser,
+    before: Option<&Device>,
+    saved: i64,
+) -> Result<()> {
+    let Some(after) = store::get_device(&state.pool, saved).await? else {
+        return Ok(());
+    };
+    let groups = groups::list_groups(&state.pool).await?;
+    let group = |id: Option<i64>| {
+        id.and_then(|id| groups.iter().find(|g| g.id == id))
+            .map_or_else(String::new, |g| g.name.clone())
+    };
+    let profile = |d: &Device| d.profile_name.clone().unwrap_or_default();
+    let (action, changes) = match before {
+        Some(old) => (
+            Action::Changed,
+            Changes::new()
+                .field("audit-field-name", &old.name, &after.name)
+                .field("audit-field-host", &old.host, &after.host)
+                .field(
+                    "audit-field-group",
+                    group(old.group_id),
+                    group(after.group_id),
+                )
+                .field("audit-field-profile", profile(old), profile(&after))
+                .label(
+                    "audit-field-kind",
+                    old.kind.label_id(),
+                    after.kind.label_id(),
+                )
+                .field("audit-field-port", old.polling.port, after.polling.port)
+                .field(
+                    "audit-field-interval",
+                    old.polling.interval_secs,
+                    after.polling.interval_secs,
+                )
+                .field(
+                    "audit-field-timeout",
+                    old.polling.timeout_secs,
+                    after.polling.timeout_secs,
+                )
+                .field(
+                    "audit-field-retries",
+                    old.polling.retries,
+                    after.polling.retries,
+                ),
+        ),
+        None => {
+            let mut changes = Changes::new().value("audit-field-host", &after.host);
+            let group = group(after.group_id);
+            if !group.is_empty() {
+                changes = changes.value("audit-field-group", group);
+            }
+            (Action::Created, changes)
+        }
+    };
+    audit::record(
+        state,
+        user,
+        action,
+        Object::new(Kind::Device, saved, &after.name),
+        changes,
+    )
+    .await;
+    Ok(())
+}
+
 /// A device can only drop its SNMP profile once it has no SNMP sensors left.
 async fn snmp_sensors_left(state: &AppState, id: Option<i64>, input: &DeviceInput) -> Result<()> {
     let (Some(id), None) = (id, input.profile_id) else {
@@ -535,10 +613,21 @@ pub async fn delete(
     if form.confirm.as_deref() != Some("yes") {
         return Err(Error::invalid(Msg::new("confirm-delete")));
     }
+    let device = store::get_device(&state.pool, id)
+        .await?
+        .ok_or(Error::NotFound)?;
     if !store::delete_device(&state.pool, id).await? {
         return Err(Error::NotFound);
     }
     tracing::info!(user = %user.username, device = id, "device deleted");
+    audit::record(
+        &state,
+        &user,
+        Action::Deleted,
+        Object::new(Kind::Device, id, &device.name),
+        Changes::new().value("audit-field-host", &device.host),
+    )
+    .await;
     Ok(Redirect::to("/?msg=device_deleted").into_response())
 }
 

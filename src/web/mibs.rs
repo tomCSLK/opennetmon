@@ -9,11 +9,13 @@ use axum::extract::{Multipart, Path, Query, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::{Deserialize, Serialize};
 
+use crate::audit::{Action, Changes, Kind};
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::mib::vendors::Vendor;
 use crate::mib::{self, MibObject, Origin};
 use crate::storage::mibs::{self as store, NewMibFile};
+use crate::web::audit::{self, Object};
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout, flash_message, iso_time_html};
 
@@ -510,6 +512,15 @@ pub async fn upload(
         replaced = result.replaced,
         "MIB files uploaded"
     );
+    for file in &files {
+        let object = Object {
+            kind: Kind::Mib,
+            id: None,
+            name: &file.file_name,
+        };
+        let changes = Changes::new().value("audit-field-modules", file.modules.join(", "));
+        audit::record(&state, &user, Action::Created, object, changes).await;
+    }
     Ok(
         Html(render(&state, &user, "", FileFilter::All, None, Some(result), None).await?)
             .into_response(),
@@ -524,11 +535,23 @@ pub async fn delete(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
+    let name = store::list_files(&state.pool)
+        .await?
+        .into_iter()
+        .find(|f| f.id == id)
+        .map(|f| f.file_name)
+        .unwrap_or_default();
     if !store::delete_file(&state.pool, id).await? {
         return Err(Error::NotFound);
     }
     state.reload_mibs().await?;
     tracing::info!(user = %user.username, file = id, "MIB file deleted");
+    let object = Object {
+        kind: Kind::Mib,
+        id: None,
+        name: &name,
+    };
+    audit::record(&state, &user, Action::Deleted, object, Changes::new()).await;
     // Back to the same choice of files.
     let to = match FileFilter::parse(form.files.as_deref()).key() {
         "" => "/mibs?msg=mib_deleted#files".to_owned(),

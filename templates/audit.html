@@ -1,0 +1,39 @@
+{% extends "app.html" %}
+{% block head %}<script src="/static/table-filter.js?v=2" defer></script>{% endblock %}
+{% block title %}{{ t.get("nav-audit") }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ t.get("nav-audit") }}</h1>
+    <p class="subtitle">{{ t.get("audit-subtitle") }}{% if !filtered.is_empty() %} · {{ filtered }} · <a href="/audit">{{ t.get("log-show-all") }}</a>{% endif %}</p>
+  </div>
+</div>
+
+<section class="card flush">
+  {% if rows.is_empty() %}
+  <div class="empty"><strong>{{ t.get("audit-empty") }}</strong></div>
+  {% else %}
+  <div class="card-tools">
+    <input type="search" data-table-filter="audit-entries" data-table-filter-key="audit-entries" placeholder="{{ t.get("audit-filter") }}" aria-label="{{ t.get("audit-filter") }}" hidden>
+    <span class="muted small" data-table-filter-count></span>
+  </div>
+  <div class="table-wrap">
+  <table id="audit-entries" class="m-cards m-log">
+    <thead><tr><th>{{ t.get("audit-when") }}</th><th>{{ t.get("audit-user") }}</th><th>{{ t.get("audit-action") }}</th><th>{{ t.get("audit-object") }}</th><th>{{ t.get("audit-detail") }}</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr data-filter="{{ r.filter }}">
+        <td class="nowrap m-when">{{ r.at|safe }}</td>
+        <td class="nowrap m-device">{% if r.user.is_empty() %}–{% else %}<a href="/audit?user={{ r.user|urlencode }}">{{ r.user }}</a>{% endif %}{% if !r.address.is_empty() %}<span class="sub">{{ r.address }}</span>{% endif %}</td>
+        <td class="nowrap m-status"><span class="badge {{ r.level }}">{{ r.action }}</span></td>
+        <td class="m-name">{% if let Some(href) = r.href %}<a href="{{ href }}"><strong>{{ r.name }}</strong></a>{% else %}<strong>{{ r.name }}</strong>{% endif %}{% if !r.kind.is_empty() %}<span class="sub">{{ r.kind }}</span>{% endif %}</td>
+        <td class="wrap muted m-msg">{{ r.detail }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="empty small" data-table-filter-empty hidden>{{ t.get("log-none-match") }}</p>
+  {% endif %}
+</section>
+{% endblock %}

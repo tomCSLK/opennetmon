@@ -18,6 +18,7 @@ const DAILY_OVERLAP: i64 = DAY_MS;
 pub struct Retention {
     pub raw_days: u32,
     pub hourly_days: u32,
+    pub audit_days: u32,
 }
 
 /// What a maintenance run did.
@@ -113,6 +114,8 @@ pub async fn apply_retention(
         .await?
         .rows_affected();
     crate::storage::availability::apply_retention(pool, hourly_before).await?;
+    let audit_before = now_ms - i64::from(retention.audit_days) * DAY_MS;
+    crate::storage::audit::apply_retention(pool, audit_before).await?;
     Ok(Report {
         raw_deleted,
         hourly_deleted,
@@ -281,6 +284,7 @@ mod tests {
             Retention {
                 raw_days: 7,
                 hourly_days: 365,
+                audit_days: 365,
             },
         )
         .await
@@ -317,6 +321,7 @@ mod tests {
             Retention {
                 raw_days: 7,
                 hourly_days: 365,
+                audit_days: 365,
             },
         )
         .await

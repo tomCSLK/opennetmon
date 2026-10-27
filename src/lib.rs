@@ -1,6 +1,7 @@
 //! opennetmon – agentless SNMP network monitor.
 
 pub mod alerting;
+pub mod audit;
 pub mod auth;
 pub mod availability;
 pub mod config;

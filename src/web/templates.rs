@@ -11,6 +11,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes, Kind};
 use crate::devices::Device;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::{Error, Result};
@@ -22,6 +23,7 @@ use crate::storage::{devices, sensors};
 use crate::templates::{
     self as tpl, ApplyError, BasicKind, BuildOptions, PortChoice, PortRule, PortSelection,
 };
+use crate::web::audit::{self, Object};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::{AppState, Crumb, Layout, flash_message, group_trail};
 
@@ -315,6 +317,22 @@ pub async fn update(
     match store::update_template(&state.pool, id, &form.name, &form.object_id).await {
         Ok(()) => {
             tracing::info!(user = %user.username, template = id, "device template updated");
+            let object_id = |t: &TemplateRecord| t.object_id.clone().unwrap_or_default();
+            let changes = Changes::new()
+                .field("audit-field-name", &template.name, form.name.trim())
+                .field(
+                    "audit-field-object-id",
+                    object_id(&template),
+                    form.object_id.trim(),
+                );
+            audit::record(
+                &state,
+                &user,
+                Action::Changed,
+                Object::new(Kind::Template, id, form.name.trim()),
+                changes,
+            )
+            .await;
             Ok(Redirect::to(&format!("/templates/{id}?msg=template_saved")).into_response())
         }
         Err(Error::Invalid(message) | Error::Conflict(message)) => {
@@ -339,10 +357,19 @@ pub async fn delete(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
+    let template = load_template(&state, id).await?;
     if !store::delete_template(&state.pool, id).await? {
         return Err(Error::NotFound);
     }
     tracing::info!(user = %user.username, template = id, "device template deleted");
+    audit::record(
+        &state,
+        &user,
+        Action::Deleted,
+        Object::new(Kind::Template, id, &template.name),
+        Changes::new(),
+    )
+    .await;
     Ok(Redirect::to("/templates?msg=template_deleted").into_response())
 }
 
@@ -615,6 +642,14 @@ pub async fn create(
         Ok(template) => {
             store::set_template_of_device(&state.pool, id, Some(template)).await?;
             tracing::info!(user = %user.username, device = id, template, "device template created");
+            audit::record(
+                &state,
+                &user,
+                Action::Created,
+                Object::new(Kind::Template, template, get("name").trim()),
+                Changes::new().value("audit-field-device", &device.name),
+            )
+            .await;
             Ok(
                 Redirect::to(&format!("/templates/{template}?msg=template_created"))
                     .into_response(),
@@ -811,6 +846,18 @@ pub async fn apply_and_render(
                 skipped = outcome.skipped.len(),
                 "device template applied"
             );
+            audit::record(
+                state,
+                user,
+                Action::Changed,
+                Object::new(Kind::Device, page.device.id, &page.device.name),
+                Changes::new().note(
+                    Msg::new("audit-template-applied")
+                        .with("template", template.name.as_str())
+                        .with("count", outcome.created.len()),
+                ),
+            )
+            .await;
             page.created = outcome.created;
             page.present = outcome.present;
             page.skipped = outcome.skipped.iter().map(|m| user.lang.msg(m)).collect();

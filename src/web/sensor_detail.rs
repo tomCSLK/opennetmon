@@ -10,6 +10,7 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::{Form, Json};
 use serde::{Deserialize, Serialize};
 
+use crate::audit::{Action, Changes, Kind};
 use crate::devices::Device;
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
@@ -21,6 +22,7 @@ use crate::storage::devices;
 use crate::storage::measurements::{ChartSeries, Range, chart_data, latest_values, recent_samples};
 use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
 use crate::storage::status as status_store;
+use crate::web::audit::{self, Object};
 use crate::web::auth::CurrentUser;
 use crate::web::sensor_text::ValueFormat;
 use crate::web::{AppState, Crumb, Layout, flash_message, group_trail, time_html};
@@ -538,6 +540,23 @@ pub async fn samples(
     }))
 }
 
+async fn audit_changed(
+    state: &AppState,
+    user: &CurrentUser,
+    sensor: &SensorRecord,
+    name: &str,
+    changes: Changes,
+) {
+    audit::record(
+        state,
+        user,
+        Action::Changed,
+        Object::new(Kind::Sensor, sensor.id, name),
+        changes,
+    )
+    .await;
+}
+
 /// Parses the threshold fields of every channel from the submitted form.
 fn parse_limits(
     channels: &[ChannelRecord],
@@ -584,6 +603,13 @@ pub async fn save_thresholds(
         Ok(limits) => {
             store::set_thresholds(&state.pool, id, &limits).await?;
             tracing::info!(user = %user.username, sensor = id, "thresholds saved");
+            let mut changes = Changes::new();
+            for (channel, new) in &limits {
+                if let Some(c) = sensor.channels.iter().find(|c| c.id == *channel) {
+                    changes = changes.limits(channel_label(&c.key), c.unit, &c.thresholds, new);
+                }
+            }
+            audit_changed(&state, &user, &sensor, &sensor.name, changes).await;
             Ok(Redirect::to(&format!("/sensors/{id}?msg=thresholds_saved")).into_response())
         }
         Err(Error::Invalid(message)) => {
@@ -650,6 +676,31 @@ pub async fn save_states(
     }
     store::set_value_states(&state.pool, id, channel.id, &states).await?;
     tracing::info!(user = %user.username, sensor = id, rated = states.len(), "status value ratings saved");
+    let rating = |list: &[ValueState], value: i64| {
+        list.iter()
+            .find(|s| s.value == value)
+            .map_or("audit-not-rated", |s| s.status.label_id())
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut changes = Changes::new();
+    for value in channel.states.iter().chain(&states) {
+        if !seen.insert(value.value) {
+            continue;
+        }
+        let (old, new) = (
+            rating(&channel.states, value.value),
+            rating(&states, value.value),
+        );
+        if old != new {
+            changes = changes.note(
+                Msg::new("audit-change")
+                    .with("field", value.label.as_str())
+                    .with("old", Msg::new(old))
+                    .with("new", Msg::new(new)),
+            );
+        }
+    }
+    audit_changed(&state, &user, &sensor, &sensor.name, changes).await;
     let msg = if states.is_empty() {
         "states_reset"
     } else {
@@ -676,6 +727,9 @@ pub async fn rename(
     match store::rename_sensor(&state.pool, id, &form.name).await {
         Ok(()) => {
             tracing::info!(user = %user.username, sensor = id, "sensor renamed");
+            let new = form.name.trim();
+            let changes = Changes::new().field("audit-field-name", &sensor.name, new);
+            audit_changed(&state, &user, &sensor, new, changes).await;
             Ok(Redirect::to(&format!("/sensors/{id}?msg=sensor_renamed")).into_response())
         }
         Err(Error::Invalid(message) | Error::Conflict(message)) => {
@@ -734,6 +788,13 @@ pub async fn set_interval(
     match saved {
         Ok(secs) => {
             tracing::info!(user = %user.username, sensor = id, interval = ?secs, "sensor interval set");
+            let shown = |s: Option<u32>| s.map_or_else(String::new, |s| s.to_string());
+            let changes = Changes::new().field(
+                "audit-field-interval",
+                shown(sensor.interval_secs),
+                shown(secs),
+            );
+            audit_changed(&state, &user, &sensor, &sensor.name, changes).await;
             Ok(Redirect::to(&format!("/sensors/{id}?msg=interval_saved")).into_response())
         }
         Err(Error::Invalid(message)) => {

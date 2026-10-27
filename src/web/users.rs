@@ -8,10 +8,12 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes, Kind};
 use crate::auth::{self, Role};
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::storage::users::{self as store, User, UserInfo};
+use crate::web::audit::{self, Object};
 use crate::web::auth::{CurrentUser, SESSION_COOKIE, cookie_value};
 use crate::web::{
     AppState, LanguageOption, Layout, flash_message, iso_time_html, language_label,
@@ -197,6 +199,8 @@ pub async fn create(
     match outcome {
         Ok(id) => {
             tracing::info!(user = %user.username, created = id, role = role.as_str(), "user created");
+            let changes = Changes::new().value_label("audit-field-role", role.label_id());
+            audit_user(&state, &user, Action::Created, id, &username, changes).await;
             Ok(Redirect::to("/users?msg=user_created").into_response())
         }
         Err(Error::Invalid(message) | Error::Conflict(message)) => {
@@ -205,6 +209,44 @@ pub async fn create(
             Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
         }
         Err(e) => Err(e),
+    }
+}
+
+pub(crate) async fn audit_user(
+    state: &AppState,
+    user: &CurrentUser,
+    action: Action,
+    id: i64,
+    name: &str,
+    changes: Changes,
+) {
+    audit::record(
+        state,
+        user,
+        action,
+        Object::new(Kind::User, id, name),
+        changes,
+    )
+    .await;
+}
+
+/// The change of a user's language (`None` = as in the browser).
+pub(crate) fn language_change(old: Option<Lang>, new: Option<Lang>) -> Changes {
+    let name = |l: Option<Lang>| l.map_or_else(String::new, |l| l.native_name().to_owned());
+    match (old, new) {
+        (Some(_), None) => Changes::new().note(
+            Msg::new("audit-change")
+                .with("field", Msg::new("audit-field-language"))
+                .with("old", name(old))
+                .with("new", Msg::new("language-browser")),
+        ),
+        (None, Some(_)) => Changes::new().note(
+            Msg::new("audit-change")
+                .with("field", Msg::new("audit-field-language"))
+                .with("old", Msg::new("language-browser"))
+                .with("new", name(new)),
+        ),
+        _ => Changes::new().field("audit-field-language", name(old), name(new)),
     }
 }
 
@@ -283,7 +325,7 @@ pub async fn set_role(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
-    load(&state, id).await?;
+    let target = load(&state, id).await?;
     let outcome = match parse_role(&form.role) {
         Ok(role) => store::set_role(&state.pool, id, role).await.map(|()| role),
         Err(e) => Err(e),
@@ -291,6 +333,17 @@ pub async fn set_role(
     match outcome {
         Ok(role) => {
             tracing::info!(user = %user.username, target = id, role = role.as_str(), "user role changed");
+            let changes =
+                Changes::new().label("audit-field-role", target.role.label_id(), role.label_id());
+            audit_user(
+                &state,
+                &user,
+                Action::Changed,
+                id,
+                &target.username,
+                changes,
+            )
+            .await;
             // An admin who made themselves a viewer can no longer open this page.
             let to = if id == user.id && !role.is_admin() {
                 "/?msg=user_role_saved".to_owned()
@@ -311,14 +364,26 @@ pub async fn set_language(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
-    load(&state, id).await?;
+    let target = load(&state, id).await?;
     let outcome = match parse_language_choice(&form.language) {
-        Ok(language) => store::set_language(&state.pool, id, language).await,
+        Ok(language) => store::set_language(&state.pool, id, language)
+            .await
+            .map(|()| language),
         Err(e) => Err(e),
     };
     match outcome {
-        Ok(()) => {
+        Ok(language) => {
             tracing::info!(user = %user.username, target = id, "user language changed");
+            let changes = language_change(target.language, language);
+            audit_user(
+                &state,
+                &user,
+                Action::Changed,
+                id,
+                &target.username,
+                changes,
+            )
+            .await;
             Ok(Redirect::to(&format!("/users/{id}?msg=user_language_saved")).into_response())
         }
         Err(e) => refused(&state, &user, id, e).await,
@@ -334,8 +399,24 @@ pub async fn set_idle(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let stay = form.stay_signed_in.as_deref() == Some("yes");
+    let target = load(&state, id).await?;
     store::set_stay_signed_in(&state.pool, id, stay).await?;
     tracing::info!(user = %user.username, target = id, stay_signed_in = stay, "user sign-out setting changed");
+    let yes_no = |b: bool| if b { "audit-yes" } else { "audit-no" };
+    let changes = Changes::new().label(
+        "audit-field-stay-signed-in",
+        yes_no(target.stay_signed_in),
+        yes_no(stay),
+    );
+    audit_user(
+        &state,
+        &user,
+        Action::Changed,
+        id,
+        &target.username,
+        changes,
+    )
+    .await;
     Ok(Redirect::to(&format!("/users/{id}?msg=user_idle_saved")).into_response())
 }
 
@@ -348,7 +429,7 @@ pub async fn set_password(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
-    load(&state, id).await?;
+    let target = load(&state, id).await?;
     // Changing one's own password keeps this session; every other session of the user ends.
     let keep = (id == user.id)
         .then(|| cookie_value(&headers, SESSION_COOKIE).map(|t| auth::token_hash(&t)))
@@ -360,6 +441,16 @@ pub async fn set_password(
     match outcome {
         Ok(()) => {
             tracing::info!(user = %user.username, target = id, "user password changed");
+            let changes = Changes::new().secret("audit-field-password", true);
+            audit_user(
+                &state,
+                &user,
+                Action::Changed,
+                id,
+                &target.username,
+                changes,
+            )
+            .await;
             Ok(Redirect::to(&format!("/users/{id}?msg=user_password_saved")).into_response())
         }
         Err(e) => refused(&state, &user, id, e).await,
@@ -385,6 +476,16 @@ pub async fn delete(
     match outcome {
         Ok(()) => {
             tracing::info!(user = %user.username, deleted = %target.username, "user deleted");
+            let changes = Changes::new();
+            audit_user(
+                &state,
+                &user,
+                Action::Deleted,
+                id,
+                &target.username,
+                changes,
+            )
+            .await;
             Ok(Redirect::to("/users?msg=user_deleted").into_response())
         }
         Err(e) => refused(&state, &user, id, e).await,

@@ -10,13 +10,15 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes, Kind};
 use crate::error::{Error, Result};
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Msg};
 use crate::pause::{Origin, Pauses, Target};
 use crate::schedule::{self, Assignment, EVERY_DAY, Window};
-use crate::snmp::format_uptime;
+use crate::sensors::Unit;
 use crate::storage::pauses;
 use crate::storage::schedules::{self as store, Schedule};
+use crate::web::audit::{self, Object as AuditObject};
 use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::pause::{Object, object};
 use crate::web::sensors::now_ms;
@@ -44,47 +46,45 @@ fn local(ms: i64) -> String {
     schedule::format_local(ms, schedule::time_zone()).replace('T', " ")
 }
 
-fn days(t: Lang, mask: u8) -> String {
+fn days(mask: u8) -> Msg {
     match mask {
-        EVERY_DAY => t.get("schedule-every-day"),
-        WORKDAYS => t.get("schedule-workdays"),
-        WEEKEND => t.get("schedule-weekend"),
-        _ => WEEKDAY_IDS
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| mask & (1 << i) != 0)
-            .map(|(_, id)| t.get(id))
-            .collect::<Vec<_>>()
-            .join(", "),
+        EVERY_DAY => Msg::new("schedule-every-day"),
+        WORKDAYS => Msg::new("schedule-workdays"),
+        WEEKEND => Msg::new("schedule-weekend"),
+        _ => Msg::List(
+            WEEKDAY_IDS
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| mask & (1 << i) != 0)
+                .map(|(_, id)| Msg::new(id))
+                .collect(),
+        ),
     }
 }
 
 /// "Mo–Fr ab 03:00 Uhr, 15 Min." or "2026-10-31 10:00 bis 2026-10-31 11:00".
-pub fn describe_window(t: Lang, w: &Window) -> String {
+pub fn window_msg(w: &Window) -> Msg {
     match *w {
         Window::Weekly {
             weekdays,
             start_minute,
             duration_minutes,
-        } => t.fmt(
-            "schedule-weekly",
-            &[
-                ("days", days(t, weekdays).into()),
-                ("time", schedule::format_time(start_minute).into()),
-                (
-                    "duration",
-                    format_uptime(t, duration_minutes.saturating_mul(6_000)).into(),
-                ),
-            ],
-        ),
-        Window::Once { start_ms, end_ms } => t.get2(
-            "schedule-once",
-            "start",
-            local(start_ms).as_str(),
-            "end",
-            local(end_ms).as_str(),
-        ),
+        } => Msg::new("schedule-weekly")
+            .with("days", days(weekdays))
+            .with("time", schedule::format_time(start_minute))
+            .with_value(
+                "duration",
+                Unit::Seconds,
+                f64::from(duration_minutes) * 60.0,
+            ),
+        Window::Once { start_ms, end_ms } => Msg::new("schedule-once")
+            .with("start", local(start_ms))
+            .with("end", local(end_ms)),
     }
+}
+
+pub fn describe_window(t: Lang, w: &Window) -> String {
+    t.msg(&window_msg(w))
 }
 
 /// "offen bis …", "nächster Beginn …" or "kein weiteres Fenster".
@@ -195,12 +195,14 @@ pub async fn create(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let result = match schedule::validate_name(&form.name) {
-        Ok(name) => store::create(&state.pool, &name).await,
+        Ok(name) => store::create(&state.pool, &name).await.map(|id| (id, name)),
         Err(msg) => Err(Error::Invalid(msg)),
     };
     match result {
-        Ok(id) => {
+        Ok((id, name)) => {
             tracing::info!(user = %user.username, schedule = id, "schedule created");
+            let object = AuditObject::new(Kind::Schedule, id, &name);
+            audit::record(&state, &user, Action::Created, object, Changes::new()).await;
             Ok(Redirect::to(&format!("/schedules/{id}?msg=schedule_created")).into_response())
         }
         Err(Error::Invalid(msg) | Error::Conflict(msg)) => {
@@ -350,12 +352,15 @@ pub async fn rename(
     user.verify_csrf(&form.csrf_token)?;
     let s = load(&state, id).await?;
     let result = match schedule::validate_name(&form.name) {
-        Ok(name) => store::rename(&state.pool, id, &name).await,
+        Ok(name) => store::rename(&state.pool, id, &name).await.map(|()| name),
         Err(msg) => Err(Error::Invalid(msg)),
     };
     match result {
-        Ok(()) => {
+        Ok(name) => {
             tracing::info!(user = %user.username, schedule = id, "schedule renamed");
+            let changes = Changes::new().field("audit-field-name", &s.name, &name);
+            let object = AuditObject::new(Kind::Schedule, id, &name);
+            audit::record(&state, &user, Action::Changed, object, changes).await;
             Ok(Redirect::to(&format!("/schedules/{id}?msg=schedule_saved")).into_response())
         }
         Err(Error::Invalid(msg) | Error::Conflict(msg)) => {
@@ -382,10 +387,13 @@ pub async fn delete(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
+    let s = load(&state, id).await?;
     if !store::delete(&state.pool, id).await? {
         return Err(Error::NotFound);
     }
     tracing::info!(user = %user.username, schedule = id, "schedule deleted");
+    let object = AuditObject::new(Kind::Schedule, id, &s.name);
+    audit::record(&state, &user, Action::Deleted, object, Changes::new()).await;
     // Objects in one of its windows are not paused any more.
     pauses::sync_all(&state.pool, now_ms()).await?;
     Ok(Redirect::to("/schedules?msg=schedule_deleted").into_response())
@@ -461,6 +469,10 @@ pub async fn add_window(
         Ok(window) => {
             store::add_window(&state.pool, id, window).await?;
             tracing::info!(user = %user.username, schedule = id, ?window, "maintenance window added");
+            let changes = Changes::new()
+                .note(Msg::new("audit-window-added").with("window", window_msg(&window)));
+            let object = AuditObject::new(Kind::Schedule, id, &s.name);
+            audit::record(&state, &user, Action::Changed, object, changes).await;
             pauses::sync_all(&state.pool, now_ms()).await?;
             Ok(Redirect::to(&format!("/schedules/{id}?msg=window_added")).into_response())
         }
@@ -487,10 +499,18 @@ pub async fn delete_window(
 ) -> Result<Response> {
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
+    let s = load(&state, id).await?;
+    let removed = s.windows.iter().find(|w| w.id == window).map(|w| w.window);
     if !store::delete_window(&state.pool, id, window).await? {
         return Err(Error::NotFound);
     }
     tracing::info!(user = %user.username, schedule = id, window, "maintenance window deleted");
+    if let Some(removed) = removed {
+        let changes = Changes::new()
+            .note(Msg::new("audit-window-deleted").with("window", window_msg(&removed)));
+        let object = AuditObject::new(Kind::Schedule, id, &s.name);
+        audit::record(&state, &user, Action::Changed, object, changes).await;
+    }
     pauses::sync_all(&state.pool, now_ms()).await?;
     Ok(Redirect::to(&format!("/schedules/{id}?msg=window_deleted")).into_response())
 }
@@ -667,6 +687,22 @@ pub async fn assign(
                 choice = a.as_str(),
                 "maintenance schedule assigned"
             );
+            let changes = match a {
+                Assignment::Parent => {
+                    Changes::new().value_label("audit-field-schedule", "audit-inherited")
+                }
+                Assignment::None => {
+                    Changes::new().value_label("audit-field-schedule", "audit-none")
+                }
+                Assignment::Schedule(schedule) => {
+                    let name = store::get(&state.pool, schedule)
+                        .await?
+                        .map_or_else(|| schedule.to_string(), |s| s.name);
+                    Changes::new().value("audit-field-schedule", name)
+                }
+            };
+            let object = AuditObject::target(target, &obj.name);
+            audit::record(&state, &user, Action::Changed, object, changes).await;
             pauses::sync_all(&state.pool, now_ms()).await?;
             Ok(Redirect::to(&href(&obj, Some("maintenance_saved"))).into_response())
         }

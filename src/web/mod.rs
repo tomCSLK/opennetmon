@@ -2,6 +2,7 @@
 
 mod account;
 mod assets;
+pub mod audit;
 pub mod auth;
 pub mod credentials;
 pub mod dependency;
@@ -196,6 +197,7 @@ pub fn router(state: AppState) -> Router {
         .route("/status/{filter}", get(status_list::list))
         .route("/log", get(log::log))
         .route("/reports", get(reports::page))
+        .route("/audit", get(audit::page))
         .route("/reports.csv", get(reports::csv))
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))

@@ -71,7 +71,28 @@ Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), pas
 - Response headers: `Content-Security-Policy` (own resources only, no `<base>` from elsewhere, no plugins), `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, and `Cache-Control: no-store` on everything but the static files (which use
   `no-cache` with an ETag), so pages are not shown again from a cache after signing out.
-- Passwords never appear in logs. Failed logins are logged without the user name.
+- Passwords never appear in logs. Failed logins are logged without the user name in the journal; the audit log (below) names the account only if it
+  exists, because what was typed into the name field might be a password.
+
+## Audit log (`/audit`, administrators only)
+
+“Changes” in the sidebar lists who changed what and when, newest first (at most the latest 2,000 on the page, with a filter field; a click on a
+user name shows only that user's entries):
+
+- created, changed and deleted groups, devices, sensors, SNMP profiles, users, device templates, MIB files and schedules, the mail settings,
+  thresholds, ratings of status values, intervals, the order of groups, devices and sensors, dependencies, maintenance assignments and applied
+  templates;
+- for a change the fields that differ, as “old → new” (“Name: Switch → Switch Office, Group: – → Network”); a form saved without a difference writes
+  no entry;
+- sign-ins, failed sign-ins (a wrong password for an existing account, or an unknown user name – the typed name is not stored) and sign-outs,
+  also those after a time without activity, each with the client address (behind a proxy see `client_ip_header`).
+
+**Secrets never go in:** for passwords, community strings and the SMTP password the entry only says “Password changed”. Pausing and resuming are
+not repeated here; they are in the log (`/log`) with user and reason.
+
+Entries are written right after the change succeeded (not in the same transaction): should writing the entry fail, the change stays and the error
+is logged. They are kept for `retention_audit_days` (default 365) and stored in the table `audit_log`; texts are stored as message ids, so each
+reader sees them in their own language.
 
 ## Configuration
 
@@ -80,6 +101,7 @@ Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), pas
 | `cookie_secure` | `true` | Send cookies over HTTPS only. Set it to `false` only for development over plain HTTP |
 | `session_ttl_hours` | `168` | Session lifetime in hours (1 to 2160), for every user |
 | `session_idle_minutes` | `30` | Sign-out after this many minutes without activity (1 to 1440; `0` switches it off) |
+| `retention_audit_days` | `365` | How long entries of the audit log are kept, in days (1 to 36500) |
 | `client_ip_header` | not set | Behind a reverse proxy: `"x-forwarded-for"` (last entry) or `"x-real-ip"`, so that the rate limiting sees the real client address (see below) |
 
 ## Sign-out without activity

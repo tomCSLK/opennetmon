@@ -34,6 +34,7 @@ poll_concurrency = 16                       # devices polled at the same time
 
 retention_raw_days = 7                      # raw measurements
 retention_hourly_days = 365                 # hourly rollups and status events; daily rollups are kept forever
+retention_audit_days = 365                  # audit log: changes by administrators, sign-ins
 
 # Time zone of the weekly maintenance windows ("daily at 03:00"); unset = the zone of the system
 # (`timedatectl`; Ubuntu servers often run in UTC). Names as in `timedatectl list-timezones`.

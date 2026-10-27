@@ -8,8 +8,8 @@
 Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft als `.deb` auf dem Ubuntu-Server des Nutzers (dort noch 0.4.4,
 Update auf 0.5.0 offen); die Instanz auf dem Laptop dient nur noch zum Testen. In v0.5.0 kamen die mobile Ansicht, Symbole in den Listen,
 **Abhängigkeiten wie in PRTG** und die Behebungen aus dem Sicherheitstest dazu (Vorhaben A–C); danach umgesetzt, noch nicht released: Knopfleisten
-der Seitenköpfe (D). **Geplant** sind die Vorhaben E–M (Dienst-Sensoren, Push, Verfügbarkeit, `cargo audit` in der CI, Update-Hinweis,
-Wartungsfenster, 2FA, Schlüsselrotation, Änderungsprotokoll); E, G, H, I, J und M jetzt, F, K und L in einer späteren Version. Weiterhin offen: Test mit dem
+der Seitenköpfe (D) und aus den Vorhaben E–M (2026-10-27) Dienst-Sensoren (E), Verfügbarkeit und Berichte (G), `cargo audit` in der CI (H),
+Update-Hinweis (I), Wartungsfenster (J) und das Änderungsprotokoll (M). **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Weiterhin offen: Test mit dem
 **echten Mailserver** des Nutzers und ein Ende-zu-Ende-Integrationstest.
 
 Umgesetzt (Details in `docs/`):
@@ -589,7 +589,14 @@ Offener Punkt. Heute lässt sich der Schlüssel nicht wechseln, ohne alle SNMP-P
 
 Zu entscheiden: nichts Grundsätzliches. Empfehlung: die Startprüfung des Fingerabdrucks gleich mit einbauen.
 
-### M. Änderungsprotokoll (wer hat wann was geändert)
+### M. Änderungsprotokoll (wer hat wann was geändert) – umgesetzt 2026-10-27
+
+**Umgesetzt** (`src/audit.rs`, `storage::audit`, `web::audit`, Migration `0022`, `docs/users-and-login.md`, „Audit log“): Seite `/audit` („Änderungen“,
+nur Admins) mit Filterfeld, Filter je Benutzer über den Namen und Link aufs Objekt; erfasst alle Admin-Handler (alt → neu, Entscheidung 1; gleich
+gespeicherte Formulare ohne Eintrag) und An-/Abmeldungen samt fehlgeschlagener mit Adresse (Entscheidung 2). Abweichungen: Einträge **nach** der
+Änderung statt in derselben Transaktion (ein Fehler beim Schreiben wird geloggt, die Änderung bleibt); bei fehlgeschlagenen Anmeldungen nur der
+Name eines vorhandenen Kontos (ein ins Namensfeld getipptes Passwort käme sonst ins Protokoll); Filter nach Objekt nur über das Suchfeld, keine
+Sortierung per Spaltenkopf (neueste zuerst); höchstens 2000 Einträge auf der Seite. Aufbewahrung `retention_audit_days` (Standard 365).
 
 - **Tabelle** `audit_log` (Zeit, Benutzer, Adresse, Aktion, Objektart, Objekt-ID, Objektname zum Zeitpunkt, Kurztext als `Msg::encode`).
 - **Erfasst:** Anlegen, Ändern und Löschen von Gruppen, Geräten, Sensoren, SNMP-Profilen, Benutzern, Vorlagen und MIB-Dateien, dazu Schwellwerte,
@@ -628,7 +635,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (537, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (542, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

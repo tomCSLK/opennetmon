@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use crate::audit::{Action, Changes, Kind};
 use crate::credentials::{
     AuthProtocol, PrivProtocol, ProfileInput, ProfileKind, ProfileView, Secret, SecurityLevel,
     SnmpVersion,
@@ -14,6 +15,7 @@ use crate::credentials::{
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::storage::credentials as store;
+use crate::web::audit::{self, Object};
 use crate::web::auth::CurrentUser;
 use crate::web::{AppState, Layout};
 
@@ -277,18 +279,27 @@ async fn save(
     id: Option<i64>,
     form: &ProfileForm,
 ) -> Result<Response> {
+    let before = match id {
+        Some(id) => store::get_profile(&state.pool, id).await?,
+        None => None,
+    };
     let outcome = match form.to_input() {
-        Ok(input) => store::save_profile(&state.pool, &state.secrets, id, &input).await,
+        Ok(input) => store::save_profile(&state.pool, &state.secrets, id, &input)
+            .await
+            .map(|saved| (saved, input)),
         Err(e) => Err(e),
     };
     match outcome {
-        Ok(saved_id) => {
+        Ok((saved_id, input)) => {
             tracing::info!(
                 user = %user.username,
                 profile = saved_id,
                 action = if id.is_some() { "update" } else { "create" },
                 "credential profile saved"
             );
+            if let Some(after) = store::get_profile(&state.pool, saved_id).await? {
+                audit_saved(state, user, before.as_ref(), &after, &input).await;
+            }
             let msg = if id.is_some() { "updated" } else { "created" };
             Ok(Redirect::to(&format!("/credentials?msg={msg}")).into_response())
         }
@@ -309,6 +320,57 @@ async fn save(
     }
 }
 
+/// The audit entry of a saved profile: settings old → new, secrets only as "changed".
+async fn audit_saved(
+    state: &AppState,
+    user: &CurrentUser,
+    before: Option<&ProfileView>,
+    after: &ProfileView,
+    input: &ProfileInput,
+) {
+    let settings = |v: &ProfileView| {
+        let mut parts = vec![v.version.label().to_owned()];
+        parts.extend(v.level.map(|l| l.label().to_owned()));
+        parts.extend(v.auth_protocol.map(|p| p.label().to_owned()));
+        parts.extend(v.priv_protocol.map(|p| p.label().to_owned()));
+        parts.join(" · ")
+    };
+    let username = |v: &ProfileView| v.username.clone().unwrap_or_default();
+    let mut changes = match before {
+        Some(old) => Changes::new()
+            .field("audit-field-name", &old.name, &after.name)
+            .field("audit-field-snmp", settings(old), settings(after))
+            .field("audit-field-username", username(old), username(after)),
+        None => Changes::new().value("audit-field-snmp", settings(after)),
+    };
+    let new_secret = |s: &Option<_>| s.is_some();
+    changes = match &input.kind {
+        ProfileKind::V2c { community } => {
+            changes.secret("audit-field-community", new_secret(community))
+        }
+        ProfileKind::V3 {
+            auth_password,
+            priv_password,
+            ..
+        } => changes
+            .secret("audit-field-auth-password", new_secret(auth_password))
+            .secret("audit-field-priv-password", new_secret(priv_password)),
+    };
+    let action = if before.is_some() {
+        Action::Changed
+    } else {
+        Action::Created
+    };
+    audit::record(
+        state,
+        user,
+        action,
+        Object::new(Kind::Profile, after.id, &after.name),
+        changes,
+    )
+    .await;
+}
+
 pub async fn delete(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -320,10 +382,21 @@ pub async fn delete(
     if form.confirm.as_deref() != Some("yes") {
         return Err(invalid("confirm-delete-missing"));
     }
+    let profile = store::get_profile(&state.pool, id)
+        .await?
+        .ok_or(Error::NotFound)?;
     if !store::delete_profile(&state.pool, id).await? {
         return Err(Error::NotFound);
     }
     tracing::info!(user = %user.username, profile = id, "credential profile deleted");
+    audit::record(
+        &state,
+        &user,
+        Action::Deleted,
+        Object::new(Kind::Profile, id, &profile.name),
+        Changes::new(),
+    )
+    .await;
     Ok(Redirect::to("/credentials?msg=deleted").into_response())
 }
 
