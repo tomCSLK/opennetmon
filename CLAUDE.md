@@ -331,6 +331,8 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   auf dem Ubuntu-Server, das Release kommt erst, wenn alle seine Tests bestanden sind
 - Umgesetzt nach v0.5.0 (noch nicht released, 2026-10-27): E Dienst-Sensoren, H `cargo audit` in der CI, I Hinweis auf neue Versionen,
   J Wartungsfenster, G Verfügbarkeit und Berichte (ohne Monatsmail), M Änderungsprotokoll
+- Zweiter Sicherheitstest 2026-10-27 (alles nach v0.5.0, Stand `47affc3`, `PLAN.md`, „Verifikation“): keine Lücke gefunden; Hinweis
+  `basic-toml` (RUSTSEC-2026-0374, nicht mehr gepflegt, nur zur Übersetzungszeit über askama)
 - Geplant (2026-10-27, `PLAN.md`, „Weitere Vorhaben E–M“; E, G, H, I, J, M jetzt, F, K, L in einer späteren Version): E Sensoren HTTP(S)/TCP/DNS/TLS-Zertifikat,
   F Push (ntfy, Gotify, Telegram, Webhook), G Verfügbarkeit und Berichte, H `cargo audit` in der CI, I Hinweis auf neue Versionen, J Wartungsfenster nach Zeitplan,
   K Zwei-Faktor-Anmeldung (TOTP), L Rotation von `secret.key`, M Änderungsprotokoll

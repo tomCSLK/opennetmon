@@ -235,7 +235,8 @@ Architektur in CLAUDE.md). Abweichungen und Ergänzungen zum Entwurf:
 - Der Zustand „Pausiert“ wird von `storage::pauses::sync` geschrieben (nach jedem Zyklus mit Änderungen und alle 15 s), nur für Sensoren mit
   vorhandenem Zustand; dort entstehen auch die Protokolleinträge (`dependency_log`).
 - Formular `/dependency/<kind>/<id>` mit Hinweis auf den übernommenen Wert; Sensorauswahl nach Gerät gruppiert in der Reihenfolge des Gerätebaums (Geräte mit Gruppenpfad, `in_tree_order`), ohne den Sensor selbst.
-- Im Browser geprüft (Kopie der Testdaten, hell und dunkel). Offen: Auf der Geräteseite bricht die Knopfleiste unterhalb von etwa 1570 px um.
+- Im Browser geprüft (Kopie der Testdaten, hell und dunkel). Dabei fiel auf, dass die Knopfleiste der Geräteseite unterhalb von etwa 1570 px
+  umbrach; behoben mit Vorhaben D (Einrichtung im Menü „⋯ Aktionen“).
 
 Ursprünglicher Plan:
 
@@ -716,10 +717,10 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (545, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (550, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
-  64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).
+  64-Bit-Counter); den Ablauf Ende zu Ende hat der Nutzer am 2026-10-27 im Betrieb geprüft (siehe „Offen“).
 - **Gerätetests** gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, `#[ignore]`).
 - **Oberfläche:** Änderungen im Browser mit einer Wegwerfkopie der Entwicklungsdaten prüfen, hell und dunkel.
 - **Packaging:** `dev/release.sh` prüft Archiv, Installer-Probelauf und Inhalt des .deb; Paket im Podman-Container getestet (Installation, Update, remove, purge).
@@ -730,6 +731,18 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
   Definitionen (12 GB, danach Absturz bei jedem Start), gleichzeitige Anmeldeversuche (2,4 GB und 123 statt 10 Versuche), vier Crates mit
   RustSec-Meldungen, `Cache-Control: no-store` und strengere CSP. Danach erneut gemessen: höchstens ~200 MB, genau 10 Versuche je Adresse.
   Nicht geändert: Die Umleitung von HTTP auf HTTPS übernimmt einen gültigen Host-Header (trifft nur den Anfragenden selbst).
+- **Zweiter Sicherheitstest 2026-10-27** (alles nach v0.5.0, Stand `47affc3`; Code-Review und 150 Angriffe auf eine Wegwerfinstanz mit Admin- und
+  Leserkonto): Rollen und CSRF auf allen neuen Routen (Wartungsfenster, Sensor-Einstellungen, Änderungsprotokoll, Berichte, Messwerte), Zugriff ohne
+  Anmeldung, XSS über Namen von Gruppe, Gerät, Sensoren und Zeitplan auf 17 Seiten, CSV ohne Formeln, unsinnige Parameter in Berichten, Messwerten und
+  Protokoll, Prüfung der Sensor-Einstellungen (Paketanzahl, URL-Schemata, Benutzerdaten und Zeilenumbrüche in URLs, Statuscodes, DNS-Namen, Ports,
+  Fenster), keine Secrets im Änderungsprotokoll, auf den Seiten oder im Log, Benutzerfeld fehlgeschlagener Anmeldungen nicht im Protokoll,
+  Sicherheits-Header. HTTP-Sensor gegen einen bösartigen Server (endloser Inhalt, endlose Header, tröpfelnde Antwort, Weiterleitungsschleife, endlose
+  Chunks): saubere Fehlermeldungen, Speicher über 5 min stabil bei knapp 35 MiB, keine offenen Verbindungen. DNS-Parser und Update-Prüfung im Code
+  geprüft, neue Protokolltabellen begrenzt – alles in Ordnung, keine Lücke gefunden. Hinweise ohne Änderung: `basic-toml` (RUSTSEC-2026-0374,
+  nicht mehr gepflegt) kommt nur über askama in den Build, nicht ins laufende Programm, eine neuere askama-Version gibt es noch nicht; HTTP-Sensoren
+  folgen Weiterleitungen zu beliebigen Hosts (gewollt, Sensoren legen nur Admins an); Tokens in der URL eines HTTP-Sensors sehen auch Leser und das
+  Änderungsprotokoll; fehlgeschlagene Anmeldungen schreiben ohne Anmeldung einen Eintrag ins Änderungsprotokoll (begrenzt durch die Wartezeit nach
+  Fehlversuchen und die Aufbewahrung).
 - **Vor jedem Abschluss:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 
 ## Sicherheit (Kurzfassung)
