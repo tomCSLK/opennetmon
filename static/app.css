@@ -164,6 +164,10 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 .sidebar-actions form { margin: 0; }
 .sidebar-meta { margin: 0; padding: 0 .4rem; color: var(--sidebar-muted); font-size: .72rem; }
 .sidebar-meta a { color: inherit; text-decoration: underline; }
+.sidebar-update { margin: 0 0 .35rem; padding: .3rem .4rem; font-size: .78rem; font-weight: 600;
+  border: 1px solid var(--sidebar-border); border-radius: var(--radius-sm); }
+.sidebar-update a { color: var(--sidebar-text); text-decoration: none; }
+.sidebar-update a:hover { text-decoration: underline; }
 .side-button { width: 100%; display: flex; align-items: center; justify-content: center; gap: .45rem;
   padding: .45rem .6rem; font: inherit; font-size: .85rem; font-weight: 500; color: var(--sidebar-text); cursor: pointer;
   justify-content: flex-start;

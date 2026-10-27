@@ -22,5 +22,6 @@ pub mod status;
 pub mod storage;
 pub mod templates;
 pub mod tls;
+pub mod update_check;
 pub mod value_discovery;
 pub mod web;

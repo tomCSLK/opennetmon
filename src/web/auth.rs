@@ -42,6 +42,8 @@ pub struct CurrentUser {
     pub csrf_token: String,
     /// Seconds until the sign-out without activity (`None`: no limit for this user).
     pub session_left: Option<i64>,
+    /// A newer release (administrators only), see [`crate::update_check`].
+    pub update: Option<crate::update_check::Release>,
 }
 
 impl CurrentUser {
@@ -73,6 +75,7 @@ impl CurrentUser {
             csrf_token: self.csrf_token.clone(),
             is_admin: self.role.is_admin(),
             session_left: self.session_left,
+            update: self.update.clone(),
         }
     }
 }
@@ -87,6 +90,7 @@ impl CurrentUser {
             language: s.language,
             csrf_token: s.csrf_token,
             session_left,
+            update: None,
         }
     }
 }
@@ -156,7 +160,10 @@ impl FromRequestParts<AppState> for CurrentUser {
             last_seen = now;
         }
         let left = idle.map(|limit| limit.saturating_sub(now.saturating_sub(last_seen)));
-        let user = Self::from_session(session, &parts.headers, left);
+        let mut user = Self::from_session(session, &parts.headers, left);
+        if user.role.is_admin() {
+            user.update = state.latest_release.get();
+        }
         // Error pages of this request use the user's language as well.
         i18n::set_current(user.lang);
         Ok(user)
@@ -632,6 +639,36 @@ mod tests {
         assert_eq!(cookie_value(&headers, "missing"), None);
     }
 
+    #[tokio::test]
+    async fn only_administrators_see_a_newer_version() {
+        let h = harness(false).await;
+        let (admin, _) = login(&h, "anna").await;
+        let (viewer, _) = login(&h, "bert").await;
+        let hint = "class=\"sidebar-update\"";
+        assert!(
+            !send(&h.app, get("/", Some(&admin)))
+                .await
+                .body
+                .contains(hint)
+        );
+
+        h.state
+            .latest_release
+            .set(Some(crate::update_check::Release {
+                version: "9.1.0".to_owned(),
+                url: "https://github.com/example/opennetmon/releases/tag/v9.1.0".to_owned(),
+            }));
+        let page = send(&h.app, get("/", Some(&admin))).await.body;
+        assert!(page.contains(hint), "{page}");
+        assert!(
+            page.contains("href=\"https://github.com/example/opennetmon/releases/tag/v9.1.0\"")
+        );
+        assert!(page.contains("9.1.0"));
+        let page = send(&h.app, get("/", Some(&viewer))).await.body;
+        assert!(!page.contains(hint));
+        assert!(!page.contains("9.1.0"));
+    }
+
     #[test]
     fn viewer_cannot_pass_admin_check() {
         let user = |role| CurrentUser {
@@ -642,6 +679,7 @@ mod tests {
             language: None,
             csrf_token: "t".to_owned(),
             session_left: None,
+            update: None,
         };
         assert!(user(Role::Admin).require_admin().is_ok());
         assert!(matches!(

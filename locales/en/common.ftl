@@ -17,6 +17,7 @@ nav-account = My account
 nav-theme = Theme
 nav-theme-toggle = Toggle theme
 nav-logout = Sign out
+update-available = Version { $version } available
 source-code = Source code
 
 ## Roles

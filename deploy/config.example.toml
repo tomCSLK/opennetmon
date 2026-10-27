@@ -1,4 +1,4 @@
-# /etc/opennetmon/config.toml - production configuration (all keys shown with their defaults).
+# /etc/opennetmon/config.toml - production configuration (all keys shown; update_check is off when the key is missing).
 # Changes need `systemctl restart opennetmon`; the e-mail settings are edited in the web interface instead.
 
 # Where the web interface listens: every IPv4 address of the server, port 8443, HTTPS only (open it with
@@ -34,3 +34,7 @@ poll_concurrency = 16                       # devices polled at the same time
 
 retention_raw_days = 7                      # raw measurements
 retention_hourly_days = 365                 # hourly rollups and status events; daily rollups are kept forever
+
+# Look once a day on GitHub for a newer release and show "Version x.y.z available" to administrators in the sidebar.
+# GitHub sees the address of this server once a day; nothing else is sent. Nothing is installed automatically.
+update_check = true

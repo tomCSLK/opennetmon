@@ -68,6 +68,9 @@ pub struct Config {
     pub retention_raw_days: u32,
     /// Days hourly rollups and status events are kept (at least `retention_raw_days`); daily rollups are kept forever.
     pub retention_hourly_days: u32,
+    /// Look once a day on GitHub whether a newer release exists and tell administrators in the sidebar
+    /// (GitHub sees the address of the server; nothing else is sent). Off unless set; the shipped config sets it.
+    pub update_check: bool,
 }
 
 impl Default for Config {
@@ -87,6 +90,7 @@ impl Default for Config {
             poll_concurrency: 16,
             retention_raw_days: 7,
             retention_hourly_days: 365,
+            update_check: false,
         }
     }
 }
@@ -222,6 +226,13 @@ mod tests {
         for bad in ["poll_concurrency = 0", "poll_concurrency = 257"] {
             assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn the_update_check_is_off_unless_switched_on() {
+        assert!(!Config::from_sources(None, no_env).unwrap().update_check);
+        let on = Config::from_sources(Some("update_check = true"), no_env).unwrap();
+        assert!(on.update_check);
     }
 
     #[test]

@@ -159,6 +159,10 @@ Ein Binary, ein Prozess, Module:
   ein langsames Gerät blockiert nie andere; nach geräteweitem SNMP-Fehler werden die übrigen SNMP-Sensoren des Zyklus übersprungen (`docs/poller.md`)
 - `http_client` – `fetch` (eine Frist für alles, Weiterleitungen, Inhalt begrenzt), `parse_url` (nur http/https, keine Zugangsdaten in der URL), `connect_tcp`,
   `connect_tls` (prüft die Kette mit `webpki-roots`, meldet das Zertifikat und das Problem, `accept_expired`); Testserver `http_client::testserver`
+- `update_check` – Hinweis auf neue Versionen (Config `update_check`, Code-Standard aus, ausgelieferte Config an): `spawn` fragt fünf Minuten nach dem Start, dann
+  täglich `api.github.com/repos/<repository>/releases/latest` (`api_url` aus `CARGO_PKG_REPOSITORY`, Vorabversionen zählen nicht, Link muss auf die Releases
+  des Repos zeigen), Ergebnis in `AppState::latest_release` (`Latest`), `CurrentUser.update` nur für Admins, Anzeige `.sidebar-update` in `templates/app.html`;
+  Fehler nur auf `debug` (`docs/operations.md`, „Notice of new versions“)
 - `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s und optional `note` als Meldung bei Erfolg; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets), `sensors::local` („Dieser Server“: `LocalMetric` CPU, Load, Speicher, Uptime, Dateisystem, Temperatur, Traffic aus `/proc`, `/sys` und `statvfs`; Typ `local`, Spalte `sensors.target`, Tabelle einmalig neu aufgebaut von `storage::migrate`/`allow_local_sensors`; Seite `web::server_values` unter `/devices/<id>/server`, erreichbar über den Typ „Dieser Server“ in „Sensor hinzufügen“ (jedes Gerät) und als Knopf bei Gerätetyp Server, Loopback-Adresse oder vorhandenen lokalen Sensoren; die Unit setzt kein `ProcSubset=pid`; `docs/sensors.md`), `sensors::service` (Dienste ohne SNMP, 2026-10-27: `http`, `tcp`, `dns`, `tls`; Einstellungen als JSON in `sensors.params`, `SensorSpec::params`/`from_params`;
   Fehlschläge als `SensorError::Check(Msg)`; Zertifikat mit Kanal `days`, `Unit::Days`, Grenzen 14/3 Tage über `SensorSpec::default_thresholds`; Formular mit
   `fieldset[data-kinds]` und `static/sensor-form.js`; `docs/sensors.md`, „Services“), `sensors::dns` (eigene A/AAAA-Abfrage über UDP an das Gerät),
@@ -298,7 +302,7 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   und `~/.config/opennetmon-dev/omada.env`, nie im Repo oder auf Drive; Tests nutzen neutrale Werte (`192.0.2.x`, Benutzer `monitor`)
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
+- Update-Möglichkeit: heute neues `.deb` per `apt install`; Hinweis auf neue Versionen in der Seitenleiste für Admins umgesetzt (2026-10-27, I), später evtl. apt-Repository
 - In v0.5.0: mobile Ansicht und Symbole statt Text in den Listen (2026-10-26), Sensorlisten nur mit dem Namen (Beschreibung nur auf der
   Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B) und die Behebungen aus dem Sicherheitstest vom 2026-10-27
   (`PLAN.md`, „Verifikation“). Nach v0.5.0 umgesetzt (noch nicht released): Knopfleisten der Geräte-, Gruppen- und Sensorseite mit

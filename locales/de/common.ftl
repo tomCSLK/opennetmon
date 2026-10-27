@@ -17,6 +17,7 @@ nav-account = Mein Konto
 nav-theme = Design
 nav-theme-toggle = Design umschalten
 nav-logout = Abmelden
+update-available = Version { $version } verfügbar
 source-code = Quellcode
 
 ## Rollen

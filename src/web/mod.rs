@@ -61,6 +61,8 @@ pub struct AppState {
     pub client_ip_header: Option<crate::auth::throttle::ClientIpHeader>,
     /// Bundled plus uploaded MIBs; replaced as a whole after every upload or deletion.
     mibs: Arc<std::sync::RwLock<Arc<crate::mib::MibIndex>>>,
+    /// Filled by the update check (config `update_check`), shown to administrators.
+    pub latest_release: crate::update_check::Latest,
 }
 
 impl AppState {
@@ -73,6 +75,7 @@ impl AppState {
             password_checks: Arc::new(tokio::sync::Semaphore::new(PASSWORD_CHECKS)),
             client_ip_header: config.client_ip_header,
             mibs: Arc::new(std::sync::RwLock::new(crate::mib::bundled_index())),
+            latest_release: crate::update_check::Latest::default(),
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
                 .unwrap_or(i64::MAX),
             session_idle_secs: (config.session_idle_minutes > 0)
@@ -505,6 +508,8 @@ pub struct Layout {
     pub is_admin: bool,
     /// Seconds until the sign-out without activity (`None`: no limit); read by `static/session.js`.
     pub session_left: Option<i64>,
+    /// A newer release found by the update check; shown to administrators only.
+    pub update: Option<crate::update_check::Release>,
 }
 
 impl Layout {

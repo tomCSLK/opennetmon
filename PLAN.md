@@ -118,7 +118,7 @@ opennetmon/
   .github/              # CI (workflows/ci.yml), Issue- und Pull-Request-Vorlagen
   src/
     main.rs             # CLI: serve (Standard), user add|passwd|list, key generate, backup, tls generate
-    lib.rs, config.rs, error.rs, i18n.rs, tls.rs
+    lib.rs, config.rs, error.rs, i18n.rs, tls.rs, http_client.rs, update_check.rs
     auth/               # Rollen, Argon2, Tokens, Validierung, throttle (Anmeldeversuche)
     crypto.rs           # SecretBox (XChaCha20-Poly1305), Schlüsseldatei
     credentials.rs      # SNMP-Profile
@@ -484,7 +484,13 @@ Befund aus dem Sicherheitstest: Dependabot hatte die vier RustSec-Meldungen nich
 
 Zu entscheiden: nichts Grundsätzliches. Empfehlung: Wochenlauf ja.
 
-### I. Hinweis auf neue Versionen in der Oberfläche
+### I. Hinweis auf neue Versionen in der Oberfläche – umgesetzt 2026-10-27
+
+**Umgesetzt** (`src/update_check.rs`, `docs/operations.md`, „Notice of new versions“): Config `update_check` (Code-Standard aus, ausgelieferte Config an),
+erste Abfrage fünf Minuten nach dem Start, dann alle 24 h; Ergebnis im `AppState` (`latest_release`), Hinweis über der Versionsnummer nur für Admins.
+Die API-Adresse kommt aus `repository` in `Cargo.toml`; der Link muss auf die Releases dieses Repos zeigen. Gegen die echte API geprüft (als 0.4.4:
+„0.5.0 verfügbar“, als 0.5.0: nichts). Abweichungen vom Plan: kein `If-None-Match` (eine Abfrage am Tag liegt weit unter dem Limit, der HTTP-Client
+kennt keine eigenen Header), keine Anzeige, wann zuletzt geprüft wurde (Fehler stehen im Log auf `debug`).
 
 Offener Punkt „Update-Möglichkeit“, erster Schritt. Installiert wird weiterhin von Hand (`apt install ./….deb`), weil das root braucht und die
 Unit bewusst ohne Rechte läuft.
@@ -606,7 +612,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (510, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (516, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

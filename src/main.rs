@@ -259,6 +259,13 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
     };
 
     let state = AppState::new(pool, &config, secrets);
+    if config.update_check {
+        opennetmon::update_check::spawn(
+            state.latest_release.clone(),
+            web::VERSION,
+            web::SOURCE_URL,
+        );
+    }
     state.reload_mibs().await.context("loading the MIB files")?;
     let mibs = state.mib_index();
     tracing::info!(

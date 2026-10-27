@@ -64,6 +64,7 @@
           </button>
         </form>
       </div>
+      {% if let Some(update) = layout.update %}<p class="sidebar-update"><a href="{{ update.url }}">{{ t.get1("update-available", "version", update.version.as_str()) }}</a></p>{% endif %}
       <p class="sidebar-meta">opennetmon {{ crate::web::VERSION }} · <a href="{{ crate::web::SOURCE_URL }}">{{ t.get("source-code") }}</a> · AGPL-3.0</p>
     </div>
   </aside>

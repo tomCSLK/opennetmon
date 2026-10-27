@@ -284,6 +284,22 @@ When stopping, the service first stops polling and then still sends pending aler
 
 ## Update and rollback
 
+### Notice of new versions
+
+With `update_check = true` (set in the shipped `/etc/opennetmon/config.toml`; off when the key is missing) the server asks GitHub once a day,
+the first time five minutes after the start, for the latest release (`https://api.github.com/repos/tomCSLK/opennetmon/releases/latest`).
+If it is newer than the running version, administrators see “Version x.y.z available” above the version number in the sidebar, linked to the release page;
+readers see nothing. Pre-releases and drafts do not count. Nothing is downloaded or installed: updating stays `apt install` (below), because that needs root
+and the service runs without privileges.
+
+- **Privacy:** GitHub sees the address of the server and the `User-Agent` `opennetmon/<version>` once a day; nothing else is sent (no cookies, no data
+  about devices or users). The answer is only kept in memory.
+- **Failures** (no internet, rate limit of the API) only appear in the log at level `debug` and are retried the next day; the user interface shows nothing.
+- **Switching it off:** `update_check = false`, then `sudo systemctl restart opennetmon`. Installations from before 0.6 keep their configuration on an
+  update if it was changed (`dpkg` asks) or installed with `install.sh` (never overwritten); add the line `update_check = true` there to switch the check on.
+
+### Installing an update
+
 Update: build the new binary, copy it as above and run `sudo ./deploy/install.sh --binary ./opennetmon` again. The installer replaces the binary and the units,
 **leaves configuration, key and database untouched** and restarts the running service; database migrations run automatically at startup.
 
@@ -378,3 +394,4 @@ sudo systemctl daemon-reload
 - [ ] SNMP passwords of the devices long and unique (Omada: only authNoPriv/MD5, therefore only in a private network)
 - [ ] Backups copied to another machine regularly, a restore tried once
 - [ ] Test e-mail received
+- [ ] `update_check` as wanted (on: GitHub sees the server address once a day)
