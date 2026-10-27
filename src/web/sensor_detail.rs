@@ -106,6 +106,8 @@ struct DetailTemplate {
     pause: Option<crate::web::pause::PauseNote>,
     /// Paused by itself, so it can be resumed here.
     paused_itself: bool,
+    /// What the sensor depends on, e.g. "abhängig von „Ping“ (Router)"; empty without dependency.
+    dependency: Vec<String>,
     last_poll: String,
     channels: Vec<ChannelView>,
     ranges: Vec<RangeLink>,
@@ -211,9 +213,14 @@ async fn render(
         })
         .collect();
     let state_row = status_store::get_state(&state.pool, sensor.id).await?;
-    let why = crate::storage::pauses::load_all(&state.pool, now_ms())
-        .await?
-        .sensor(sensor.id, device.id);
+    let pauses = crate::storage::pauses::load_all(&state.pool, now_ms()).await?;
+    let why = pauses.sensor(sensor.id, device.id);
+    let dependency = dependency_lines(
+        user.lang,
+        &pauses,
+        sensor.id,
+        why.as_ref().and_then(|w| w.dependency()),
+    );
     let status = crate::status::shown_status(why.is_some(), state_row.as_ref().map(|s| s.status));
     let events = status_store::events_of_sensor(&state.pool, sensor.id, EVENT_LIMIT)
         .await?
@@ -249,6 +256,7 @@ async fn render(
             .as_ref()
             .is_some_and(|w| w.source == crate::pause::Source::Own),
         pause: why.as_ref().map(|w| crate::web::pause::note(user.lang, w)),
+        dependency,
         last_poll: state_row.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
         channels,
         ranges: Range::ALL
@@ -286,6 +294,45 @@ async fn render(
         device,
     };
     Ok(page.render()?)
+}
+
+/// The sensors a sensor depends on (its setting, own or inherited, and the master sensor of its
+/// device), and whether it is the master itself; not the one that pauses it now (`pausing`), which
+/// the pause note names already.
+fn dependency_lines(
+    t: Lang,
+    pauses: &crate::pause::Pauses,
+    id: i64,
+    pausing: Option<i64>,
+) -> Vec<String> {
+    let Some(info) = pauses.sensor_info(id) else {
+        return Vec::new();
+    };
+    let mut lines = Vec::new();
+    if info.master {
+        lines.push(t.get("dependency-is-master"));
+    }
+    let on = pauses.effective(crate::pause::Target::Sensor(id)).sensor;
+    let master = pauses.master_of(info.device_id);
+    for target in [on, master]
+        .into_iter()
+        .flatten()
+        .filter(|t| *t != id && Some(*t) != pausing)
+    {
+        if let Some(other) = pauses.sensor_info(target) {
+            let line = t.get2(
+                "dependency-depends-on",
+                "sensor",
+                other.name.as_str(),
+                "device",
+                other.device.as_str(),
+            );
+            if !lines.contains(&line) {
+                lines.push(line);
+            }
+        }
+    }
+    lines
 }
 
 /// The channel whose values can be rated: the single channel of an OID value with named values or

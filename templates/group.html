@@ -28,6 +28,7 @@
     {% else %}
     <a class="button ghost" href="/pause/group/{{ summary.id }}?back={{ back }}">{{ t.get("pause") }}</a>
     {% endif %}
+    <a class="button ghost" href="/dependency/group/{{ summary.id }}">{{ t.get("dependency") }}</a>
     {% if !rows.is_empty() %}<a class="button ghost" href="/groups/{{ summary.id }}/order?back={{ back }}">{{ t.get("order-change") }}</a>{% endif %}
     <a class="button secondary" href="/groups/new?parent={{ summary.id }}&back={{ back }}">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>

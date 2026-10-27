@@ -75,6 +75,37 @@ As in PRTG, **groups, devices and individual sensors can be paused** (`src/pause
 - **Database** (migration `0016`): `groups`/`devices` have `paused`, `pause_until_ms`, `pause_reason`; for sensors the own pause remains `enabled = 0`
   (plus `pause_until_ms`, `pause_reason`). Sensors that used to be “disabled” are paused indefinitely since then.
 
+## Dependencies (administrators only)
+
+As in PRTG, objects can **depend on a sensor** (`src/pause.rs`, `storage::pauses`, page `web::dependency`): while that sensor is down, they are paused
+instead of each reporting an outage. Example: the group “Switches” depends on the ping of the router; when the router fails, there is one mail for the
+router instead of one per switch sensor.
+
+- **Form** `/dependency/<group|device|sensor>/<id>` (button “Dependency” on the group page, the sensor page of a device and the sensor detail page):
+  - *Inherit from the parent object* (default): group → subgroup → device → sensor, like pauses; the form says what is inherited and from where.
+  - *Depend on a sensor*: any sensor, chosen by device.
+  - *No dependency*: stops the inheritance.
+  - **Delay after recovery** in seconds (0–3600, empty = inherit, in the end 0), inherited on its own: how long the objects stay paused after the
+    sensor is fine again, e.g. so that a switch can boot after the router restarted.
+  - For a sensor: **master sensor of the device** (typically the ping): while it is down or paused, the other sensors of its device are paused. A device
+    has at most one; setting another one replaces it.
+- **Trigger:** the sensor depended on is “Down”, or paused (by hand, with its device or group, or through its own dependency, so chains like
+  router → switch → access point work). “Warning” alone does not trigger. A stored “Paused” counts until that sensor's next poll, so a chain unwinds
+  in order. The sensor depended on is always polled; a sensor never depends on itself (a device may depend on its own ping: its other sensors pause).
+- **Effect:** like a pause – not polled, no mail, “Paused” with the reason “Paused by its dependency on “Ping” (Router)” (during the delay with its end)
+  in the overview, the status lists and on the sensor pages; the sensor page also names what a sensor depends on. Afterwards the sensors start afresh
+  (no belated “OK again” mail).
+- **Race:** the router and a switch are polled by different device tasks. A failed poll of a sensor does not count while a sensor it depends on has
+  failed polls of its own (or was never polled), because it is about to pause it; the notifier drops collected changes of sensors that are paused
+  through a dependency by the time it sends. The outage mail of the sensor depended on says what it paused (“Paused by it: 14 sensors on 3 devices”).
+- **Cycles** (A depends on B and B on A, also through inheritance or a master) are refused when saving.
+- **Log:** one entry when a sensor starts pausing others (“Dependency active: 14 sensors on 3 devices paused”) and one when that ends, instead of a line
+  per sensor (table `dependency_log`, the newest 500 entries). After every poll cycle that changed a status and with every rescan (15 s),
+  `pauses::sync_all` marks newly paused sensors and writes these entries; a delay thus ends within 15 s.
+- **Device templates** keep the master flag of a ping, uptime or OID sensor; applying a template sets it only if the device has no master yet.
+- **Database** (migration `0019`): `dependency` (`parent`/`sensor`/`none`), `dependency_sensor_id` (`ON DELETE SET NULL`: a deleted sensor means
+  “inherit” again) and `dependency_delay_secs` on `groups`, `devices` and `sensors`, plus `sensors.dependency_master`.
+
 ## Order (administrators only)
 
 - **Automatic** (the default): by name, case-insensitive, numbers by value (“Switch 2” before “Switch 10”).

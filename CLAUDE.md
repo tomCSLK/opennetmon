@@ -132,9 +132,19 @@ Ein Binary, ein Prozess, Module:
   Migration `0016`: `paused`/`pause_until_ms`/`pause_reason` an `groups`/`devices`, eigene Sensorpause bleibt `enabled = 0`); Seiten `web::pause`
   (`/pause/<kind>/<id>`, `/resume/<kind>/<id>`); beim Pausieren Zustand sofort „Pausiert“ (`storage::status::mark_paused`), erste Abfrage danach ohne alten Zustand
   (keine nachträgliche Erholungsmail); im Protokoll mit Problemen gemischt (`docs/devices-and-groups.md`, „Pausieren“)
+- Abhängigkeiten wie in PRTG (2026-10-27, `docs/devices-and-groups.md`, „Dependencies“): je Gruppe/Gerät/Sensor `Dependency` (`parent` = übernehmen,
+  `sensor` = von einem Sensor abhängig, `none`) und Verzögerung nach der Rückkehr (`Setting`, `parse_delay`, 0–3600 s, vererbt, Standard 0), dazu
+  Master-Sensor je Gerät (`sensors.dependency_master`, pausiert die übrigen Sensoren seines Geräts); Migration `0019` (Spalten an `groups`/`devices`/`sensors`,
+  Tabelle `dependency_log`). Berechnet in `pause::Pauses` (nicht als Pause gespeichert): `Source::Dependency`, ausgelöst bei „Ausfall“ oder „Pausiert“ des
+  Sensors (auch von Hand; Ketten mit Zyklusschutz) und im Verzögerungsfenster; `dependency_unsettled` (Poller verwirft Fehlschläge, solange der Sensor,
+  von dem abhängig ist, Fehlschläge hat), `dependency_roots` (Zählung für die Mail), `has_cycle`. `storage::pauses::sync`/`sync_all` (markiert pausierte
+  Sensoren, schreibt `dependency_log` „active“/„ended“; Poller nach Zyklen mit Änderungen und alle 15 s), `set_dependency` (prüft Sensor und Zyklen,
+  ein Master je Gerät), `dependency_entries` fürs Protokoll (ein Eintrag je Auslösung statt je Sensor). `alerting::deliver` verwirft Wechsel durch
+  Abhängigkeit pausierter Sensoren, die Ausfallmail nennt die pausierten Objekte (`paused_dependents`). Seite `web::dependency` (`/dependency/<kind>/<id>`,
+  nur Admins, `templates/dependency_form.html`), Knopf „Abhängigkeit“ auf Gruppen-, Geräte- und Sensorseite; Gerätevorlagen übernehmen den Master (`master`)
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum; `DeviceKind`: Gerätetyp, nur fürs Symbol in der Übersicht, Spalte `kind`, Migration `0015`); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - Geräte ohne SNMP: `Device.profile_id` ist `Option` (`None` = „Kein SNMP – nur Ping“, `has_snmp()`, `profile_label()`); interaktive SNMP-Aktionen holen die Zugangsdaten über `web::snmp_credentials` (Fehlermeldung für Ping-Geräte). Die Spalte wurde nachträglich nullbar: `storage::migrate` baut `devices` einmalig mit abgeschalteten Fremdschlüsseln neu auf (`allow_devices_without_profile`), weil das in einer sqlx-Migration (immer Transaktion) nicht geht
-- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::pauses` für Pausen und ihr Protokoll, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
+- `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::pauses` für Pausen, Abhängigkeiten und ihr Protokoll, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
 - `poller` – Supervisor + eine Aufgabe je Gerät, die Gerät/Sensoren/Profil in jedem Zyklus neu lädt; Intervall je Sensor (`sensors.interval_secs`, Migration `0017`,
   `NULL` = Gerät; `SensorRecord::interval`, Formular `sensor_detail::set_interval`; GitHub-Issue #1): die Aufgabe merkt sich je Sensor die Fälligkeit (`SensorSet.due`),
   fragt je Zyklus nur fällige Sensoren ab und schläft bis zur nächsten Fälligkeit, höchstens ein Geräteintervall; verteilt Startzeiten über das Intervall
@@ -153,7 +163,7 @@ Ein Binary, ein Prozess, Module:
   (`web::status_list`, `/status/all|up|warning|down|inactive`, sortierbar per Spaltenkopf `?sort=…&dir=…`, aktuelle Werte über `web::sensors::fresh_values`); oben rechts auf Übersicht, Statuslisten, Sensor- und Detailseite „Aktualisieren“ mit
   „Automatisch“ (alle 30 s wie PRTG, pausiert bei Eingaben; `templates/refresh.html`, `static/refresh.js`); Protokoll `/log` (`web::log`: sortierbar per Spaltenkopf wie die Statuslisten, Suchfeld über `static/table-filter.js`, `?device=<id>`/`?sensor=<id>` über den
   Knopf „Protokoll“ der Geräte- und Sensorseite; Warnungen, Ausfälle und
-  ihr Ende, `storage::status::problem_log`, dazu Pausen aus `storage::pauses::log_entries`; `events` hält nur die neuesten 500 Wechsel, `EVENTS_KEPT`)
+  ihr Ende, `storage::status::problem_log`, dazu Pausen aus `storage::pauses::log_entries` und Abhängigkeiten aus `storage::pauses::dependency_entries`; `events` hält nur die neuesten 500 Wechsel, `EVENTS_KEPT`)
 
 ### Messdaten
 
@@ -270,9 +280,9 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - ER605: läuft jetzt als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
 - Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
-- Mobile Ansicht und Symbole statt Text in den Listen sind umgesetzt (2026-10-26, noch nicht released). Als Nächstes eingeplant: Abhängigkeiten wie in PRTG
-  (Objekte pausieren automatisch, wenn ein anderer Sensor ausfällt, z. B. Switches beim Ausfall des Router-Pings); Entwurf und die Entscheidungen des Nutzers
-  in `PLAN.md`, „Nächste Vorhaben“
+- Noch nicht released: mobile Ansicht und Symbole statt Text in den Listen (2026-10-26), Sensorlisten nur mit dem Namen (Beschreibung nur auf der
+  Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B). Auf der Geräteseite bricht die Knopfleiste durch den Knopf
+  „Abhängigkeit“ unterhalb von etwa 1570 px in zwei Zeilen um (Automatisch/Aktualisieren eigene Zeile); ggf. später ins Menü „Aktionen“ verschieben
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,

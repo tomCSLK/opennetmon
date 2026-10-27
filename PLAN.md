@@ -183,7 +183,7 @@ opennetmon/
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
 
-## Nächste Vorhaben (eingeplant 2026-10-26; A und C umgesetzt, B offen)
+## Nächste Vorhaben (eingeplant 2026-10-26; alle drei umgesetzt, noch nicht released)
 
 ### A. Mobile Ansicht überarbeiten – umgesetzt 2026-10-26 (noch nicht released)
 
@@ -220,7 +220,20 @@ Wunsch des Nutzers: Die Ansicht auf dem Handy „schaut noch nicht so gut aus“
 Umsetzung nur mit CSS in `static/app.css` und kleinen Template-Änderungen (Klassen, `data-label`, `<details>`); keine Inline-Styles (CSP), keine
 neue Abhängigkeit. Seite für Seite in kleinen Commits, jede im Browser geprüft (Memory „Check UI in browser“).
 
-### B. Abhängigkeiten wie in PRTG (automatisch pausieren)
+### B. Abhängigkeiten wie in PRTG (automatisch pausieren) – umgesetzt 2026-10-27 (noch nicht released)
+
+**Umgesetzt** wie im Entwurf unten, mit den drei Entscheidungen des Nutzers (Beschreibung in `docs/devices-and-groups.md`, „Dependencies“;
+Architektur in CLAUDE.md). Abweichungen und Ergänzungen zum Entwurf:
+
+- Der Poller verwirft einen Fehlschlag (statt ihn zu zählen), solange der Sensor, von dem abhängig ist, selbst Fehlschläge hat oder noch nie
+  abgefragt wurde (`Pauses::dependency_unsettled`); damit braucht der `Notifier` kein eigenes Wissen über Abhängigkeiten außer beim Versand
+  (`alerting::deliver` verwirft Wechsel von Sensoren, die beim Versand durch Abhängigkeit pausiert sind).
+- Der Zustand „Pausiert“ wird von `storage::pauses::sync` geschrieben (nach jedem Zyklus mit Änderungen und alle 15 s), nur für Sensoren mit
+  vorhandenem Zustand; dort entstehen auch die Protokolleinträge (`dependency_log`).
+- Formular `/dependency/<kind>/<id>` mit Hinweis auf den übernommenen Wert; Sensorauswahl nach Gerät gruppiert, ohne den Sensor selbst.
+- Im Browser geprüft (Kopie der Testdaten, hell und dunkel). Offen: Auf der Geräteseite bricht die Knopfleiste unterhalb von etwa 1570 px um.
+
+Ursprünglicher Plan:
 
 Wunsch des Nutzers (2026-10-26, präzisiert): Objekte sollen sich **in Abhängigkeit von einem anderen Sensor** automatisch pausieren, nicht nach
 ihrem eigenen Wert. Beispiel: Fällt der Ping-Sensor des Routers aus, werden alle Sensoren der Switches pausiert, statt dass jeder einzelne als
@@ -307,7 +320,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (436, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (482, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

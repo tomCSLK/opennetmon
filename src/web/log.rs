@@ -1,5 +1,5 @@
-//! Problem log: warnings, outages and their end over all sensors, and who paused or resumed what,
-//! newest first unless sorted by another column (`?sort=…&dir=…`, like the status lists); a filter field
+//! Problem log: warnings, outages and their end over all sensors, who paused or resumed what, and
+//! when a sensor started or stopped pausing others through dependencies (one entry each), newest first unless sorted by another column (`?sort=…&dir=…`, like the status lists); a filter field
 //! (`static/table-filter.js`) searches the entries. `?device=<id>` or `?sensor=<id>` limits the log to one device (its
 //! sensors and pauses) or one sensor, opened by the "Log" buttons of the device and sensor pages. Only the newest [`status::EVENTS_KEPT`] status changes and
 //! [`pauses::LOG_KEPT`] pause entries are stored, so the log reaches back that far.
@@ -366,12 +366,60 @@ pub async fn log(
             ongoing,
         });
     }
+    for d in pauses::dependency_entries(&state.pool).await? {
+        let (status, status_label, message) = if d.active {
+            (
+                Status::Paused,
+                t.get("log-dependency-active"),
+                t.get2(
+                    "log-dependency-active-message",
+                    "sensors",
+                    d.sensors,
+                    "devices",
+                    d.devices,
+                ),
+            )
+        } else {
+            (
+                Status::Up,
+                t.get("log-dependency-ended"),
+                t.get("log-dependency-ended-message"),
+            )
+        };
+        let (duration_ms, ongoing) = match (d.active, d.end_ms) {
+            (true, Some(end)) => (Some(end - d.ts_ms), false),
+            (true, None) => (Some(now - d.ts_ms), true),
+            (false, _) => (None, false),
+        };
+        entries.push(Entry {
+            ts_ms: d.ts_ms,
+            at: time_html(d.ts_ms),
+            status,
+            status_class: status.as_str(),
+            status_label,
+            before: String::new(),
+            sensor_id: Some(d.sensor_id),
+            sensor_name: d.sensor,
+            scope: String::new(),
+            device_id: Some(d.device.0),
+            device_name: d.device.1,
+            group: d
+                .group_id
+                .and_then(|g| paths.get(&g).cloned())
+                .unwrap_or_default(),
+            message,
+            until: None,
+            duration: duration_ms.map_or_else(String::new, |ms| duration(t, ms)),
+            duration_ms,
+            ongoing,
+        });
+    }
     match (query.sensor, query.device) {
         (Some(id), _) => entries.retain(|e| e.sensor_id == Some(id)),
         (None, Some(id)) => entries.retain(|e| e.device_id == Some(id)),
         (None, None) => {}
     }
-    // Both lists are newest first; merge them by time (stable, so ties keep their order), then sort.
+    // All lists are newest first; merge them by time (stable, so ties keep their order), then sort.
     entries.sort_by_key(|e| std::cmp::Reverse(e.ts_ms));
     sort_entries(&mut entries, key, dir);
     let scope_param = scope.as_ref().map_or("", |s| s.param.as_str());
@@ -476,6 +524,102 @@ mod tests {
 
         let anonymous = send(&h.app, get("/log", None)).await;
         assert_eq!(anonymous.status, axum::http::StatusCode::SEE_OTHER);
+    }
+
+    #[tokio::test]
+    async fn a_dependency_is_one_entry_instead_of_one_per_paused_sensor() {
+        use crate::pause::{Dependency, Setting, Target};
+        let h = harness(true).await;
+        let pool = &h.state.pool;
+        let mut ids = Vec::new();
+        for name in ["Router", "Switch"] {
+            ids.push(
+                crate::storage::devices::save_device(
+                    pool,
+                    None,
+                    DeviceInput {
+                        kind: Default::default(),
+                        name: name.to_owned(),
+                        host: "192.0.2.1".to_owned(),
+                        group_id: None,
+                        profile_id: None,
+                        polling: Polling::default(),
+                    },
+                )
+                .await
+                .unwrap(),
+            );
+        }
+        let router_ping = create_sensor(pool, ids[0], "Ping", &SensorSpec::Ping)
+            .await
+            .unwrap();
+        let mut switch_sensors = Vec::new();
+        for name in ["Ping", "Uptime"] {
+            let id = create_sensor(pool, ids[1], name, &SensorSpec::Ping)
+                .await
+                .unwrap();
+            record_poll(pool, id, 1_000, &[], &Assessment::Healthy("OK".into()))
+                .await
+                .unwrap();
+            switch_sensors.push(id);
+        }
+        crate::storage::pauses::set_dependency(
+            pool,
+            Target::Device(ids[1]),
+            Setting {
+                dependency: Dependency::Sensor(router_ping),
+                delay_secs: None,
+            },
+            None,
+            1_000,
+        )
+        .await
+        .unwrap();
+        for ts in [2_000, 3_000] {
+            record_poll(
+                pool,
+                router_ping,
+                ts,
+                &[],
+                &Assessment::Failed("weg".into()),
+            )
+            .await
+            .unwrap();
+        }
+        crate::storage::pauses::sync_all(pool, 3_000).await.unwrap();
+        let (viewer, _) = login(&h, "bert").await;
+        let page = send(&h.app, get("/log", Some(&viewer))).await;
+        let body = &page.body;
+        assert!(
+            body.contains("Abhängigkeit aktiv") && body.contains("2 Sensoren an 1 Gerät pausiert"),
+            "{body}"
+        );
+        assert_eq!(
+            body.matches("<tr data-filter=").count(),
+            3,
+            "the router's warning and outage and the dependency, nothing per switch sensor"
+        );
+        record_poll(
+            pool,
+            router_ping,
+            4_000,
+            &[],
+            &Assessment::Healthy("OK".into()),
+        )
+        .await
+        .unwrap();
+        crate::storage::pauses::sync_all(pool, 4_000).await.unwrap();
+        let page = send(
+            &h.app,
+            get(&format!("/log?sensor={router_ping}"), Some(&viewer)),
+        )
+        .await;
+        assert!(
+            page.body.contains("Abhängigkeit beendet")
+                && page.body.contains("abhängige Sensoren laufen weiter"),
+            "{}",
+            page.body
+        );
     }
 
     #[tokio::test]

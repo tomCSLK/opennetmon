@@ -169,6 +169,14 @@ fn rule_items(t: Lang, what: &str, rule: &PortRule) -> Vec<ItemView> {
     }
 }
 
+fn master_note(t: Lang, master: bool) -> String {
+    if master {
+        format!(" · {}", t.get("dependency-is-master"))
+    } else {
+        String::new()
+    }
+}
+
 fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
     let mut items: Vec<ItemView> = body
         .basics
@@ -176,12 +184,13 @@ fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
         .map(|b| ItemView {
             name: b.name.clone(),
             detail: format!(
-                "{}{}",
+                "{}{}{}",
                 match b.kind {
                     BasicKind::Ping => "Ping",
                     BasicKind::Uptime => "Uptime",
                 },
-                limits_note(t, &b.limits)
+                limits_note(t, &b.limits),
+                master_note(t, b.master)
             ),
             state: state_label(t, b.enabled),
         })
@@ -195,7 +204,7 @@ fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
     items.extend(body.oids.iter().map(|o| ItemView {
         name: o.name.clone(),
         detail: format!(
-            "OID {} · {}{}{}{}",
+            "OID {} · {}{}{}{}{}",
             o.oid,
             t.get(if o.counter {
                 "template-oid-counter"
@@ -211,7 +220,8 @@ fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
                 ", {}",
                 t.get1("oid-detail-unit", "unit", u)
             )),
-            limits_note(t, &o.limits)
+            limits_note(t, &o.limits),
+            master_note(t, o.master)
         ),
         state: state_label(t, o.enabled),
     }));
@@ -566,6 +576,9 @@ pub async fn create(
             include: include.clone(),
             traffic: PortChoice::parse(traffic),
             status: PortChoice::parse(status),
+            master: crate::storage::pauses::load_all(&state.pool, crate::web::sensors::now_ms())
+                .await?
+                .master_of(id),
         },
     );
     let outcome = match built {

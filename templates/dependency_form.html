@@ -1,0 +1,57 @@
+{% extends "app.html" %}
+{% block page_class %} narrow{% endblock %}
+{% block title %}{{ heading }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="breadcrumb">{% for c in trail %}<a href="{{ c.href }}">{{ c.name }}</a><span>›</span>{% endfor %}<span>{{ t.get("dependency") }}</span></div>
+    <h1>{{ heading }}</h1>
+  </div>
+</div>
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+<section class="card">
+  <form method="post" action="{{ action }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <p class="muted">{{ t.get("dependency-intro") }}{% if !hint.is_empty() %} {{ hint }}{% endif %}</p>
+    <fieldset class="choices">
+      <legend>{{ t.get("dependency") }}</legend>
+      <label class="inline"><input type="radio" name="dependency" value="parent"{% if choice == "parent" %} checked{% endif %}> <span>{{ t.get("dependency-parent") }}</span></label>
+      <p class="hint choice-hint">{{ t.get1("dependency-current", "value", inherited.as_str()) }}</p>
+      <label class="inline"><input type="radio" name="dependency" value="sensor"{% if choice == "sensor" %} checked{% endif %}> <span>{{ t.get("dependency-sensor") }}</span></label>
+      <div class="choice-hint">
+        <select name="sensor" aria-label="{{ t.get("dependency-sensor") }}">
+          <option value="">{{ t.get("dependency-choose") }}</option>
+          {% for d in devices %}
+          <optgroup label="{{ d.name }}">
+            {% for s in d.sensors %}
+            <option value="{{ s.id }}"{% if s.selected %} selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+      <label class="inline"><input type="radio" name="dependency" value="none"{% if choice == "none" %} checked{% endif %}> <span>{{ t.get("dependency-none") }}</span></label>
+      <p class="hint choice-hint">{{ t.get("dependency-none-hint") }}</p>
+    </fieldset>
+    <div class="form-grid">
+      <div>
+        <label for="delay">{{ t.get("dependency-delay") }}</label>
+        <input id="delay" name="delay" type="number" min="0" max="3600" step="1" inputmode="numeric" value="{{ delay }}">
+        <p class="hint">{{ t.get1("dependency-delay-hint", "current", delay_inherited.as_str()) }}</p>
+      </div>
+    </div>
+    {% if let Some(checked) = master %}
+    <div>
+      <label class="inline"><input type="checkbox" name="master" value="on"{% if checked %} checked{% endif %}> {{ t.get("dependency-master") }}</label>
+      <p class="hint">{{ t.get("dependency-master-hint") }}</p>
+    </div>
+    {% endif %}
+    <div class="form-actions">
+      <button type="submit">{{ t.get("save") }}</button>
+      <a class="button secondary" href="{{ cancel_href }}">{{ t.get("cancel") }}</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

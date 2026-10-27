@@ -13,6 +13,10 @@
 //! - Sensors of one device run one after another; once a device-level SNMP error occurs
 //!   (timeout, authentication, unreachable) the remaining SNMP sensors of that cycle are not tried.
 //! - SNMP sessions are opened per cycle: it costs one round trip and avoids stale SNMPv3 engine state.
+//! - Dependencies: sensors paused through a dependency are skipped like paused ones; a failed poll
+//!   does not count while a sensor it depends on is failing itself (it is about to pause it). After a
+//!   cycle that changed a status, and with every rescan, `storage::pauses::sync_all` marks the
+//!   sensors that are now paused and logs dependencies that start or end.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -168,6 +172,10 @@ async fn supervise(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             Ok(ended) => tracing::info!(ended, "timed pauses ended"),
             Err(e) => tracing::error!(error = %e, "ending timed pauses failed"),
         }
+        // Delays after a dependency end by time alone.
+        if let Err(e) = crate::storage::pauses::sync_all(&shared.pool, now_ms()).await {
+            tracing::error!(error = %e, "updating dependencies failed");
+        }
         tokio::select! {
             _ = tokio::time::sleep(RESCAN_INTERVAL) => {}
             _ = shutdown.changed() => break,
@@ -226,7 +234,7 @@ async fn device_loop(shared: Arc<Shared>, device_id: i64, mut shutdown: watch::R
                     for change in &cycle.changes {
                         log_change(&device, &change.change);
                     }
-                    queue_alerts(&shared.alerts, &device.name, cycle.changes);
+                    queue_alerts(&shared.alerts, &device, cycle.changes);
                     due_next = cycle.next_due;
                 }
                 Ok(None) => return,
@@ -252,15 +260,17 @@ async fn cancelled_during(shutdown: &mut watch::Receiver<bool>, pause: Duration)
 }
 
 /// Hands status changes to the alert queue without ever blocking the poller.
-fn queue_alerts(alerts: &mpsc::Sender<AlertEvent>, device: &str, changes: Vec<SensorChange>) {
+fn queue_alerts(alerts: &mpsc::Sender<AlertEvent>, device: &Device, changes: Vec<SensorChange>) {
     for SensorChange { change, sensor } in changes {
         let event = AlertEvent {
             change,
-            device: device.to_owned(),
+            device_id: device.id,
+            device: device.name.clone(),
             sensor,
+            paused_dependents: None,
         };
         if alerts.try_send(event).is_err() {
-            tracing::warn!(device, "alert queue is full or closed; dropping an alert");
+            tracing::warn!(device = %device.name, "alert queue is full or closed; dropping an alert");
         }
     }
 }
@@ -482,12 +492,27 @@ async fn poll_sensors(
             (assess_with(spec, &result, &rules), samples)
         };
         let (assessment, samples) = assessment_and_values;
+        if matches!(assessment, Assessment::Failed(_))
+            && pauses.dependency_unsettled(record.id, device_id)
+        {
+            tracing::debug!(
+                device = %device.name,
+                sensor = %record.name,
+                "failed poll not counted: a sensor it depends on is failing"
+            );
+            continue;
+        }
         if let Some(change) = record_poll(pool, record.id, started, &samples, &assessment).await? {
             changes.push(SensorChange {
                 change,
                 sensor: record.name.clone(),
             });
         }
+    }
+    if !changes.is_empty()
+        && let Err(e) = crate::storage::pauses::sync_all(pool, now_ms()).await
+    {
+        tracing::error!(device = %device.name, error = %e, "updating dependencies failed");
     }
     Ok(Some(Cycle {
         changes,
@@ -924,7 +949,8 @@ mod tests {
             Duration::from_millis(300),
         );
         let mut state = SensorSet::default();
-        let queue = |changes: Vec<SensorChange>| queue_alerts(&notifier.sender, "dev", changes);
+        let device = get_device(&env.pool, env.device).await.unwrap().unwrap();
+        let queue = |changes: Vec<SensorChange>| queue_alerts(&notifier.sender, &device, changes);
         let first = poll_device_once(&env.pool, &env.secrets, &env.ping, env.device, &mut state)
             .await
             .unwrap()
@@ -965,6 +991,171 @@ mod tests {
         assert!(
             !mails[0].data.contains("erste Abfrage -> In Ordnung"),
             "first Up readings are not news"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_router_outage_pauses_the_switch_behind_it_with_one_mail() {
+        use crate::mail::testsmtp::{Behavior, TestSmtp};
+        use crate::mail::{MailInput, Security};
+        use crate::pause::{Dependency, Setting, Target};
+        // `env.device` is the router; the switch has its own agent and depends on the router.
+        let env = env().await;
+        let smtp = TestSmtp::spawn(Behavior::default()).await;
+        let input = MailInput {
+            enabled: true,
+            host: "127.0.0.1".to_owned(),
+            port: smtp.port,
+            security: Security::None,
+            username: String::new(),
+            password: None,
+            from_address: "opennetmon@example.org".to_owned(),
+            recipients: "admin@example.org".to_owned(),
+            notify_warnings: true,
+            language: crate::i18n::Lang::De,
+        };
+        crate::storage::mail::save(&env.pool, &env.secrets, &input.check().unwrap())
+            .await
+            .unwrap();
+        let router = env.device;
+        let router_device = get_device(&env.pool, router).await.unwrap().unwrap();
+        let switch_agent = FakeAgent::spawn("public", "switch", 1_000).await;
+        let switch = devices::save_device(
+            &env.pool,
+            None,
+            DeviceInput {
+                kind: Default::default(),
+                name: "switch".to_owned(),
+                host: "127.0.0.1".to_owned(),
+                group_id: None,
+                profile_id: router_device.profile_id,
+                polling: Polling {
+                    port: switch_agent.port,
+                    ..router_device.polling
+                },
+            },
+        )
+        .await
+        .unwrap();
+        let switch_device = get_device(&env.pool, switch).await.unwrap().unwrap();
+        // SNMP sensors stand in for pings (no ICMP sockets in CI).
+        let router_up = create_sensor(&env.pool, router, "Uptime", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        let switch_up = create_sensor(&env.pool, switch, "Uptime", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        crate::storage::pauses::set_dependency(
+            &env.pool,
+            Target::Device(switch),
+            Setting {
+                dependency: Dependency::Sensor(router_up),
+                delay_secs: None,
+            },
+            None,
+            now_ms(),
+        )
+        .await
+        .unwrap();
+
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let notifier = Notifier::spawn_with_window(
+            env.pool.clone(),
+            Arc::new(SecretBox::from_key([9u8; 32])),
+            shutdown_rx,
+            Duration::from_millis(300),
+        );
+        let mut router_state = SensorSet::default();
+        let mut switch_state = SensorSet::default();
+        async fn cycle(
+            env: &Env,
+            device: &Device,
+            state: &mut SensorSet,
+            sender: &mpsc::Sender<AlertEvent>,
+        ) {
+            let changes = poll_device_once(&env.pool, &env.secrets, &env.ping, device.id, state)
+                .await
+                .unwrap()
+                .unwrap();
+            queue_alerts(sender, device, changes);
+        }
+        cycle(&env, &router_device, &mut router_state, &notifier.sender).await;
+        cycle(&env, &switch_device, &mut switch_state, &notifier.sender).await;
+        assert_eq!(env.state_of(switch_up).await, Status::Up);
+
+        // Both stop answering. The router fails first: the switch's failure does not count yet.
+        let dead = FakeAgent::spawn("other", "x", 1).await;
+        for device in [router, switch] {
+            sqlx::query("UPDATE devices SET port = ? WHERE id = ?")
+                .bind(i64::from(dead.port))
+                .bind(device)
+                .execute(&env.pool)
+                .await
+                .unwrap();
+        }
+        cycle(&env, &router_device, &mut router_state, &notifier.sender).await;
+        assert_eq!(env.state_of(router_up).await, Status::Warning);
+        cycle(&env, &switch_device, &mut switch_state, &notifier.sender).await;
+        assert_eq!(
+            env.state_of(switch_up).await,
+            Status::Up,
+            "not counted while the router is failing"
+        );
+        cycle(&env, &router_device, &mut router_state, &notifier.sender).await;
+        assert_eq!(env.state_of(router_up).await, Status::Down);
+        assert_eq!(
+            env.state_of(switch_up).await,
+            Status::Paused,
+            "marked as soon as the router is down"
+        );
+        cycle(&env, &switch_device, &mut switch_state, &notifier.sender).await;
+        assert!(switch_state.sensors.is_empty(), "the switch is not polled");
+
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        let mails = smtp.received();
+        assert_eq!(
+            mails.len(),
+            2,
+            "the router's warning and its outage: {mails:?}"
+        );
+        let outage = &mails[1].data;
+        assert!(outage.contains("Ausfall: dev / Uptime"), "{outage}");
+        assert!(
+            outage.contains("Dadurch pausiert: 1 Sensor an 1 Ger"),
+            "{outage}"
+        );
+        assert!(!mails.iter().any(|m| m.data.contains("switch /")));
+
+        // The router is back: the switch runs again and starts afresh, without a recovery mail.
+        for device in [router, switch] {
+            sqlx::query("UPDATE devices SET port = ? WHERE id = ?")
+                .bind(i64::from(if device == router {
+                    env.agent.port
+                } else {
+                    switch_agent.port
+                }))
+                .bind(device)
+                .execute(&env.pool)
+                .await
+                .unwrap();
+        }
+        cycle(&env, &router_device, &mut router_state, &notifier.sender).await;
+        cycle(&env, &switch_device, &mut switch_state, &notifier.sender).await;
+        assert_eq!(env.state_of(switch_up).await, Status::Up);
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        shutdown_tx.send(true).unwrap();
+        notifier.finish(Duration::from_secs(5)).await;
+        let mails = smtp.received();
+        assert_eq!(mails.len(), 3, "only the router's recovery: {mails:?}");
+        assert!(mails[2].data.contains("Wieder in Ordnung: dev / Uptime"));
+        let log = crate::storage::pauses::dependency_entries(&env.pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            log.iter()
+                .map(|e| (e.active, e.sensor_id))
+                .collect::<Vec<_>>(),
+            [(false, router_up), (true, router_up)]
         );
     }
 

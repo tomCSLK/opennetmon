@@ -29,8 +29,12 @@ const QUEUE_SIZE: usize = 1_000;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlertEvent {
     pub change: StatusChange,
+    pub device_id: i64,
     pub device: String,
     pub sensor: String,
+    /// For an outage: how many sensors on how many devices it pauses through dependencies (set by
+    /// [`deliver`]).
+    pub paused_dependents: Option<(usize, usize)>,
 }
 
 /// Whether a change is worth a mail. The first reading that is fine (`None → Up`) is not;
@@ -95,13 +99,26 @@ pub fn compose(t: Lang, events: &[AlertEvent]) -> (String, String) {
             .from
             .map_or_else(|| t.get("alert-first-poll"), |s| t.get(s.label_id()));
         body.push_str(&format!(
-            "{}  {} / {}\n  {from} -> {}\n  {}\n\n",
+            "{}  {} / {}\n  {from} -> {}\n  {}\n",
             format_utc(e.change.ts_ms),
             e.device,
             e.sensor,
             t.get(e.change.to.label_id()),
             crate::status::shown(t, &e.change.message),
         ));
+        if let Some((sensors, devices)) = e.paused_dependents {
+            body.push_str(&format!(
+                "  {}\n",
+                t.get2(
+                    "alert-dependents-paused",
+                    "sensors",
+                    sensors,
+                    "devices",
+                    devices
+                )
+            ));
+        }
+        body.push('\n');
     }
     body.push_str("-- \nopennetmon\n");
     (subject, body)
@@ -135,9 +152,27 @@ pub async fn deliver(
     if !config.enabled {
         return Ok(Delivery::Disabled);
     }
+    // Sensors paused through a dependency since their change are no news of their own: the outage
+    // of the sensor they depend on is, and it says how much it paused.
+    let pauses = crate::storage::pauses::load_all(pool, now_ms()).await?;
+    let roots = pauses.dependency_roots();
     let events: Vec<AlertEvent> = events
         .into_iter()
         .filter(|e| is_alertworthy(&e.change, config.notify_warnings))
+        .filter(|e| {
+            pauses
+                .sensor(e.change.sensor_id, e.device_id)
+                .and_then(|w| w.dependency())
+                .is_none()
+        })
+        .map(|mut e| {
+            if e.change.to == Status::Down {
+                e.paused_dependents = roots
+                    .get(&e.change.sensor_id)
+                    .map(|a| (a.sensors, a.devices.len()));
+            }
+            e
+        })
         .collect();
     if events.is_empty() {
         return Ok(Delivery::Filtered);
@@ -266,8 +301,10 @@ mod tests {
     fn event(device: &str, sensor: &str, from: Option<Status>, to: Status) -> AlertEvent {
         AlertEvent {
             change: change(from, to),
+            device_id: 1,
             device: device.to_owned(),
             sensor: sensor.to_owned(),
+            paused_dependents: None,
         }
     }
 
@@ -307,6 +344,27 @@ mod tests {
         assert_eq!(subject, "[opennetmon] Wieder in Ordnung: AP / Uptime");
         let (_, body) = compose(Lang::De, &[event("AP", "Uptime", None, Status::Down)]);
         assert!(body.contains("erste Abfrage -> Ausfall"));
+    }
+
+    #[test]
+    fn an_outage_says_what_it_paused_through_dependencies() {
+        let mut outage = event("Router", "Ping", Some(Status::Up), Status::Down);
+        outage.paused_dependents = Some((14, 3));
+        let (_, body) = compose(Lang::De, std::slice::from_ref(&outage));
+        assert!(
+            body.contains("  Dadurch pausiert: 14 Sensoren an 3 Geräten\n"),
+            "{body}"
+        );
+        let (_, body) = compose(Lang::En, &[outage]);
+        assert!(
+            body.contains("Paused by it: 14 sensors on 3 devices"),
+            "{body}"
+        );
+        let (_, body) = compose(
+            Lang::De,
+            &[event("Router", "Ping", Some(Status::Up), Status::Down)],
+        );
+        assert!(!body.contains("Dadurch"));
     }
 
     #[test]

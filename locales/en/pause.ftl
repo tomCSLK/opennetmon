@@ -26,6 +26,7 @@ pause-until = until
 pause-note-own = Paused
 pause-note-device = Paused with the device
 pause-note-group = Paused with the group “{ $name }”
+pause-note-dependency = Paused by its dependency on “{ $sensor }” ({ $device })
 pause-device-notice = While the device is paused, none of its sensors is polled.
 pause-group-notice = While the group is paused, none of its devices is polled.
 pause-duration-invalid = Please choose one of the offered durations.

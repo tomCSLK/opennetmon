@@ -20,6 +20,10 @@ device is deleted, the task ends.
   with the same error. Ping sensors run anyway.
 - **The SNMP session** is set up anew in every cycle (one round of engine discovery for v3). This avoids stale engine times after a device reboot.
 - **Counter base values** are kept across cycles as long as the sensor configuration does not change. After a change this costs one value.
+- **Dependencies** (`docs/devices-and-groups.md`, “Dependencies”): sensors paused through a dependency are skipped like paused ones. A failed poll is
+  not stored while a sensor it depends on has failed polls of its own (or was never polled), so a switch does not report an outage just before the
+  router's outage pauses it. After a cycle that changed a status and with every rescan, `storage::pauses::sync_all` marks the sensors that are paused
+  now and logs dependencies that start or end.
 - **Decryption** of the credentials only in the poller (`storage::credentials::load_credentials`); errors are logged without the secret.
 
 Config: `poller_enabled` (default `true`) and `poll_concurrency` (1–256, default 16). On shutdown the server first stops the web server
@@ -59,7 +63,9 @@ ended” at the planned end; for devices and groups “whole device”/“whole 
 `storage::status::problem_log`). Columns: time, status with the previous status, sensor, device with group path, message, duration. For a warning/failure
 the duration is the time until the next change, or “ongoing” with the time so far; for a recovery “after …” it is the duration of the problem before (from
 `LAG`/`LEAD` over the changes of the same sensor). First polls, pausing and “Unknown” are not in the log but count towards the 500 stored changes. The pause
-log (`pause_log`) also keeps the newest 500 entries. At the top right, “Refresh” with “Auto”.
+log (`pause_log`) also keeps the newest 500 entries. **Dependencies** appear with one entry when a sensor starts pausing others (“Dependency active”,
+how many sensors on how many devices, duration until it ends) and one when that ends (`storage::pauses::dependency_entries`, table `dependency_log`,
+newest 500); the sensors it pauses get no lines of their own. At the top right, “Refresh” with “Auto”.
 
 Every column except the message sorts the log by a click on its head (`?sort=when|status|sensor|device|duration&dir=asc|desc`, like the status
 lists; first click: newest and longest first, otherwise ascending; ties newest first). The search field above the table keeps only entries that contain

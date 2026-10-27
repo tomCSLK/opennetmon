@@ -61,6 +61,13 @@ alert-subject-paused = Paused
 alert-subject-many =
     { $count } status changes: { $parts }
 alert-count-down = { $count } down
+alert-dependents-paused = Paused by it: { $sensors ->
+        [one] 1 sensor
+       *[other] { $sensors } sensors
+    } on { $devices ->
+        [one] 1 device
+       *[other] { $devices } devices
+    }
 alert-count-warning =
     { $count ->
         [one] { $count } warning

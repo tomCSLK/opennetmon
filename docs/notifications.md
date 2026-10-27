@@ -40,6 +40,8 @@ Poll errors are only a warning at first, and only the second in a row is a failu
 
 - The poller puts every status change into a queue (1000 slots, never blocking; if it is full, a warning is logged and the alert is dropped).
 - A task of its own collects the changes arriving within **10 seconds** of the first one into **one mail** (“3 status changes: 2 down, 1 warning”).
+- Changes of sensors that are paused through a **dependency** by then are left out; the outage of the sensor they depend on names what it paused
+  (“Paused by it: 14 sensors on 3 devices”, see `docs/devices-and-groups.md`, “Dependencies”).
   If a whole device fails, this results in one mail instead of one per sensor. A single change has a subject of its own, e.g.
   `[opennetmon] Down: Switch Office / Ping`.
 - The settings are read fresh for every mail. When the server shuts down, a collection that is still waiting is sent.

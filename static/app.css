@@ -600,6 +600,9 @@ form.inline-form input.narrow-input { flex: 0 0 auto; width: 7rem; min-width: 0;
 .split h2 { margin-bottom: .2rem; }
 .split p { margin: 0; }
 .choices label.inline { margin: .35rem 0; font-weight: 400; }
+/* Dependency page: the hint or select of a choice sits under its label, in line with the text. */
+.choices .choice-hint { margin: 0 0 .5rem 1.65rem; }
+.choices select { max-width: 100%; }
 
 /* Reached from a breadcrumb: mark the group. */
 details[data-group]:target > summary { background: var(--accent-soft); }

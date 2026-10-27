@@ -4,6 +4,7 @@ mod account;
 mod assets;
 pub mod auth;
 pub mod credentials;
+pub mod dependency;
 pub mod devices;
 mod error_page;
 pub mod groups;
@@ -192,6 +193,10 @@ pub fn router(state: AppState) -> Router {
         .route("/sensors/{id}/states", post(sensor_detail::save_states))
         .route("/pause/{kind}/{id}", get(pause::form).post(pause::pause))
         .route("/resume/{kind}/{id}", post(pause::resume))
+        .route(
+            "/dependency/{kind}/{id}",
+            get(dependency::form).post(dependency::save),
+        )
         .route("/sensors/{id}/delete", post(sensors::delete))
         .route(
             "/settings/mail",
@@ -381,6 +386,7 @@ pub fn flash_message(t: Lang, key: Option<&str>) -> Option<String> {
         "thresholds_saved" => "flash-thresholds-saved",
         "sensor_renamed" => "flash-sensor-renamed",
         "interval_saved" => "flash-interval-saved",
+        "dependency_saved" => "flash-dependency-saved",
         "states_saved" => "flash-states-saved",
         "states_reset" => "flash-states-reset",
         "order_saved" => "flash-order-saved",

@@ -125,6 +125,9 @@ pub struct Basic {
     pub enabled: bool,
     #[serde(default)]
     pub limits: Vec<Limits>,
+    /// The master sensor of the device (see [`crate::pause`]).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub master: bool,
 }
 
 /// Which interfaces get a traffic or status sensor.
@@ -175,6 +178,9 @@ pub struct OidItem {
     pub enabled: bool,
     #[serde(default)]
     pub limits: Vec<Limits>,
+    /// The master sensor of the device.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub master: bool,
 }
 
 impl OidItem {
@@ -349,6 +355,8 @@ pub struct BuildOptions {
     pub include: HashSet<i64>,
     pub traffic: PortChoice,
     pub status: PortChoice,
+    /// The master sensor of the device, taken over if included.
+    pub master: Option<i64>,
 }
 
 fn port_rule(
@@ -448,6 +456,7 @@ pub fn build(
                 name: s.name.clone(),
                 enabled: s.enabled,
                 limits,
+                master: options.master == Some(s.id),
             }),
             SensorSpec::Oid {
                 oid,
@@ -462,6 +471,7 @@ pub fn build(
                 unit: unit.clone(),
                 enabled: s.enabled,
                 limits,
+                master: options.master == Some(s.id),
             }),
             // Interfaces follow the port rules; local sensors belong to one machine.
             SensorSpec::InterfaceTraffic { .. }
@@ -483,6 +493,8 @@ pub struct NewSensor {
     pub spec: SensorSpec,
     pub enabled: bool,
     pub limits: Vec<Limits>,
+    /// Becomes the master sensor of the device, unless it has one.
+    pub master: bool,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -588,6 +600,7 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
             spec,
             enabled: b.enabled,
             limits: b.limits.clone(),
+            master: b.master,
         });
     }
 
@@ -646,6 +659,7 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
                 spec: spec_of(index),
                 enabled,
                 limits,
+                master: false,
             });
         }
     }
@@ -673,6 +687,7 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
             spec,
             enabled: o.enabled,
             limits: o.limits.clone(),
+            master: o.master,
         });
     }
     out
@@ -780,6 +795,9 @@ pub async fn apply(
         let id =
             store::create_sensor_with_state(pool, device_id, &new.name, &new.spec, new.enabled)
                 .await?;
+        if new.master {
+            crate::storage::pauses::set_master_if_none(pool, device_id, id).await?;
+        }
         if !new.limits.is_empty() {
             let channels = store::get_sensor(pool, id)
                 .await?
@@ -913,6 +931,7 @@ mod tests {
             include: [1, 2, 6, 7].into(),
             traffic,
             status,
+            master: None,
         }
     }
 
@@ -990,6 +1009,7 @@ mod tests {
             include: HashSet::new(),
             traffic: PortChoice::Skip,
             status: PortChoice::Skip,
+            master: None,
         };
         assert!(
             build(&sensors, None, &none)
@@ -1018,6 +1038,34 @@ mod tests {
             interfaces,
             answering,
         }
+    }
+
+    #[test]
+    fn the_master_sensor_is_taken_over() {
+        let (sensors, _) = source();
+        let with_master = BuildOptions {
+            master: Some(1),
+            ..options(PortChoice::Skip, PortChoice::Skip)
+        };
+        let body = build(&sensors, None, &with_master).unwrap();
+        assert!(body.basics[0].master && !body.basics[1].master);
+        let json = body.to_json().unwrap();
+        assert_eq!(
+            json.matches("\"master\"").count(),
+            1,
+            "only where set: {json}"
+        );
+        assert_eq!(Body::from_json(&json).unwrap(), body);
+        let plan = plan(&body, &facts(&[], None, &HashSet::new()));
+        let masters: Vec<(&str, bool)> = plan
+            .create
+            .iter()
+            .map(|n| (n.name.as_str(), n.master))
+            .collect();
+        assert_eq!(masters[..2], [("Ping", true), ("Uptime", false)]);
+        // Templates from before keep working.
+        let old = body.to_json().unwrap().replace(",\"master\":true", "");
+        assert!(!Body::from_json(&old).unwrap().basics[0].master);
     }
 
     #[test]

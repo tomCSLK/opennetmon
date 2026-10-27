@@ -72,14 +72,14 @@ impl Back {
     }
 }
 
-/// The paused object with what the pages need of it.
-struct Object {
-    target: Target,
-    name: String,
+/// The paused object with what the pages need of it (also for the dependency page).
+pub(super) struct Object {
+    pub(super) target: Target,
+    pub(super) name: String,
     /// Device of a device or sensor.
-    device_id: Option<i64>,
+    pub(super) device_id: Option<i64>,
     /// Übersicht › groups › device › sensor, down to the object itself.
-    trail: Vec<Crumb>,
+    pub(super) trail: Vec<Crumb>,
 }
 
 impl Object {
@@ -95,7 +95,7 @@ impl Object {
     }
 }
 
-async fn object(state: &AppState, t: Lang, target: Target) -> Result<Object> {
+pub(super) async fn object(state: &AppState, t: Lang, target: Target) -> Result<Object> {
     let overview = Crumb {
         name: t.get("nav-overview"),
         href: "/".to_owned(),
@@ -410,6 +410,16 @@ mod tests {
             StatusCode::NOT_FOUND
         );
 
+        // A polled sensor: pausing ends its state (one never polled has none to end).
+        crate::storage::status::record_poll(
+            &h.state.pool,
+            sensor,
+            1_000,
+            &[],
+            &crate::status::Assessment::Healthy(Msg::Text("ok".into())),
+        )
+        .await
+        .unwrap();
         let page = send(&h.app, get(&form_path, Some(&admin))).await;
         assert_eq!(page.status, StatusCode::OK);
         assert!(page.body.contains("„Netzwerk“ pausieren"), "{}", page.body);

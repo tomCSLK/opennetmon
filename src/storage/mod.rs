@@ -63,7 +63,8 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
     }
     const COLUMNS: &str = "id, name, host, port, group_id, profile_id, interval_secs, timeout_secs, \
                            retries, created_at, updated_at, position, template_id, kind, \
-                           paused, pause_until_ms, pause_reason";
+                           paused, pause_until_ms, pause_reason, dependency, dependency_sensor_id, \
+                           dependency_delay_secs";
     rebuild_without_foreign_keys(pool, "devices", |tx| {
         Box::pin(async move {
             sqlx::query(
@@ -85,7 +86,11 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
                     kind          TEXT NOT NULL DEFAULT 'generic',
                     paused        INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
                     pause_until_ms INTEGER,
-                    pause_reason  TEXT NOT NULL DEFAULT ''
+                    pause_reason  TEXT NOT NULL DEFAULT '',
+                    -- dependencies (migration 0019)
+                    dependency    TEXT NOT NULL DEFAULT 'parent' CHECK (dependency IN ('parent', 'sensor', 'none')),
+                    dependency_sensor_id INTEGER REFERENCES sensors (id) ON DELETE SET NULL,
+                    dependency_delay_secs INTEGER CHECK (dependency_delay_secs IS NULL OR dependency_delay_secs BETWEEN 0 AND 3600)
                 ) STRICT",
             )
             .execute(&mut **tx)
@@ -125,7 +130,8 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
     }
     const COLUMNS: &str = "id, device_id, name, kind, if_index, oid, oid_mode, scale, enabled, \
                            created_at, unit_label, position, pause_until_ms, pause_reason, \
-                           interval_secs";
+                           interval_secs, dependency, dependency_sensor_id, dependency_delay_secs, \
+                           dependency_master";
     rebuild_without_foreign_keys(pool, "sensors", |tx| {
         Box::pin(async move {
             sqlx::query(
@@ -148,6 +154,11 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
                     target         TEXT,
                     -- own polling interval (migration 0017); NULL = the device's
                     interval_secs  INTEGER CHECK (interval_secs IS NULL OR interval_secs BETWEEN 10 AND 3600),
+                    -- dependencies (migration 0019)
+                    dependency     TEXT NOT NULL DEFAULT 'parent' CHECK (dependency IN ('parent', 'sensor', 'none')),
+                    dependency_sensor_id INTEGER REFERENCES sensors (id) ON DELETE SET NULL,
+                    dependency_delay_secs INTEGER CHECK (dependency_delay_secs IS NULL OR dependency_delay_secs BETWEEN 0 AND 3600),
+                    dependency_master INTEGER NOT NULL DEFAULT 0 CHECK (dependency_master IN (0, 1)),
                     UNIQUE (device_id, name),
                     -- Exactly the columns that belong to the kind are set.
                     CHECK (

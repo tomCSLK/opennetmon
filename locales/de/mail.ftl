@@ -60,6 +60,13 @@ alert-subject-unknown = Unbekannt
 alert-subject-paused = Pausiert
 alert-subject-many = { $count } Statuswechsel: { $parts }
 alert-count-down = { $count } Ausfall
+alert-dependents-paused = Dadurch pausiert: { $sensors ->
+        [one] 1 Sensor
+       *[other] { $sensors } Sensoren
+    } an { $devices ->
+        [one] 1 Gerät
+       *[other] { $devices } Geräten
+    }
 alert-count-warning =
     { $count ->
         [one] { $count } Warnung
