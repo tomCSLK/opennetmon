@@ -1,5 +1,6 @@
 // Table of measured values below the chart (like PRTG's "Live data" table): one row per poll,
-// newest first, with average/minimum/maximum (and the summed volume for traffic) on top. Always raw
+// newest first, with average/minimum/maximum (and the summed volume for traffic) on top. Polls that
+// warned or failed are tinted like in PRTG; a failed poll has no values and shows its message. Always raw
 // values, also where the chart shows averages; the viewer picks how far back
 // the table reaches (#samples-span, minutes) and the summary covers exactly those rows. Loads from
 // #samples[data-src] whenever static/chart.js has loaded new data (event "opennetmon:data"), so both
@@ -88,6 +89,13 @@
     var dur = durations(data);
     var cols = columns(data, dur);
     var count = data.ts.length;
+    var states = data.states || [];
+    var messages = data.messages || [];
+    // Rows with at least one value: what the average, minimum and maximum are made of.
+    var valued = 0;
+    for (var r = 0; r < count; r++) {
+      if (cols.some(function (c) { return c.values[r] !== null && c.values[r] !== undefined; })) { valued++; }
+    }
     if (info) {
       if (data.total > count) { info.textContent = T('samples-newest', count, data.total); }
       else { info.textContent = count === 1 ? T('samples-one') : T('samples-many', count); }
@@ -125,7 +133,7 @@
       if (row.onlyIf && !row.onlyIf()) { return; }
       var tr = el('tr', row.onlyIf ? 'summary sum' : 'summary');
       lastSummary = tr;
-      tr.appendChild(el('td', null, count === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, count)));
+      tr.appendChild(el('td', null, valued === 1 ? T('samples-from-one', row.label) : T('samples-from-many', row.label, valued)));
       cols.forEach(function (c, i) { tr.appendChild(el('td', c.cls || 'n', row.pick(st[i], c))); });
       body.appendChild(tr);
     });
@@ -133,9 +141,17 @@
 
     for (var k = 0; k < count; k++) {
       var i = count - 1 - k; // newest first
-      var tr = el('tr');
+      var tr = el('tr', states[i] ? 'state-' + states[i] : null);
       tr.appendChild(el('td', 'nowrap', F.dateTime(data.ts[i], true)));
-      cols.forEach(function (c) { tr.appendChild(el('td', c.cls || 'n', c.fmt(c.values[i]))); });
+      var empty = cols.every(function (c) { return c.values[i] === null || c.values[i] === undefined; });
+      if (states[i] && empty) {
+        var td = el('td', 'problem', messages[i] || '');
+        td.colSpan = cols.length;
+        tr.appendChild(td);
+      } else {
+        if (messages[i]) { tr.title = messages[i]; }
+        cols.forEach(function (c) { tr.appendChild(el('td', c.cls || 'n', c.fmt(c.values[i]))); });
+      }
       body.appendChild(tr);
     }
     table.appendChild(body);

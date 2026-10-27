@@ -614,6 +614,14 @@ Zu entscheiden:
 1. Nur „Feld X geändert“ oder alt → neu? Empfehlung: alt → neu (außer Secrets), sonst ist das Protokoll wenig wert.
 2. Anmeldungen mitprotokollieren? Empfehlung: ja, auch fehlgeschlagene (mit Adresse); das journald-Log hat sie heute nur auf Stufe `info`.
 
+### Fehlgeschlagene Abfragen in der Messwerttabelle – umgesetzt 2026-10-27 (Wunsch des Nutzers, nach einem Bildschirmfoto von PRTG)
+
+Vorher fehlten fehlgeschlagene Abfragen in der Tabelle „Messwerte“ ganz (sie schreiben keine Messwerte). Jetzt speichert `record_poll` jede Abfrage,
+die nicht „OK“ endet, in `poll_problems` (Migration `0023`: Status und Meldung, Aufbewahrung wie Rohwerte); `recent_samples` mischt sie als Zeilen ein
+(`TableRows`), die Tabelle färbt sie rot bzw. gelb und zeigt bei fehlenden Werten die Meldung. Mittelwert, Minimum und Maximum zählen nur Zeilen mit Werten.
+Nicht übernommen aus PRTG: Spalten „Ausfallzeit“ und „Abdeckung“ (PRTG zeigt sie in den gemittelten historischen Daten; unsere Tabelle hat je Abfrage
+eine Zeile, dort wären es nur 0 oder 100 %).
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
 - Test mit dem echten Mailserver des Nutzers (braucht den Nutzer), Ende-zu-Ende-Integrationstest (Server starten, Gerät gegen lokalen `snmpd`, Poller,
@@ -635,7 +643,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (542, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (543, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

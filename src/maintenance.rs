@@ -85,7 +85,8 @@ pub async fn rollup(pool: &SqlitePool, now_ms: i64) -> Result<()> {
     crate::storage::availability::rollup(pool).await
 }
 
-/// Deletes raw samples, hourly rollups and events older than their retention. Daily rollups stay.
+/// Deletes raw samples (with the failed polls), hourly rollups and events older than their
+/// retention. Daily rollups stay.
 pub async fn apply_retention(
     pool: &SqlitePool,
     now_ms: i64,
@@ -98,6 +99,10 @@ pub async fn apply_retention(
         .execute(pool)
         .await?
         .rows_affected();
+    sqlx::query("DELETE FROM poll_problems WHERE ts < ?")
+        .bind(raw_before)
+        .execute(pool)
+        .await?;
     let hourly_deleted = sqlx::query("DELETE FROM samples_1h WHERE ts < ?")
         .bind(hourly_before)
         .execute(pool)

@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use sqlx::SqlitePool;
 
 use crate::error::Result;
+use crate::i18n::Msg;
 use crate::sensors::Unit;
+use crate::status::Status;
 use crate::storage::sensors::ChannelRecord;
 
 const HOUR_MS: i64 = 3_600_000;
@@ -183,18 +185,39 @@ pub async fn chart_data(
     Ok(ChartData { ts, series })
 }
 
-/// The raw samples of `channels` in the last `span_minutes` before `now_ms` (aligned like
-/// [`chart_data`]; at most `limit`, the newest), and how many points the span holds in all.
-/// For the table of values, which lists every poll whatever the chart averages.
+/// A poll that did not end "up" (table `poll_problems`): its status and message.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PollProblem {
+    pub status: Status,
+    pub message: Msg,
+}
+
+/// The rows of the table of values: one per poll, `problems` aligned with `data.ts`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableRows {
+    pub data: ChartData,
+    pub problems: Vec<Option<PollProblem>>,
+    /// Polls in the whole span (`data` holds at most the limit, the newest).
+    pub total: u64,
+}
+
+/// The values of one poll (one per channel) and its problem, if any.
+type TableRow = (Vec<Option<f64>>, Option<PollProblem>);
+
+/// The raw samples of `channels` (of sensor `sensor_id`) in the last `span_minutes` before
+/// `now_ms`, aligned like [`chart_data`], with the polls that failed or warned (a failed poll has no
+/// samples, but a row): at most `limit` rows, the newest. For the table of values, which lists
+/// every poll whatever the chart averages.
 pub async fn recent_samples(
     pool: &SqlitePool,
+    sensor_id: i64,
     channels: &[ChannelRecord],
     span_minutes: u32,
     now_ms: i64,
     limit: u32,
-) -> Result<(ChartData, u64)> {
+) -> Result<TableRows> {
     let from = now_ms - i64::from(span_minutes) * 60_000;
-    let mut rows: BTreeMap<i64, Vec<Option<f64>>> = BTreeMap::new();
+    let mut rows: BTreeMap<i64, TableRow> = BTreeMap::new();
     for (i, channel) in channels.iter().enumerate() {
         let points: Vec<(i64, f64)> = sqlx::query_as(
             "SELECT ts, value FROM samples WHERE channel_id = ? AND ts >= ? AND ts <= ? \
@@ -209,28 +232,63 @@ pub async fn recent_samples(
         for (ts_ms, value) in points {
             let row = rows
                 .entry(ts_ms.div_euclid(1000))
-                .or_insert_with(|| vec![None; channels.len()]);
-            row[i] = Some(value);
+                .or_insert_with(|| (vec![None; channels.len()], None));
+            row.0[i] = Some(value);
         }
+    }
+    let problems: Vec<(i64, String, String)> = sqlx::query_as(
+        "SELECT ts, status, message FROM poll_problems WHERE sensor_id = ? AND ts >= ? AND ts <= ? \
+         ORDER BY ts DESC LIMIT ?",
+    )
+    .bind(sensor_id)
+    .bind(from)
+    .bind(now_ms)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    for (ts_ms, status, message) in problems {
+        let Some(status) = Status::parse(&status) else {
+            continue;
+        };
+        rows.entry(ts_ms.div_euclid(1000))
+            .or_insert_with(|| (vec![None; channels.len()], None))
+            .1 = Some(PollProblem {
+            status,
+            message: Msg::decode(&message),
+        });
     }
     // Channels polled together share their timestamps; should they differ, keep the newest rows.
     let skip = rows
         .len()
         .saturating_sub(usize::try_from(limit).unwrap_or(usize::MAX));
-    let rows: Vec<(i64, Vec<Option<f64>>)> = rows.into_iter().skip(skip).collect();
+    let rows: Vec<(i64, TableRow)> = rows.into_iter().skip(skip).collect();
 
-    let mut total: i64 = 0;
-    for channel in channels {
-        let n: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM samples WHERE channel_id = ? AND ts >= ? AND ts <= ?",
+    // Polls in the span: the distinct times of the samples and the failed polls.
+    let placeholders = vec!["?"; channels.len()].join(", ");
+    let sample_times = if channels.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "SELECT ts FROM samples WHERE channel_id IN ({placeholders}) AND ts >= ? AND ts <= ? UNION "
         )
-        .bind(channel.id)
+    };
+    let sql = format!(
+        "SELECT COUNT(*) FROM ({sample_times}\
+         SELECT ts FROM poll_problems WHERE sensor_id = ? AND ts >= ? AND ts <= ?)"
+    );
+    let mut count = sqlx::query_scalar::<_, i64>(&sql);
+    if !channels.is_empty() {
+        for channel in channels {
+            count = count.bind(channel.id);
+        }
+        count = count.bind(from).bind(now_ms);
+    }
+    let total = count
+        .bind(sensor_id)
         .bind(from)
         .bind(now_ms)
         .fetch_one(pool)
         .await?;
-        total = total.max(n);
-    }
 
     let ts = rows.iter().map(|(ts, _)| *ts).collect();
     let series = channels
@@ -239,10 +297,15 @@ pub async fn recent_samples(
         .map(|(i, c)| ChartSeries {
             key: c.key.clone(),
             unit: c.unit,
-            values: rows.iter().map(|(_, row)| row[i]).collect(),
+            values: rows.iter().map(|(_, row)| row.0[i]).collect(),
         })
         .collect();
-    Ok((ChartData { ts, series }, u64::try_from(total).unwrap_or(0)))
+    let problems = rows.into_iter().map(|(_, row)| row.1).collect();
+    Ok(TableRows {
+        data: ChartData { ts, series },
+        problems,
+        total: u64::try_from(total).unwrap_or(0),
+    })
 }
 
 /// Averages of one channel in `count` equal buckets of `bucket_ms` starting at `from_ms`; `None`
@@ -406,23 +469,102 @@ mod tests {
         }
         samples.push(sample(ch[0].id, now - 25 * HOUR_MS, -1.0));
         insert_samples(&pool, &samples).await.unwrap();
+        let sensor = sensor_of(&pool, &ch).await;
 
         // Every poll of the span (61: both ends included), not averages.
-        let (hour, total) = recent_samples(&pool, &ch, 60, now, 20_000).await.unwrap();
+        let table = recent_samples(&pool, sensor, &ch, 60, now, 20_000)
+            .await
+            .unwrap();
+        let (hour, total) = (&table.data, table.total);
         assert_eq!((hour.ts.len(), total), (61, 61));
+        assert!(table.problems.iter().all(Option::is_none));
         assert_eq!(hour.ts.last(), Some(&(now / 1000)));
         assert_eq!(hour.ts[0], (now - HOUR_MS) / 1000);
         assert_eq!(hour.series[0].values[60], Some(0.0));
         assert_eq!(hour.series[1].values[0], Some(1060.0));
         // A day reaches all 180 polls; the limit keeps the newest.
-        let (day, total) = recent_samples(&pool, &ch, 1440, now, 100).await.unwrap();
+        let table = recent_samples(&pool, sensor, &ch, 1440, now, 100)
+            .await
+            .unwrap();
+        let (day, total) = (&table.data, table.total);
         assert_eq!((day.ts.len(), total), (100, 180));
         assert_eq!(day.ts[0], (now - 99 * 60_000) / 1000);
         // The week reaches the older sample.
-        let (_, total) = recent_samples(&pool, &ch, 10_080, now, 20_000)
+        let total = recent_samples(&pool, sensor, &ch, 10_080, now, 20_000)
+            .await
+            .unwrap()
+            .total;
+        assert_eq!(total, 181);
+    }
+
+    async fn sensor_of(pool: &SqlitePool, channels: &[ChannelRecord]) -> i64 {
+        sqlx::query_scalar("SELECT sensor_id FROM channels WHERE id = ?")
+            .bind(channels[0].id)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn failed_polls_are_rows_of_the_table_with_their_message() {
+        use crate::status::Assessment;
+        use crate::storage::status::record_poll;
+        let (_dir, pool, ch) = setup(&SensorSpec::Ping).await;
+        let sensor = sensor_of(&pool, &ch).await;
+        let now = 30 * 24 * HOUR_MS;
+        // Up, then three failed polls (warning, then down) and up again, a minute apart.
+        let polls = [
+            (now - 4 * 60_000, Some(7.0)),
+            (now - 3 * 60_000, None),
+            (now - 2 * 60_000, None),
+            (now - 60_000, None),
+            (now, Some(5.0)),
+        ];
+        for (ts, value) in polls {
+            let (samples, assessment) = match value {
+                Some(v) => (
+                    vec![sample(ch[0].id, ts, v)],
+                    Assessment::Healthy("OK".into()),
+                ),
+                None => (Vec::new(), Assessment::Failed("timeout".into())),
+            };
+            record_poll(&pool, sensor, ts, &samples, &assessment)
+                .await
+                .unwrap();
+        }
+        let table = recent_samples(&pool, sensor, &ch, 60, now, 100)
             .await
             .unwrap();
-        assert_eq!(total, 181);
+        assert_eq!((table.data.ts.len(), table.total), (5, 5));
+        assert_eq!(
+            table.data.series[0].values,
+            vec![Some(7.0), None, None, None, Some(5.0)]
+        );
+        let statuses: Vec<Option<Status>> = table
+            .problems
+            .iter()
+            .map(|p| p.as_ref().map(|p| p.status))
+            .collect();
+        assert_eq!(
+            statuses,
+            vec![
+                None,
+                Some(Status::Warning),
+                Some(Status::Down),
+                Some(Status::Down),
+                None
+            ]
+        );
+        assert_eq!(
+            table.problems[1].as_ref().map(|p| &p.message),
+            Some(&Msg::from("timeout"))
+        );
+        // The limit keeps the newest rows, failed or not.
+        let table = recent_samples(&pool, sensor, &ch, 60, now, 2)
+            .await
+            .unwrap();
+        assert_eq!(table.data.ts, vec![(now - 60_000) / 1000, now / 1000]);
+        assert_eq!(table.total, 5);
     }
 
     #[tokio::test]

@@ -135,6 +135,18 @@ pub async fn record_poll(
     .bind(i64::from(next.consecutive_failures))
     .execute(&mut *tx)
     .await?;
+    // A failed poll writes no samples; the table of values shows it from here.
+    if next.status != Status::Up {
+        sqlx::query(
+            "INSERT OR REPLACE INTO poll_problems (sensor_id, ts, status, message) VALUES (?, ?, ?, ?)",
+        )
+        .bind(sensor_id)
+        .bind(ts_ms)
+        .bind(next.status.as_str())
+        .bind(next.message.encode())
+        .execute(&mut *tx)
+        .await?;
+    }
 
     let from = prev.as_ref().map(|p| p.status);
     let change = (from != Some(next.status)).then(|| StatusChange {

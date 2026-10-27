@@ -450,6 +450,11 @@ table.samples td.nowrap { font-variant-numeric: tabular-nums; }
 table.samples tr.summary td { background: var(--surface-2); font-weight: 600; }
 table.samples tr.summary-last td { border-bottom: 2px solid var(--border-strong); }
 table.samples .head-short { display: none; }
+/* polls that warned or failed, tinted like in PRTG; a failed poll shows its message instead of values */
+table.samples tr.state-down td { background: var(--down-soft); border-bottom-color: color-mix(in srgb, var(--down) 35%, transparent); }
+table.samples tr.state-warning td { background: var(--warn-soft); border-bottom-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+table.samples tr.state-down td.problem { color: var(--down); }
+table.samples tr.state-warning td.problem { color: var(--warn); }
 label.rows-select { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .85rem; font-weight: 500; color: var(--muted); }
 label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font-size: .85rem; }
 @media (max-width: 640px) {

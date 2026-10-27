@@ -498,10 +498,15 @@ pub struct SamplesQuery {
 pub struct SamplesJson {
     /// Polling interval of the device, to estimate the time a raw sample covers.
     interval_secs: u32,
-    /// Raw samples in the span; `ts` holds all of them up to [`TABLE_ROWS_MAX`], the newest.
+    /// Polls in the span; `ts` holds all of them up to [`TABLE_ROWS_MAX`], the newest.
     total: u64,
     ts: Vec<i64>,
     series: Vec<SeriesJson>,
+    /// Per row: `"warning"` or `"down"` for a poll that did not end up (a failed poll has no
+    /// values), else `null`.
+    states: Vec<Option<&'static str>>,
+    /// Per row: the message of such a poll, in the language of the reader.
+    messages: Vec<Option<String>>,
 }
 
 /// The table of values: the raw samples (every poll) of the last `minutes`, however the chart
@@ -524,8 +529,9 @@ pub async fn samples(
         .filter(|h| spans.contains(h))
         .or_else(|| spans.first().copied())
         .unwrap_or(1);
-    let (rows, total) = recent_samples(
+    let rows = recent_samples(
         &state.pool,
+        sensor.id,
         &sensor.channels,
         minutes,
         now_ms(),
@@ -534,9 +540,22 @@ pub async fn samples(
     .await?;
     Ok(Json(SamplesJson {
         interval_secs: sensor.interval(device.polling.interval_secs),
-        total,
-        ts: rows.ts,
-        series: series_json(&state, &sensor, user.lang, rows.series),
+        total: rows.total,
+        ts: rows.data.ts,
+        series: series_json(&state, &sensor, user.lang, rows.data.series),
+        states: rows
+            .problems
+            .iter()
+            .map(|p| p.as_ref().map(|p| p.status.as_str()))
+            .collect(),
+        messages: rows
+            .problems
+            .iter()
+            .map(|p| {
+                p.as_ref()
+                    .map(|p| crate::status::shown(user.lang, &p.message))
+            })
+            .collect(),
     }))
 }
 
@@ -1097,6 +1116,10 @@ mod tests {
             body.contains("[12500000.0]") && body.contains("[3000.0]"),
             "{body}"
         );
+        assert!(
+            body.contains("\"states\":[null]") && body.contains("\"messages\":[null]"),
+            "{body}"
+        );
         // A span the range does not offer falls back to its first instead of failing.
         let odd = send(
             &h.app,
@@ -1107,6 +1130,32 @@ mod tests {
         )
         .await;
         assert_eq!(odd.status, StatusCode::OK);
+        // A failed poll has no values but a row with its status and message.
+        record_poll(
+            &h.state.pool,
+            sensor,
+            now_ms() - 5_000,
+            &[],
+            &Assessment::Failed("no reply".into()),
+        )
+        .await
+        .unwrap();
+        let body = send(
+            &h.app,
+            get(
+                &format!("/sensors/{sensor}/samples?range=1h"),
+                Some(&viewer),
+            ),
+        )
+        .await
+        .body;
+        assert!(body.contains("\"total\":2"), "{body}");
+        assert!(
+            body.contains("\"states\":[null,\"warning\"]")
+                && body.contains("\"messages\":[null,\"no reply\"]")
+                && body.contains("[12500000.0,null]"),
+            "{body}"
+        );
         assert_eq!(
             send(&h.app, get(&format!("/sensors/{sensor}/samples"), None))
                 .await

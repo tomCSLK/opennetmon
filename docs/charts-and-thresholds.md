@@ -37,8 +37,13 @@ This holds for every range, also where the chart shows block averages. How far b
 
 Raw values exist for `retention_raw_days` (7 days by default), so no choice reaches further. An hour has 60 polls at a 60-second interval and 360 at
 10 seconds; seven days are about 10,000 rows at 60 seconds and 60,000 at 10 seconds. At most 20,000 rows are sent (the newest; the table then says
-“newest 20000 of …”). The table loads from its own endpoint `/sensors/<id>/samples?range=…&minutes=…` (the raw values of the span plus their total).
+“newest 20000 of …”). The table loads from its own endpoint `/sensors/<id>/samples?range=…&minutes=…` (the raw values of the span, the status and message of each row that warned or failed, plus their total).
 The volume of a traffic row uses the sensor's interval (its own or the device's).
+
+Polls that did not end “up” are tinted like in PRTG: red for down, amber for a warning. A failed poll (timeout, no reply) writes no values,
+so its row shows the message instead (e.g. the timeout); a warning from a limit keeps its values and shows the message on hover. Average,
+minimum and maximum count only the rows with values. These polls are stored in `poll_problems` (status and message, migration `0023`) and
+kept like the raw values (`retention_raw_days`). Paused times have no rows: a paused sensor is not polled.
 
 - Traffic channels have two columns per direction: **volume** (the amount of data in the section, decimal: 1 MB = 1,000,000 bytes) and **speed**.
   The volume is rate × duration; the duration is the gap to the previous poll, at most one polling interval (after a restart or a lost poll
