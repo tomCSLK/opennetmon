@@ -18,8 +18,10 @@ use crate::i18n::{Lang, Msg};
 use crate::mib::MibIndex;
 use crate::pause::{Source, Target};
 use crate::sensors::Unit;
+use crate::sensors::dns::RecordType;
 use crate::sensors::format::channel_label;
 use crate::sensors::local::LocalMetric;
+use crate::sensors::service;
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
 use crate::snmp::{SnmpClient, SnmpTarget};
@@ -66,6 +68,145 @@ struct SensorFormValues {
     mode: String,
     scale: String,
     unit: String,
+    service: ServiceFields,
+}
+
+/// The fields of the service sensors (HTTP, TCP, DNS, TLS), as typed.
+#[derive(Clone, Deserialize)]
+struct ServiceFields {
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    expect: String,
+    #[serde(default)]
+    keyword: String,
+    #[serde(default)]
+    head: Option<String>,
+    #[serde(default)]
+    follow: Option<String>,
+    #[serde(default)]
+    verify: Option<String>,
+    #[serde(default)]
+    tcp_port: String,
+    #[serde(default)]
+    dns_name: String,
+    #[serde(default)]
+    dns_type: String,
+    #[serde(default)]
+    dns_port: String,
+    #[serde(default)]
+    dns_expect: String,
+    #[serde(default)]
+    tls_port: String,
+    #[serde(default)]
+    server_name: String,
+    #[serde(default)]
+    tls_verify: Option<String>,
+}
+
+impl Default for ServiceFields {
+    fn default() -> Self {
+        let on = Some("on".to_owned());
+        Self {
+            url: String::new(),
+            expect: String::new(),
+            keyword: String::new(),
+            head: None,
+            follow: on.clone(),
+            verify: on.clone(),
+            tcp_port: String::new(),
+            dns_name: String::new(),
+            dns_type: "a".to_owned(),
+            dns_port: "53".to_owned(),
+            dns_expect: String::new(),
+            tls_port: "443".to_owned(),
+            server_name: String::new(),
+            tls_verify: on,
+        }
+    }
+}
+
+impl ServiceFields {
+    fn port(text: &str) -> Result<u16> {
+        text.trim()
+            .parse::<u16>()
+            .ok()
+            .filter(|p| *p > 0)
+            .ok_or_else(|| Error::invalid(Msg::new("service-port-invalid")))
+    }
+
+    fn optional(text: &str) -> Option<String> {
+        Some(text.trim().to_owned()).filter(|t| !t.is_empty())
+    }
+
+    /// Default name and settings of the service sensor `kind` for a device with `host`.
+    fn to_spec(&self, t: Lang, kind: &str, host: &str) -> Result<(String, SensorSpec)> {
+        Ok(match kind {
+            "http" => {
+                let url = match self.url.trim() {
+                    "" if host.contains(':') => format!("https://[{host}]/"),
+                    "" => format!("https://{host}/"),
+                    url => url.to_owned(),
+                };
+                let expect = match self.expect.trim() {
+                    "" => service::DEFAULT_EXPECT.to_owned(),
+                    text => text.split_whitespace().collect(),
+                };
+                (
+                    t.get("service-name-http"),
+                    SensorSpec::Http(service::HttpCheck {
+                        url,
+                        head: self.head.is_some(),
+                        expect,
+                        keyword: Self::optional(&self.keyword),
+                        follow_redirects: self.follow.is_some(),
+                        verify_tls: self.verify.is_some(),
+                    }),
+                )
+            }
+            "tcp" => {
+                let port = Self::port(&self.tcp_port)?;
+                (
+                    t.get1("service-name-tcp", "port", port),
+                    SensorSpec::Tcp(service::TcpCheck { port }),
+                )
+            }
+            "dns" => {
+                let expect = match Self::optional(&self.dns_expect) {
+                    Some(text) => Some(
+                        text.parse()
+                            .map_err(|_| Error::invalid(Msg::new("service-dns-expect-invalid")))?,
+                    ),
+                    None => None,
+                };
+                let name = self.dns_name.trim().to_owned();
+                (
+                    t.get1("service-name-dns", "name", name.as_str()),
+                    SensorSpec::Dns(service::DnsCheck {
+                        name,
+                        record: if self.dns_type == "aaaa" {
+                            RecordType::Aaaa
+                        } else {
+                            RecordType::A
+                        },
+                        port: Self::port(&self.dns_port)?,
+                        expect,
+                    }),
+                )
+            }
+            _ => {
+                let port = Self::port(&self.tls_port)?;
+                (
+                    t.get1("service-name-tls", "port", port),
+                    SensorSpec::Tls(service::TlsCheck {
+                        port,
+                        server_name: Self::optional(&self.server_name),
+                        verify: self.tls_verify.is_some(),
+                    }),
+                )
+            }
+        })
+    }
 }
 
 impl Default for SensorFormValues {
@@ -77,6 +218,7 @@ impl Default for SensorFormValues {
             mode: "auto".to_owned(),
             scale: "1".to_owned(),
             unit: String::new(),
+            service: ServiceFields::default(),
         }
     }
 }
@@ -107,6 +249,18 @@ struct SensorsTemplate {
     template_name: Option<String>,
     /// Offer "Werte dieses Servers" (`web::server_values`).
     offer_server_values: bool,
+}
+
+impl SensorsTemplate {
+    fn tls_hint(&self) -> String {
+        self.t.get2(
+            "service-tls-hint",
+            "warn",
+            crate::sensors::spec::TLS_WARN_DAYS as u32,
+            "down",
+            crate::sensors::spec::TLS_DOWN_DAYS as u32,
+        )
+    }
 }
 
 struct DiscoverRowView {
@@ -148,6 +302,8 @@ pub struct SensorForm {
     scale: String,
     #[serde(default)]
     unit: String,
+    #[serde(flatten)]
+    service: ServiceFields,
 }
 
 impl SensorForm {
@@ -159,15 +315,17 @@ impl SensorForm {
             mode: self.mode.clone(),
             scale: self.scale.clone(),
             unit: self.unit.clone(),
+            service: self.service.clone(),
         }
     }
 
     /// Name and configuration for the chosen sensor type. A custom OID may be given by MIB name;
     /// mode ("auto"), unit and name then default to what the MIB says.
-    fn to_spec(&self, mibs: &MibIndex) -> Result<(String, SensorSpec)> {
+    fn to_spec(&self, t: Lang, mibs: &MibIndex, host: &str) -> Result<(String, SensorSpec)> {
         let invalid = |id: &'static str| Error::invalid(Msg::new(id));
         let (default_name, spec) = match self.kind.as_str() {
             "ping" => ("Ping".to_owned(), SensorSpec::Ping),
+            kind @ ("http" | "tcp" | "dns" | "tls") => self.service.to_spec(t, kind, host)?,
             "uptime" => ("Uptime".to_owned(), SensorSpec::Uptime),
             "oid" => {
                 let target = mibs.oid_target(&self.oid).map_err(Error::invalid)?;
@@ -434,7 +592,7 @@ pub async fn create(
         return Ok(Redirect::to(&format!("/devices/{}/server", device.id)).into_response());
     }
     let mibs = state.mib_index();
-    let outcome = match form.to_spec(&mibs) {
+    let outcome = match form.to_spec(user.lang, &mibs, &device.host) {
         Ok((_, spec)) if spec.uses_snmp() && !device.has_snmp() => {
             Err(Error::invalid(Msg::new("device-without-snmp")))
         }
@@ -993,6 +1151,97 @@ mod tests {
         .await;
         assert!(detail.body.contains("OID 1.3.6.1.4.1.99.1.0"));
         assert!(page.body.contains("Unbekannt"), "never polled yet");
+    }
+
+    #[tokio::test]
+    async fn admin_adds_service_sensors_with_defaults_from_the_device() {
+        let h = harness(true).await;
+        let device = device_on(&h, 161).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let path = format!("/devices/{device}/sensors");
+        let page = send(&h.app, get(&path, Some(&admin))).await;
+        for kind in ["http", "tcp", "dns", "tls"] {
+            assert!(
+                page.body.contains(&format!("<option value=\"{kind}\"")),
+                "{kind}"
+            );
+            assert!(
+                page.body.contains(&format!("data-kinds=\"{kind}\"")),
+                "{kind}"
+            );
+        }
+        for body in [
+            format!("csrf_token={csrf}&kind=http&name=&url=&expect=&follow=on"),
+            format!("csrf_token={csrf}&kind=tcp&name=&tcp_port=22"),
+            format!(
+                "csrf_token={csrf}&kind=dns&name=&dns_name=example.org&dns_type=aaaa&dns_port=53&dns_expect=2001%3Adb8%3A%3A1"
+            ),
+            format!("csrf_token={csrf}&kind=tls&name=&tls_port=8443&server_name=&tls_verify=on"),
+        ] {
+            let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
+            assert_eq!(
+                reply.location(),
+                format!("{path}?msg=sensor_created"),
+                "{body}"
+            );
+        }
+        let stored = store::list_sensors(&h.state.pool, device).await.unwrap();
+        let by_name = |name: &str| {
+            stored
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap_or_else(|| panic!("{name} missing"))
+        };
+        assert!(matches!(
+            &by_name("HTTP(S)").spec,
+            SensorSpec::Http(c) if c.url == "https://127.0.0.1/" && c.expect == "200-399"
+                && c.follow_redirects && !c.verify_tls && !c.head
+        ));
+        assert!(matches!(by_name("TCP-Port 22").spec, SensorSpec::Tcp(ref c) if c.port == 22));
+        assert!(matches!(
+            &by_name("DNS example.org").spec,
+            SensorSpec::Dns(c) if c.record == RecordType::Aaaa && c.expect == Some("2001:db8::1".parse().unwrap())
+        ));
+        let cert = by_name("Zertifikat Port 8443");
+        assert!(matches!(&cert.spec, SensorSpec::Tls(c) if c.verify && c.server_name.is_none()));
+        assert_eq!(cert.channels[0].key, "days");
+        assert_eq!(cert.channels[0].thresholds.warn_below, Some(14.0));
+        assert_eq!(cert.channels[0].thresholds.down_below, Some(3.0));
+
+        let detail = send(&h.app, get(&format!("/sensors/{}", cert.id), Some(&admin))).await;
+        assert!(
+            detail.body.contains("TLS-Zertifikat an Port 8443"),
+            "described on its page"
+        );
+
+        for (body, error) in [
+            (
+                format!("csrf_token={csrf}&kind=http&url=ftp%3A%2F%2Fx%2F"),
+                "URL ist ungültig",
+            ),
+            (
+                format!("csrf_token={csrf}&kind=tcp&tcp_port=0"),
+                "Port muss",
+            ),
+            (
+                format!("csrf_token={csrf}&kind=dns&dns_name=a+b&dns_port=53"),
+                "kein gültiger DNS-Name",
+            ),
+            (
+                format!(
+                    "csrf_token={csrf}&kind=dns&dns_name=example.org&dns_port=53&dns_expect=192.0.2.1&dns_type=aaaa"
+                ),
+                "passt nicht zum Typ",
+            ),
+            (
+                format!("csrf_token={csrf}&kind=http&url=https%3A%2F%2Fx%2F&head=on&keyword=ok"),
+                "nicht nur den Kopf",
+            ),
+        ] {
+            let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
+            assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+            assert!(reply.body.contains(error), "{body}: {}", reply.body);
+        }
     }
 
     #[tokio::test]
@@ -1680,12 +1929,7 @@ mod tests {
             get(&format!("/devices/{device}/sensors"), Some(&admin)),
         )
         .await;
-        for text in [
-            "No sensors yet.",
-            "Add sensor",
-            "no SNMP, ping only",
-            "every 60 s",
-        ] {
+        for text in ["No sensors yet.", "Add sensor", "no SNMP", "every 60 s"] {
             assert!(page.body.contains(text), "{text} missing");
         }
         let refused = send(

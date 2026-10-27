@@ -229,6 +229,7 @@ fn unit_rank(unit: Unit) -> u8 {
         Unit::State => 6,
         Unit::Bytes => 7,
         Unit::Celsius => 8,
+        Unit::Days => 9,
     }
 }
 

@@ -61,6 +61,7 @@ struct SensorRow {
     scale: Option<f64>,
     unit_label: Option<String>,
     target: Option<String>,
+    params: Option<String>,
     enabled: i64,
     position: Option<i64>,
     interval_secs: Option<i64>,
@@ -113,11 +114,16 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
                 .and_then(LocalMetric::parse)
                 .ok_or_else(|| corrupt("target"))?,
         ),
+        kind @ ("http" | "tcp" | "dns" | "tls") => r
+            .params
+            .as_deref()
+            .and_then(|p| SensorSpec::from_params(kind, p))
+            .ok_or_else(|| corrupt("params"))?,
         _ => return Err(corrupt("kind")),
     })
 }
 
-const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, enabled, position, interval_secs FROM sensors";
+const SENSOR_SELECT: &str = "SELECT id, device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, params, enabled, position, interval_secs FROM sensors";
 
 /// Automatic order of sensor kinds: reachability first, then ports, then everything else.
 fn kind_rank(kind: &str) -> u8 {
@@ -325,9 +331,13 @@ pub async fn create_sensor_with_state(
             Some(*scale),
             unit.as_deref().map(str::trim),
         ),
-        SensorSpec::Ping | SensorSpec::Uptime | SensorSpec::Local(_) => {
-            (None, None, None, None, None)
-        }
+        SensorSpec::Ping
+        | SensorSpec::Uptime
+        | SensorSpec::Local(_)
+        | SensorSpec::Http(_)
+        | SensorSpec::Tcp(_)
+        | SensorSpec::Dns(_)
+        | SensorSpec::Tls(_) => (None, None, None, None, None),
     };
     let target = match spec {
         SensorSpec::Local(metric) => Some(metric.target()),
@@ -336,8 +346,8 @@ pub async fn create_sensor_with_state(
 
     let mut tx = pool.begin().await?;
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, enabled) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO sensors (device_id, name, kind, if_index, oid, oid_mode, scale, unit_label, target, params, enabled) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(device_id)
     .bind(name)
@@ -348,6 +358,7 @@ pub async fn create_sensor_with_state(
     .bind(scale)
     .bind(unit_label)
     .bind(target)
+    .bind(spec.params())
     .bind(i64::from(enabled))
     .fetch_one(&mut *tx)
     .await
@@ -359,12 +370,20 @@ pub async fn create_sensor_with_state(
         _ => e.into(),
     })?;
     for channel in spec.channels() {
-        sqlx::query("INSERT INTO channels (sensor_id, key, unit) VALUES (?, ?, ?)")
-            .bind(id)
-            .bind(channel.key)
-            .bind(channel.unit.as_str())
-            .execute(&mut *tx)
-            .await?;
+        let limits = spec.default_thresholds(channel.key);
+        sqlx::query(
+            "INSERT INTO channels (sensor_id, key, unit, warn_above, warn_below, down_above, down_below) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(channel.key)
+        .bind(channel.unit.as_str())
+        .bind(limits.warn_above)
+        .bind(limits.warn_below)
+        .bind(limits.down_above)
+        .bind(limits.down_below)
+        .execute(&mut *tx)
+        .await?;
     }
     tx.commit().await?;
     Ok(id)

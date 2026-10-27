@@ -628,6 +628,7 @@ impl Sensor for LocalSensor {
     fn poll<'a>(&'a mut self, ctx: &'a mut PollContext<'_>) -> PollFuture<'a> {
         Box::pin(async move {
             Ok(Measurement {
+                note: None,
                 channels: self.measure(ctx.now_ms).await?,
             })
         })

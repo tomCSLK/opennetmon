@@ -44,7 +44,7 @@ pub async fn connect(path: &Path) -> Result<SqlitePool> {
 pub async fn migrate(pool: &SqlitePool) -> Result<()> {
     sqlx::migrate!("./migrations").run(pool).await?;
     allow_devices_without_profile(pool).await?;
-    allow_local_sensors(pool).await?;
+    current_sensors_table(pool).await?;
     Ok(())
 }
 
@@ -114,24 +114,48 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
     .await
 }
 
-/// Sensors of the machine opennetmon runs on (kind `local`, measured value in the new column
-/// `target`, e.g. `disk:/var`) do not fit the kind check of migration 0005. Like
-/// [`allow_devices_without_profile`], the check only changes by rebuilding the table outside a
-/// migration transaction; it runs once. Later migrations that add columns to `sensors` must add
-/// them here as well.
-async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
-    let has_target: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pragma_table_info('sensors') WHERE name = 'target'",
-    )
-    .fetch_one(pool)
-    .await?;
-    if has_target > 0 {
+/// The `sensors` table of migration 0005 has a check on `kind` that later sensor types do not fit:
+/// sensors of the machine opennetmon runs on (kind `local`, measured value in `target`, e.g.
+/// `disk:/var`) and service sensors (`http`, `tcp`, `dns`, `tls`, settings as JSON in `params`).
+/// Like [`allow_devices_without_profile`], the check only changes by rebuilding the table outside a
+/// migration transaction; it runs once per schema change (detected by the newest column) and copies
+/// the columns the old table has. Later migrations that add columns to `sensors` must add them here
+/// as well, and a new sensor type needs a new newest column (or another check) to trigger it.
+async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
+    let existing: Vec<String> = sqlx::query_scalar("SELECT name FROM pragma_table_info('sensors')")
+        .fetch_all(pool)
+        .await?;
+    if existing.iter().any(|c| c == "params") {
         return Ok(());
     }
-    const COLUMNS: &str = "id, device_id, name, kind, if_index, oid, oid_mode, scale, enabled, \
-                           created_at, unit_label, position, pause_until_ms, pause_reason, \
-                           interval_secs, dependency, dependency_sensor_id, dependency_delay_secs, \
-                           dependency_master";
+    const COLUMNS: [&str; 20] = [
+        "id",
+        "device_id",
+        "name",
+        "kind",
+        "if_index",
+        "oid",
+        "oid_mode",
+        "scale",
+        "enabled",
+        "created_at",
+        "unit_label",
+        "position",
+        "pause_until_ms",
+        "pause_reason",
+        "target",
+        "interval_secs",
+        "dependency",
+        "dependency_sensor_id",
+        "dependency_delay_secs",
+        "dependency_master",
+    ];
+    let copied = COLUMNS
+        .iter()
+        .filter(|c| existing.iter().any(|e| e == *c))
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
     rebuild_without_foreign_keys(pool, "sensors", |tx| {
         Box::pin(async move {
             sqlx::query(
@@ -139,7 +163,7 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
                     id             INTEGER PRIMARY KEY,
                     device_id      INTEGER NOT NULL REFERENCES devices (id) ON DELETE CASCADE,
                     name           TEXT NOT NULL COLLATE NOCASE,
-                    kind           TEXT NOT NULL CHECK (kind IN ('ping', 'uptime', 'if_traffic', 'if_status', 'oid', 'local')),
+                    kind           TEXT NOT NULL CHECK (kind IN ('ping', 'uptime', 'if_traffic', 'if_status', 'oid', 'local', 'http', 'tcp', 'dns', 'tls')),
                     if_index       INTEGER,
                     oid            TEXT,
                     oid_mode       TEXT CHECK (oid_mode IN ('gauge', 'counter')),
@@ -152,6 +176,8 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
                     pause_reason   TEXT NOT NULL DEFAULT '',
                     -- what a local sensor measures, e.g. 'cpu' or 'disk:/var'
                     target         TEXT,
+                    -- settings of a service sensor (JSON, checked by the program)
+                    params         TEXT CHECK (params IS NULL OR json_valid(params)),
                     -- own polling interval (migration 0017); NULL = the device's
                     interval_secs  INTEGER CHECK (interval_secs IS NULL OR interval_secs BETWEEN 10 AND 3600),
                     -- dependencies (migration 0019)
@@ -163,11 +189,15 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
                     -- Exactly the columns that belong to the kind are set.
                     CHECK (
                         CASE kind
-                            WHEN 'if_traffic' THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
-                            WHEN 'if_status'  THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
-                            WHEN 'oid'        THEN if_index IS NULL AND oid IS NOT NULL AND oid_mode IS NOT NULL AND scale IS NOT NULL AND target IS NULL
-                            WHEN 'local'      THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NOT NULL
-                            ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
+                            WHEN 'if_traffic' THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL
+                            WHEN 'if_status'  THEN if_index IS NOT NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL
+                            WHEN 'oid'        THEN if_index IS NULL AND oid IS NOT NULL AND oid_mode IS NOT NULL AND scale IS NOT NULL AND target IS NULL AND params IS NULL
+                            WHEN 'local'      THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NOT NULL AND params IS NULL
+                            WHEN 'http'       THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NOT NULL
+                            WHEN 'tcp'        THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NOT NULL
+                            WHEN 'dns'        THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NOT NULL
+                            WHEN 'tls'        THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NOT NULL
+                            ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL
                         END
                     )
                 ) STRICT",
@@ -175,7 +205,7 @@ async fn allow_local_sensors(pool: &SqlitePool) -> Result<()> {
             .execute(&mut **tx)
             .await?;
             sqlx::query(&format!(
-                "INSERT INTO sensors_new ({COLUMNS}) SELECT {COLUMNS} FROM sensors"
+                "INSERT INTO sensors_new ({copied}) SELECT {copied} FROM sensors"
             ))
             .execute(&mut **tx)
             .await?;

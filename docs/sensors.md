@@ -11,6 +11,10 @@ All sensor types implement the trait `Sensor` (`src/sensors/mod.rs`); the poller
 | Interface status (`if_status`) | `oper_status` (code) | `ifOperStatus` (1 = up, 2 = down, 3 = testing, 5 = dormant, 7 = lowerLayerDown) |
 | OID (`oid`) | `value` | any numeric OID, mode *gauge* (value × factor) or *counter* (rate/s × factor) |
 | This server (`local`) | depends on the value, see “This server” | reads the machine opennetmon runs on directly (no SNMP) |
+| HTTP(S) (`http`) | `rtt` (ms) | one request to a URL, see “Services” |
+| TCP port (`tcp`) | `rtt` (ms) | opens a TCP connection to a port of the device |
+| DNS (`dns`) | `rtt` (ms) | asks the device as DNS server for an A or AAAA record |
+| TLS certificate (`tls`) | `days` (days until expiry) | TLS handshake with a port of the device, reads the server's certificate |
 
 Traffic rates are in bit/s (octets × 8). A poll needs exactly one SNMP GET per sensor; counters also fetch `sysUpTime`.
 
@@ -49,6 +53,37 @@ Sensors for the machine opennetmon itself runs on – without `snmpd`, without c
 - **Database:** new type `local` and column `target`. SQLite can only change the table's `CHECK` by rebuilding the table; `storage::migrate` does that once
   at the first start with foreign keys switched off (`allow_local_sensors`, as for devices without SNMP).
 
+## Services (`src/sensors/service.rs`, `src/sensors/dns.rs`, `src/http_client.rs`)
+
+Sensors that check whether a service answers, not only whether the device is alive: a website, Home Assistant, an AdGuard instance, the Omada
+controller, a reverse proxy and its certificate. They need no SNMP and work on devices with “No SNMP” as well; for a target without a device of its
+own (e.g. a website) add a device without SNMP. They are added with “Add sensor”; the form shows only the fields of the chosen type
+(`static/sensor-form.js`; without the script all fields are shown and the server ignores those of other types). The settings are stored as JSON in
+`sensors.params` and cannot be changed afterwards (delete the sensor and add it again).
+
+| Type | Settings | Fine when | Message when fine |
+|---|---|---|---|
+| HTTP(S) | URL (empty: `https://<device>/`), expected status codes (codes and ranges, default `200-399`), optional keyword in the content (case-sensitive, searched in the first MiB), follow redirects (up to 5), check the certificate, only HEAD | the status is expected and the keyword found | `HTTP 200` |
+| TCP port | port | the connection opens | `Port 22 open` |
+| DNS | name, type A or AAAA, port of the server (53), optional expected address | the server answers with at least one address (and the expected one) | the addresses |
+| TLS certificate | port (443), server name (SNI; empty: the device's address), check the certificate | the chain is trusted and the name matches (if checked) | `valid until 2026-12-27 · issued by R11` |
+
+- **Failures** count like a failed ping: the first one is a warning, the second in a row is down. The message says why (connection refused, timeout,
+  `Unexpected status code 503.`, keyword not found, wrong DNS answer, `The name … does not exist`, certificate not trusted with the reason).
+- **Response time** (`rtt`): HTTP until the response head arrived (connection, TLS and request included; with redirects the last request), TCP the
+  connection, DNS the answer. Thresholds as for any channel.
+- **Certificates:** the channel `days` starts with thresholds *warning below 14 days* and *down below 3 days*, changeable like any threshold. Let's
+  Encrypt renews 30 days before expiry, so a warning means the renewal failed. An expired certificate still reports its (negative) days; with “check
+  the certificate” any other problem (unknown issuer, wrong name, self-signed) fails the sensor. Switch the check off for self-signed certificates
+  (e.g. opennetmon itself or the Omada controller) to watch only their expiry.
+- **HTTP client** (`http_client`): HTTP/1.1, one connection per request, rustls with the Mozilla root certificates (`webpki-roots`, no OpenSSL),
+  `User-Agent: opennetmon/<version>`, no cookies, one deadline (the device's timeout) for the whole request including redirects. URLs with a user
+  name or password are refused, because the URL is stored and shown as it is. The certificate's expiry and issuer are read with `x509-parser`.
+- **DNS:** a small query of its own over UDP (`sensors::dns`: query, answer with compressed names, A/AAAA). It asks the device directly rather than the
+  system resolver, so a failing AdGuard instance shows up even while the other one answers for the system.
+- The timeout is the device's; as with SNMP, choose the interval of a certificate sensor freely (e.g. 3600 s per sensor).
+- Tests: local HTTP, HTTPS and DNS test servers (`http_client::testserver`, `dns::testserver`); certificates from `rcgen` with chosen expiry.
+
 ## Counters and rates (`src/sensors/counter.rs`)
 
 Rate = difference / time delta. **No value is written** (instead of an outlier) if
@@ -64,7 +99,9 @@ A confirmed 32-bit wrap (access points) is calculated correctly. If a device swi
 ## Database (migration `0005`)
 
 - `sensors`: device (`ON DELETE CASCADE`), name (unique per device, case-insensitive), type and the columns matching the type
-  (`if_index`; `oid`, `oid_mode`, `scale`); a `CHECK` enforces that exactly the matching columns are set; `enabled`.
+  (`if_index`; `oid`, `oid_mode`, `scale`; `target` for “This server”; `params` (JSON) for services); a `CHECK` enforces that exactly the matching
+  columns are set; `enabled`. New types do not fit the type check of migration 0005: `storage::current_sensors_table` rebuilds the table once
+  (outside a migration transaction, foreign keys checked afterwards) and copies the columns the old table has.
 - `channels`: per sensor the channels of its type (`key`, `unit`), created in the same transaction as the sensor.
 - `samples`: `(channel_id, ts, value)`, `ts` in milliseconds since the Unix epoch (UTC), primary key `(channel_id, ts)`
   (`WITHOUT ROWID`); a second value for the same timestamp is ignored. Deleting a sensor removes its channels and values too.

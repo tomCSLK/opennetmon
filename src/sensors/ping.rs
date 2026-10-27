@@ -75,6 +75,7 @@ impl Sensor for PingSensor {
                 .await
                 .map_err(|e| SensorError::Unreachable(e.to_string()))?;
             Ok(Measurement {
+                note: None,
                 channels: vec![ChannelReading {
                     key: "rtt".to_owned(),
                     unit: Unit::Milliseconds,

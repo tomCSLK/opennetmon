@@ -17,7 +17,7 @@ assess-above-down = { $channel }: { $value } is above the down limit { $limit }
 assess-below-down = { $channel }: { $value } is below the down limit { $limit }
 assess-ok = OK
 
-poll-no-snmp = This device has no SNMP set up (ping only).
+poll-no-snmp = This device has no SNMP set up (only ping, services and the values of this server).
 poll-profile-missing = The device's SNMP profile no longer exists.
 poll-credentials-unreadable = The SNMP credentials cannot be read.
 
@@ -41,7 +41,7 @@ channel-error = { $channel }: { $message }
 states-none = This sensor has no named status values.
 states-choose = { $value }: please choose a rating.
 
-sensors-ping-only = no SNMP, ping only
+sensors-ping-only = no SNMP
 sensors-find-values = Find values
 sensors-find-interfaces = Find interfaces
 count-active = { $count } active
@@ -78,7 +78,7 @@ sensors-scale = Factor
 sensors-unit = Unit (optional)
 sensors-unit-placeholder = empty: from the MIB
 sensors-name-hint = Without a name the sensor is named after the MIB object (e.g. “tpSysMonitorCpu5Seconds.1”).
-sensors-no-snmp-hint = This device has no SNMP profile, so only ping and the values of this server are available. For uptime, interfaces and custom values choose an SNMP profile under “Edit device”.
+sensors-no-snmp-hint = This device has no SNMP profile, so only ping, services (HTTP, TCP, DNS, TLS) and the values of this server are available. For uptime, interfaces and custom values choose an SNMP profile under “Edit device”.
 add = Add
 
 discover-heading = Interfaces of { $device }

@@ -13,7 +13,7 @@ On the sensor page of a device, in the section **Device template** (`/devices/<i
 | Name | free, unique (suggestion: the name of the device) |
 | Device identification | prefilled with the device's `sysObjectID`, e.g. `1.3.6.1.4.1.11863.5.134` (SG2008) or `…11863.5.154` (SG2008P); empty = can only be chosen by hand |
 | Traffic, interface status | **all active ports** of the target device, **all ports** (inactive ones too), **the same ports** (by port name, with the sensor names of this device) or do not take over |
-| Other sensors | ping, uptime and custom values (e.g. PoE, CPU, memory) individually by ticking them |
+| Other sensors | ping, uptime, custom values (e.g. PoE, CPU, memory) and services (HTTP, TCP, DNS, TLS certificate) individually by ticking them |
 
 - Name, state (active/paused), factor, unit, thresholds and the rating of status values are taken over. With “active/all ports”, the thresholds only apply
   if all interface sensors of this kind on the source device have the same ones; the new sensors are active if at least one on the source device is active.
@@ -21,6 +21,8 @@ On the sensor page of a device, in the section **Device template** (`/devices/<i
   (on TP-Link, `Vlan-interface1` counts as well).
 - “The same ports” needs the interfaces of the source device; if it is not reachable, the option is locked.
 - An empty template is rejected.
+- In the URL of an HTTP sensor, the address of the source device becomes `{host}`, which stands for the device the template is applied to
+  (`https://192.0.2.10:8443/` → `https://{host}:8443/`); URLs to other hosts stay as they are.
 
 ## Applying a template
 
@@ -30,7 +32,8 @@ On the sensor page of a device, in the section **Device template** (`/devices/<i
 - **Later** with “Apply template” on the sensor page (`/devices/<id>/template/apply`); the template matching the device identification is preselected,
   otherwise the one used last. This way, for example, newly used ports can be added.
 - Only what is missing is created: ping/uptime if the device has no such sensor yet; interface sensors if there is none of this kind for the interface yet;
-  custom values if the OID is not monitored yet. **Existing sensors are never changed or deleted.**
+  custom values if the OID is not monitored yet; services if the device has no sensor with exactly these settings yet.
+  **Existing sensors are never changed or deleted.**
 - Custom values are checked with a GET first; if the device returns no number (e.g. no PoE on the SG2008), the sensor is **skipped** and listed with the
   reason on the result page. The same applies to ports of “the same ports” that do not exist on the target device.
 - Names already in use are numbered (“Uptime (2)”).

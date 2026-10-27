@@ -225,6 +225,16 @@ fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
         ),
         state: state_label(t, o.enabled),
     }));
+    items.extend(body.services.iter().map(|item| ItemView {
+        name: item.name.clone(),
+        detail: format!(
+            "{}{}{}",
+            item.service.spec(tpl::HOST_PLACEHOLDER).describe(t),
+            limits_note(t, &item.limits),
+            master_note(t, item.master)
+        ),
+        state: state_label(t, item.enabled),
+    }));
     items
 }
 
@@ -484,7 +494,13 @@ async fn render_new(
         .filter(|s| {
             matches!(
                 s.spec,
-                SensorSpec::Ping | SensorSpec::Uptime | SensorSpec::Oid { .. }
+                SensorSpec::Ping
+                    | SensorSpec::Uptime
+                    | SensorSpec::Oid { .. }
+                    | SensorSpec::Http(_)
+                    | SensorSpec::Tcp(_)
+                    | SensorSpec::Dns(_)
+                    | SensorSpec::Tls(_)
             )
         })
         .map(|s| SourceSensor {
@@ -579,6 +595,7 @@ pub async fn create(
             master: crate::storage::pauses::load_all(&state.pool, crate::web::sensors::now_ms())
                 .await?
                 .master_of(id),
+            host: device.host.clone(),
         },
     );
     let outcome = match built {
@@ -775,7 +792,15 @@ pub async fn apply_and_render(
         }
     };
     page.template_name = Some(template.name.clone());
-    match tpl::apply(&state.pool, &mut client, page.device.id, &template.body).await {
+    match tpl::apply(
+        &state.pool,
+        &mut client,
+        page.device.id,
+        &page.device.host,
+        &template.body,
+    )
+    .await
+    {
         Ok(outcome) => {
             store::set_template_of_device(&state.pool, page.device.id, Some(template.id)).await?;
             tracing::info!(

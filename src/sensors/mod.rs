@@ -3,9 +3,11 @@
 //! New sensor types implement [`Sensor`]; the poller never special-cases a type.
 
 pub mod counter;
+pub mod dns;
 pub mod format;
 pub mod local;
 pub mod ping;
+pub mod service;
 pub mod snmp;
 pub mod spec;
 
@@ -13,6 +15,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
+use crate::i18n::Msg;
 use crate::snmp::{SnmpClient, SnmpError};
 use ping::PingClients;
 
@@ -31,6 +34,8 @@ pub enum Unit {
     Bytes,
     /// Degrees Celsius.
     Celsius,
+    /// Days, e.g. until a certificate expires.
+    Days,
 }
 
 /// One channel value of a poll. `value: None` means "nothing to store" (first poll of a
@@ -46,6 +51,9 @@ pub struct ChannelReading {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Measurement {
     pub channels: Vec<ChannelReading>,
+    /// What the poll found when everything is fine, e.g. `HTTP 200`; shown as the sensor's message
+    /// unless a threshold or rating says otherwise.
+    pub note: Option<Msg>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -58,6 +66,9 @@ pub enum SensorError {
     NoSession,
     #[error("host not reachable: {0}")]
     Unreachable(String),
+    /// A check of a service failed (wrong HTTP status, DNS answer, certificate …).
+    #[error("{0}")]
+    Check(Msg),
 }
 
 /// What a sensor may use during a poll.

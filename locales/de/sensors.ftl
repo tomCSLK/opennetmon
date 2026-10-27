@@ -17,7 +17,7 @@ assess-above-down = { $channel }: { $value } liegt über der Ausfallgrenze { $li
 assess-below-down = { $channel }: { $value } liegt unter der Ausfallgrenze { $limit }
 assess-ok = OK
 
-poll-no-snmp = Für dieses Gerät ist kein SNMP eingerichtet (nur Ping).
+poll-no-snmp = Für dieses Gerät ist kein SNMP eingerichtet (nur Ping, Dienste und die Werte dieses Servers).
 poll-profile-missing = Das SNMP-Profil des Geräts existiert nicht mehr.
 poll-credentials-unreadable = Die SNMP-Zugangsdaten sind nicht lesbar.
 
@@ -41,7 +41,7 @@ channel-error = { $channel }: { $message }
 states-none = Dieser Sensor hat keine benannten Statuswerte.
 states-choose = { $value }: Bitte eine Bewertung wählen.
 
-sensors-ping-only = kein SNMP, nur Ping
+sensors-ping-only = kein SNMP
 sensors-find-values = Werte suchen
 sensors-find-interfaces = Interfaces suchen
 count-active = { $count } aktiv
@@ -78,7 +78,7 @@ sensors-scale = Faktor
 sensors-unit = Einheit (optional)
 sensors-unit-placeholder = leer: aus der MIB
 sensors-name-hint = Ohne Namen heißt der Sensor wie das MIB-Objekt (z. B. „tpSysMonitorCpu5Seconds.1“).
-sensors-no-snmp-hint = Dieses Gerät hat kein SNMP-Profil, daher gibt es nur Ping und die Werte dieses Servers. Für Uptime, Interfaces und eigene Werte unter „Gerät bearbeiten“ ein SNMP-Profil wählen.
+sensors-no-snmp-hint = Dieses Gerät hat kein SNMP-Profil, daher gibt es nur Ping, Dienste (HTTP, TCP, DNS, TLS) und die Werte dieses Servers. Für Uptime, Interfaces und eigene Werte unter „Gerät bearbeiten“ ein SNMP-Profil wählen.
 add = Hinzufügen
 
 discover-heading = Interfaces von { $device }

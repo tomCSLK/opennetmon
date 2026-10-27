@@ -88,7 +88,7 @@ struct FormTemplate {
     groups: Vec<SelectOption>,
     profiles: Vec<SelectOption>,
     kinds: Vec<KindOption>,
-    /// "Kein SNMP – nur Ping" is selected.
+    /// "Kein SNMP – Ping und Dienste" is selected.
     no_snmp: bool,
     /// Device templates to apply right after creating (empty when editing or without templates).
     templates: Vec<crate::web::templates::TemplateOption>,
@@ -1263,7 +1263,7 @@ mod tests {
         let page = send(&h.app, get("/devices/new", Some(&admin))).await;
         assert!(
             page.body
-                .contains("<option value=\"none\" selected>Kein SNMP – nur Ping</option>")
+                .contains("<option value=\"none\" selected>Kein SNMP – Ping und Dienste</option>")
         );
         let reply = send(
             &h.app,
@@ -1292,10 +1292,7 @@ mod tests {
         );
 
         let page = send(&h.app, get(reply.location(), Some(&admin))).await;
-        assert!(
-            page.body.contains("Gerät ohne SNMP angelegt")
-                && page.body.contains("kein SNMP, nur Ping")
-        );
+        assert!(page.body.contains("Gerät ohne SNMP angelegt") && page.body.contains("kein SNMP"));
         for absent in [
             "/test\"",
             "/values\"",
@@ -1389,7 +1386,7 @@ mod tests {
         let (admin, csrf) = login(&h, "anna").await;
         let form = send(&h.app, get("/devices/new", Some(&admin))).await;
         assert!(form.body.contains("<h1>New device</h1>"));
-        assert!(form.body.contains("No SNMP – ping only"));
+        assert!(form.body.contains("No SNMP – ping and services"));
         let bad = ping_only(&csrf, "Drucker", "300.1.1.1");
         let refused = send(&h.app, post("/devices", Some(&admin), &bad)).await;
         assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);

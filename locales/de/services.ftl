@@ -1,0 +1,63 @@
+# Sensoren für Dienste: HTTP(S), TCP-Port, DNS, TLS-Zertifikat (sensors::service).
+sensors-type-http = HTTP(S)-Abfrage
+sensors-type-tcp = TCP-Port
+sensors-type-dns = DNS-Server (dieses Gerät)
+sensors-type-tls = TLS-Zertifikat
+service-fields-http = Nur für HTTP(S)
+service-fields-tcp = Nur für TCP-Port
+service-fields-dns = Nur für DNS
+service-fields-tls = Nur für TLS-Zertifikat
+service-url = URL
+service-url-hint = Vollständige Adresse mit http:// oder https://. Leer: https://{ $host }/
+service-expect = Erwartete Statuscodes
+service-expect-hint = Codes und Bereiche mit Komma getrennt, z. B. 200-299,301. Leer: 200-399 (Erfolg und Weiterleitungen).
+service-keyword = Schlüsselwort im Inhalt (optional)
+service-head = Nur den Kopf abfragen (HEAD, ohne Inhalt)
+service-follow-redirects = Weiterleitungen folgen (höchstens 5)
+service-verify-tls = Zertifikat prüfen (Kette und Name)
+service-verify-hint = Ausschalten für selbst signierte Zertifikate, z. B. des Omada-Controllers oder von opennetmon selbst.
+service-port = Port
+service-dns-name = Gefragter Name
+service-dns-type = Typ
+service-dns-expect = Erwartete Adresse (optional)
+service-dns-hint = Gefragt wird das Gerät selbst als DNS-Server (z. B. eine AdGuard-Instanz), nicht der DNS-Server dieses Rechners.
+service-server-name = Servername (SNI, optional)
+service-tls-hint = Leer: die Adresse des Geräts. Warnung unter { $warn } Tagen, Ausfall unter { $down } Tagen bis zum Ablauf (änderbar als Grenzwerte des Kanals).
+service-name-http = HTTP(S)
+service-name-tcp = TCP-Port { $port }
+service-name-dns = DNS { $name }
+service-name-tls = Zertifikat Port { $port }
+service-describe-keyword = { "" } · Schlüsselwort „{ $keyword }“
+service-describe-no-verify = { "" } · ohne Zertifikatsprüfung
+service-describe-tcp = TCP-Port { $port }
+service-describe-dns = DNS { $type } { $name }
+service-describe-tls = TLS-Zertifikat an Port { $port }
+service-url-invalid = Die URL ist ungültig. Erlaubt sind vollständige Adressen mit http:// oder https:// ohne Benutzername und Passwort.
+service-expect-invalid = Die erwarteten Statuscodes sind ungültig. Beispiel: 200-299,301
+service-keyword-invalid = Das Schlüsselwort ist zu lang oder enthält Steuerzeichen (höchstens 200 Zeichen).
+service-keyword-needs-get = Ein Schlüsselwort braucht den Inhalt: dafür nicht nur den Kopf abfragen.
+service-port-invalid = Der Port muss zwischen 1 und 65535 liegen.
+service-dns-name-invalid = Der Name ist kein gültiger DNS-Name.
+service-dns-expect-family = Die erwartete Adresse passt nicht zum Typ (A: IPv4, AAAA: IPv6).
+service-dns-expect-invalid = Die erwartete Adresse ist keine IP-Adresse.
+service-server-name-invalid = Der Servername ist kein gültiger Name und keine IP-Adresse.
+service-timeout = Keine Antwort innerhalb des Timeouts.
+service-connect-failed = Keine Verbindung: { $detail }
+service-tls-failed = TLS-Verbindung fehlgeschlagen: { $detail }
+service-http-failed = HTTP-Fehler: { $detail }
+service-http-status = Unerwarteter Statuscode { $code }.
+service-keyword-missing = Schlüsselwort „{ $keyword }“ nicht im Inhalt gefunden.
+service-port-open = Port { $port } offen
+service-dns-failed = DNS-Fehler: { $detail }
+service-dns-no-such-name = Den Namen { $name } gibt es laut Server nicht.
+service-dns-no-address = Der Server kennt für { $name } keine { $type }-Adresse.
+service-dns-mismatch = Erwartet { $expected }, geantwortet: { $found }
+service-tls-untrusted = Zertifikat nicht vertrauenswürdig: { $detail }
+service-tls-unreadable = Das Zertifikat ließ sich nicht lesen.
+service-tls-valid = gültig bis { $date } · ausgestellt von { $issuer }
+channel-days = Tage bis Ablauf
+value-days =
+    { $days ->
+        [one] { $days } Tag
+       *[other] { $days } Tage
+    }

@@ -63,6 +63,7 @@ pub fn format_value(t: Lang, unit: Unit, value: f64) -> String {
         Unit::State => num(t, value, 0),
         Unit::Bytes => bytes(t, value),
         Unit::Celsius => format!("{} °C", num(t, value, 1)),
+        Unit::Days => t.get1("value-days", "days", value.floor() as i64),
     }
 }
 
@@ -91,6 +92,7 @@ pub fn input_unit(unit: Unit) -> &'static str {
         Unit::PerSecond => "/s",
         Unit::Bytes => "GB",
         Unit::Celsius => "°C",
+        Unit::Days => "d",
         Unit::Count | Unit::State => "",
     }
 }
@@ -123,6 +125,7 @@ pub fn channel_label(key: &str) -> Msg {
         "swap_used" => Msg::new("channel-swap-used"),
         "free" => Msg::new("channel-free"),
         "temperature" => Msg::new("channel-temperature"),
+        "days" => Msg::new("channel-days"),
         other => Msg::Text(other.to_owned()),
     }
 }
@@ -185,6 +188,9 @@ mod tests {
         assert_eq!(format_value(Lang::De, Unit::PerSecond, 100.0), "100 /s");
         assert_eq!(format_value(Lang::De, Unit::State, 1.0), "1");
         assert_eq!(format_value(Lang::De, Unit::Celsius, 45.25), "45,2 °C");
+        assert_eq!(format_value(Lang::De, Unit::Days, 13.6), "13 Tage");
+        assert_eq!(format_value(Lang::En, Unit::Days, 1.2), "1 day");
+        assert_eq!(format_value(Lang::En, Unit::Days, -1.5), "-2 days");
         assert_eq!(format_value(Lang::De, Unit::Bytes, 512.0), "512 B");
         assert_eq!(format_value(Lang::De, Unit::Bytes, 12_345.0), "12,3 KB");
         assert_eq!(

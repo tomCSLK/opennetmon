@@ -2,6 +2,7 @@
 js-decimal = ,
 js-date = DD.MM.YYYY
 js-day = DD.MM.
+js-unit-day = Tag
 js-unit-days = Tage
 js-unit-hours = Std.
 js-unit-minutes = Min.

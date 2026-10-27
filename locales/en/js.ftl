@@ -2,6 +2,7 @@
 js-decimal = .
 js-date = MM/DD/YYYY
 js-day = MM/DD
+js-unit-day = day
 js-unit-days = days
 js-unit-hours = h
 js-unit-minutes = min

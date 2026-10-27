@@ -9,6 +9,11 @@ template-custom-values =
         [one] { $count } custom value
        *[other] { $count } custom values
     }
+template-services =
+    { $count ->
+        [one] { $count } service
+       *[other] { $count } services
+    }
 template-empty = empty
 template-ports-same =
     { $count ->

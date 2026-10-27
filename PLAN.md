@@ -376,7 +376,14 @@ Aufwand grob: klein = bis ein halber Tag, mittel = ein bis zwei Tage.
 | L | Rotation von `secret.key` | klein bis mittel | Betrieb |
 | M | Änderungsprotokoll (wer hat was geändert) | klein bis mittel | erst ab mehreren Admins |
 
-### E. Sensoren für Dienste: HTTP(S), TCP-Port, DNS, TLS-Zertifikat
+### E. Sensoren für Dienste: HTTP(S), TCP-Port, DNS, TLS-Zertifikat – umgesetzt 2026-10-27
+
+**Umgesetzt** wie geplant, alle vier Typen, Ablaufdatum über `x509-parser` (Beschreibung in `docs/sensors.md`, „Services“). Ergänzungen: Gerätevorlagen
+übernehmen die Dienste, eine URL zum Quellgerät wird dabei zu `{host}`; die Texte für Geräte ohne SNMP heißen jetzt „Kein SNMP – Ping und Dienste“; ein
+abgelaufenes Zertifikat meldet seine (negativen) Tage. Die Einstellungen lassen sich nach dem Anlegen nicht ändern (wie bei den übrigen Typen).
+Geprüft: Neuaufbau der Tabelle auf einer Kopie der Testdaten (alle Spalten gleich, `integrity_check` ok), Formular im Browser hell/dunkel, echte Abfragen
+einer frischen Instanz gegen ciesliks.de (HTTP 200, Zertifikat 61 Tage, Port 443), 1.1.1.1 (A, AAAA, falsche Adresse, unbekannter Name) und sich selbst.
+
 
 Ziel: prüfen, ob ein Dienst antwortet, nicht nur ob das Gerät lebt. Beispiele: ciesliks.de, Home Assistant, beide AdGuard-Instanzen (DNS),
 Omada-Controller, Traefik und das Let's-Encrypt-Wildcard-Zertifikat. Für Ziele ohne eigenes Gerät (z. B. ciesliks.de) legt man ein Gerät ohne SNMP an.
@@ -599,7 +606,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (488, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (510, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

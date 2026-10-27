@@ -14,6 +14,7 @@ use crate::devices::MAX_NAME_LEN;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::Error;
 use crate::i18n::{Lang, Msg};
+use crate::sensors::service::{DnsCheck, HttpCheck, TcpCheck, TlsCheck};
 use crate::sensors::snmp::{OidMode, numeric};
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
 use crate::snmp::{SYS_OBJECT_ID, SnmpClient, SnmpError, SnmpValue};
@@ -198,6 +199,82 @@ impl OidItem {
     }
 }
 
+/// Stands for the device's host in the URL of an HTTP sensor of a template.
+pub const HOST_PLACEHOLDER: &str = "{host}";
+
+/// The settings of a service sensor (HTTP, TCP, DNS, TLS).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Service {
+    Http(HttpCheck),
+    Tcp(TcpCheck),
+    Dns(DnsCheck),
+    Tls(TlsCheck),
+}
+
+impl Service {
+    fn from_spec(spec: &SensorSpec, host: &str) -> Option<Self> {
+        Some(match spec {
+            SensorSpec::Http(c) => {
+                // A URL to the source device itself points to each device the template is applied to.
+                let mut c = c.clone();
+                if let Ok(target) = crate::http_client::parse_url(&c.url)
+                    && target.host.eq_ignore_ascii_case(host)
+                    && let Some(at) = c.url.find("://").map(|i| i + 3)
+                {
+                    let authority = target.authority.as_str();
+                    let host_len = if authority.starts_with('[') {
+                        authority.find(']').map_or(authority.len(), |i| i + 1)
+                    } else {
+                        authority.find(':').unwrap_or(authority.len())
+                    };
+                    c.url = format!(
+                        "{}{HOST_PLACEHOLDER}{}",
+                        &c.url[..at],
+                        &c.url[at + host_len..]
+                    );
+                }
+                Self::Http(c)
+            }
+            SensorSpec::Tcp(c) => Self::Tcp(c.clone()),
+            SensorSpec::Dns(c) => Self::Dns(c.clone()),
+            SensorSpec::Tls(c) => Self::Tls(c.clone()),
+            _ => return None,
+        })
+    }
+
+    /// The sensor for a device with `host`.
+    pub fn spec(&self, host: &str) -> SensorSpec {
+        match self {
+            Self::Http(c) => {
+                let mut c = c.clone();
+                let host = if host.contains(':') {
+                    format!("[{host}]")
+                } else {
+                    host.to_owned()
+                };
+                c.url = c.url.replace(HOST_PLACEHOLDER, &host);
+                SensorSpec::Http(c)
+            }
+            Self::Tcp(c) => SensorSpec::Tcp(c.clone()),
+            Self::Dns(c) => SensorSpec::Dns(c.clone()),
+            Self::Tls(c) => SensorSpec::Tls(c.clone()),
+        }
+    }
+}
+
+/// A service sensor of a template.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ServiceItem {
+    pub service: Service,
+    pub name: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub limits: Vec<Limits>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub master: bool,
+}
+
 /// What a template contains (stored as JSON).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Body {
@@ -210,6 +287,8 @@ pub struct Body {
     pub status: Option<PortRule>,
     #[serde(default)]
     pub oids: Vec<OidItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub services: Vec<ServiceItem>,
 }
 
 /// `„name“: message`
@@ -245,6 +324,7 @@ impl Body {
             && self.traffic.is_none()
             && self.status.is_none()
             && self.oids.is_empty()
+            && self.services.is_empty()
     }
 
     fn rules(&self) -> impl Iterator<Item = &PortRule> {
@@ -256,7 +336,7 @@ impl Body {
             return Err(Msg::new("template-version-unknown").with("version", self.version));
         }
         let ports: usize = self.rules().map(|r| r.ports.len()).sum();
-        if self.basics.len() + ports + self.oids.len() > MAX_ITEMS {
+        if self.basics.len() + ports + self.oids.len() + self.services.len() > MAX_ITEMS {
             return Err(Msg::new("template-too-many").with("count", MAX_ITEMS));
         }
         for b in &self.basics {
@@ -278,6 +358,14 @@ impl Body {
             let spec = o.spec().map_err(|m| named(&o.name, m))?;
             spec.validate().map_err(|m| named(&o.name, m))?;
             check_limits(&o.name, &o.limits)?;
+        }
+        for item in &self.services {
+            check_name(&item.name)?;
+            item.service
+                .spec("example.org")
+                .validate()
+                .map_err(|m| named(&item.name, m))?;
+            check_limits(&item.name, &item.limits)?;
         }
         Ok(())
     }
@@ -313,6 +401,9 @@ impl Body {
         }
         if !self.oids.is_empty() {
             parts.push(t.get1("template-custom-values", "count", self.oids.len()));
+        }
+        if !self.services.is_empty() {
+            parts.push(t.get1("template-services", "count", self.services.len()));
         }
         if parts.is_empty() {
             t.get("template-empty")
@@ -357,6 +448,8 @@ pub struct BuildOptions {
     pub status: PortChoice,
     /// The master sensor of the device, taken over if included.
     pub master: Option<i64>,
+    /// Host of the source device (URLs to it become [`HOST_PLACEHOLDER`]).
+    pub host: String,
 }
 
 fn port_rule(
@@ -443,6 +536,7 @@ pub fn build(
         traffic: port_rule(&all, traffic_index, options.traffic, interfaces)?,
         status: port_rule(&all, status_index, options.status, interfaces)?,
         oids: Vec::new(),
+        services: Vec::new(),
     };
     for s in sensors.iter().filter(|s| options.include.contains(&s.id)) {
         let limits = limits_of(&s.channels);
@@ -473,6 +567,17 @@ pub fn build(
                 limits,
                 master: options.master == Some(s.id),
             }),
+            SensorSpec::Http(_) | SensorSpec::Tcp(_) | SensorSpec::Dns(_) | SensorSpec::Tls(_) => {
+                if let Some(service) = Service::from_spec(&s.spec, &options.host) {
+                    body.services.push(ServiceItem {
+                        service,
+                        name: s.name.clone(),
+                        enabled: s.enabled,
+                        limits,
+                        master: options.master == Some(s.id),
+                    });
+                }
+            }
             // Interfaces follow the port rules; local sensors belong to one machine.
             SensorSpec::InterfaceTraffic { .. }
             | SensorSpec::InterfaceStatus { .. }
@@ -513,6 +618,8 @@ pub struct Facts<'a> {
     pub interfaces: Option<&'a [DiscoveredInterface]>,
     /// OIDs the device answered with a number.
     pub answering: &'a HashSet<Vec<u64>>,
+    /// Host of the device (for URLs with [`HOST_PLACEHOLDER`]).
+    pub host: &'a str,
 }
 
 /// Sensor names in use on a device (case-insensitive like the database) and numbering of duplicates.
@@ -690,6 +797,21 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
             master: o.master,
         });
     }
+
+    for item in &body.services {
+        let spec = item.service.spec(facts.host);
+        if facts.existing.iter().any(|s| s.spec == spec) {
+            out.present += 1;
+            continue;
+        }
+        out.create.push(NewSensor {
+            name: names.take(&item.name),
+            spec,
+            enabled: item.enabled,
+            limits: item.limits.clone(),
+            master: item.master,
+        });
+    }
     out
 }
 
@@ -773,6 +895,7 @@ pub async fn apply(
     pool: &SqlitePool,
     client: &mut SnmpClient,
     device_id: i64,
+    host: &str,
     body: &Body,
 ) -> Result<Outcome, ApplyError> {
     let existing = store::list_sensors(pool, device_id).await?;
@@ -788,6 +911,7 @@ pub async fn apply(
             existing: &existing,
             interfaces: interfaces.as_deref(),
             answering: &answering,
+            host,
         },
     );
     let mut created = Vec::with_capacity(plan.create.len());
@@ -932,6 +1056,7 @@ mod tests {
             traffic,
             status,
             master: None,
+            host: "192.0.2.10".to_owned(),
         }
     }
 
@@ -1010,6 +1135,7 @@ mod tests {
             traffic: PortChoice::Skip,
             status: PortChoice::Skip,
             master: None,
+            host: "192.0.2.10".to_owned(),
         };
         assert!(
             build(&sensors, None, &none)
@@ -1037,7 +1163,84 @@ mod tests {
             existing,
             interfaces,
             answering,
+            host: "192.0.2.20",
         }
+    }
+
+    #[test]
+    fn service_sensors_follow_the_device_they_are_applied_to() {
+        use crate::sensors::dns::RecordType;
+        let http = |url: &str| {
+            SensorSpec::Http(HttpCheck {
+                url: url.to_owned(),
+                head: false,
+                expect: "200-399".to_owned(),
+                keyword: None,
+                follow_redirects: true,
+                verify_tls: false,
+            })
+        };
+        let dns = SensorSpec::Dns(DnsCheck {
+            name: "example.org".to_owned(),
+            record: RecordType::A,
+            port: 53,
+            expect: None,
+        });
+        let mut tls = sensor(
+            12,
+            "Zertifikat",
+            SensorSpec::Tls(TlsCheck {
+                port: 443,
+                server_name: None,
+                verify: true,
+            }),
+            true,
+        );
+        tls.channels[0].key = "days".to_owned();
+        tls.channels[0].thresholds.warn_below = Some(14.0);
+        let sensors = vec![
+            sensor(10, "Web", http("https://192.0.2.10:8443/admin?x=1"), true),
+            sensor(11, "Extern", http("https://example.org/"), false),
+            sensor(13, "DNS", dns.clone(), true),
+            tls,
+        ];
+        let options = BuildOptions {
+            include: [10, 11, 12, 13].into(),
+            ..options(PortChoice::Skip, PortChoice::Skip)
+        };
+        let body = build(&sensors, None, &options).unwrap();
+        assert_eq!(body.services.len(), 4);
+        let json = body.to_json().unwrap();
+        assert!(json.contains("https://{host}:8443/admin?x=1"), "{json}");
+        assert!(json.contains("https://example.org/"), "{json}");
+        assert_eq!(Body::from_json(&json).unwrap(), body);
+        assert!(
+            body.summary(Lang::De).contains("4 Dienste"),
+            "{}",
+            body.summary(Lang::De)
+        );
+
+        let existing = vec![sensor(20, "Schon da", dns, true)];
+        let planned = plan(&body, &facts(&existing, None, &HashSet::new()));
+        assert_eq!(planned.present, 1);
+        let urls: Vec<String> = planned
+            .create
+            .iter()
+            .filter_map(|n| match &n.spec {
+                SensorSpec::Http(c) => Some(c.url.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            urls,
+            ["https://192.0.2.20:8443/admin?x=1", "https://example.org/"]
+        );
+        let cert = planned
+            .create
+            .iter()
+            .find(|n| n.name == "Zertifikat")
+            .unwrap();
+        assert_eq!(cert.limits[0].warn_below, Some(14.0));
     }
 
     #[test]

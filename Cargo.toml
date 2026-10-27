@@ -16,7 +16,8 @@ axum = { version = "0.8", features = ["multipart"] }
 chacha20poly1305 = "0.11.0"
 clap = { version = "4", features = ["derive"] }
 fluent-bundle = "0.16"
-hyper = { version = "1", features = ["http1", "server"] }
+http-body-util = "0.1.5"
+hyper = { version = "1", features = ["client", "http1", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "server", "server-graceful", "service", "tokio"] }
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
 rand = "0.9"
@@ -41,10 +42,11 @@ tower-http = { version = "0.6", features = ["trace", "compression-gzip", "set-he
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 unic-langid = "0.9"
+webpki-roots = "1.0.11"
+x509-parser = { version = "0.18.1", default-features = false }
 
 [dev-dependencies]
 base64 = "0.23.1"
-http-body-util = "0.1.5"
 tempfile = "3.27.0"
 tokio = { version = "1", features = ["io-util", "test-util"] }
 

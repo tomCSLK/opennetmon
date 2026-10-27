@@ -137,7 +137,7 @@ router instead of one per switch sensor.
 | Device type | Generic (default), Router, Switch, Access point, Firewall, Server, NAS / storage, PC, Printer, Camera, Smart home / IoT, Internet service; only chooses the icon in the overview |
 | Address | IPv4/IPv6 or a host name according to RFC 1123 (stored in lower case); `0.0.0.0`, `::`, multicast and broadcast are not allowed; `localhost` is allowed |
 | Group | optional |
-| SNMP profile | a profile or **“No SNMP – ping only”**; a profile used by devices cannot be deleted (a message instead of an error) |
+| SNMP profile | a profile or **“No SNMP – ping and services”**; a profile used by devices cannot be deleted (a message instead of an error) |
 | UDP port | 1–65535, default 161 |
 | Interval | 10–3600 s, default 60 s |
 | Timeout per attempt | 1–60 s, default 5 s |
@@ -153,19 +153,19 @@ All checks run on the server; after an error the entered values stay in the form
 the overview (the link there carries `?back=overview`), a group page (`?back=group-<id>`) or otherwise the device's sensor page. “New device” on a group
 page preselects the group (`/devices/new?group=<id>`) and returns there after saving.
 
-## Devices without SNMP (ping only)
+## Devices without SNMP (ping and services)
 
-For devices that do not speak SNMP (e.g. the ER605, printers, cameras), choose **“No SNMP – ping only”** in the SNMP profile field. This also works before
+For devices that do not speak SNMP (e.g. the ER605, printers, cameras), choose **“No SNMP – ping and services”** in the SNMP profile field. Websites and other services without a device of their own are added the same way. This also works before
 any SNMP profile exists.
 
 - When the device is created, an active **“Ping”** sensor is added right away and the page jumps to the device's sensor page. A chosen device template does
   not apply then.
-- The sensor page has no “Test connection”, “Find values”, “Find interfaces” and no device template section; “Add sensor” only offers ping (and the values of
-  this server, see `docs/sensors.md`). The overview shows “no SNMP” instead of the profile and no “Test” button. The server also rejects the SNMP actions with
+- The sensor page has no “Test connection”, “Find values”, “Find interfaces” and no device template section; “Add sensor” only offers ping, the services (HTTP(S), TCP port, DNS,
+  TLS certificate) and the values of this server (see `docs/sensors.md`). The overview shows “no SNMP” instead of the profile and no “Test” button. The server also rejects the SNMP actions with
   an explanation.
 - Later you can choose an SNMP profile under “Edit device”. Going back to “No SNMP” is only possible when the device has no SNMP sensors left.
 - Technical details: `devices.profile_id` is `NULL`. The poller opens no SNMP session for devices without SNMP sensors; should such a device still have an
-  SNMP sensor, it reports “This device has no SNMP set up (ping only).”
+  SNMP sensor, it reports “This device has no SNMP set up (only ping, services and the values of this server).”
 - The column was mandatory up to migration 0011. SQLite only allows this change by rebuilding the table, which needs foreign keys switched off (otherwise
   dropping the old table would take all sensors with it) – that is not possible in an sqlx migration. Therefore `storage::migrate` does it once at startup
   (`allow_devices_without_profile`: new table, copy the data, indexes, `PRAGMA foreign_key_check`, only then `COMMIT`); afterwards it is a no-op. Take a backup

@@ -384,6 +384,7 @@ input[type=checkbox] { width: 1.05rem; height: 1.05rem; accent-color: var(--acce
 label.inline { display: flex; align-items: center; gap: .6rem; font-weight: 500; margin: .55rem 0; }
 fieldset { margin: 1.1rem 0 0; padding: .4rem 1.1rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--surface-2); }
+fieldset[hidden] { display: none; }
 legend { padding: 0 .45rem; font-size: .8rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .hint, fieldset p.muted { margin: .45rem 0 0; font-size: .84rem; color: var(--muted); }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }

@@ -30,6 +30,7 @@
       case 'percent': return num(v, 1) + ' %';
       case 'bytes': return bytes(v);
       case 'celsius': return num(v, 1) + ' °C';
+      case 'days': { var d = Math.floor(v); return d + ' ' + (d === 1 ? T('unit-day') : T('unit-days')); }
       case 'per_second': return num(v, 3) + ' /s';
       case 'state':
         if (key === 'oper_status' && OPER_STATUS[Math.round(v)]) { return OPER_STATUS[Math.round(v)]; }

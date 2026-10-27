@@ -454,7 +454,8 @@ async fn poll_sensors(
             };
             let result = match tokio::time::timeout(cutoff, sensor.poll(&mut ctx)).await {
                 Ok(result) => result,
-                Err(_) => Err(SensorError::Snmp(SnmpError::Timeout)),
+                Err(_) if spec.uses_snmp() => Err(SensorError::Snmp(SnmpError::Timeout)),
+                Err(_) => Err(SensorError::Check(Msg::new("service-timeout"))),
             };
             if let Err(e) = &result
                 && spec.uses_snmp()
@@ -759,7 +760,7 @@ mod tests {
             (stored.status, stored.message.to_string().as_str()),
             (
                 Status::Warning,
-                "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping)."
+                "Für dieses Gerät ist kein SNMP eingerichtet (nur Ping, Dienste und die Werte dieses Servers)."
             )
         );
     }

@@ -3,11 +3,15 @@
 
 use super::local::{LocalMetric, LocalSensor, Paths};
 use super::ping::PingSensor;
+use super::service::{
+    DnsCheck, DnsSensor, HttpCheck, HttpSensor, TcpCheck, TcpSensor, TlsCheck, TlsSensor,
+};
 use super::snmp::{
     InterfaceStatusSensor, InterfaceTrafficSensor, OidMode, OidSensor, UptimeSensor,
 };
 use super::{Sensor, Unit};
 use crate::i18n::{Lang, Msg};
+use crate::status::Thresholds;
 
 pub const MAX_OID_ARCS: usize = 128;
 /// Largest accepted `ifIndex` (the value is a 31-bit integer in the IF-MIB).
@@ -32,7 +36,19 @@ pub enum SensorSpec {
     },
     /// A value of the machine opennetmon runs on ("Dieser Server").
     Local(LocalMetric),
+    /// An HTTP(S) request to a URL.
+    Http(HttpCheck),
+    /// A TCP connection to a port of the device.
+    Tcp(TcpCheck),
+    /// A DNS question to the device as DNS server.
+    Dns(DnsCheck),
+    /// The TLS certificate a port of the device presents.
+    Tls(TlsCheck),
 }
+
+/// Days before expiry at which a certificate sensor warns or fails (defaults, changeable per channel).
+pub const TLS_WARN_DAYS: f64 = 14.0;
+pub const TLS_DOWN_DAYS: f64 = 3.0;
 
 /// Longest accepted unit label of a custom OID sensor.
 pub const MAX_UNIT_CHARS: usize = 24;
@@ -56,6 +72,7 @@ impl Unit {
             Self::State => "state",
             Self::Bytes => "bytes",
             Self::Celsius => "celsius",
+            Self::Days => "days",
         }
     }
 
@@ -70,6 +87,7 @@ impl Unit {
             "state" => Self::State,
             "bytes" => Self::Bytes,
             "celsius" => Self::Celsius,
+            "days" => Self::Days,
             _ => return None,
         })
     }
@@ -85,6 +103,44 @@ impl SensorSpec {
             Self::InterfaceStatus { .. } => "if_status",
             Self::Oid { .. } => "oid",
             Self::Local(_) => "local",
+            Self::Http(_) => "http",
+            Self::Tcp(_) => "tcp",
+            Self::Dns(_) => "dns",
+            Self::Tls(_) => "tls",
+        }
+    }
+
+    /// Settings of the service sensors as stored in `sensors.params` (JSON); `None` for the others.
+    pub fn params(&self) -> Option<String> {
+        match self {
+            Self::Http(c) => serde_json::to_string(c).ok(),
+            Self::Tcp(c) => serde_json::to_string(c).ok(),
+            Self::Dns(c) => serde_json::to_string(c).ok(),
+            Self::Tls(c) => serde_json::to_string(c).ok(),
+            _ => None,
+        }
+    }
+
+    /// The service sensor of `kind` with the stored `params`; `None` if they do not fit.
+    pub fn from_params(kind: &str, params: &str) -> Option<Self> {
+        Some(match kind {
+            "http" => Self::Http(serde_json::from_str(params).ok()?),
+            "tcp" => Self::Tcp(serde_json::from_str(params).ok()?),
+            "dns" => Self::Dns(serde_json::from_str(params).ok()?),
+            "tls" => Self::Tls(serde_json::from_str(params).ok()?),
+            _ => return None,
+        })
+    }
+
+    /// Thresholds a new sensor starts with for channel `key`.
+    pub fn default_thresholds(&self, key: &str) -> Thresholds {
+        match (self, key) {
+            (Self::Tls(_), "days") => Thresholds {
+                warn_below: Some(TLS_WARN_DAYS),
+                down_below: Some(TLS_DOWN_DAYS),
+                ..Thresholds::default()
+            },
+            _ => Thresholds::default(),
         }
     }
 
@@ -113,6 +169,25 @@ impl SensorSpec {
                     t.get1("local-describe-traffic", "interface", interface)
                 }
             },
+            Self::Http(c) => {
+                let mut text = c.url.clone();
+                if let Some(keyword) = &c.keyword {
+                    text.push_str(&t.get1("service-describe-keyword", "keyword", keyword));
+                }
+                if !c.verify_tls && c.url.starts_with("https:") {
+                    text.push_str(&t.get("service-describe-no-verify"));
+                }
+                text
+            }
+            Self::Tcp(c) => t.get1("service-describe-tcp", "port", c.port),
+            Self::Dns(c) => t.fmt(
+                "service-describe-dns",
+                &[
+                    ("type", c.record.label().into()),
+                    ("name", c.name.clone().into()),
+                ],
+            ),
+            Self::Tls(c) => t.get1("service-describe-tls", "port", c.port),
         }
     }
 
@@ -162,12 +237,20 @@ impl SensorSpec {
                 ..
             } => one("value", Unit::PerSecond),
             Self::Local(metric) => metric.channels(),
+            Self::Http(_) | Self::Tcp(_) | Self::Dns(_) => one("rtt", Unit::Milliseconds),
+            Self::Tls(_) => one("days", Unit::Days),
         }
     }
 
-    /// Whether the sensor needs an SNMP session (ping and local sensors do not).
+    /// Whether the sensor needs an SNMP session (ping, local and service sensors do not).
     pub fn uses_snmp(&self) -> bool {
-        !matches!(self, Self::Ping | Self::Local(_))
+        matches!(
+            self,
+            Self::Uptime
+                | Self::InterfaceTraffic { .. }
+                | Self::InterfaceStatus { .. }
+                | Self::Oid { .. }
+        )
     }
 
     pub fn validate(&self) -> Result<(), Msg> {
@@ -194,6 +277,10 @@ impl SensorSpec {
                 Ok(())
             }
             Self::Local(metric) => metric.validate(),
+            Self::Http(c) => c.validate(),
+            Self::Tcp(c) => c.validate(),
+            Self::Dns(c) => c.validate(),
+            Self::Tls(c) => c.validate(),
             _ => Ok(()),
         }
     }
@@ -209,6 +296,10 @@ impl SensorSpec {
                 oid, mode, scale, ..
             } => Box::new(OidSensor::new(oid.clone(), *mode, *scale)),
             Self::Local(metric) => Box::new(LocalSensor::new(metric.clone(), Paths::default())),
+            Self::Http(c) => Box::new(HttpSensor::new(c.clone())),
+            Self::Tcp(c) => Box::new(TcpSensor::new(c)),
+            Self::Dns(c) => Box::new(DnsSensor::new(c.clone())),
+            Self::Tls(c) => Box::new(TlsSensor::new(c.clone())),
         }
     }
 }
@@ -354,6 +445,7 @@ mod tests {
             Unit::State,
             Unit::Bytes,
             Unit::Celsius,
+            Unit::Days,
         ] {
             assert_eq!(Unit::parse(unit.as_str()), Some(unit));
         }

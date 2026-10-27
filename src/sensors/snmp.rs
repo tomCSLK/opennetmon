@@ -92,6 +92,7 @@ impl Sensor for UptimeSensor {
             let ticks = uptime_ticks(values.first())
                 .ok_or_else(|| SensorError::BadValue("sysUpTime is not TimeTicks".to_owned()))?;
             Ok(Measurement {
+                note: None,
                 channels: vec![reading(
                     "uptime",
                     Unit::Seconds,
@@ -121,6 +122,7 @@ impl Sensor for InterfaceStatusSensor {
             let values = get(ctx, &[&self.oid]).await?;
             match values.first() {
                 Some(SnmpValue::Integer(n)) => Ok(Measurement {
+                    note: None,
                     channels: vec![reading("oper_status", Unit::State, Some(*n as f64))],
                 }),
                 _ => Err(SensorError::BadValue(
@@ -198,6 +200,7 @@ impl Sensor for InterfaceTrafficSensor {
             let out_rate = at(out_value).map(|r| self.outbound.update(r));
             // Octets per second -> bits per second.
             Ok(Measurement {
+                note: None,
                 channels: vec![
                     reading(
                         "in",
@@ -265,6 +268,7 @@ impl Sensor for OidSensor {
                         .filter(|n| n.is_finite())
                         .ok_or_else(|| SensorError::BadValue("value is not numeric".to_owned()))?;
                     Ok(Measurement {
+                        note: None,
                         channels: vec![reading("value", Unit::Count, Some(number * self.scale))],
                     })
                 }
@@ -281,6 +285,7 @@ impl Sensor for OidSensor {
                         uptime_ticks: uptime_ticks(values.get(1)),
                     });
                     Ok(Measurement {
+                        note: None,
                         channels: vec![reading(
                             "value",
                             Unit::PerSecond,

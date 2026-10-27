@@ -193,6 +193,7 @@ impl SensorError {
             Self::Unreachable(m) => {
                 Msg::new("sensor-unreachable").with("detail", truncate(m.clone()))
             }
+            Self::Check(m) => m.clone(),
         }
     }
 }
@@ -367,7 +368,12 @@ pub fn assess_with(
     match worst {
         Some((2, message)) => Assessment::Unhealthy(message),
         Some((_, message)) => Assessment::Degraded(message),
-        None if fine.is_empty() => Assessment::Healthy(Msg::new("assess-ok")),
+        None if fine.is_empty() => Assessment::Healthy(
+            measurement
+                .note
+                .clone()
+                .unwrap_or_else(|| Msg::new("assess-ok")),
+        ),
         None => Assessment::Healthy(Msg::List(fine)),
     }
 }
@@ -526,6 +532,7 @@ mod tests {
 
     fn status_reading(value: Option<f64>) -> Result<Measurement, SensorError> {
         Ok(Measurement {
+            note: None,
             channels: vec![ChannelReading {
                 key: "oper_status".to_owned(),
                 unit: Unit::State,
@@ -613,6 +620,7 @@ mod tests {
 
     fn rtt(value: f64) -> Result<Measurement, SensorError> {
         Ok(Measurement {
+            note: None,
             channels: vec![ChannelReading {
                 key: "rtt".to_owned(),
                 unit: Unit::Milliseconds,
@@ -658,6 +666,7 @@ mod tests {
     #[test]
     fn a_down_breach_beats_a_warning_on_another_channel() {
         let m = Ok(Measurement {
+            note: None,
             channels: vec![
                 ChannelReading {
                     key: "in".to_owned(),
@@ -789,6 +798,7 @@ mod tests {
 
     fn gauge(value: f64) -> Result<Measurement, SensorError> {
         Ok(Measurement {
+            note: None,
             channels: vec![ChannelReading {
                 key: "value".to_owned(),
                 unit: Unit::Count,
