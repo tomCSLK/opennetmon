@@ -59,7 +59,7 @@ Sensors that check whether a service answers, not only whether the device is ali
 controller, a reverse proxy and its certificate. They need no SNMP and work on devices with “No SNMP” as well; for a target without a device of its
 own (e.g. a website) add a device without SNMP. They are added with “Add sensor”; the form shows only the fields of the chosen type
 (`static/sensor-form.js`; without the script all fields are shown and the server ignores those of other types). The settings are stored as JSON in
-`sensors.params` and cannot be changed afterwards (delete the sensor and add it again).
+`sensors.params` and can be changed later under “Settings” (see “User interface”).
 
 | Type | Settings | Fine when | Message when fine |
 |---|---|---|---|
@@ -155,6 +155,12 @@ Manually against real hardware: `cargo test --test omada_manual sensors_work -- 
   deleting needs the tick “Yes, delete this sensor” (`confirm=yes`, otherwise `422`) and removes the sensor with its measurements and events.
 - **Rename** on the detail page (section “Name”, administrators only, `POST /sensors/<id>/rename`): at most 64 characters, unique per device;
   values, chart, thresholds, status and events are kept.
+- **Settings** (`/sensors/<id>/edit`, administrators only, in the menu “⋯ Actions” of the detail page; `sensors::edit_form`/`save_settings`,
+  `storage::sensors::update_spec`): the fields a custom OID sensor (OID, mode, factor, unit) or a service sensor (URL, ports, names, checks) was
+  added with, the same fieldsets as “Add sensor” (`templates/sensor_fields.html`). Type, name, thresholds, values and events are kept; the poller uses the
+  new settings from its next cycle (a changed setting builds a new sensor instance, so a counter starts afresh). Changing an OID sensor between value and
+  counter changes the unit of its channel; older values keep the old meaning. Ping, uptime, interface and “This server” sensors have no settings
+  (their interface or value is what they are). Changes appear field by field in the audit log.
 - **Interface discovery** (`POST /devices/<id>/discover`, administrators only, CSRF): `SnmpClient::walk` (GETBULK) reads `ifDescr`, `ifType`, `ifSpeed`,
   `ifOperStatus`, `ifName`, `ifHighSpeed` and `ifAlias` (`src/discovery.rs`) and merges them per `ifIndex`. Name = `ifName`, otherwise `ifDescr`
   (access points have no `ifXTable`), otherwise “Interface N”. The page shows two ticks per interface (traffic, status). **Preselected** is traffic for

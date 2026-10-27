@@ -71,6 +71,8 @@ struct SensorFormValues {
     scale: String,
     unit: String,
     service: ServiceFields,
+    /// The settings page of an existing sensor (`edit_form`), not "Sensor hinzufügen".
+    editing: bool,
 }
 
 /// The fields of the service sensors (HTTP, TCP, DNS, TLS), as typed.
@@ -221,8 +223,80 @@ impl Default for SensorFormValues {
             scale: "1".to_owned(),
             unit: String::new(),
             service: ServiceFields::default(),
+            editing: false,
         }
     }
+}
+
+impl SensorFormValues {
+    /// The form of the settings page, filled with the sensor's settings; `None` for a sensor
+    /// without settings of its own (see [`has_settings`]).
+    fn from_spec(spec: &SensorSpec) -> Option<Self> {
+        let on = |b: bool| b.then(|| "on".to_owned());
+        let mut form = Self {
+            kind: spec.kind().to_owned(),
+            editing: true,
+            ..Self::default()
+        };
+        let f = &mut form.service;
+        match spec {
+            SensorSpec::Oid {
+                oid,
+                mode,
+                scale,
+                unit,
+            } => {
+                form.oid = crate::sensors::spec::format_oid(oid);
+                form.mode = match mode {
+                    OidMode::Gauge => "gauge",
+                    OidMode::Counter => "counter",
+                }
+                .to_owned();
+                form.scale = scale.to_string();
+                form.unit = unit.clone().unwrap_or_default();
+            }
+            SensorSpec::Http(c) => {
+                f.url = c.url.clone();
+                f.expect = c.expect.clone();
+                f.keyword = c.keyword.clone().unwrap_or_default();
+                f.head = on(c.head);
+                f.follow = on(c.follow_redirects);
+                f.verify = on(c.verify_tls);
+            }
+            SensorSpec::Tcp(c) => f.tcp_port = c.port.to_string(),
+            SensorSpec::Dns(c) => {
+                f.dns_name = c.name.clone();
+                f.dns_type = if c.record == RecordType::Aaaa {
+                    "aaaa"
+                } else {
+                    "a"
+                }
+                .to_owned();
+                f.dns_port = c.port.to_string();
+                f.dns_expect = c.expect.map(|ip| ip.to_string()).unwrap_or_default();
+            }
+            SensorSpec::Tls(c) => {
+                f.tls_port = c.port.to_string();
+                f.server_name = c.server_name.clone().unwrap_or_default();
+                f.tls_verify = on(c.verify);
+            }
+            _ => return None,
+        }
+        Some(form)
+    }
+}
+
+/// Whether the sensor has settings to change on its settings page (custom OID and the service
+/// sensors; the others are fixed by their type, interface or value).
+pub(crate) fn has_settings(spec: &SensorSpec) -> bool {
+    matches!(
+        spec,
+        SensorSpec::Oid { .. }
+            | SensorSpec::Http(_)
+            | SensorSpec::Tcp(_)
+            | SensorSpec::Dns(_)
+            | SensorSpec::Tls(_)
+    )
 }
 
 #[derive(Template)]
@@ -318,6 +392,7 @@ impl SensorForm {
             scale: self.scale.clone(),
             unit: self.unit.clone(),
             service: self.service.clone(),
+            editing: false,
         }
     }
 
@@ -811,6 +886,196 @@ fn key_of(spec: &SensorSpec) -> Option<InterfaceKey> {
 }
 
 /// The audit entry of a new sensor (also used by the other pages that create sensors).
+#[derive(Template)]
+#[template(path = "sensor_edit.html")]
+struct SensorEditTemplate {
+    /// Language of the page.
+    t: Lang,
+    layout: Layout,
+    device: Device,
+    /// Groups above the device, for the breadcrumbs.
+    trail: Vec<Crumb>,
+    sensor_id: i64,
+    sensor_name: String,
+    form: SensorFormValues,
+    error: Option<String>,
+}
+
+impl SensorEditTemplate {
+    fn tls_hint(&self) -> String {
+        self.t.get2(
+            "service-tls-hint",
+            "warn",
+            crate::sensors::spec::TLS_WARN_DAYS as u32,
+            "down",
+            crate::sensors::spec::TLS_DOWN_DAYS as u32,
+        )
+    }
+}
+
+async fn render_edit(
+    state: &AppState,
+    user: &CurrentUser,
+    sensor: &SensorRecord,
+    device: Device,
+    form: SensorFormValues,
+    error: Option<String>,
+) -> Result<String> {
+    let page = SensorEditTemplate {
+        t: user.lang,
+        layout: user.layout(),
+        trail: group_trail(&state.pool, device.group_id).await?,
+        device,
+        sensor_id: sensor.id,
+        sensor_name: sensor.name.clone(),
+        form,
+        error,
+    };
+    Ok(page.render()?)
+}
+
+/// The settings page of a sensor: the fields it was created with (custom OID, service sensors).
+pub async fn edit_form(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+) -> Result<Html<String>> {
+    user.require_admin()?;
+    let sensor = find_sensor(&state, id).await?;
+    let form = SensorFormValues::from_spec(&sensor.spec).ok_or(Error::NotFound)?;
+    let device = load_device(&state, sensor.device_id).await?;
+    Ok(Html(
+        render_edit(&state, &user, &sensor, device, form, None).await?,
+    ))
+}
+
+/// Saves the settings of a sensor; its type, name, channels and history stay.
+pub async fn save_settings(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Form(mut form): Form<SensorForm>,
+) -> Result<Response> {
+    user.require_admin()?;
+    user.verify_csrf(&form.csrf_token)?;
+    let sensor = find_sensor(&state, id).await?;
+    if !has_settings(&sensor.spec) {
+        return Err(Error::NotFound);
+    }
+    let device = load_device(&state, sensor.device_id).await?;
+    // The type cannot change; the name is kept (renamed on the sensor page).
+    form.kind = sensor.spec.kind().to_owned();
+    form.name.clone_from(&sensor.name);
+    let mibs = state.mib_index();
+    let outcome = match form.to_spec(user.lang, &mibs, &device.host) {
+        Ok((_, spec)) => store::update_spec(&state.pool, id, &spec)
+            .await
+            .map(|()| spec),
+        Err(e) => Err(e),
+    };
+    match outcome {
+        Ok(spec) => {
+            tracing::info!(user = %user.username, sensor = id, "sensor settings changed");
+            audit::record(
+                &state,
+                &user,
+                Action::Changed,
+                Object::new(Kind::Sensor, id, &sensor.name),
+                settings_changes(&sensor.spec, &spec),
+            )
+            .await;
+            Ok(Redirect::to(&format!("/sensors/{id}?msg=sensor_settings_saved")).into_response())
+        }
+        Err(Error::Invalid(message) | Error::Conflict(message)) => {
+            let values = SensorFormValues {
+                editing: true,
+                ..form.values()
+            };
+            let html = render_edit(
+                &state,
+                &user,
+                &sensor,
+                device,
+                values,
+                Some(user.lang.msg(&message)),
+            )
+            .await?;
+            Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// The changed settings for the audit log, field by field (labels of the form).
+fn settings_changes(old: &SensorSpec, new: &SensorSpec) -> Changes {
+    let yes_no = |b: bool| if b { "audit-yes" } else { "audit-no" };
+    let text = |o: &Option<String>| o.clone().unwrap_or_default();
+    let changes = Changes::new();
+    match (old, new) {
+        (
+            SensorSpec::Oid {
+                oid: o_oid,
+                mode: o_mode,
+                scale: o_scale,
+                unit: o_unit,
+            },
+            SensorSpec::Oid {
+                oid,
+                mode,
+                scale,
+                unit,
+            },
+        ) => {
+            let mode_id = |m: &OidMode| match m {
+                OidMode::Gauge => "sensors-mode-gauge",
+                OidMode::Counter => "sensors-mode-counter",
+            };
+            changes
+                .field(
+                    "sensors-oid-only",
+                    crate::sensors::spec::format_oid(o_oid),
+                    crate::sensors::spec::format_oid(oid),
+                )
+                .label("sensors-mode", mode_id(o_mode), mode_id(mode))
+                .field("sensors-scale", o_scale, scale)
+                .field("sensors-unit", text(o_unit), text(unit))
+        }
+        (SensorSpec::Http(o), SensorSpec::Http(n)) => changes
+            .field("service-url", &o.url, &n.url)
+            .field("service-expect", &o.expect, &n.expect)
+            .field("service-keyword", text(&o.keyword), text(&n.keyword))
+            .label(
+                "service-follow-redirects",
+                yes_no(o.follow_redirects),
+                yes_no(n.follow_redirects),
+            )
+            .label(
+                "service-verify-tls",
+                yes_no(o.verify_tls),
+                yes_no(n.verify_tls),
+            )
+            .label("service-head", yes_no(o.head), yes_no(n.head)),
+        (SensorSpec::Tcp(o), SensorSpec::Tcp(n)) => changes.field("service-port", o.port, n.port),
+        (SensorSpec::Dns(o), SensorSpec::Dns(n)) => {
+            let ip = |a: &Option<std::net::IpAddr>| a.map(|a| a.to_string()).unwrap_or_default();
+            changes
+                .field("service-dns-name", &o.name, &n.name)
+                .field("service-dns-type", o.record.label(), n.record.label())
+                .field("service-port", o.port, n.port)
+                .field("service-dns-expect", ip(&o.expect), ip(&n.expect))
+        }
+        (SensorSpec::Tls(o), SensorSpec::Tls(n)) => changes
+            .field("service-port", o.port, n.port)
+            .field(
+                "service-server-name",
+                text(&o.server_name),
+                text(&n.server_name),
+            )
+            .label("service-verify-tls", yes_no(o.verify), yes_no(n.verify)),
+        _ => changes,
+    }
+}
+
 pub async fn audit_created(
     state: &AppState,
     user: &CurrentUser,
@@ -1288,6 +1553,156 @@ mod tests {
             let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
             assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
             assert!(reply.body.contains(error), "{body}: {}", reply.body);
+        }
+    }
+
+    #[tokio::test]
+    async fn admins_change_the_settings_of_service_and_oid_sensors() {
+        let h = harness(true).await;
+        let device = device_on(&h, 161).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let (viewer, viewer_csrf) = login(&h, "bert").await;
+        let path = format!("/devices/{device}/sensors");
+        for body in [
+            format!(
+                "csrf_token={csrf}&kind=http&name=Web&url=https%3A%2F%2F192.0.2.1%2F&expect=&follow=on&verify=on"
+            ),
+            format!(
+                "csrf_token={csrf}&kind=oid&name=Wert&oid=1.3.6.1.4.1.99.1.0&mode=gauge&scale=1&unit=%C2%B0C"
+            ),
+            format!("csrf_token={csrf}&kind=ping&name="),
+        ] {
+            let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
+            assert_eq!(
+                reply.location(),
+                format!("{path}?msg=sensor_created"),
+                "{body}"
+            );
+        }
+        let stored = store::list_sensors(&h.state.pool, device).await.unwrap();
+        let id = |name: &str| stored.iter().find(|s| s.name == name).unwrap().id;
+        let (web, value, ping) = (id("Web"), id("Wert"), id("Ping"));
+
+        // The page shows the stored settings; the sensor page links to it.
+        let page = send(&h.app, get(&format!("/sensors/{web}/edit"), Some(&admin))).await;
+        assert_eq!(page.status, StatusCode::OK);
+        for part in [
+            "value=\"https://192.0.2.1/\"",
+            "id=\"kind\" name=\"kind\" value=\"http\"",
+            "name=\"verify\" value=\"on\" checked",
+            "data-kinds=\"http\"",
+        ] {
+            assert!(page.body.contains(part), "{part}");
+        }
+        let detail = send(&h.app, get(&format!("/sensors/{web}"), Some(&admin))).await;
+        assert!(
+            detail
+                .body
+                .contains(&format!("href=\"/sensors/{web}/edit\""))
+        );
+        let detail = send(&h.app, get(&format!("/sensors/{ping}"), Some(&admin))).await;
+        assert!(!detail.body.contains("/edit\""), "ping has no settings");
+
+        // Saved: type, name and channels stay; the kind field cannot turn it into another type.
+        let body = format!(
+            "csrf_token={csrf}&kind=tcp&name=Anders&url=https%3A%2F%2F192.0.2.1%2Fstatus&expect=200&keyword=ok&follow=on"
+        );
+        let reply = send(
+            &h.app,
+            post(&format!("/sensors/{web}/edit"), Some(&admin), &body),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/sensors/{web}?msg=sensor_settings_saved")
+        );
+        let saved = store::get_sensor(&h.state.pool, web)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.name, "Web");
+        assert!(matches!(
+            &saved.spec,
+            SensorSpec::Http(c) if c.url == "https://192.0.2.1/status" && c.expect == "200"
+                && c.keyword.as_deref() == Some("ok") && c.follow_redirects && !c.verify_tls
+        ));
+        let audit = crate::storage::audit::list(&h.state.pool, 10)
+            .await
+            .unwrap();
+        let text = Lang::De.msg(&audit[0].detail);
+        assert!(
+            text.contains("https://192.0.2.1/ → https://192.0.2.1/status")
+                && text.contains("(Kette und Name): ja → nein"),
+            "{text}"
+        );
+
+        // A changed OID mode changes the unit of the channel.
+        let body = format!(
+            "csrf_token={csrf}&kind=oid&oid=1.3.6.1.4.1.99.2.0&mode=counter&scale=0%2C5&unit="
+        );
+        let reply = send(
+            &h.app,
+            post(&format!("/sensors/{value}/edit"), Some(&admin), &body),
+        )
+        .await;
+        assert_eq!(
+            reply.location(),
+            format!("/sensors/{value}?msg=sensor_settings_saved")
+        );
+        let saved = store::get_sensor(&h.state.pool, value)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            &saved.spec,
+            SensorSpec::Oid { oid, mode: OidMode::Counter, scale, unit: None }
+                if oid == &[1, 3, 6, 1, 4, 1, 99, 2, 0] && (*scale - 0.5).abs() < 1e-12
+        ));
+        assert_eq!(saved.channels[0].unit, Unit::PerSecond);
+
+        // Invalid input is explained and echoed, nothing saved.
+        let body = format!("csrf_token={csrf}&kind=http&url=ftp%3A%2F%2Fx%2F&follow=on");
+        let reply = send(
+            &h.app,
+            post(&format!("/sensors/{web}/edit"), Some(&admin), &body),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(reply.body.contains("URL ist ungültig") && reply.body.contains("ftp://x/"));
+        assert!(matches!(
+            store::get_sensor(&h.state.pool, web).await.unwrap().unwrap().spec,
+            SensorSpec::Http(ref c) if c.url == "https://192.0.2.1/status"
+        ));
+
+        // Only admins; sensors without settings and unknown ones have no page.
+        let reply = send(&h.app, get(&format!("/sensors/{web}/edit"), Some(&viewer))).await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        let body = format!("csrf_token={viewer_csrf}&kind=http&url=https%3A%2F%2Fx%2F");
+        let reply = send(
+            &h.app,
+            post(&format!("/sensors/{web}/edit"), Some(&viewer), &body),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/sensors/{web}/edit"),
+                Some(&admin),
+                "csrf_token=wrong&kind=http",
+            ),
+        )
+        .await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        for path in [
+            format!("/sensors/{ping}/edit"),
+            "/sensors/99/edit".to_owned(),
+        ] {
+            assert_eq!(
+                send(&h.app, get(&path, Some(&admin))).await.status,
+                StatusCode::NOT_FOUND,
+                "{path}"
+            );
         }
     }
 

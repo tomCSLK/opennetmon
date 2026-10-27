@@ -98,6 +98,8 @@ struct DetailTemplate {
     layout: Layout,
     sensor: SensorRecord,
     description: String,
+    /// Offer the settings page (`sensors::edit_form`).
+    has_settings: bool,
     device: Device,
     /// Groups above the device, for the breadcrumbs.
     trail: Vec<Crumb>,
@@ -251,6 +253,7 @@ async fn render(
         layout: user.layout(),
         t: user.lang,
         description: crate::web::sensor_text::describe(user.lang, &sensor.spec, &mibs),
+        has_settings: crate::web::sensors::has_settings(&sensor.spec),
         status_label: user.lang.get(status.label_id()),
         status_class: status.as_str(),
         message: state_row

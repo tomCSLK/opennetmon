@@ -130,7 +130,7 @@ Ein Binary, ein Prozess, Module:
 - `ordering` – Anzeigereihenfolge: `natural_cmp` (Zahlen der Größe nach), `position_cmp` (Handordnung zuerst), `reorder` aus Formularpositionen;
   Spalte `position` in `groups`/`devices`/`sensors` (`NULL` = automatisch, beim Verschieben in eine andere Gruppe zurückgesetzt), Schreiben über
   `storage::write_positions`; Seiten `web::order` (`/groups/<id>/order`, 0 = oberste Ebene; `/devices/<id>/sensors/order`) mit `static/order.js`;
-  Sensoren automatisch nach Typ, dann Name; Umbenennen von Sensoren auf der Detailseite (`sensor_detail::rename`)
+  Sensoren automatisch nach Typ, dann Name; Umbenennen von Sensoren auf der Detailseite (`sensor_detail::rename`); Einstellungen eigener OID- und Dienst-Sensoren unter `/sensors/<id>/edit` (`sensors::edit_form`/`save_settings`, `has_settings`, `storage::sensors::update_spec`, Felder gemeinsam mit „Sensor hinzufügen“ in `templates/sensor_fields.html`)
 - `templates` – Gerätevorlagen: `Body` (Regeln als JSON in `device_templates`, Migration `0011`), `build` aus den Sensoren eines Geräts,
   `plan` (reine Logik: nur Fehlendes, Übersprungenes mit Grund), `apply` (Interfaces lesen, OIDs per GET prüfen, Sensoren mit Schwellwerten anlegen),
   `detect` über `sysObjectID`; `storage::templates`, `devices.template_id`; Seiten `web::templates` (`/templates`, `/devices/<id>/template/new|apply`),

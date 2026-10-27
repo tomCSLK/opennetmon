@@ -234,6 +234,63 @@ pub async fn rename_sensor(pool: &SqlitePool, id: i64, name: &str) -> Result<()>
     Ok(())
 }
 
+/// Changes the settings of a sensor (`spec` must be of the same kind: an OID's address, mode,
+/// factor and unit, or a service sensor's parameters). A changed OID mode changes the unit of its
+/// channel; the poller picks the new settings up in its next cycle.
+pub async fn update_spec(pool: &SqlitePool, id: i64, spec: &SensorSpec) -> Result<()> {
+    spec.validate().map_err(Error::invalid)?;
+    let kind: Option<String> = sqlx::query_scalar("SELECT kind FROM sensors WHERE id = ?")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    match kind {
+        None => return Err(Error::NotFound),
+        Some(kind) if kind != spec.kind() => {
+            return Err(Error::Internal("sensor kind cannot change".to_owned()));
+        }
+        Some(_) => {}
+    }
+    let (oid, oid_mode, scale, unit_label) = match spec {
+        SensorSpec::Oid {
+            oid,
+            mode,
+            scale,
+            unit,
+        } => (
+            Some(format_oid(oid)),
+            Some(match mode {
+                OidMode::Gauge => "gauge",
+                OidMode::Counter => "counter",
+            }),
+            Some(*scale),
+            unit.as_deref().map(str::trim),
+        ),
+        _ => (None, None, None, None),
+    };
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "UPDATE sensors SET oid = ?, oid_mode = ?, scale = ?, unit_label = ?, params = ? WHERE id = ?",
+    )
+    .bind(oid)
+    .bind(oid_mode)
+    .bind(scale)
+    .bind(unit_label)
+    .bind(spec.params())
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
+    for channel in spec.channels() {
+        sqlx::query("UPDATE channels SET unit = ? WHERE sensor_id = ? AND key = ?")
+            .bind(channel.unit.as_str())
+            .bind(id)
+            .bind(channel.key)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Sets a sensor's own polling interval (`None`: the device's), checked against the device's
 /// timeout and retries like the device's own interval.
 pub async fn set_interval(

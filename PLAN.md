@@ -382,7 +382,7 @@ Aufwand grob: klein = bis ein halber Tag, mittel = ein bis zwei Tage.
 
 **Umgesetzt** wie geplant, alle vier Typen, Ablaufdatum über `x509-parser` (Beschreibung in `docs/sensors.md`, „Services“). Ergänzungen: Gerätevorlagen
 übernehmen die Dienste, eine URL zum Quellgerät wird dabei zu `{host}`; die Texte für Geräte ohne SNMP heißen jetzt „Kein SNMP – Ping und Dienste“; ein
-abgelaufenes Zertifikat meldet seine (negativen) Tage. Die Einstellungen lassen sich nach dem Anlegen nicht ändern (wie bei den übrigen Typen).
+abgelaufenes Zertifikat meldet seine (negativen) Tage. Die Einstellungen ließen sich zunächst nach dem Anlegen nicht ändern; seit 2026-10-27 geht das über „Einstellungen“ (siehe unten, „Sensor bearbeiten“).
 Geprüft: Neuaufbau der Tabelle auf einer Kopie der Testdaten (alle Spalten gleich, `integrity_check` ok), Formular im Browser hell/dunkel, echte Abfragen
 einer frischen Instanz gegen ciesliks.de (HTTP 200, Zertifikat 61 Tage, Port 443), 1.1.1.1 (A, AAAA, falsche Adresse, unbekannter Name) und sich selbst.
 
@@ -622,6 +622,13 @@ die nicht „OK“ endet, in `poll_problems` (Migration `0023`: Status und Meldu
 Nicht übernommen aus PRTG: Spalten „Ausfallzeit“ und „Abdeckung“ (PRTG zeigt sie in den gemittelten historischen Daten; unsere Tabelle hat je Abfrage
 eine Zeile, dort wären es nur 0 oder 100 %).
 
+### Sensor bearbeiten – umgesetzt 2026-10-27 (Wunsch des Nutzers)
+
+Seite „Einstellungen“ (`/sensors/<id>/edit`, nur Admins, im Menü „⋯ Aktionen“ der Sensorseite) für Sensoren mit eigenen Einstellungen: eigene OID (OID,
+Auswertung, Faktor, Einheit) und Dienste (HTTP(S), TCP, DNS, TLS). Dieselben Felder wie „Sensor hinzufügen“ (`templates/sensor_fields.html`),
+`storage::sensors::update_spec` (Typ bleibt, Name/Grenzwerte/Verlauf bleiben, bei Wechsel Wert ↔ Zähler die Einheit des Kanals), Änderungsprotokoll je Feld.
+Ping, Uptime, Interfaces und „Dieser Server“ haben keine Einstellungen (Name und Intervall stehen schon auf der Sensorseite).
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
 - Test mit dem echten Mailserver des Nutzers (braucht den Nutzer), Ende-zu-Ende-Integrationstest (Server starten, Gerät gegen lokalen `snmpd`, Poller,
@@ -643,7 +650,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (543, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (544, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

@@ -91,6 +91,7 @@ flash-sensors-activated = Sensors resumed.
 flash-sensors-deleted = Sensors deleted.
 flash-thresholds-saved = Thresholds saved.
 flash-sensor-renamed = Sensor renamed.
+flash-sensor-settings-saved = Settings saved.
 flash-interval-saved = Polling interval saved.
 flash-dependency-saved = Dependency saved.
 flash-states-saved = Status value ratings saved. They apply from the next poll.

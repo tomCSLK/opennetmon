@@ -47,6 +47,9 @@
     <details class="more-actions setup" open>
       {% call icons::more_summary(t) %}{% endcall %}
       <div class="more-items">
+    {% if has_settings %}
+    <a class="button ghost" href="/sensors/{{ sensor.id }}/edit">{{ t.get("sensor-settings") }}</a>
+    {% endif %}
     <a class="button ghost" href="/dependency/sensor/{{ sensor.id }}">{{ t.get("dependency") }}</a>
     <a class="button ghost" href="/maintenance/sensor/{{ sensor.id }}">{{ t.get("maintenance") }}</a>
     <a class="button ghost" href="#delete">{{ t.get("sensor-delete") }}</a>
