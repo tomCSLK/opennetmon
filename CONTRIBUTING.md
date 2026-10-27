@@ -24,7 +24,9 @@ cargo test
 ```
 
 The tests need no network (a fake SNMP agent is built in). Optional tests against a local `snmpd` are described in
-[`docs/dev-testagent.md`](docs/dev-testagent.md). CI runs the same checks on every pull request.
+[`docs/dev-testagent.md`](docs/dev-testagent.md). CI runs the same checks on every pull request, plus `cargo audit`
+(known vulnerabilities in dependencies from the RustSec database; exceptions with a reason in `.cargo/audit.toml`), which also runs weekly.
+If you change `Cargo.lock`, run it locally too (`cargo install cargo-audit --locked`).
 
 ## Conventions
 

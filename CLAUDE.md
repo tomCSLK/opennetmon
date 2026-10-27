@@ -244,7 +244,8 @@ Vollständige Anleitung: `docs/operations.md`. Dateien unter `deploy/`:
 
 ## Tests
 
-- CI: `.github/workflows/ci.yml` (fmt, clippy, Tests, `third-party-licenses.py --check`; bei Pull Requests zusätzlich DCO-Prüfung `Signed-off-by`
+- CI: `.github/workflows/ci.yml` (fmt, clippy, Tests, `third-party-licenses.py --check`; Job `audit` mit `cargo audit` bei Push/PR und montags per `schedule`,
+  `cargo-audit` per `cargo install` in fester Version mit Cache, weil nur `actions/*` erlaubt; `dev/release.sh` prüft es auch; bei Pull Requests zusätzlich DCO-Prüfung `Signed-off-by`
   des Autors); Actions nur von `actions/*`, auf Commit-Hash gepinnt. Beitragsregeln in `CONTRIBUTING.md` (Englisch), Meldeweg für Lücken in `SECURITY.md`
 - Unit-Tests für Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Config-Parsing
 - Integrationstests gegen lokalen `snmpd` (net-snmp) als Testagent (`tests/snmp_local.rs`, überspringen sich ohne Agent oder

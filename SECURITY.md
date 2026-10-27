@@ -4,6 +4,8 @@
 
 Security fixes go into the next release; only the latest release is supported.
 
+Dependencies are checked against the RustSec advisory database (`cargo audit`) on every change, every week and before each release.
+
 ## Reporting a vulnerability
 
 Please report vulnerabilities **privately** and not as a public issue:

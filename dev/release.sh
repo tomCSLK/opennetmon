@@ -7,8 +7,8 @@
 #
 # The version comes from Cargo.toml (bump it there and commit first). Before anything is published the script
 # requires a clean work tree on main that matches origin/main, a version without an existing tag, passing
-# fmt/clippy/tests, an up-to-date THIRD-PARTY-LICENSES.txt, a successful installer dry run from the archive and the
-# expected files in the .deb (built with dev/deb.sh, needs cargo-deb).
+# fmt/clippy/tests, no RustSec advisories (cargo audit), an up-to-date THIRD-PARTY-LICENSES.txt, a successful
+# installer dry run from the archive and the expected files in the .deb (built with dev/deb.sh, needs cargo-deb).
 # Releases are regular releases since 0.4.4 (0.1.0 to 0.4.3 were pre-releases); --prerelease marks one as pre-release.
 set -euo pipefail
 
@@ -54,6 +54,8 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test --quiet
 python3 -I dev/third-party-licenses.py --check
+command -v cargo-audit >/dev/null || fail "cargo-audit is missing (cargo install cargo-audit --locked)"
+cargo audit --quiet
 
 step "building the static binary ($TARGET)"
 cargo build --release --target "$TARGET"

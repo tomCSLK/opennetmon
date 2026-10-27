@@ -460,7 +460,9 @@ Zu entscheiden:
    ohne J zunächst UTC, dann liegen die Grenzen 1–2 h verschoben).
 2. Monatsbericht per Mail gleich mit oder später? Empfehlung: später, zuerst Seite und CSV.
 
-### H. `cargo audit` in der CI
+### H. `cargo audit` in der CI – umgesetzt 2026-10-27
+
+**Umgesetzt** wie geplant (Job `audit`, montags 05:17 UTC und von Hand, `cargo-audit` 0.22.2 mit Cache; `dev/release.sh` bricht ohne `cargo-audit` oder bei Meldungen ab).
 
 Befund aus dem Sicherheitstest: Dependabot hatte die vier RustSec-Meldungen nicht gemeldet, `cargo audit` schon.
 
