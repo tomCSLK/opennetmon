@@ -183,7 +183,7 @@ opennetmon/
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
 
-## Nächste Vorhaben (eingeplant 2026-10-26; alle drei umgesetzt, in v0.5.0)
+## Nächste Vorhaben (A–C eingeplant 2026-10-26 und in v0.5.0; D geplant 2026-10-27, noch nicht umgesetzt)
 
 ### A. Mobile Ansicht überarbeiten – umgesetzt 2026-10-26 (in v0.5.0)
 
@@ -307,6 +307,34 @@ Bestand (Textknöpfe in Tabellenzeilen bzw. Kartenköpfen):
   Geräten und Gruppen (Häkchen „wirklich löschen“). Bei den MIB-Dateien ebenso prüfen.
 - Die großen Knöpfe in den Werkzeugleisten oben auf den Seiten (Gerät bearbeiten, Verbindung testen, Werte suchen …) behalten ihren Text; für
   das Handy kommen sie in das Menü „Weitere Aktionen“ (A, Punkt 3).
+
+### D. Knopfleisten der Seitenköpfe: Alltag sichtbar, Einrichtung im Menü – geplant 2026-10-27 (noch nicht umgesetzt)
+
+Befund: Auf der Geräteseite stehen für Admins bis zu neun Knöpfe plus „Automatisch“/„Aktualisieren“. Zwischen 641 und etwa 1570 px (die meisten
+Laptops) bricht die Reihe in zwei Zeilen um; seit dem Knopf „Abhängigkeit“ (v0.5.0) schon unterhalb von etwa 1570 px. Bis 640 px stecken die Knöpfe
+heute schon im Menü „⋯ Aktionen“ (`details.more-actions`).
+
+Entschieden vom Nutzer (2026-10-27): **Variante 1**, also aufteilen. Was man im Alltag braucht, bleibt sichtbar. Die Einrichtung (ist eher eine
+einmalige Sache) kommt auf jeder Breite in das aufklappbare Menü „⋯ Aktionen“. Gilt einheitlich für Geräte-, Gruppen- und Sensorseite. Verworfen
+wurden ein breiterer Umschaltpunkt nur für die Geräteseite (dann wären auf dem Laptop auch Pausieren und Protokoll versteckt) und ein Skript, das
+überzählige Knöpfe automatisch ins Menü schiebt (mehr Code, die Leiste springt).
+
+| Seite | Sichtbar | Im Menü „⋯ Aktionen“ |
+|---|---|---|
+| Gerät (`sensors.html`) | Pausieren/Fortsetzen, Protokoll | Gerät bearbeiten, Abhängigkeit, Werte dieses Servers, Verbindung testen, Werte suchen, Interfaces suchen |
+| Gruppe (`group.html`) | Pausieren/Fortsetzen (ein Protokoll je Gruppe gibt es bewusst nicht) | Gruppe bearbeiten, Abhängigkeit, Reihenfolge ändern, Neue Untergruppe, Neues Gerät |
+| Sensor (`sensor_detail.html`) | Pausieren/Fortsetzen, Protokoll | Abhängigkeit, Sensor löschen |
+
+- Rechts daneben bleiben wie bisher „Automatisch“/„Aktualisieren“ (Gruppe, Gerät, Sensor), auf der Sensorseite die Zeitraumwahl an ihrem Platz.
+- Leser (keine Admins) sehen weiter nur Protokoll und Aktualisieren, ohne Menü.
+- Auf dem Handy (bis 640 px) alles in einem Menü wie heute, auch die sichtbaren Knöpfe.
+- Die Übersicht (`home.html`, drei Knöpfe) bricht nicht um und bleibt wie sie ist.
+- Umsetzung: Alltagsknöpfe vor dem Menü, übrige in `details.more-actions` mit neuer Klasse (z. B. `.always`), die auf jeder Breite als Dropdown
+  erscheint. CSS: die Dropdown-Regeln, die heute nur bis 640 px gelten, auch für `.always`. `static/app.js`: `.always` startet auf jeder Breite
+  geschlossen und schließt bei Klick daneben bzw. Esc. Beschriftung „⋯ Aktionen“ gibt es schon (`actions`), keine neuen Katalogtexte nötig;
+  keine Inline-Styles (CSP).
+- Prüfung: Handler-Tests (welcher Knopf wo, Leser ohne Menü), Browser bei 1400, 1024, 800 und 390 px, hell und dunkel (Wegwerfkopie).
+  Doku: `docs/devices-and-groups.md` („Phones“) und der Design-Absatz in CLAUDE.md.
 
 ## Bewusst nicht im MVP
 

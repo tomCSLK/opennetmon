@@ -289,8 +289,8 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
 - In v0.5.0: mobile Ansicht und Symbole statt Text in den Listen (2026-10-26), Sensorlisten nur mit dem Namen (Beschreibung nur auf der
   Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B) und die Behebungen aus dem Sicherheitstest vom 2026-10-27
-  (`PLAN.md`, „Verifikation“). Offen: Auf der Geräteseite bricht die Knopfleiste durch den Knopf „Abhängigkeit“ unterhalb von etwa 1570 px in zwei
-  Zeilen um (Automatisch/Aktualisieren eigene Zeile); ggf. später ins Menü „Aktionen“ verschieben
+  (`PLAN.md`, „Verifikation“). Geplant, noch nicht umgesetzt: Knopfleisten der Geräte-, Gruppen- und Sensorseite mit Pausieren/Fortsetzen und
+  Protokoll sichtbar, die Einrichtung im Menü „⋯ Aktionen“ auf jeder Breite (Entscheidung des Nutzers 2026-10-27, `PLAN.md`, „Nächste Vorhaben“, D)
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,
