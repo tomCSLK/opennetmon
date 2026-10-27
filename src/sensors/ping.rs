@@ -13,7 +13,7 @@ use tokio::task::JoinSet;
 use super::{ChannelReading, Measurement, PollContext, PollFuture, Sensor, SensorError, Unit};
 use crate::i18n::Msg;
 
-/// Echo requests per poll unless the sensor says otherwise (sensors from before 0.5.5 too).
+/// Echo requests per poll unless the sensor says otherwise (sensors from before 0.5.6 too).
 pub const DEFAULT_PACKETS: u8 = 5;
 pub const MAX_PACKETS: u8 = 10;
 /// Pause between the requests of one poll. Each waits for its reply up to the device's timeout on

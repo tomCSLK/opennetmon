@@ -90,7 +90,7 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
             .ok_or_else(|| corrupt("if_index"))
     };
     Ok(match r.kind.as_str() {
-        // Ping sensors from before 0.5.5 have no settings: the default number of packets.
+        // Ping sensors from before 0.5.6 have no settings: the default number of packets.
         "ping" => match r.params.as_deref() {
             None => SensorSpec::ping(),
             Some(p) => SensorSpec::from_params("ping", p).ok_or_else(|| corrupt("params"))?,

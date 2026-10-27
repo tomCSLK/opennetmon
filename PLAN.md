@@ -3,15 +3,15 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-10-27, Release v0.5.0)
+## Stand (2026-10-27, Release v0.5.6)
 
-Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft als `.deb` auf dem Ubuntu-Server des Nutzers (dort noch 0.4.4,
-Update auf 0.5.0 offen); die Instanz auf dem Laptop dient nur noch zum Testen. In v0.5.0 kamen die mobile Ansicht, Symbole in den Listen,
-**Abhängigkeiten wie in PRTG** und die Behebungen aus dem Sicherheitstest dazu (Vorhaben A–C); danach umgesetzt, noch nicht released: Knopfleisten
+Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft als `.deb` auf dem Ubuntu-Server des Nutzers (dort das Test-Paket
+0.5.5, Update auf 0.5.6 offen); die Instanz auf dem Laptop dient nur noch zum Testen. In v0.5.0 kamen die mobile Ansicht, Symbole in den Listen,
+**Abhängigkeiten wie in PRTG** und die Behebungen aus dem Sicherheitstest dazu (Vorhaben A–C); in **v0.5.6** (2026-10-27): Knopfleisten
 der Seitenköpfe (D) und aus den Vorhaben E–M (2026-10-27) Dienst-Sensoren (E), Verfügbarkeit und Berichte (G), `cargo audit` in der CI (H),
 Update-Hinweis (I), Wartungsfenster (J) und das Änderungsprotokoll (M), dazu fehlgeschlagene Abfragen in der Messwerttabelle und eine
-Einstellungsseite je Sensor. Gepusht am 2026-10-27; Version **0.5.5** als Test-Paket (`dev/deb.sh`, kein Tag, kein Release) für den Test des
-Nutzers auf dem Ubuntu-Server – das Release folgt erst, wenn alle Tests des Nutzers bestanden sind. **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Der Mailversand mit dem
+Einstellungsseite je Sensor, Messwerttabelle in Seiten und Ping mit mehreren Paketen. Vorher als Test-Paket **0.5.5** (`dev/deb.sh`, kein Tag) auf dem
+Ubuntu-Server vom Nutzer getestet (ohne Befund), danach als v0.5.6 released. **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Der Mailversand mit dem
 **echten Mailserver** des Nutzers funktioniert, ebenso der Ablauf Ende zu Ende im Betrieb und die Omada-Geräte (vom Nutzer getestet, 2026-10-27).
 
 Umgesetzt (Details in `docs/`):
@@ -187,7 +187,7 @@ opennetmon/
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
 
-## Nächste Vorhaben (A–C eingeplant 2026-10-26 und in v0.5.0; D umgesetzt 2026-10-27, noch nicht released)
+## Nächste Vorhaben (A–C eingeplant 2026-10-26 und in v0.5.0; D umgesetzt 2026-10-27, in v0.5.6)
 
 ### A. Mobile Ansicht überarbeiten – umgesetzt 2026-10-26 (in v0.5.0)
 
@@ -313,7 +313,7 @@ Bestand (Textknöpfe in Tabellenzeilen bzw. Kartenköpfen):
 - Die großen Knöpfe in den Werkzeugleisten oben auf den Seiten (Gerät bearbeiten, Verbindung testen, Werte suchen …) behalten ihren Text; für
   das Handy kommen sie in das Menü „Weitere Aktionen“ (A, Punkt 3).
 
-### D. Knopfleisten der Seitenköpfe: Alltag sichtbar, Einrichtung im Menü – umgesetzt 2026-10-27 (noch nicht released)
+### D. Knopfleisten der Seitenköpfe: Alltag sichtbar, Einrichtung im Menü – umgesetzt 2026-10-27 (in v0.5.6)
 
 **Umgesetzt** wie geplant, ohne doppelte Knöpfe im HTML: Das äußere `details.more-actions` bleibt das Handy-Menü, darin steckt
 `details.more-actions.setup` mit der Einrichtung (breit ein Dropdown, rechtsbündig unter dem Knopf; auf dem Handy offen, ohne eigenen Knopf, unter

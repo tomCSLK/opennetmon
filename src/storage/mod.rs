@@ -120,7 +120,7 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
 /// The `sensors` table of migration 0005 has a check on `kind` that later sensor types do not fit:
 /// sensors of the machine opennetmon runs on (kind `local`, measured value in `target`, e.g.
 /// `disk:/var`), service sensors (`http`, `tcp`, `dns`, `tls`, settings as JSON in `params`) and,
-/// since 0.5.5, ping sensors with settings in `params` (the number of packets).
+/// since 0.5.6, ping sensors with settings in `params` (the number of packets).
 /// Like [`allow_devices_without_profile`], the check only changes by rebuilding the table outside a
 /// migration transaction; it runs once per schema change (detected by the newest column or by the
 /// rule for `ping` in the table's definition) and copies the columns the old table has. Later

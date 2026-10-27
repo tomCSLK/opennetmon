@@ -121,7 +121,7 @@ pub struct Basic {
     /// The master sensor of the device (see [`crate::pause`]).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub master: bool,
-    /// Echo requests per poll of a ping sensor; templates from before 0.5.5 have none (default).
+    /// Echo requests per poll of a ping sensor; templates from before 0.5.6 have none (default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub packets: Option<u8>,
 }
@@ -1087,7 +1087,7 @@ mod tests {
         let mut fewer = body.basics[0].clone();
         fewer.packets = Some(3);
         assert_eq!(fewer.spec(), SensorSpec::Ping(PingCheck { packets: 3 }));
-        fewer.packets = None; // a template from before 0.5.5
+        fewer.packets = None; // a template from before 0.5.6
         assert_eq!(fewer.spec(), SensorSpec::ping());
         fewer.packets = Some(0);
         let mut broken = body.clone();

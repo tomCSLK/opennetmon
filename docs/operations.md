@@ -297,7 +297,7 @@ and the service runs without privileges.
 - **Privacy:** GitHub sees the address of the server and the `User-Agent` `opennetmon/<version>` once a day; nothing else is sent (no cookies, no data
   about devices or users). The answer is only kept in memory.
 - **Failures** (no internet, rate limit of the API) only appear in the log at level `debug` and are retried the next day; the user interface shows nothing.
-- **Switching it off:** `update_check = false`, then `sudo systemctl restart opennetmon`. Installations from before 0.6 keep their configuration on an
+- **Switching it off:** `update_check = false`, then `sudo systemctl restart opennetmon`. Installations from before 0.5.6 keep their configuration on an
   update if it was changed (`dpkg` asks) or installed with `install.sh` (never overwritten); add the line `update_check = true` there to switch the check on.
 
 ### Installing an update
