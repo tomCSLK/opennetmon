@@ -78,6 +78,16 @@
   {% endfor %}
 </section>
 
+<section class="values" aria-label="{{ t.get("report-availability") }}">
+  {% for (label, value, down) in availability %}
+  <div class="value-tile">
+    <div class="label">{{ t.get1("report-availability-of", "period", label.as_str()) }}</div>
+    <div class="value">{{ value }}</div>
+    <div class="when">{% if !down.is_empty() %}{{ t.get1("report-downtime-of", "time", down.as_str()) }}{% endif %}</div>
+  </div>
+  {% endfor %}
+</section>
+
 <section class="card">
   <div id="charts" data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="{{ t.get("detail-no-samples") }}"></div>
   <noscript><p class="muted">{{ t.get("detail-chart-needs-js") }}</p></noscript>

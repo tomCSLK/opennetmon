@@ -1,7 +1,7 @@
 //! Rollups and retention of measurements.
 //!
-//! Raw samples are aggregated into hourly and daily min/avg/max rows; old data is deleted after the
-//! configured retention. Both steps are idempotent and cheap, so they simply run periodically.
+//! Raw samples are aggregated into hourly and daily min/avg/max rows, the hourly availability into
+//! daily sums; old data is deleted after the configured retention. Both steps are idempotent and cheap, so they simply run periodically.
 
 use sqlx::SqlitePool;
 
@@ -81,7 +81,7 @@ pub async fn rollup(pool: &SqlitePool, now_ms: i64) -> Result<()> {
     .bind(from_day)
     .execute(pool)
     .await?;
-    Ok(())
+    crate::storage::availability::rollup(pool).await
 }
 
 /// Deletes raw samples, hourly rollups and events older than their retention. Daily rollups stay.
@@ -112,6 +112,7 @@ pub async fn apply_retention(
         .execute(pool)
         .await?
         .rows_affected();
+    crate::storage::availability::apply_retention(pool, hourly_before).await?;
     Ok(Report {
         raw_deleted,
         hourly_deleted,

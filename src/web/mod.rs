@@ -14,6 +14,7 @@ pub mod mibs;
 pub mod order;
 pub mod overview;
 pub mod pause;
+pub mod reports;
 pub mod schedules;
 pub mod sensor_detail;
 pub mod sensor_text;
@@ -194,6 +195,8 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/status/{filter}", get(status_list::list))
         .route("/log", get(log::log))
+        .route("/reports", get(reports::page))
+        .route("/reports.csv", get(reports::csv))
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))
         .route("/sensors/{id}/samples", get(sensor_detail::samples))

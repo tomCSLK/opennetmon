@@ -158,6 +158,11 @@ Ein Binary, ein Prozess, Module:
   in `pause::Pauses` als `Source::Schedule` nach der Pause von Hand und vor den Abhängigkeiten (`group_by_hand`/`device_by_hand`, `maintenance`,
   `schedule_of`, `schedule_roots`); Seiten `web::schedules` (`/schedules`, `/schedules/<id>` mit Fenstern, `/maintenance/<kind>/<id>`, Knopf
   „Wartungsfenster“ im Menü „⋯ Aktionen“), Protokolleinträge in `web::log`
+- Verfügbarkeit wie die Berichte in PRTG (2026-10-27, `docs/reports.md`): `availability` (reine Logik: `Totals` ms je Zustand, `percent` = (OK + Warnung) /
+  (OK + Warnung + Ausfall), `split_hours`, `counted_span` (Lücke über `GAP_INTERVALS` = 3 Intervalle zählt nicht), `device` nach Master, sonst Ping, sonst
+  Mittel), `storage::availability` (Migration `0021`: `availability_1h`/`_1d`; `count` aus `storage::status::record_poll` in derselben Transaktion, `rollup`
+  und `apply_retention` aus `maintenance`, `totals` stundengenau mit Tagen als Rückfall), Seite `web::reports` (`/reports`, `/reports.csv`, alle Benutzer;
+  Monate in `schedule::time_zone()`; `percent_text` rundet ab), Kacheln auf der Sensorseite (`reports::sensor_summary`)
 - `devices` – Domäne und Validierung von Geräten und Gruppen (Host, Intervall, Gruppenbaum; `DeviceKind`: Gerätetyp, nur fürs Symbol in der Übersicht, Spalte `kind`, Migration `0015`); `crypto` – `SecretBox` (XChaCha20-Poly1305), Schlüsseldatei mit Rechteprüfung; `credentials` – Profil-Domäne und Validierung (`Secret` mit geschwärztem `Debug`)
 - Geräte ohne SNMP: `Device.profile_id` ist `Option` (`None` = „Kein SNMP – nur Ping“, `has_snmp()`, `profile_label()`); interaktive SNMP-Aktionen holen die Zugangsdaten über `web::snmp_credentials` (Fehlermeldung für Ping-Geräte). Die Spalte wurde nachträglich nullbar: `storage::migrate` baut `devices` einmalig mit abgeschalteten Fremdschlüsseln neu auf (`allow_devices_without_profile`), weil das in einer sqlx-Migration (immer Transaktion) nicht geht
 - `storage` – sqlx-Repository (`storage::users` für Benutzer und Sitzungen, `storage::credentials` für SNMP-Profile, `storage::groups`, `storage::devices`, `storage::sensors` für Sensoren, Kanäle und Messwerte, `storage::status` für Zustand und Ereignisse, `storage::pauses` für Pausen, Abhängigkeiten und ihr Protokoll, `storage::measurements` für Zeitreihen), Migrations, Rollups, Retention
@@ -317,7 +322,7 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   (`PLAN.md`, „Verifikation“). Nach v0.5.0 umgesetzt (noch nicht released): Knopfleisten der Geräte-, Gruppen- und Sensorseite mit
   Pausieren/Fortsetzen und Protokoll sichtbar, die Einrichtung im Menü „⋯ Aktionen“ auf jeder Breite (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, D)
 - Umgesetzt nach v0.5.0 (noch nicht released, 2026-10-27): E Dienst-Sensoren, H `cargo audit` in der CI, I Hinweis auf neue Versionen,
-  J Wartungsfenster
+  J Wartungsfenster, G Verfügbarkeit und Berichte (ohne Monatsmail)
 - Geplant (2026-10-27, `PLAN.md`, „Weitere Vorhaben E–M“; E, G, H, I, J, M jetzt, F, K, L in einer späteren Version): E Sensoren HTTP(S)/TCP/DNS/TLS-Zertifikat,
   F Push (ntfy, Gotify, Telegram, Webhook), G Verfügbarkeit und Berichte, H `cargo audit` in der CI, I Hinweis auf neue Versionen, J Wartungsfenster nach Zeitplan,
   K Zwei-Faktor-Anmeldung (TOTP), L Rotation von `secret.key`, M Änderungsprotokoll

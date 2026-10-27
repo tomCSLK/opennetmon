@@ -131,6 +131,7 @@ opennetmon/
     ordering.rs         # Anzeigereihenfolge
     pause.rs            # Pausen und ihre Vererbung
     schedule.rs         # Wartungsfenster: Fenster, Zeitzone
+    availability.rs     # Verfügbarkeit: Zählung, Rechnung, Geräte
     sensors/            # Trait Sensor, ping, snmp, local (Dieser Server), spec, counter, format
     status.rs           # Schwellwerte, Bewertungen, Zustandsautomat
     poller.rs           # Supervisor, eine Aufgabe je Gerät
@@ -142,7 +143,7 @@ opennetmon/
   static/               # app.css, eigene Skripte (theme, app, chart, refresh, order, samples, time, …), vendor/uplot
   locales/              # de/, en/ (Fluent)
   mibs/                 # mitgelieferte Standard-MIBs
-  migrations/           # 0001–0020
+  migrations/           # 0001–0021
   examples/snmp_probe.rs
   tests/                # snmp_local.rs (lokaler snmpd), omada_manual.rs (echte Hardware, #[ignore])
   deploy/               # Unit, Installer, Backup, sysctl, Proxy-Beispiele, deb/ (Maintainer-Skripte)
@@ -443,7 +444,13 @@ Zu entscheiden:
 2. ntfy.sh (fremder Server) oder selbst betreiben (z. B. als Docker-Container auf dem Server, in `Serveradmin/`)? Das betrifft nur den Betrieb,
    nicht den Code.
 
-### G. Verfügbarkeit in Prozent und Berichte
+### G. Verfügbarkeit in Prozent und Berichte – umgesetzt 2026-10-27 (ohne Monatsmail)
+
+**Umgesetzt** (`src/availability.rs`, `storage::availability`, `web::reports`, Migration `0021`, `docs/reports.md`): Zählung in `record_poll` je Stunde,
+Lücken über drei Intervallen und pausierte Zeit zählen nicht, Rollup je UTC-Tag im Wartungslauf, Stunden nach `retention_hourly_days` gelöscht. Seite
+`/reports` (alle Benutzer) je Gerät (Master, sonst Ping, sonst Mittel) oder Sensor, 7/30 Tage oder einer der letzten zwölf Monate in der Zeitzone des
+Servers (Entscheidung 1 mit `jiff` aus J), sortierbar, CSV mit Schutz gegen Formeln; Kacheln 24 h/7/30 Tage auf der Sensorseite. Monatsmail später
+(Entscheidung 2). Genauigkeit eine Stunde an den Rändern des Zeitraums.
 
 Ziel: wie die Berichte in PRTG sehen, wie zuverlässig ein Gerät oder Sensor über 7 bzw. 30 Tage oder einen Monat war.
 
@@ -621,7 +628,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (527, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (537, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

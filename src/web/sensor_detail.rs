@@ -126,6 +126,8 @@ struct DetailTemplate {
     interval_field: String,
     interval_failed: bool,
     states: Option<StatesView>,
+    /// Availability for 24 h, 7 and 30 days: (label, value, downtime).
+    availability: Vec<(String, String, String)>,
 }
 
 fn now_ms() -> i64 {
@@ -241,7 +243,9 @@ async fn render(
             message: crate::status::shown(user.lang, &e.message),
         })
         .collect();
+    let availability = crate::web::reports::sensor_summary(state, user.lang, sensor.id).await?;
     let page = DetailTemplate {
+        availability,
         layout: user.layout(),
         t: user.lang,
         description: crate::web::sensor_text::describe(user.lang, &sensor.spec, &mibs),

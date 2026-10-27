@@ -2,6 +2,7 @@
 
 pub mod alerting;
 pub mod auth;
+pub mod availability;
 pub mod config;
 pub mod credentials;
 pub mod crypto;

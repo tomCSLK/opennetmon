@@ -19,6 +19,10 @@
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg>
         {{ t.get("log") }}
       </a>
+      <a href="/reports" data-match="/reports">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="6"/><rect x="11" y="7" width="3" height="10"/><rect x="16" y="13" width="3" height="4"/></svg>
+        {{ t.get("nav-reports") }}
+      </a>
       {% if layout.is_admin %}
       <div class="nav-label">{{ t.get("nav-settings") }}</div>
       <a href="/credentials" data-match="/credentials">

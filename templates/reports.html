@@ -1,0 +1,59 @@
+{% extends "app.html" %}
+{% block title %}{{ t.get("nav-reports") }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ t.get("nav-reports") }}</h1>
+    <p class="subtitle">{{ t.get1("report-subtitle", "period", period_text.as_str()) }}</p>
+  </div>
+  <div class="actions">
+    <nav class="ranges" aria-label="{{ t.get("report-view") }}">
+      <a href="{{ devices_href }}"{% if view_devices %} aria-current="page"{% endif %}>{{ t.get("report-view-devices") }}</a>
+      <a href="{{ sensors_href }}"{% if !view_devices %} aria-current="page"{% endif %}>{{ t.get("report-view-sensors") }}</a>
+    </nav>
+  </div>
+</div>
+
+<section class="card">
+  <form method="get" action="/reports" class="inline-form">
+    <input type="hidden" name="view" value="{% if view_devices %}devices{% else %}sensors{% endif %}">
+    <label class="rows-select" for="period">{{ t.get("report-period") }}
+      <select id="period" name="period">
+        {% for (key, label, selected) in periods %}
+        <option value="{{ key }}"{% if *selected %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="secondary">{{ t.get("report-show") }}</button>
+    <a class="button ghost" href="{{ csv_href }}" download>{{ t.get("report-csv") }}</a>
+  </form>
+  <p class="hint">{{ t.get("report-hint") }}</p>
+</section>
+
+<section class="card flush">
+  {% if rows.is_empty() %}
+  <div class="empty"><strong>{{ t.get("report-empty") }}</strong></div>
+  {% else %}
+  <div class="table-wrap">
+  <table class="m-cards m-simple">
+    <thead>
+      <tr>
+        {% for c in columns %}
+        <th{% if c.right %} class="right"{% endif %}{% if !c.aria_sort.is_empty() %} aria-sort="{{ c.aria_sort }}"{% endif %}>{% if let Some(href) = c.href %}<a class="sort" href="{{ href }}">{{ c.label }}</a>{% else %}{{ c.label }}{% endif %}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td class="m-name"><a href="{{ row.href }}"><strong>{{ row.name }}</strong></a>{% if !row.context.is_empty() %}<span class="sub">{{ row.context }}</span>{% endif %}{% if !row.basis.is_empty() %}<span class="sub">{{ row.basis }}</span>{% endif %}</td>
+        <td class="num right m-value">{% if row.level.is_empty() %}<span class="muted">{{ row.availability }}</span>{% else %}<span class="badge {{ row.level }}">{{ row.availability }}</span>{% endif %}</td>
+        <td class="num right m-when">{{ row.downtime }}{% if !row.counted.is_empty() %}<span class="sub">{{ row.counted }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

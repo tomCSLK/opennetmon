@@ -112,6 +112,11 @@ pub async fn record_poll(
         .map(<(i64, SensorState)>::try_from)
         .transpose()?
         .map(|(_, s)| s);
+    // The time since the poll before belongs to the status it had (for the availability).
+    if let Some(p) = &prev {
+        crate::storage::availability::count(&mut tx, sensor_id, p.status, p.last_poll_ms, ts_ms)
+            .await?;
+    }
     // After a pause the sensor starts afresh: no failure count, no stale "recovered" from before.
     let basis = prev.as_ref().filter(|p| p.status != Status::Paused);
     let next = advance(basis, assessment, ts_ms);
@@ -377,6 +382,30 @@ mod tests {
 
     fn fail() -> Assessment {
         Assessment::Failed("timeout".into())
+    }
+
+    #[tokio::test]
+    async fn every_poll_counts_the_time_since_the_one_before_for_the_availability() {
+        let (_dir, pool, sensor) = setup().await;
+        record_poll(&pool, sensor, 1_000, &[], &ok()).await.unwrap();
+        record_poll(&pool, sensor, 61_000, &[], &fail())
+            .await
+            .unwrap();
+        record_poll(&pool, sensor, 121_000, &[], &fail())
+            .await
+            .unwrap(); // warning → down
+        record_poll(&pool, sensor, 181_000, &[], &ok())
+            .await
+            .unwrap();
+        // The service was stopped for an hour: not counted.
+        record_poll(&pool, sensor, 3_781_000, &[], &ok())
+            .await
+            .unwrap();
+        let totals = crate::storage::availability::totals(&pool, 0, 10_000_000, None)
+            .await
+            .unwrap();
+        let t = totals[&sensor];
+        assert_eq!((t.up_ms, t.warning_ms, t.down_ms), (60_000, 60_000, 60_000));
     }
 
     #[tokio::test]
