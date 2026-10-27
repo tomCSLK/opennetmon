@@ -252,8 +252,12 @@ pub fn router(state: AppState) -> Router {
         .layer(security_header(header::REFERRER_POLICY, "same-origin"))
         .layer(security_header(
             header::CONTENT_SECURITY_POLICY,
-            "default-src 'self'; frame-ancestors 'none'; form-action 'self'",
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'",
         ))
+        // Pages show monitoring data and forms of signed-in users: never keep them in a cache, so they
+        // cannot be shown again (e.g. with the back button) after signing out. Static files set their
+        // own `no-cache` with an ETag.
+        .layer(security_header(header::CACHE_CONTROL, "no-store"))
         .layer(axum::middleware::from_fn(request_language))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
@@ -616,11 +620,14 @@ mod tests {
         let h = response.headers();
         assert_eq!(h[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
         assert_eq!(h[header::X_FRAME_OPTIONS], "DENY");
-        assert!(
-            h[header::CONTENT_SECURITY_POLICY]
-                .to_str()
-                .unwrap()
-                .contains("frame-ancestors 'none'")
-        );
+        let csp = h[header::CONTENT_SECURITY_POLICY].to_str().unwrap();
+        for directive in [
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "object-src 'none'",
+        ] {
+            assert!(csp.contains(directive), "{csp}");
+        }
+        assert_eq!(h[header::CACHE_CONTROL], "no-store");
     }
 }

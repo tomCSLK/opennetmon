@@ -320,13 +320,20 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (483, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (487, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).
 - **Gerätetests** gegen echte Omada-Hardware nur manuell (`tests/omada_manual.rs`, `#[ignore]`).
 - **Oberfläche:** Änderungen im Browser mit einer Wegwerfkopie der Entwicklungsdaten prüfen, hell und dunkel.
 - **Packaging:** `dev/release.sh` prüft Archiv, Installer-Probelauf und Inhalt des .deb; Paket im Podman-Container getestet (Installation, Update, remove, purge).
+- **Abhängigkeiten:** `cargo audit` (RustSec; Ausnahmen mit Begründung in `.cargo/audit.toml`), dazu Dependabot auf GitHub.
+- **Sicherheitstest 2026-10-27** (Code-Review und Angriffe auf eine Wegwerfkopie mit Admin- und Leserkonto): Rollen und CSRF auf allen Routen,
+  Zugriff ohne Anmeldung, XSS über Namen auf allen Seiten und in den JSON-Endpunkten, Steuerzeichen, Pfade außerhalb von `/static`, Weiterleitungen,
+  SQL, Sitzungen nach dem Abmelden, Wartezeit nach Fehlversuchen, TLS (nur 1.2/1.3) – in Ordnung. Behoben: MIB-Dateien mit langen Ketten von
+  Definitionen (12 GB, danach Absturz bei jedem Start), gleichzeitige Anmeldeversuche (2,4 GB und 123 statt 10 Versuche), vier Crates mit
+  RustSec-Meldungen, `Cache-Control: no-store` und strengere CSP. Danach erneut gemessen: höchstens ~200 MB, genau 10 Versuche je Adresse.
+  Nicht geändert: Die Umleitung von HTTP auf HTTPS übernimmt einen gültigen Host-Header (trifft nur den Anfragenden selbst).
 - **Vor jedem Abschluss:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 
 ## Sicherheit (Kurzfassung)

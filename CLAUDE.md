@@ -117,6 +117,8 @@ Ein Binary, ein Prozess, Module:
 - `snmp` – `SnmpClient` (GET und GETBULK-`walk` mit Timeout/Retries, v2c und v3, `heap_buffers`), `probe` für den Verbindungstest; `discovery` – Interface-Discovery über IF-MIB-Walks (`merge` ist reine Logik); Poller und Sensoren bauen darauf auf
 - `mib` – MIB-Parser (`mib::lexer`, `mib::parser`, tolerant) und Index (`MibIndex`: Auflösung über Module, Textual Conventions, Tabellen inkl. AUGMENTS,
   Suche, Name ↔ OID, `oid_target` für das Sensorformular); mitgelieferte Standard-MIBs in `mibs/` (per `rust-embed`), Uploads in `mib_files`;
+  OIDs höchstens 128 Stellen (`MAX_OID_ARCS`, begrenzt Rekursion und Speicher von `Resolver::resolve_def`; abgebrochene Auflösungen nicht im Memo; vorher
+  brachte eine Kette von Definitionen den Server auf 12 GB und nach dem Speichern bei jedem Start zum Absturz);
   Index im `AppState` (`mib_index()`, `reload_mibs()`), Seite `web::mibs` (hochgeladene Dateien nach Hersteller gruppiert über `mib::vendors` (Unternehmensnummer der meisten Objekte, sonst die der importierenden Module; Namen für ~50 Hersteller), darin Probleme zuerst, Auswahl `?files=problems|ok`, Filterfeld `static/table-filter.js`, Tabelle mit fester Höhe `.table-wrap.scroll`), Anzeige-Helfer `web::sensor_text` (Namen, Klartext, Einheiten) (`docs/mibs.md`); `mib::catalog` – bekannte Tabellen (PoE, CPU, Speicher, HOST-RESOURCES, ENTITY-SENSOR), Einheiten aus Beschreibungen
 - `ordering` – Anzeigereihenfolge: `natural_cmp` (Zahlen der Größe nach), `position_cmp` (Handordnung zuerst), `reorder` aus Formularpositionen;
   Spalte `position` in `groups`/`devices`/`sensors` (`NULL` = automatisch, beim Verschieben in eine andere Gruppe zurückgesetzt), Schreiben über
@@ -191,8 +193,12 @@ Ein Binary, ein Prozess, Module:
   (`POST /session`, höchstens einmal pro Minute; `GET /session` liefert die Restzeit und zählt nicht); **automatisches Aktualisieren zählt nicht**
   (Cookie `opennetmon_auto` von `static/refresh.js`), Skripte (Graph, Messwerte) auch nicht. Ausnahme je Benutzer `users.stay_signed_in`
   („angemeldet bleiben“, z. B. Wandbildschirm; nur Admins auf `/users/<id>`, Route `/users/<id>/idle`)
-- Sicherheits-Header auf allen Antworten (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`); Fehler von Seitenaufrufen (Accept `text/html`) zeigt `web::error_page` als Seite im Design (mit Seitenleiste bzw. Anmeldekarte; Meldung aus `error::ErrorMessage`, sonst je Status, nie axums englische Texte), JSON-Abfragen bleiben Klartext
-- Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/users-and-login.md`)
+- Sicherheits-Header auf allen Antworten (CSP mit `base-uri 'self'` und `object-src 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`,
+  `Cache-Control: no-store` außer bei den statischen Dateien); Fehler von Seitenaufrufen (Accept `text/html`) zeigt `web::error_page` als Seite im Design (mit Seitenleiste bzw. Anmeldekarte; Meldung aus `error::ErrorMessage`, sonst je Status, nie axums englische Texte), JSON-Abfragen bleiben Klartext
+- Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/users-and-login.md`).
+  Jeder Versuch zählt schon vor der Prüfung als Fehlversuch (`LoginThrottle::begin_attempt`, Prüfen und Zählen unter einer Sperre; Erfolg löscht),
+  sonst kämen gleichzeitige Versuche alle durch. Argon2-Prüfungen nur über `AppState::check_password`: höchstens 4 gleichzeitig (`PASSWORD_CHECKS`, je ~19 MiB),
+  Platz bleibt bis zum Ende der Prüfung belegt, nach 10 s ohne Platz 503 „login-busy“ (Sicherheitstest 2026-10-27: vorher 2,4 GB bei 200 Versuchen)
 - Omada-SNMP ist nur authNoPriv/MD5 (keine Verschlüsselung, schwacher Hash): nur im privaten Netz, Passwort lang und einzigartig wählen
 - Ausgelieferte Config (Paket, `install.sh`): `listen = "0.0.0.0:8443"` mit eingebautem HTTPS (seit 0.3.0, Wunsch des Nutzers: direkter Zugriff per IP und Port, zwingend HTTPS);
   Zertifikat `/etc/opennetmon/tls-cert.pem`/`tls-key.pem` bei der Installation selbst signiert erzeugt (`hostname -f`, `hostname -I`), ersetzbar durch ein eigenes
@@ -259,6 +265,7 @@ cargo run --example snmp_probe -- -t <ip>:161 v3 -u <user> --level auth-no-priv 
 cargo test --test omada_manual -- --ignored --nocapture                 # manuell, braucht omada.env (siehe Datei)
 dev/mib-oracle.sh dev/data/mibs/tplink/*.mib                          # MIB-Auflösung gegen net-snmp (snmptranslate) prüfen
 python3 -I dev/third-party-licenses.py                                 # THIRD-PARTY-LICENSES.txt neu erzeugen (--check: nur prüfen)
+cargo audit                                                            # bekannte Lücken in Abhängigkeiten (RustSec; Ausnahmen mit Begründung in .cargo/audit.toml)
 dev/deb.sh                                                             # Debian-Paket bauen (target/debian/), braucht cargo install cargo-deb --locked
 dev/release.sh                                                         # Release bauen und prüfen (Archiv, .deb und SHA256SUMS in target/dist/)
 dev/release.sh --publish --notes <datei>                               # zusätzlich Tag vX.Y.Z pushen und GitHub-Release anlegen (nur auf Ansage)
@@ -282,7 +289,8 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
 - Noch nicht released: mobile Ansicht und Symbole statt Text in den Listen (2026-10-26), Sensorlisten nur mit dem Namen (Beschreibung nur auf der
   Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B). Auf der Geräteseite bricht die Knopfleiste durch den Knopf
-  „Abhängigkeit“ unterhalb von etwa 1570 px in zwei Zeilen um (Automatisch/Aktualisieren eigene Zeile); ggf. später ins Menü „Aktionen“ verschieben
+  „Abhängigkeit“ unterhalb von etwa 1570 px in zwei Zeilen um (Automatisch/Aktualisieren eigene Zeile); ggf. später ins Menü „Aktionen“ verschieben.
+  Außerdem die Behebungen aus dem Sicherheitstest vom 2026-10-27 (`PLAN.md`, „Verifikation“)
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,

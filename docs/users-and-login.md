@@ -68,7 +68,9 @@ Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), pas
 - Lifetime: absolute `session_ttl_hours` (default 168 hours), and a sign-out after `session_idle_minutes` without activity (default 30, see below).
   Expired sessions are deleted when they are used and at every login.
 - CSRF: the login form uses a double-submit cookie (`opennetmon_login`), all other POST forms a token per session.
-- Response headers: `Content-Security-Policy` (own resources only), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
+- Response headers: `Content-Security-Policy` (own resources only, no `<base>` from elsewhere, no plugins), `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, and `Cache-Control: no-store` on everything but the static files (which use
+  `no-cache` with an ETag), so pages are not shown again from a cache after signing out.
 - Passwords never appear in logs. Failed logins are logged without the user name.
 
 ## Configuration
