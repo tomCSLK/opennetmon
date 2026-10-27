@@ -134,7 +134,7 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 /* ---------- shell: sidebar + content ---------- */
 .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
 .sidebar {
-  position: sticky; top: 0; height: 100vh;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; /* low windows: the foot (sign-out, source link) stays reachable */
   display: flex; flex-direction: column; gap: 1.25rem;
   padding: 1.1rem .85rem; background: var(--sidebar); color: var(--sidebar-text);
   border-right: 1px solid var(--sidebar-border);
@@ -504,6 +504,7 @@ a.button.secondary { color: var(--text); }
   .menu-toggle:hover { background: var(--sidebar-active); }
   .sidebar .nav, .sidebar .sidebar-foot { display: none; width: 100%; }
   .sidebar.open .nav, .sidebar.open .sidebar-foot { display: flex; }
+  .sidebar.open { max-height: 100vh; } /* the open menu scrolls on low screens */
   .sidebar-foot { margin-top: 0; }
   .content { padding: 1.1rem 1rem 2.5rem; }
   .form-grid, .threshold-grid { grid-template-columns: 1fr; }
@@ -579,6 +580,8 @@ a.button.secondary { color: var(--text); }
   table.m-simple tbody tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name act" "msg msg" "when when"; }
   table.m-simple .m-value { grid-area: act; }
   .card table.m-simple .m-when { justify-self: start; text-align: left; }
+  table.m-simple.m-has-status tbody tr { grid-template-areas: "name act" "status status" "msg msg" "when when"; }
+  table.m-simple.m-has-status .m-status { justify-self: start; }
   /* Touch targets: icon buttons in rows at least 40 px. */
   table.m-cards .icon-only { min-width: 2.5rem; min-height: 2.5rem; }
 }

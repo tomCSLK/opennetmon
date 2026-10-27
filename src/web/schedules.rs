@@ -15,7 +15,6 @@ use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::pause::{Origin, Pauses, Target};
 use crate::schedule::{self, Assignment, EVERY_DAY, Window};
-use crate::sensors::Unit;
 use crate::storage::pauses;
 use crate::storage::schedules::{self as store, Schedule};
 use crate::web::audit::{self, Object as AuditObject};
@@ -62,6 +61,21 @@ fn days(mask: u8) -> Msg {
     }
 }
 
+/// "15 Min.", "1 Std. 30 Min." or "2 T. 0 Std. 0 Min." (as `snmp::format_uptime`).
+fn duration(minutes: u32) -> Msg {
+    let (days, hours, minutes) = (minutes / 1_440, (minutes % 1_440) / 60, minutes % 60);
+    match (days, hours) {
+        (0, 0) => Msg::new("duration-minutes").with("minutes", minutes),
+        (0, _) => Msg::new("duration-hours-minutes")
+            .with("hours", hours)
+            .with("minutes", minutes),
+        _ => Msg::new("duration-days-hours-minutes")
+            .with("days", days)
+            .with("hours", hours)
+            .with("minutes", minutes),
+    }
+}
+
 /// "Mo–Fr ab 03:00 Uhr, 15 Min." or "2026-10-31 10:00 bis 2026-10-31 11:00".
 pub fn window_msg(w: &Window) -> Msg {
     match *w {
@@ -72,11 +86,7 @@ pub fn window_msg(w: &Window) -> Msg {
         } => Msg::new("schedule-weekly")
             .with("days", days(weekdays))
             .with("time", schedule::format_time(start_minute))
-            .with_value(
-                "duration",
-                Unit::Seconds,
-                f64::from(duration_minutes) * 60.0,
-            ),
+            .with("duration", duration(duration_minutes)),
         Window::Once { start_ms, end_ms } => Msg::new("schedule-once")
             .with("start", local(start_ms))
             .with("end", local(end_ms)),
@@ -799,7 +809,7 @@ mod tests {
 
         let page = send(&h.app, get(&format!("/schedules/{id}"), Some(&admin))).await;
         assert!(
-            page.body.contains("Mo, Di ab 03:00 Uhr, 15 Min."),
+            page.body.contains("Mo, Di ab 03:00 Uhr, 15 Min.<"),
             "{}",
             page.body
         );

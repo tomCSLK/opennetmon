@@ -23,7 +23,7 @@
   </div>
   {% else %}
   <div class="table-wrap">
-  <table class="m-cards m-simple">
+  <table class="m-cards m-simple m-has-status">
     <thead><tr><th>{{ t.get("schedule") }}</th><th>{{ t.get("schedule-windows") }}</th><th>{{ t.get("status") }}</th><th class="right">{{ t.get("schedule-used") }}</th></tr></thead>
     <tbody>
     {% for row in rows %}

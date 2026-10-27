@@ -44,7 +44,7 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
   `details.more-actions` (breit eine Knopfreihe, bis 640 px Dropdown über `static/app.js`; `theme.js` setzt die Klasse `js` an `<html>`); auf Geräte-, Gruppen-
   und Sensorseite steht in der Reihe nur Pausieren/Fortsetzen und Protokoll, die Einrichtung im inneren `details.more-actions.setup` (Dropdown auf jeder Breite,
   auf dem Handy Einträge des äußeren Menüs unter einer Linie; Sprunglinks wie `#delete` schließen das Menü; Test `page_heads_show_everyday_actions…`); Tabellen bis 640 px
-  als Blöcke (`table.m-cards` + Layoutklasse wie `m-sensors`/`m-log`/`m-simple`, Zellklassen `m-name`, `m-status`, `m-value`, `m-hide` …)
+  als Blöcke (`table.m-cards` + Layoutklasse wie `m-sensors`/`m-log`/`m-simple`, dazu `m-has-status` für `m-simple` mit Statuszelle; jede Zellklasse braucht einen Bereich im Layout, sonst entsteht eine schmale Zusatzspalte; Zellklassen `m-name`, `m-status`, `m-value`, `m-hide` …)
 - Statische Dateien (`web::assets`): `Cache-Control: no-cache` + ETag (SHA-256 des eingebetteten Inhalts), Antwort `304` bei unverändertem Stand –
   neue Versionen gelten nach einem Update sofort, ohne Versionsnummern in den Adressen pflegen zu müssen
 - SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
