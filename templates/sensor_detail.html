@@ -96,6 +96,7 @@
 </section>
 
 {% if layout.is_admin %}
+<div class="panel-row">
 <details class="card panel"{% if rename_failed %} open{% endif %}>
   <summary><h2>{{ t.get("name") }}</h2></summary>
   <form method="post" action="/sensors/{{ sensor.id }}/rename" class="inline-form">
@@ -118,6 +119,7 @@
   </form>
   <p class="hint">{{ t.get1("detail-interval-hint", "seconds", device.polling.interval_secs) }}</p>
 </details>
+</div>
 {% endif %}
 
 {% if let Some(st) = states %}

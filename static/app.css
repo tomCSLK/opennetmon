@@ -417,6 +417,12 @@ details.panel > summary { cursor: pointer; list-style: none; display: flex; alig
 details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
 details.panel:not([open]) > summary::after { transform: rotate(-90deg); }
+/* The heading keeps no margin of its own, so a closed panel is just as high as its title needs. */
+details.panel > summary h2 { margin: 0; }
+details.panel[open] > summary:not(.card-head) { margin-bottom: .9rem; }
+/* Short panels side by side (name and interval of a sensor); stacked on narrow screens. */
+.panel-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; align-items: start; }
+@media (max-width: 900px) { .panel-row { grid-template-columns: 1fr; } }
 .threshold-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 .9rem; }
 
 /* table of measured values (static/samples.js) */
