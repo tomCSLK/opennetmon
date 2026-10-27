@@ -83,7 +83,7 @@ router instead of one per switch sensor.
 
 - **Form** `/dependency/<group|device|sensor>/<id>` (button “Dependency” on the group page, the sensor page of a device and the sensor detail page):
   - *Inherit from the parent object* (default): group → subgroup → device → sensor, like pauses; the form says what is inherited and from where.
-  - *Depend on a sensor*: any sensor, chosen by device.
+  - *Depend on a sensor*: any sensor, chosen by device (listed like the device tree of the overview, each device with the path of its group).
   - *No dependency*: stops the inheritance.
   - **Delay after recovery** in seconds (0–3600, empty = inherit, in the end 0), inherited on its own: how long the objects stay paused after the
     sensor is fine again, e.g. so that a switch can boot after the router restarted.

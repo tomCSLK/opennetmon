@@ -9,11 +9,14 @@ use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 
+use std::collections::HashMap;
+
+use crate::devices::{Group, flatten_groups};
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::pause::{Dependency, Effective, Origin, Pauses, Setting, Target, parse_delay};
 use crate::storage::pauses::{self, DependencyError};
-use crate::storage::{devices, sensors};
+use crate::storage::{devices, groups, sensors};
 use crate::web::auth::CurrentUser;
 use crate::web::pause::{Object, object};
 use crate::web::sensors::now_ms;
@@ -60,6 +63,7 @@ struct SensorOption {
 }
 
 struct DeviceOptions {
+    /// The device with the path of its group ("Netzwerk › Switche › Switch Büro").
     name: String,
     sensors: Vec<SensorOption>,
 }
@@ -113,12 +117,19 @@ async fn render(
 ) -> Result<String> {
     let t = user.lang;
     let inherited = pauses.inherited(obj.target);
-    let mut devices: Vec<(i64, DeviceOptions)> = devices::list_devices(&state.pool)
-        .await?
+    let groups = groups::list_groups(&state.pool).await?;
+    let paths = group_paths(&groups);
+    let mut devices = devices::list_devices(&state.pool).await?;
+    in_tree_order(&groups, &mut devices, |d| d.group_id);
+    let mut devices: Vec<(i64, DeviceOptions)> = devices
         .into_iter()
         .map(|d| {
+            let name = match d.group_id.and_then(|g| paths.get(&g)) {
+                Some(path) => format!("{path} › {}", d.name),
+                None => d.name,
+            };
             let options = DeviceOptions {
-                name: d.name,
+                name,
                 sensors: Vec::new(),
             };
             (d.id, options)
@@ -281,6 +292,37 @@ pub async fn save(
     Ok((axum::http::StatusCode::UNPROCESSABLE_ENTITY, Html(page)).into_response())
 }
 
+/// Sorts `items` like the device tree of the overview: groups depth-first, ungrouped last. The sort is
+/// stable, so items of one group keep their order (`list_devices` orders by position within a group,
+/// which across groups would mix them).
+fn in_tree_order<T>(groups: &[Group], items: &mut [T], group_of: impl Fn(&T) -> Option<i64>) {
+    let rank: HashMap<i64, usize> = flatten_groups(groups)
+        .iter()
+        .enumerate()
+        .map(|(i, node)| (node.group.id, i))
+        .collect();
+    items.sort_by_key(|item| {
+        group_of(item)
+            .and_then(|g| rank.get(&g).copied())
+            .unwrap_or(usize::MAX)
+    });
+}
+
+/// "Netzwerk › Switche" for every group.
+fn group_paths(groups: &[Group]) -> HashMap<i64, String> {
+    let mut paths: HashMap<i64, String> = HashMap::new();
+    // Depth-first, so the parent's path is always known first.
+    for node in flatten_groups(groups) {
+        let group = node.group;
+        let path = match group.parent_id.and_then(|p| paths.get(&p)) {
+            Some(parent) => format!("{parent} › {}", group.name),
+            None => group.name,
+        };
+        paths.insert(group.id, path);
+    }
+    paths
+}
+
 #[cfg(test)]
 mod tests {
     use axum::http::StatusCode;
@@ -290,6 +332,50 @@ mod tests {
     use crate::sensors::spec::SensorSpec;
     use crate::storage::{devices::save_device, groups};
     use crate::web::testutil::*;
+
+    fn g(id: i64, name: &str, parent_id: Option<i64>) -> Group {
+        Group {
+            id,
+            name: name.to_owned(),
+            parent_id,
+        }
+    }
+
+    #[test]
+    fn sensors_to_choose_are_ordered_like_the_device_tree() {
+        // As stored: siblings in display order, "Netzwerk" with "Switche" before "Router" by hand.
+        let groups = [
+            g(1, "IOT", None),
+            g(2, "Netzwerk", None),
+            g(3, "Switche", Some(2)),
+            g(4, "Router", Some(2)),
+        ];
+        // Ordered by their position within each group, which mixes the groups.
+        let mut devices = vec![
+            ("Switch Keller", Some(3)),
+            ("Router", Some(4)),
+            ("Laptop", None),
+            ("Tibber", Some(1)),
+            ("Switch Wohnen", Some(3)),
+            ("FritzBox", Some(4)),
+        ];
+        in_tree_order(&groups, &mut devices, |d| d.1);
+        let names: Vec<&str> = devices.iter().map(|d| d.0).collect();
+        assert_eq!(
+            names,
+            [
+                "Tibber",
+                "Switch Keller",
+                "Switch Wohnen",
+                "Router",
+                "FritzBox",
+                "Laptop"
+            ]
+        );
+        let paths = group_paths(&groups);
+        assert_eq!(paths[&3], "Netzwerk › Switche");
+        assert_eq!(paths[&1], "IOT");
+    }
 
     async fn device(h: &Harness, name: &str, group: Option<i64>) -> i64 {
         save_device(
@@ -357,7 +443,11 @@ mod tests {
             page.body
         );
         assert!(page.body.contains("derzeit: keine Abhängigkeit"));
-        assert!(page.body.contains("<optgroup label=\"Router\">"));
+        // Grouped devices with their group, in tree order, ungrouped ones last.
+        let switch_at = page.body.find("<optgroup label=\"Switche › Switch\">");
+        let router_at = page.body.find("<optgroup label=\"Router\">");
+        assert!(switch_at.is_some() && router_at.is_some(), "{}", page.body);
+        assert!(switch_at < router_at);
         assert!(
             !page.body.contains("name=\"master\""),
             "only sensors have a master"

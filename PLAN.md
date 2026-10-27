@@ -230,7 +230,7 @@ Architektur in CLAUDE.md). Abweichungen und Ergänzungen zum Entwurf:
   (`alerting::deliver` verwirft Wechsel von Sensoren, die beim Versand durch Abhängigkeit pausiert sind).
 - Der Zustand „Pausiert“ wird von `storage::pauses::sync` geschrieben (nach jedem Zyklus mit Änderungen und alle 15 s), nur für Sensoren mit
   vorhandenem Zustand; dort entstehen auch die Protokolleinträge (`dependency_log`).
-- Formular `/dependency/<kind>/<id>` mit Hinweis auf den übernommenen Wert; Sensorauswahl nach Gerät gruppiert, ohne den Sensor selbst.
+- Formular `/dependency/<kind>/<id>` mit Hinweis auf den übernommenen Wert; Sensorauswahl nach Gerät gruppiert in der Reihenfolge des Gerätebaums (Geräte mit Gruppenpfad, `in_tree_order`), ohne den Sensor selbst.
 - Im Browser geprüft (Kopie der Testdaten, hell und dunkel). Offen: Auf der Geräteseite bricht die Knopfleiste unterhalb von etwa 1570 px um.
 
 Ursprünglicher Plan:
@@ -320,7 +320,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (482, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (483, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).
