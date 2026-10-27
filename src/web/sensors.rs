@@ -778,6 +778,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn page_heads_show_everyday_actions_and_keep_the_setup_in_a_menu() {
+        let h = harness(true).await;
+        let group = crate::storage::groups::create_group(&h.state.pool, "Netz", None)
+            .await
+            .unwrap();
+        let device = device_on(&h, 161).await;
+        let sensor = crate::storage::sensors::create_sensor(
+            &h.state.pool,
+            device,
+            "Ping",
+            &crate::sensors::spec::SensorSpec::Ping,
+        )
+        .await
+        .unwrap();
+        let (admin, _) = login(&h, "anna").await;
+        let pages = [
+            (
+                format!("/devices/{device}/sensors"),
+                vec![
+                    format!("/pause/device/{device}"),
+                    format!("/log?device={device}"),
+                ],
+                vec![
+                    format!("/devices/{device}/edit"),
+                    format!("/dependency/device/{device}"),
+                    format!("/devices/{device}/test"),
+                    format!("/devices/{device}/values"),
+                    format!("/devices/{device}/discover"),
+                ],
+            ),
+            (
+                format!("/groups/{group}"),
+                vec![format!("/pause/group/{group}")],
+                vec![
+                    format!("/groups/{group}/edit"),
+                    format!("/dependency/group/{group}"),
+                    format!("/groups/new?parent={group}"),
+                    format!("/devices/new?group={group}"),
+                ],
+            ),
+            (
+                format!("/sensors/{sensor}"),
+                vec![
+                    format!("/pause/sensor/{sensor}"),
+                    format!("/log?sensor={sensor}"),
+                ],
+                vec![format!("/dependency/sensor/{sensor}"), "#delete".to_owned()],
+            ),
+        ];
+        for (path, shown, setup) in &pages {
+            let page = send(&h.app, get(path, Some(&admin))).await;
+            let (row, menu) = head_actions(&page.body).unwrap_or_else(|| panic!("{path}"));
+            for href in shown {
+                assert!(
+                    row.contains(&format!("\"{href}")),
+                    "{path}: {href} in the row"
+                );
+                assert!(
+                    !menu.contains(&format!("\"{href}")),
+                    "{path}: {href} not in the menu"
+                );
+            }
+            for href in setup {
+                let action = format!("\"{href}");
+                assert!(menu.contains(&action), "{path}: {href} in the menu");
+                assert!(!row.contains(&action), "{path}: {href} not in the row");
+            }
+        }
+
+        // Readers get neither menu: only the log (where there is one) and the refresh.
+        let (viewer, _) = login(&h, "bert").await;
+        for (path, ..) in &pages {
+            let page = send(&h.app, get(path, Some(&viewer))).await;
+            assert!(!page.body.contains("more-actions"), "{path}");
+        }
+    }
+
+    #[tokio::test]
     async fn everyone_may_look_but_only_admins_may_change() {
         let h = harness(true).await;
         let device = device_on(&h, 161).await;

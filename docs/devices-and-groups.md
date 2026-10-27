@@ -20,6 +20,10 @@ The action messages (“Device created.” etc.) come in through `?msg=` and are
 **Phones:** the pages are laid out for narrow screens (tested at 360–430 px), without scrolling sideways:
 - The buttons in the head of the overview, the group pages, the sensor page of a device and the detail page are an **“Actions”** menu (`details.more-actions`):
   a row of buttons on wide screens, a drop-down on screens up to 640 px (`static/app.js`; without JavaScript it stays open as a row).
+- On the device, group and sensor pages only the everyday actions stand in that row: **Pause/Resume** and **Log** (groups have no log). Setting up
+  (edit, dependency, test connection, find values or interfaces, new subgroup or device, order, delete sensor) is in a second “Actions” menu inside the
+  row (`details.more-actions.setup`), a drop-down on every width, so the row fits on one line down to about 800 px. On phones its entries join the
+  outer menu below a line instead of a menu in the menu. Readers see neither menu.
 - Row actions everywhere are icons with the name as tooltip (`templates/icons.html`: edit ✎, delete 🗑, pause ‖, order ↕); deleting a sensor or a device
   always asks for confirmation, only an uploaded MIB file is deleted at once (it can be uploaded again).
 - Up to 560 px the tiles take three columns, the tree hides the row actions and the address line, and sensor labels show just their count.

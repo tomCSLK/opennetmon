@@ -43,9 +43,14 @@
     {% else %}
     <a class="button ghost" href="/pause/sensor/{{ sensor.id }}?back=sensor">{{ t.get("pause") }}</a>
     {% endif %}
-    <a class="button ghost" href="/dependency/sensor/{{ sensor.id }}">{{ t.get("dependency") }}</a>
     <a class="button ghost" href="/log?sensor={{ sensor.id }}">{{ t.get("log") }}</a>
+    <details class="more-actions setup" open>
+      {% call icons::more_summary(t) %}{% endcall %}
+      <div class="more-items">
+    <a class="button ghost" href="/dependency/sensor/{{ sensor.id }}">{{ t.get("dependency") }}</a>
     <a class="button ghost" href="#delete">{{ t.get("sensor-delete") }}</a>
+      </div>
+    </details>
       </div>
     </details>
     {% else %}

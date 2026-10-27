@@ -20,7 +20,6 @@
     <details class="more-actions" open>
       {% call icons::more_summary(t) %}{% endcall %}
       <div class="more-items">
-    <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
     {% if device_paused_itself %}
     <form method="post" action="/resume/device/{{ device.id }}">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
@@ -30,8 +29,12 @@
     {% else %}
     <a class="button ghost" href="/pause/device/{{ device.id }}?back=device">{{ t.get("pause") }}</a>
     {% endif %}
-    <a class="button ghost" href="/dependency/device/{{ device.id }}">{{ t.get("dependency") }}</a>
     <a class="button ghost" href="/log?device={{ device.id }}">{{ t.get("log") }}</a>
+    <details class="more-actions setup" open>
+      {% call icons::more_summary(t) %}{% endcall %}
+      <div class="more-items">
+    <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
+    <a class="button ghost" href="/dependency/device/{{ device.id }}">{{ t.get("dependency") }}</a>
     {% if offer_server_values %}
     <a class="button secondary" href="/devices/{{ device.id }}/server">{{ t.get("local-find-values") }}</a>
     {% endif %}
@@ -52,6 +55,8 @@
       </button>
     </form>
     {% endif %}
+      </div>
+    </details>
       </div>
     </details>
     {% else %}

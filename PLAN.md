@@ -183,7 +183,7 @@ opennetmon/
 Nach jedem Schritt ein lauffähiger Stand und ein kleiner, thematisch abgeschlossener Commit.
 **Vor jedem Commit und Push werden `CLAUDE.md` und `PLAN.md` auf den aktuellen Stand gebracht.**
 
-## Nächste Vorhaben (A–C eingeplant 2026-10-26 und in v0.5.0; D geplant 2026-10-27, noch nicht umgesetzt)
+## Nächste Vorhaben (A–C eingeplant 2026-10-26 und in v0.5.0; D umgesetzt 2026-10-27, noch nicht released)
 
 ### A. Mobile Ansicht überarbeiten – umgesetzt 2026-10-26 (in v0.5.0)
 
@@ -308,7 +308,15 @@ Bestand (Textknöpfe in Tabellenzeilen bzw. Kartenköpfen):
 - Die großen Knöpfe in den Werkzeugleisten oben auf den Seiten (Gerät bearbeiten, Verbindung testen, Werte suchen …) behalten ihren Text; für
   das Handy kommen sie in das Menü „Weitere Aktionen“ (A, Punkt 3).
 
-### D. Knopfleisten der Seitenköpfe: Alltag sichtbar, Einrichtung im Menü – geplant 2026-10-27 (noch nicht umgesetzt)
+### D. Knopfleisten der Seitenköpfe: Alltag sichtbar, Einrichtung im Menü – umgesetzt 2026-10-27 (noch nicht released)
+
+**Umgesetzt** wie geplant, ohne doppelte Knöpfe im HTML: Das äußere `details.more-actions` bleibt das Handy-Menü, darin steckt
+`details.more-actions.setup` mit der Einrichtung (breit ein Dropdown, rechtsbündig unter dem Knopf; auf dem Handy offen, ohne eigenen Knopf, unter
+einer Linie). `static/app.js` behandelt je nach Breite das eine oder das andere als Menü; Klick daneben, Esc und Sprunglinks (`#delete`) schließen es.
+Geprüft im Browser bei 1920 und 800 px sowie über eine lokale Testseite mit Iframes bei 360, 390 und 430 px, hell und dunkel; die Reihe passt bis
+800 px in eine Zeile, bei 360 px rutscht „Automatisch“ wie bisher in eine zweite Zeile.
+
+Plan:
 
 Befund: Auf der Geräteseite stehen für Admins bis zu neun Knöpfe plus „Automatisch“/„Aktualisieren“. Zwischen 641 und etwa 1570 px (die meisten
 Laptops) bricht die Reihe in zwei Zeilen um; seit dem Knopf „Abhängigkeit“ (v0.5.0) schon unterhalb von etwa 1570 px. Bis 640 px stecken die Knöpfe
@@ -348,7 +356,7 @@ Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 
 ## Verifikation
 
-- **Unit- und Handler-Tests** (487, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
+- **Unit- und Handler-Tests** (488, `cargo test`): Counter-/Ratenberechnung (inkl. Wrap/Reset), Statuslogik, Pausen, Abhängigkeiten, Config, Auth, Krypto, Validierung,
   Storage, SNMP-Client gegen den Fake-Agenten, MIB-Parser, Übersetzungskataloge; Handler mit `tower::ServiceExt::oneshot` (Helfer in `web/testutil.rs`).
 - **Integrationstests** gegen den lokalen `snmpd` (`tests/snmp_local.rs`, 5 Tests: Probe, falsche Community, v3 mit richtigem und falschem Passwort,
   64-Bit-Counter); der Ende-zu-Ende-Test steht noch aus (siehe „Offen“).

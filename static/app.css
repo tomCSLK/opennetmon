@@ -187,6 +187,20 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
 .more-actions > summary { display: none; }
 .more-items { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 .more-items form { margin: 0; }
+/* Setup actions (`details.more-actions.setup` inside the row): a menu on every width; on small screens its entries join the
+   outer menu instead (static/app.js opens and closes both). Without JavaScript they stand in the row. */
+html.js .more-actions.setup { position: relative; }
+html.js .more-actions.setup > summary { display: inline-flex; list-style: none; }
+html.js .more-actions.setup > summary::-webkit-details-marker { display: none; }
+html.js .more-actions.setup[open] > summary { background: var(--surface-2); }
+html.js .more-actions.setup:not([data-ready]) > .more-items { display: none; }
+html.js .more-actions.setup > .more-items { position: absolute; right: 0; top: calc(100% + .35rem); z-index: 20; flex-direction: column;
+  align-items: stretch; min-width: 15rem; padding: .45rem; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg); }
+html.js .more-actions.setup > .more-items > .button, html.js .more-actions.setup > .more-items > form > button { width: 100%;
+  justify-content: flex-start; padding: .6rem .75rem; color: var(--text); background: transparent; border-color: transparent; font-weight: 500; }
+html.js .more-actions.setup > .more-items > .button:hover, html.js .more-actions.setup > .more-items > form > button:hover {
+  background: var(--surface-2); color: var(--text); }
 .refresh { display: inline-flex; align-items: center; gap: .6rem; }
 .refresh-auto { display: inline-flex; align-items: center; gap: .35rem; margin: 0; color: var(--muted); font-size: .86rem;
   font-weight: 500; white-space: nowrap; cursor: pointer; }
@@ -503,6 +517,10 @@ a.button.secondary { color: var(--text); }
   .more-items > .button, .more-items > form > button { width: 100%; justify-content: flex-start; padding: .6rem .75rem;
     color: var(--text); background: transparent; border-color: transparent; font-weight: 500; }
   .more-items > .button:hover, .more-items > form > button:hover { background: var(--surface-2); color: var(--text); }
+  /* No menu in the menu: the setup entries follow the everyday ones, below a line. */
+  html.js .more-actions.setup > summary { display: none; }
+  html.js .more-actions.setup > .more-items { position: static; min-width: 0; margin-top: .3rem; padding: .3rem 0 0; background: none;
+    border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
 }
 @media (max-width: 560px) {
   /* Status tiles as a compact block of three columns, so the tree starts on the first screen. */

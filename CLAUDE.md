@@ -41,7 +41,9 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
   und Handy-Menü). Keine Inline-Styles (CSP): Breiten z. B. des Statusbands der Mini-Graphen als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen
   und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`).
   Handy (`docs/devices-and-groups.md`, „Phones“): Zeilenaktionen als Symbole aus den Makros in `templates/icons.html`; Knöpfe der Seitenköpfe im Menü
-  `details.more-actions` (breit eine Knopfreihe, bis 640 px Dropdown über `static/app.js`; `theme.js` setzt die Klasse `js` an `<html>`); Tabellen bis 640 px
+  `details.more-actions` (breit eine Knopfreihe, bis 640 px Dropdown über `static/app.js`; `theme.js` setzt die Klasse `js` an `<html>`); auf Geräte-, Gruppen-
+  und Sensorseite steht in der Reihe nur Pausieren/Fortsetzen und Protokoll, die Einrichtung im inneren `details.more-actions.setup` (Dropdown auf jeder Breite,
+  auf dem Handy Einträge des äußeren Menüs unter einer Linie; Sprunglinks wie `#delete` schließen das Menü; Test `page_heads_show_everyday_actions…`); Tabellen bis 640 px
   als Blöcke (`table.m-cards` + Layoutklasse wie `m-sensors`/`m-log`/`m-simple`, Zellklassen `m-name`, `m-status`, `m-value`, `m-hide` …)
 - Statische Dateien (`web::assets`): `Cache-Control: no-cache` + ETag (SHA-256 des eingebetteten Inhalts), Antwort `304` bei unverändertem Stand –
   neue Versionen gelten nach einem Update sofort, ohne Versionsnummern in den Adressen pflegen zu müssen
@@ -289,8 +291,8 @@ und `cargo test` müssen fehlerfrei durchlaufen.
 - Update-Möglichkeit (Zeitpunkt offen): heute neues `.deb` per `apt install`; später apt-Repository und/oder Hinweis auf neue Versionen in der Oberfläche
 - In v0.5.0: mobile Ansicht und Symbole statt Text in den Listen (2026-10-26), Sensorlisten nur mit dem Namen (Beschreibung nur auf der
   Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B) und die Behebungen aus dem Sicherheitstest vom 2026-10-27
-  (`PLAN.md`, „Verifikation“). Geplant, noch nicht umgesetzt: Knopfleisten der Geräte-, Gruppen- und Sensorseite mit Pausieren/Fortsetzen und
-  Protokoll sichtbar, die Einrichtung im Menü „⋯ Aktionen“ auf jeder Breite (Entscheidung des Nutzers 2026-10-27, `PLAN.md`, „Nächste Vorhaben“, D)
+  (`PLAN.md`, „Verifikation“). Nach v0.5.0 umgesetzt (noch nicht released): Knopfleisten der Geräte-, Gruppen- und Sensorseite mit
+  Pausieren/Fortsetzen und Protokoll sichtbar, die Einrichtung im Menü „⋯ Aktionen“ auf jeder Breite (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, D)
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,

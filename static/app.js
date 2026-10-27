@@ -88,22 +88,28 @@
   }
 
   // "More actions" in page heads (`details.more-actions`, rendered open): a menu on small screens,
-  // all buttons in one row on wide ones. Without JavaScript the buttons simply stay visible.
+  // all buttons in one row on wide ones. The setup actions inside (`.setup`) are the other way round:
+  // a menu on wide screens, entries of the outer menu on small ones. Without JavaScript all buttons
+  // simply stay visible.
   var mores = document.querySelectorAll('details.more-actions');
   if (mores.length && window.matchMedia) {
     var narrow = window.matchMedia('(max-width: 640px)');
+    var isMenu = function (m) { return m.classList.contains('setup') ? !narrow.matches : narrow.matches; };
     var fit = function () {
-      for (var m = 0; m < mores.length; m++) { mores[m].open = !narrow.matches; mores[m].setAttribute('data-ready', ''); }
+      for (var m = 0; m < mores.length; m++) { mores[m].open = !isMenu(mores[m]); mores[m].setAttribute('data-ready', ''); }
     };
     fit();
     if (narrow.addEventListener) { narrow.addEventListener('change', fit); }
-    var closeMenus = function (except) {
-      if (!narrow.matches) { return; }
-      for (var m = 0; m < mores.length; m++) { if (mores[m] !== except) { mores[m].open = false; } }
+    // Closes every open menu that does not contain `target` (all of them for `null`).
+    var closeMenus = function (target) {
+      for (var m = 0; m < mores.length; m++) {
+        if (isMenu(mores[m]) && !(target && mores[m].contains(target))) { mores[m].open = false; }
+      }
     };
     document.addEventListener('click', function (e) {
-      var inside = e.target.closest ? e.target.closest('details.more-actions') : null;
-      closeMenus(inside);
+      // A jump within the page (e.g. to "Delete sensor") leaves the page as it is, so close the menu as well.
+      var jump = e.target.closest && e.target.closest('.more-items a[href^="#"]');
+      closeMenus(jump ? null : e.target);
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeMenus(null); } });
   }

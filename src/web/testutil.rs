@@ -158,3 +158,11 @@ pub async fn add_v2c_profile(h: &Harness, name: &str, community: &str) -> i64 {
         .await
         .unwrap()
 }
+
+/// The page head actions of an admin page as (the row, the setup menu inside it); `None` without a setup menu.
+pub fn head_actions(body: &str) -> Option<(&str, &str)> {
+    let start = body.find("<details class=\"more-actions\" open>")?;
+    let setup = start + body[start..].find("<details class=\"more-actions setup\" open>")?;
+    let end = setup + body[setup..].find("</details>")?;
+    Some((&body[start..setup], &body[setup..end]))
+}
