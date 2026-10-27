@@ -3,13 +3,14 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-10-26, Release v0.4.4)
+## Stand (2026-10-27, Release v0.5.0)
 
-Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft seit v0.4.4 als `.deb` auf dem Ubuntu-Server des Nutzers;
-die Instanz auf dem Laptop dient nur noch zum Testen. Als Nächstes (Wunsch 2026-10-26, siehe „Nächste Vorhaben“): **mobile Ansicht überarbeiten**
-und **Abhängigkeiten wie in PRTG** (automatisch pausieren, wenn ein anderer Sensor ausfällt). Dazu Symbole statt Text bei den Zeilenaktionen
-der Listen, wie im Gerätebaum. Weiterhin offen: Test mit dem **echten Mailserver** des Nutzers, ein Ende-zu-Ende-Integrationstest, Feinschliff
-und eine **Update-Möglichkeit** (Zeitpunkt offen).
+Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft als `.deb` auf dem Ubuntu-Server des Nutzers (dort noch 0.4.4,
+Update auf 0.5.0 offen); die Instanz auf dem Laptop dient nur noch zum Testen. In v0.5.0 kamen die mobile Ansicht, Symbole in den Listen,
+**Abhängigkeiten wie in PRTG** und die Behebungen aus dem Sicherheitstest dazu (Vorhaben A–C); danach umgesetzt, noch nicht released: Knopfleisten
+der Seitenköpfe (D). **Geplant** sind die Vorhaben E–M (Dienst-Sensoren, Push, Verfügbarkeit, `cargo audit` in der CI, Update-Hinweis,
+Wartungsfenster, 2FA, Schlüsselrotation, Änderungsprotokoll); E, G, H, I, J und M jetzt, F, K und L in einer späteren Version. Weiterhin offen: Test mit dem
+**echten Mailserver** des Nutzers und ein Ende-zu-Ende-Integrationstest.
 
 Umgesetzt (Details in `docs/`):
 
@@ -344,11 +345,251 @@ wurden ein breiterer Umschaltpunkt nur für die Geräteseite (dann wären auf de
 - Prüfung: Handler-Tests (welcher Knopf wo, Leser ohne Menü), Browser bei 1400, 1024, 800 und 390 px, hell und dunkel (Wegwerfkopie).
   Doku: `docs/devices-and-groups.md` („Phones“) und der Design-Absatz in CLAUDE.md.
 
+## Weitere Vorhaben E–M (geplant 2026-10-27; E, G, H, I, J, M jetzt, F, K, L später)
+
+Wunsch des Nutzers (2026-10-27): alle Ideen aus der Runde nach v0.5.0 planen. **Entschieden (2026-10-27): E, G, H, I, J und M werden jetzt
+umgesetzt, F, K und L kommen in einer späteren Version.** Bei den Punkten **Zu entscheiden** am Ende jedes Vorhabens gilt jeweils die Empfehlung.
+Reihenfolge der Umsetzung: H, E (bringt den HTTP-Client), I, J (bringt die Zeitzonen), G, M. Für alle gilt wie bisher: Texte in beiden Katalogen,
+Doku in `docs/` (Englisch), README-Statustabelle, Handler- und Unit-Tests, UI im Browser prüfen (Wegwerfkopie, hell/dunkel, Handybreiten),
+neue Abhängigkeiten nur mit Begründung und `THIRD-PARTY-LICENSES.txt`, Migrationen mit der nächsten freien Nummer. Releases bündeln mehrere Vorhaben.
+
+**Was voneinander abhängt:**
+
+- E (Dienst-Sensoren) bringt einen **HTTP(S)-Client** mit (`hyper-util` mit Feature `client-legacy`, `tokio-rustls`, `webpki-roots`, alle schon im
+  Build, kein neues Crate). F (Push) und I (Update-Hinweis) brauchen ihn auch. Wer zuerst umgesetzt wird, baut ihn als eigenes Modul `http_client`.
+- L (Schlüsselrotation) muss alle verschlüsselten Spalten kennen, auch die neuen aus F (Tokens) und K (TOTP-Secrets). Dafür bekommt L ein
+  Verzeichnis der verschlüsselten Spalten mit einem Test gegen das Schema. Damit ist die Reihenfolge egal.
+- G (Verfügbarkeit) zählt pausierte Zeit nicht mit. Damit zählen auch die Wartungsfenster aus J automatisch nicht mit.
+- M (Änderungsprotokoll) protokolliert auch die Ereignisse aus K (2FA ein/aus, Zurücksetzen), wenn K schon da ist.
+
+Aufwand grob: klein = bis ein halber Tag, mittel = ein bis zwei Tage.
+
+| | Vorhaben | Aufwand | Nutzen im Heimnetz |
+|---|---|---|---|
+| E | Sensoren HTTP(S), TCP-Port, DNS, TLS-Zertifikat | mittel | hoch: Dienste statt nur Geräte |
+| F | Push-Benachrichtigungen (ntfy, Gotify, Telegram, Webhook) | klein bis mittel | hoch |
+| G | Verfügbarkeit in Prozent, Berichte | mittel | mittel |
+| H | `cargo audit` in der CI | klein | Sicherheit |
+| I | Hinweis auf neue Versionen | klein | mittel |
+| J | Wartungsfenster nach Zeitplan | mittel | mittel |
+| K | Zwei-Faktor-Anmeldung (TOTP) | mittel | Sicherheit (LAN, Port 8443) |
+| L | Rotation von `secret.key` | klein bis mittel | Betrieb |
+| M | Änderungsprotokoll (wer hat was geändert) | klein bis mittel | erst ab mehreren Admins |
+
+### E. Sensoren für Dienste: HTTP(S), TCP-Port, DNS, TLS-Zertifikat
+
+Ziel: prüfen, ob ein Dienst antwortet, nicht nur ob das Gerät lebt. Beispiele: ciesliks.de, Home Assistant, beide AdGuard-Instanzen (DNS),
+Omada-Controller, Traefik und das Let's-Encrypt-Wildcard-Zertifikat. Für Ziele ohne eigenes Gerät (z. B. ciesliks.de) legt man ein Gerät ohne SNMP an.
+
+Neue Sensortypen, alle über den `Sensor`-Trait (keine Sonderfälle im Poller), Adresse vom Gerät (`ctx.host`):
+
+| Typ | Einstellungen | Kanäle | Status |
+|---|---|---|---|
+| `http` | URL (Standard `https://<Gerät>/`), Methode GET/HEAD, erwartete Statuscodes (Standard 200–399), optional Schlüsselwort im Inhalt, Weiterleitungen folgen (aus/bis 5), Zertifikat prüfen (an; aus z. B. für den Omada-Controller mit eigenem Zertifikat) | Antwortzeit (ms), Statuscode | Ausfall bei Fehler, falschem Code oder fehlendem Schlüsselwort |
+| `tcp` | Port | Verbindungszeit (ms) | Ausfall, wenn keine Verbindung |
+| `dns` | Name, Typ A/AAAA, Server (Standard: das Gerät selbst, also z. B. die AdGuard-Instanz), optional erwartete Adresse | Antwortzeit (ms), Antwort passt (Statuswert) | Ausfall ohne Antwort oder bei falscher Adresse |
+| `tls` | Port (Standard 443), Servername (SNI, Standard Gerät) | Tage bis Ablauf | Warnung unter 14 Tagen, Ausfall unter 3 Tagen (Standard, als Kanalgrenzen änderbar); Ausfall bei ungültiger Kette oder falschem Namen |
+
+- **HTTP-Client** in einem eigenen Modul `http_client` (siehe oben): Timeout wie das Gerät, höchstens 1 MiB Inhalt lesen (nur für das Schlüsselwort),
+  `User-Agent: opennetmon/<Version>`, keine Cookies, keine Zugangsdaten in Logs. Weil nur Admins Sensoren anlegen, ist eine beliebige URL in Ordnung.
+- **DNS:** eigene kleine Abfrage über UDP (Anfrage bauen, Antwort für A/AAAA lesen, mit Tests gegen feste Pakete) statt eines Resolver-Crates. Wir
+  brauchen nur „fragt diesen Server, kommt eine passende Antwort“. Das ist bewusst der Server des Geräts, nicht der des Systems, sonst merkt man den
+  Ausfall einer AdGuard-Instanz nicht.
+- **TLS:** Handshake mit `tokio-rustls`, Zertifikat aus der Verbindung. Für das Ablaufdatum braucht es einen X.509-Parser (Entscheidung 2).
+- **Einheit** `Unit::Days` neu (Anzeige „Tage“).
+- **Speicherung:** Die Einstellungen kommen als JSON in eine neue Spalte `sensors.params` (geprüft über `SensorSpec`), statt für jeden Typ eigene
+  Spalten anzulegen. Weil die Spalte `kind` einen CHECK hat, baut `storage::migrate` die Tabelle `sensors` noch einmal neu auf (wie bei `local`),
+  mit den neuen Typen und `params`.
+- **Oberfläche:** „Sensor hinzufügen“ bekommt die vier Typen mit eigenem Formular. Die Detailseite zeigt beim TLS-Sensor zusätzlich Aussteller und
+  Ablaufdatum. Gerätevorlagen übernehmen die neuen Typen.
+- **Tests:** lokaler HTTP- und TLS-Testserver im Test (es gibt schon `rcgen` und `tokio-rustls`), DNS mit festen Paketen und einem UDP-Testserver.
+  Doku in `docs/sensors.md`.
+
+Zu entscheiden:
+
+1. Alle vier Typen in einem Rutsch oder zuerst nur HTTP(S) und TLS? Empfehlung: alle vier, TCP und DNS sind klein, wenn der Rest steht.
+2. Ablaufdatum lesen: neues Crate `x509-parser` (MIT/Apache-2.0, steht schon im Lockfile, wird aber nicht gebaut) oder selbst den kleinen Teil der
+   DER-Struktur lesen. Empfehlung: `x509-parser`, weil eigenes ASN.1-Parsen fehleranfällig ist.
+
+### F. Push-Benachrichtigungen zusätzlich zur Mail
+
+Ziel: Ausfälle schneller aufs Handy bringen und nicht nur vom (noch nicht mit dem echten Server getesteten) Mailversand abhängen.
+
+- **Kanäle**, beliebig viele, je an/aus: **ntfy** (Server-URL, Topic, optional Token; Priorität hoch bei Ausfall), **Gotify** (URL, App-Token),
+  **Telegram** (Bot-Token, Chat-ID), **Webhook** (URL, JSON mit den Ereignissen, optional `Authorization: Bearer`).
+- **Tabelle** `notification_channels` (Art, Name, aktiv, URL, Ziel, Token verschlüsselt mit eigenem Kontext je Spalte, „auch Warnungen“).
+  Der Sendelog `notifications` bekommt eine Spalte für den Kanal (Mail oder Kanal-ID).
+- **Versand:** Der `Notifier` sammelt wie bisher 10 s und schickt dieselbe Zusammenfassung an die Mail und an jeden aktiven Kanal. Der Text kommt aus
+  `alerting::compose`, für Push als kurze Fassung (Titel plus wenige Zeilen, „+ 12 weitere“). Fehler eines Kanals blockieren die anderen nicht.
+  Abhängigkeiten und Pausen gelten wie bei der Mail.
+- **Oberfläche:** Seite „Benachrichtigungen“ (die Mail-Einstellungen werden ein Abschnitt darin), je Kanal „Testnachricht senden“, Sendelog mit Kanal.
+  Nur Admins. Tokens erscheinen nur als „gesetzt/nicht gesetzt“.
+- **Datenschutz:** In der Doku: Topics auf ntfy.sh sind für jeden lesbar, der den Namen kennt. Also langen Zufallsnamen oder Token nutzen, oder ntfy
+  selbst betreiben. Die Nachricht enthält Geräte- und Sensornamen.
+- **Tests:** Versand gegen einen lokalen HTTP-Testserver je Art, Kurzfassung, Fehler eines Kanals. Doku in `docs/notifications.md`.
+
+Zu entscheiden:
+
+1. Welche Kanäle? Empfehlung: ntfy und Webhook zuerst (decken fast alles ab, auch Home Assistant über dessen Webhook), Gotify und Telegram danach,
+   weil sie nur kleine Ergänzungen sind.
+2. ntfy.sh (fremder Server) oder selbst betreiben (z. B. als Docker-Container auf dem Server, in `Serveradmin/`)? Das betrifft nur den Betrieb,
+   nicht den Code.
+
+### G. Verfügbarkeit in Prozent und Berichte
+
+Ziel: wie die Berichte in PRTG sehen, wie zuverlässig ein Gerät oder Sensor über 7 bzw. 30 Tage oder einen Monat war.
+
+- **Befund:** Die Ereignistabelle `events` hält nur die neuesten 500 Wechsel und taugt dafür nicht. Daher eine neue Tabelle
+  `availability_1h` (Sensor, Stunde, Millisekunden je Zustand In Ordnung/Warnung/Ausfall/Unbekannt/Pausiert) und ein Rollup `availability_1d`.
+- **Zählen** in `storage::status::record_poll` in derselben Transaktion: die Zeit seit der letzten Abfrage geht an den vorigen Zustand, auf die
+  Stunden verteilt. Lücken über dem Dreifachen des Intervalls (Dienst gestoppt, Rechner aus) zählen als „keine Daten“, nicht als verfügbar.
+  Aufbewahrung wie die Messwerte: Stunden für `retention_hourly_days`, Tage unbegrenzt (bei 70 Sensoren etwa 25 000 Zeilen im Jahr).
+- **Rechnung wie in PRTG:** verfügbar = In Ordnung + Warnung, nicht verfügbar = Ausfall. Pausierte Zeit (von Hand, durch Abhängigkeit, später
+  Wartungsfenster) und Zeit ohne Daten zählen nicht mit. Ein Gerät gilt als verfügbar nach seinem Master-Sensor, sonst nach dem Ping-Sensor, sonst
+  als Mittel seiner Sensoren.
+- **Anzeige:** Sensordetail mit 24 h, 7 Tagen, 30 Tagen und Ausfallzeit. Neue Seite „Berichte“ (`/reports`, auch für Leser): Tabelle je Gerät bzw.
+  Sensor für einen wählbaren Zeitraum (7 Tage, 30 Tage, ein Monat), sortierbar wie die Statuslisten, Download als CSV.
+- **Monatsbericht per Mail** (optional, Schalter in den Benachrichtigungen): am Ersten eines Monats die Verfügbarkeit des Vormonats je Gerät, die
+  schlechtesten zuerst.
+- Verfügbarkeit gibt es erst ab dem Update, nachträglich lässt sie sich nicht berechnen.
+- **Tests:** Zählung über Stundengrenzen, Lücken, Pausen, Rollup, Rechnung für Geräte, Handler. Doku neu `docs/reports.md`.
+
+Zu entscheiden:
+
+1. Monatsgrenzen in welcher Zeitzone? Gespeichert wird in UTC. Empfehlung: in der Zeitzone des Servers (braucht dieselbe Zeitzonenbibliothek wie J;
+   ohne J zunächst UTC, dann liegen die Grenzen 1–2 h verschoben).
+2. Monatsbericht per Mail gleich mit oder später? Empfehlung: später, zuerst Seite und CSV.
+
+### H. `cargo audit` in der CI
+
+Befund aus dem Sicherheitstest: Dependabot hatte die vier RustSec-Meldungen nicht gemeldet, `cargo audit` schon.
+
+- Neuer Job `audit` in `.github/workflows/ci.yml`: bei Push und Pull Request und zusätzlich **wöchentlich per `schedule`** (Montag früh) sowie von Hand
+  (`workflow_dispatch`). So fallen neue Meldungen auf, auch wenn gerade nicht entwickelt wird. GitHub schickt bei einem Fehlschlag eine Mail an den
+  Besitzer.
+- Weil Actions nur von `actions/*` kommen dürfen: `cargo install cargo-audit --locked --version <fest>` mit `actions/cache` auf das Binary
+  (Schlüssel = Version), die Datenbank holt `cargo audit` selbst. Ausnahmen bleiben in `.cargo/audit.toml` mit Begründung.
+- Schwachstellen lassen den Job fehlschlagen, Warnungen (unmaintained, yanked) nur anzeigen; Letzteres prüft der Release.
+- `dev/release.sh` prüft `cargo audit` ebenfalls vor dem Veröffentlichen.
+- Doku: Abschnitt „Tests“/„Befehle“ in CLAUDE.md, `CONTRIBUTING.md`, `SECURITY.md`.
+
+Zu entscheiden: nichts Grundsätzliches. Empfehlung: Wochenlauf ja.
+
+### I. Hinweis auf neue Versionen in der Oberfläche
+
+Offener Punkt „Update-Möglichkeit“, erster Schritt. Installiert wird weiterhin von Hand (`apt install ./….deb`), weil das root braucht und die
+Unit bewusst ohne Rechte läuft.
+
+- Hintergrundaufgabe einmal am Tag (erste Abfrage einige Minuten nach dem Start): `GET https://api.github.com/repos/tomCSLK/opennetmon/releases/latest`
+  über den HTTP-Client aus E, mit `User-Agent` und `If-None-Match`. Vorabversionen zählen nicht. Ergebnis nur im Speicher.
+- Ist die Version neuer als `web::VERSION`, zeigt die Seitenleiste **für Admins** „Version 0.x.y verfügbar“ mit Link auf die Release-Seite. Auf der
+  Seite „Über“ bzw. unter der Versionsnummer steht, wann zuletzt geprüft wurde und mit welchem Ergebnis.
+- Config `update_check = true|false`. Fehler (kein Internet, Rate-Limit) nur im Log auf Stufe `debug`, nie als Störung in der Oberfläche.
+- Datenschutz in `docs/operations.md`: GitHub sieht einmal am Tag die Adresse des Servers, sonst wird nichts gesendet.
+- Tests: Versionsvergleich, Antwort eines lokalen Testservers, Anzeige nur für Admins.
+- Später möglich (nicht Teil davon): eigenes apt-Repository auf GitHub Pages, dann reicht `apt upgrade`.
+
+Zu entscheiden: Standard an oder aus? Empfehlung: in der ausgelieferten Config **an** mit Kommentar, im Code-Standard aus.
+
+### J. Wartungsfenster nach Zeitplan
+
+Ziel: geplante Unterbrechungen (z. B. nächtliches Omada-Backup, Neustarts, Updates am Server) ohne Ausfallmails, ohne jedes Mal von Hand zu pausieren.
+
+- **Zeitpläne** wie in PRTG als eigene, benannte Objekte (Seite `/schedules`, nur Admins): wiederkehrend (Wochentage, Beginn, Dauer, z. B.
+  „täglich 03:00, 15 min“) oder einmalig (Beginn und Ende, z. B. „Server-Update am Samstag 10–11 Uhr“). Tabelle `schedules` plus Einträge.
+- **Zuordnung** je Gruppe, Gerät und Sensor wie bei der Abhängigkeit: übernehmen (Standard), bestimmter Zeitplan, keiner. Vererbung nach unten.
+- **Wirkung** wie eine Pause: berechnet in `pause::Pauses` als neue Quelle `Source::Schedule` (nicht gespeichert), Zustand „Pausiert“ mit dem Namen
+  des Zeitplans, keine Abfragen, keine Mails. Danach weiter wie nach einer Pause von Hand (keine nachträgliche Erholungsmail). Das Protokoll zeigt
+  Beginn und Ende je Fenster (ein Eintrag je Fenster, nicht je Sensor). Abhängige Objekte folgen über die Abhängigkeit wie bei einer Pause.
+- **Zeitzone:** Zeitpläne gelten in Ortszeit, sonst verschieben sie sich bei der Sommerzeit. Dafür ein Crate mit Zeitzonen (Entscheidung 1), Zone vom
+  System (`/etc/localtime`), überschreibbar per Config `time_zone = "Europe/Berlin"`.
+- **Prüfung** im bestehenden 15-s-Takt des Pollers (`storage::pauses::sync_all`). Genauigkeit also etwa 15 s.
+- Anzeige: auf Gruppen-, Geräte- und Sensorseite „nächstes Wartungsfenster: …“; Knopf im Menü „⋯ Aktionen“ (Einrichtung).
+- **Tests:** Berechnung der Fenster (auch über Mitternacht und an den Tagen der Zeitumstellung), Vererbung, Poller ohne Mail, Handler. Doku in
+  `docs/devices-and-groups.md` („Maintenance windows“).
+
+Zu entscheiden:
+
+1. Zeitzonen-Crate: `jiff` (MIT/Unlicense, liest die Zeitzonendatenbank des Systems, aktiv gepflegt) oder `chrono` plus `chrono-tz` (bringt eine
+   eigene Datenbank mit, größer). Empfehlung: `jiff`.
+2. Benannte Zeitpläne wie in PRTG oder Fenster direkt am Objekt? Empfehlung: benannt, weil man dasselbe Fenster an mehrere Geräte hängt.
+
+### K. Zwei-Faktor-Anmeldung (TOTP)
+
+Von außen schützt Cloudflare Access mit MFA, im LAN reicht über Port 8443 das Passwort.
+
+- **Je Benutzer freiwillig**, eingeschaltet unter „Mein Konto“: Secret erzeugen, als QR-Code und als Text zeigen, mit einem Code bestätigen. Dazu
+  zehn **Wiederherstellungscodes** (einmal angezeigt, gespeichert nur als SHA-256, je einmal nutzbar).
+- **Anmeldung in zwei Schritten:** nach richtigem Passwort keine Sitzung, sondern ein kurzlebiger Zwischenschritt (zufälliges Token, 5 min, nur als
+  Hash gespeichert) und die Seite „Code eingeben“. Erst ein gültiger Code (30-s-Schritte, ±1 Schritt Toleranz) erzeugt die Sitzung. Derselbe Code gilt
+  nur einmal (`users.totp_last_step`). Fehlversuche zählen in `auth::throttle` wie falsche Passwörter.
+- **Umsetzung:** TOTP nach RFC 6238 selbst (wenige Zeilen; `hmac` und `sha1` werden über `snmp2` schon gebaut, kommen nur als direkte Abhängigkeit
+  dazu), Base32 selbst. Secret verschlüsselt mit `SecretBox` (Kontext `users.totp_secret`). Für den QR-Code ein Crate (Entscheidung 1).
+- **Zurücksetzen:** Admins auf `/users/<id>` (beendet die Sitzungen des Benutzers), dazu CLI `opennetmon user 2fa-reset <name>`, falls der einzige
+  Admin sein Handy verliert. „Mein Konto“ zeigt, ob 2FA an ist; Ausschalten nur mit Passwort und Code.
+- „Angemeldet bleiben“ (`stay_signed_in`) und das Abmelden ohne Aktivität bleiben unverändert.
+- **Tests:** Codes aus den Testvektoren von RFC 6238, Ablauf des Zwischenschritts, Wiederverwendung, Wiederherstellungscodes, Throttle, CSRF,
+  Handler. Doku in `docs/users-and-login.md`.
+
+Zu entscheiden:
+
+1. QR-Code: Crate `qrcode` (MIT/Apache-2.0, SVG-Ausgabe ohne weitere Abhängigkeiten) oder nur den Text zum Abtippen. Empfehlung: `qrcode`.
+2. Pflicht für Admins einstellbar (Config `require_2fa_for_admins`)? Empfehlung: ja, aber Standard aus.
+
+### L. Rotation von `secret.key`
+
+Offener Punkt. Heute lässt sich der Schlüssel nicht wechseln, ohne alle SNMP-Passwörter und das SMTP-Passwort neu einzugeben.
+
+- **CLI** `opennetmon key rotate` bei gestopptem Dienst:
+  1. Sicherung der Datenbank (`VACUUM INTO`, wie `opennetmon backup`)
+  2. neuen Schlüssel als `secret.key.new` (0600) schreiben
+  3. in einer Transaktion alle verschlüsselten Werte mit dem alten Schlüssel entschlüsseln und mit dem neuen verschlüsseln
+  4. Dateien umbenennen: `secret.key` → `secret.key.old-<Datum>`, `secret.key.new` → `secret.key`
+- **Verzeichnis der verschlüsselten Spalten** an einer Stelle (Tabelle, Spalte, Kontext). Ein Test prüft, dass jede Spalte `*_enc` im Schema darin
+  steht, damit spätere Secrets (F, K) nicht vergessen werden.
+- **Schlüssel-Kennung:** neue Tabelle `meta` mit dem Fingerabdruck des Schlüssels (gekürzter SHA-256), in derselben Transaktion geschrieben. Der Server
+  prüft beim Start, ob Schlüssel und Datenbank zusammenpassen, und meldet sonst klar „Schlüssel passt nicht zur Datenbank“. Das hilft auch heute
+  schon, wenn eine Sicherung mit dem falschen Schlüssel zurückgespielt wird; bricht der Ablauf zwischen Schritt 3 und 4 ab, sagt die Meldung, welche
+  Datei passt.
+- **Dienst gestoppt:** Der Server hält beim Laufen eine Sperre auf eine Datei neben der Datenbank (`flock` über `rustix`), `key rotate` bricht ab,
+  wenn sie belegt ist. Sonst würde der laufende Server mit dem alten Schlüssel weiterschreiben.
+- Doku in `docs/operations.md`: Sicherungen von vorher brauchen den alten Schlüssel, ihn also bei den Sicherungen aufbewahren.
+- **Tests:** Rotation mit Profilen und Mail-Passwort, Abbruch mittendrin, falscher Schlüssel beim Start, Sperre.
+
+Zu entscheiden: nichts Grundsätzliches. Empfehlung: die Startprüfung des Fingerabdrucks gleich mit einbauen.
+
+### M. Änderungsprotokoll (wer hat wann was geändert)
+
+- **Tabelle** `audit_log` (Zeit, Benutzer, Adresse, Aktion, Objektart, Objekt-ID, Objektname zum Zeitpunkt, Kurztext als `Msg::encode`).
+- **Erfasst:** Anlegen, Ändern und Löschen von Gruppen, Geräten, Sensoren, SNMP-Profilen, Benutzern, Vorlagen und MIB-Dateien, dazu Schwellwerte,
+  Abhängigkeiten, Benachrichtigungen, Reihenfolge, An- und Abmelden (auch fehlgeschlagene Anmeldungen) und später 2FA (K). Pausen stehen schon im
+  Protokoll.
+- **Nie** Secrets: bei Passwörtern und Tokens nur „geändert“. Bei anderen Feldern alt → neu (Entscheidung 1).
+- Geschrieben in den Admin-Handlern über einen kleinen Helfer (`audit::record`), in derselben Transaktion wie die Änderung, wo es eine gibt.
+- **Seite** `/audit` nur für Admins: sortierbar und durchsuchbar wie `/log`, Filter nach Benutzer und Objekt, Link aufs Objekt.
+- Aufbewahrung 365 Tage (Config `retention_audit_days`), vom bestehenden Wartungslauf gelöscht.
+- **Tests:** je Handler-Gruppe ein Eintrag, keine Secrets im Protokoll (Test über alle Einträge eines Durchlaufs), Rollen. Doku in
+  `docs/users-and-login.md`.
+
+Zu entscheiden:
+
+1. Nur „Feld X geändert“ oder alt → neu? Empfehlung: alt → neu (außer Secrets), sonst ist das Protokoll wenig wert.
+2. Anmeldungen mitprotokollieren? Empfehlung: ja, auch fehlgeschlagene (mit Adresse); das journald-Log hat sie heute nur auf Stufe `info`.
+
+### Kleinere offene Punkte (ohne eigenen Plan)
+
+- Test mit dem echten Mailserver des Nutzers (braucht den Nutzer), Ende-zu-Ende-Integrationstest (Server starten, Gerät gegen lokalen `snmpd`, Poller,
+  Statuswechsel, Mail an einen Test-SMTP-Server).
+- Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen außer dem Master noch nicht.
+- ER605 zusätzlich über die Omada-API (nicht im MVP, nur auf Wunsch).
+
 ## Bewusst nicht im MVP
 
 SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET, Mandantenfähigkeit, Omada-Controller-API,
 Herstellermibs außer gezielt benötigten TP-Link-OIDs.
 Zurückgestellt gegenüber früheren Ideen: SNMP v1, Subnetz-Scan, Docker-Betrieb, htmx.
+Verworfen am 2026-10-27 nach Abwägung: RPC über UDP (als Sensor für ONC-RPC reicht bei NFSv4 der TCP-Port-Sensor aus E; als Schnittstelle
+von opennetmon wäre eine JSON-API über HTTPS der bessere Weg).
 
 Optionen, erst auf Nachfrage (z. B. ein GitHub-Issue):
 - Knopf „Protokoll“ auch auf Gruppenseiten (`/log?group=<id>` mit allen Geräten der Gruppe und ihrer Untergruppen); am 2026-10-24 bewusst
@@ -382,7 +623,7 @@ Begrenzung der Anmeldeversuche (`auth::throttle`).
 ## Offene Punkte (vom Nutzer zu klären)
 
 - ER605: läuft als Gerät ohne SNMP (nur Ping); später zusätzlich über die Omada-API?
-- Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt
-- Update-Möglichkeit: Weg und Zeitpunkt
+- Schlüsseldatei (`secret.key`): Sicherung getrennt von der Datenbank einplanen; Schlüsselrotation ist noch nicht umgesetzt (geplant als Vorhaben L)
+- Update-Möglichkeit: Weg und Zeitpunkt (erster Schritt geplant als Vorhaben I)
 
 Geklärt: Beiträge nach DCO (2026-10-21). Der Server hat Internetzugang und betreibt weitere Programme (2026-10-21).
