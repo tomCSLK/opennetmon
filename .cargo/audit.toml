@@ -1,0 +1,8 @@
+# Settings for `cargo audit` (RustSec advisory database).
+[advisories]
+ignore = [
+    # rsa (Marvin timing attack, no fixed version): only listed in Cargo.lock as a dependency of
+    # sqlx-mysql, which sqlx records there but never builds for this crate (`cargo tree -i sqlx-mysql
+    # --target all -e all` prints nothing). Recheck when sqlx changes.
+    "RUSTSEC-2023-0071",
+]
