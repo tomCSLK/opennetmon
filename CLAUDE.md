@@ -327,6 +327,8 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   Detailseite), Abhängigkeiten wie in PRTG (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, B) und die Behebungen aus dem Sicherheitstest vom 2026-10-27
   (`PLAN.md`, „Verifikation“). Nach v0.5.0 umgesetzt (noch nicht released): Knopfleisten der Geräte-, Gruppen- und Sensorseite mit
   Pausieren/Fortsetzen und Protokoll sichtbar, die Einrichtung im Menü „⋯ Aktionen“ auf jeder Breite (2026-10-27, `PLAN.md`, „Nächste Vorhaben“, D)
+- Version 0.5.5 (2026-10-27, gepusht, **kein Tag, kein Release**): Test-Paket aus `dev/deb.sh` mit allem nach v0.5.0; der Nutzer installiert und testet es
+  auf dem Ubuntu-Server, das Release kommt erst, wenn alle seine Tests bestanden sind
 - Umgesetzt nach v0.5.0 (noch nicht released, 2026-10-27): E Dienst-Sensoren, H `cargo audit` in der CI, I Hinweis auf neue Versionen,
   J Wartungsfenster, G Verfügbarkeit und Berichte (ohne Monatsmail), M Änderungsprotokoll
 - Geplant (2026-10-27, `PLAN.md`, „Weitere Vorhaben E–M“; E, G, H, I, J, M jetzt, F, K, L in einer späteren Version): E Sensoren HTTP(S)/TCP/DNS/TLS-Zertifikat,

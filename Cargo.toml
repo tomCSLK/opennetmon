@@ -1,6 +1,6 @@
 [package]
 name = "opennetmon"
-version = "0.5.0"
+version = "0.5.5"
 edition = "2024"
 description = "opennetmon – agentless SNMP network monitoring with a web interface"
 authors = ["Thomas Cieslik"]

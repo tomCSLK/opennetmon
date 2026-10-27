@@ -9,7 +9,9 @@ Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon
 Update auf 0.5.0 offen); die Instanz auf dem Laptop dient nur noch zum Testen. In v0.5.0 kamen die mobile Ansicht, Symbole in den Listen,
 **Abhängigkeiten wie in PRTG** und die Behebungen aus dem Sicherheitstest dazu (Vorhaben A–C); danach umgesetzt, noch nicht released: Knopfleisten
 der Seitenköpfe (D) und aus den Vorhaben E–M (2026-10-27) Dienst-Sensoren (E), Verfügbarkeit und Berichte (G), `cargo audit` in der CI (H),
-Update-Hinweis (I), Wartungsfenster (J) und das Änderungsprotokoll (M). **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Weiterhin offen: Test mit dem
+Update-Hinweis (I), Wartungsfenster (J) und das Änderungsprotokoll (M), dazu fehlgeschlagene Abfragen in der Messwerttabelle und eine
+Einstellungsseite je Sensor. Gepusht am 2026-10-27; Version **0.5.5** als Test-Paket (`dev/deb.sh`, kein Tag, kein Release) für den Test des
+Nutzers auf dem Ubuntu-Server – das Release folgt erst, wenn alle Tests des Nutzers bestanden sind. **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Weiterhin offen: Test mit dem
 **echten Mailserver** des Nutzers und ein Ende-zu-Ende-Integrationstest.
 
 Umgesetzt (Details in `docs/`):
