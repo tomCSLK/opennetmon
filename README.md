@@ -13,6 +13,13 @@ A single, statically linked binary (Rust) with SQLite – meant to run on a head
 > **Language:** The user interface is available in German and English (language per user, by default the browser's).
 > The documentation in [`docs/`](docs/) is in English; only the internal planning files (`PLAN.md`, `CLAUDE.md`) are written in German.
 
+## See it in action
+
+https://github.com/user-attachments/assets/c8c321df-8603-4b73-a534-f170a33c8944
+
+88 seconds with voice-over and captions: overview, interface discovery, graphs, ping with five packets, service checks, settings,
+dependencies, maintenance windows, reports and the phone view (version 0.5.6, recorded on a demo network with made-up data).
+
 ## Try it – testers welcome
 
 opennetmon works and is tested on real hardware (TP-Link Omada); since 0.4.4 the releases are regular releases, no longer pre-releases.
