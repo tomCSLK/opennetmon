@@ -38,6 +38,7 @@ Die Sprache nicht eigenmächtig wechseln – bei grundlegenden Problemen Befund 
   Kein npm, kein WASM-Frontend.
 - Design: `static/app.css` ist ein kleines Designsystem (Farb-Tokens für hell/dunkel, Seitenleiste, Kacheln, Karten, Badges, Tabellen, Formulare);
   Seitenleiste violett mit Verlauf, dunkles Schema leicht violett getönt (2026-10-29, wie openpacketmon, `PLAN.md`); Akzent-, Status- und Diagrammfarben bleiben Blau/Grün/Gelb/Rot;
+  Bedienelemente in zwei festen Höhen `--control-h` (36 px) und `--control-h-sm` (≈ 30 px, Kartenköpfe und `.card-tools`), kleine Symbolknöpfe 28 px, `select` ohne Systemstil mit gezeichnetem Pfeil (2026-10-29, `PLAN.md`);
   Schema folgt dem System, Umschalter in der Seitenleiste (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js` für Umschalter, aktiven Menüpunkt
   und Handy-Menü). Keine Inline-Styles (CSP): Breiten z. B. des Statusbands der Mini-Graphen als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen
   und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`).

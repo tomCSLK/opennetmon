@@ -746,6 +746,22 @@ etwas heller, damit sie zur Leiste passen; Akzent-, Status- und Diagrammfarben (
 `a.user:hover` auf `--sidebar-hover` (die helle `--sidebar-active` hätte die weiße Schrift unlesbar gemacht). Im Browser geprüft (Kopie der
 Dev-Daten): Übersicht, Protokoll, Mein Konto hell/dunkel (System und Umschalter), Handy 390 px mit geschlossenem und offenem Menü.
 
+### Einheitliche Höhen der Bedienelemente – aus openpacketmon (2026-10-29, umgesetzt)
+
+Aus openpacketmon (`../Sniffnet_Fork`, `PLAN.md` Phase 3 Punkt 13 „Leisten stimmiger und flacher“) übernommen, mit dem Nutzer
+abgestimmt: alles aus Punkt 13, kleine Symbolknöpfe in Zeilen und Kartenköpfen bleiben bei 28 px, an der Handy-Ansicht nichts eigens
+ändern. Gemessen vorher (Chrome, 1440 px): Knöpfe im Seitenkopf 37–39 px, Zeitraum-Umschalter 40 px, Felder 44 px neben Knöpfen mit
+37 px, Auswahlboxen im Systemstil, Filterleiste 69 px, Kartenkopf ≈ 60 px.
+
+Umgesetzt in `static/app.css`: Variablen `--control-h` (2,25rem = 36 px; Formulare, Seitenköpfe, Filterleisten außerhalb von Karten)
+und `--control-h-sm` (1,9rem ≈ 30 px; Kartenköpfe, `.card-tools`, Feld der Reihenfolge, `input.compact`); Knöpfe, Felder, Auswahlboxen,
+Datei-Knopf und `.ranges` mit fester Höhe statt Innenabstand oben/unten (`textarea` frei); quadratische `icon-only` 36 px,
+`small.icon-only` 28 px; `select` mit `appearance: none` und gezeichnetem Pfeil (Verläufe, CSP-sicher); Kartenkopf `padding .6rem`
+mit Mindesthöhe 3,2rem, `.card-tools` `.55rem`. Seitenleiste, Handy-Menü-Knopf und Menüeinträge (`.more-items`) behalten ihre
+Maße (`height: auto`). Gemessen nachher per Skript auf allen Seiten, hell und dunkel: in jeder Leiste eine Höhe (Seitenköpfe,
+Formulare 36 px, Kartenköpfe 30 px bzw. 28 px für Symbolknöpfe), Filterleiste 49 px, Kartenkopf 51 px; Handy 390 px ohne
+waagerechtes Scrollen.
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
 - Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen außer dem Master noch nicht.

@@ -3,6 +3,9 @@
 
 :root {
   color-scheme: light;
+  /* the two heights of fields, choices and buttons: forms, filter bars and page heads; bars in card heads */
+  --control-h: 2.25rem;
+  --control-h-sm: 1.9rem;
   --bg: #f4f6fa;
   --surface: #ffffff;
   --surface-2: #f1f4f9;
@@ -178,12 +181,12 @@ svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentCol
   border: 1px solid var(--sidebar-border); border-radius: var(--radius-sm); }
 .sidebar-update a { color: var(--sidebar-muted); text-decoration: none; }
 .sidebar-update a:hover { text-decoration: underline; }
-.side-button { width: 100%; display: flex; align-items: center; justify-content: center; gap: .45rem;
+.side-button { width: 100%; height: auto; display: flex; align-items: center; justify-content: center; gap: .45rem;
   padding: .45rem .6rem; font: inherit; font-size: .85rem; font-weight: 500; color: var(--sidebar-text); cursor: pointer;
   justify-content: flex-start;
   background: transparent; border: 1px solid var(--sidebar-border); border-radius: var(--radius-sm); }
 .side-button:hover { background: var(--sidebar-hover); color: #fff; }
-.menu-toggle { display: none; }
+.menu-toggle { display: none; height: auto; }
 
 .content { min-width: 0; padding: 1.75rem 2rem 3rem; }
 .page { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
@@ -212,7 +215,7 @@ html.js .more-actions.setup > .more-items { position: absolute; right: 0; top: c
   align-items: stretch; min-width: 15rem; padding: .45rem; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: var(--shadow-lg); }
 html.js .more-actions.setup > .more-items > .button, html.js .more-actions.setup > .more-items > form > button { width: 100%;
-  justify-content: flex-start; padding: .6rem .75rem; color: var(--text); background: transparent; border-color: transparent; font-weight: 500; }
+  height: auto; justify-content: flex-start; padding: .6rem .75rem; color: var(--text); background: transparent; border-color: transparent; font-weight: 500; }
 html.js .more-actions.setup > .more-items > .button:hover, html.js .more-actions.setup > .more-items > form > button:hover {
   background: var(--surface-2); color: var(--text); }
 .refresh { display: inline-flex; align-items: center; gap: .6rem; }
@@ -226,11 +229,11 @@ html.js .more-actions.setup > .more-items > .button:hover, html.js .more-actions
   box-shadow: var(--shadow); padding: 1.25rem 1.35rem; }
 .card.flush { padding: 0; overflow: hidden; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
-  padding: .95rem 1.35rem; border-bottom: 1px solid var(--border); }
+  min-height: 3.2rem; padding: .6rem 1.35rem; border-bottom: 1px solid var(--border); }
 .card-head h2 { margin: 0; }
 .card-body { padding: 1.1rem 1.35rem; }
 /* Tools between the head of a flush card and its table: filter choices, filter field, counter. */
-.card-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .9rem; padding: .75rem 1.35rem;
+.card-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; padding: .55rem 1.35rem;
   border-bottom: 1px solid var(--border); }
 .card-tools .ranges { flex-wrap: wrap; }
 .card-tools input[type=search] { width: auto; flex: 1 1 14rem; max-width: 24rem; }
@@ -364,7 +367,7 @@ th[aria-sort="descending"] a.sort::after { content: " ↓"; }
 
 /* ---------- buttons ---------- */
 .button, button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
-  padding: .55rem .95rem; font: inherit; font-size: .9rem; font-weight: 600; line-height: 1.2; cursor: pointer;
+  height: var(--control-h); padding: 0 .95rem; font: inherit; font-size: .9rem; font-weight: 600; line-height: 1.2; cursor: pointer;
   color: var(--accent-fg); background: var(--accent); border: 1px solid transparent; border-radius: var(--radius-sm);
   text-decoration: none; white-space: nowrap; transition: background .12s, border-color .12s, color .12s; }
 .button:hover, button:hover { background: var(--accent-hover); color: var(--accent-fg); text-decoration: none; }
@@ -376,10 +379,10 @@ th[aria-sort="descending"] a.sort::after { content: " ↓"; }
 .button.ghost:hover, button.ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
 button.danger, .button.danger { background: var(--down); color: #fff; }
 button.danger:hover, .button.danger:hover { background: #b91c1c; color: #fff; }
-.button.icon-only, button.icon-only { padding: .55rem; }
-button.small, .button.small { padding: .32rem .6rem; font-size: .82rem; font-weight: 500; }
+.button.icon-only, button.icon-only { width: var(--control-h); padding: 0; }
+button.small, .button.small { height: var(--control-h-sm); padding: 0 .65rem; font-size: .85rem; font-weight: 500; }
 /* Small icon buttons in table rows and card heads (`templates/icons.html`), square like those of the tree. */
-.button.small.icon-only, button.small.icon-only { padding: .3rem; }
+.button.small.icon-only, button.small.icon-only { width: 1.75rem; height: 1.75rem; padding: 0; }
 .small.icon-only svg.icon { width: 16px; height: 16px; }
 .button.danger-icon:hover, button.danger-icon:hover { color: var(--down); border-color: var(--down-soft); }
 button:disabled { opacity: .55; cursor: not-allowed; }
@@ -389,8 +392,19 @@ form.stack { display: flex; flex-direction: column; }
 label { display: block; margin: .9rem 0 .3rem; font-size: .88rem; font-weight: 600; }
 form.stack > label:first-of-type, fieldset > label:first-of-type { margin-top: .2rem; }
 input[type=text], input[type=password], input[type=number], input[type=email], input[type=search], select, textarea {
-  width: 100%; padding: .6rem .75rem; font: inherit; font-size: .93rem; color: var(--text); background: var(--surface);
-  border: 1px solid var(--border-strong); border-radius: var(--radius-sm); transition: border-color .12s, box-shadow .12s; }
+  width: 100%; height: var(--control-h); padding: 0 .75rem; font: inherit; font-size: .9rem; line-height: 1.2; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  transition: border-color .12s, box-shadow .12s; }
+textarea { height: auto; padding: .6rem .75rem; line-height: 1.5; }
+/* Choices look like the fields (no box of the system), with a drawn arrow. */
+select { appearance: none; -webkit-appearance: none; padding-right: 2rem; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+/* Bars in card heads and small fields in rows: one smaller height. */
+.card-head select, .card-head input[type=text], .card-head input[type=search], .card-tools input[type=search], input.compact,
+ol.order-list input.pos {
+  height: var(--control-h-sm); padding: 0 .55rem; font-size: .85rem; }
+.card-head select { padding-right: 1.8rem; background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus); }
 input::placeholder, textarea::placeholder { color: var(--faint); }
 textarea { resize: vertical; }
@@ -421,9 +435,11 @@ form.inline-note .muted { font-size: .85rem; }
 .card .flash, .card .error { margin-bottom: 1rem; }
 
 /* ---------- sensor detail ---------- */
-.ranges { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border: 1px solid var(--border);
-  border-radius: 10px; }
-.ranges a { padding: .35rem .8rem; border-radius: 7px; color: var(--muted); font-size: .86rem; font-weight: 600; }
+.ranges { display: inline-flex; min-height: var(--control-h); padding: 3px; gap: 2px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 10px; }
+.card-tools .ranges { min-height: var(--control-h-sm); padding: 2px; }
+.ranges a { display: inline-flex; align-items: center; justify-content: center; padding: 0 .8rem; border-radius: 7px;
+  color: var(--muted); font-size: .86rem; font-weight: 600; }
 .ranges a:hover { color: var(--text); text-decoration: none; }
 .ranges a[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .values { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .9rem; }
@@ -479,7 +495,7 @@ table.samples tr.state-warning td { background: var(--warn-soft); border-bottom-
 table.samples tr.state-down td.problem { color: var(--down); }
 table.samples tr.state-warning td.problem { color: var(--warn); }
 label.rows-select { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .85rem; font-weight: 500; color: var(--muted); }
-label.rows-select select { width: auto; padding: .3rem 1.6rem .3rem .55rem; font-size: .85rem; }
+label.rows-select select { width: auto; }
 /* pages of the table of values: rows shown on the left, buttons on the right */
 .pager { display: flex; align-items: center; justify-content: space-between; gap: .5rem .75rem; flex-wrap: wrap;
   padding: .7rem 1.35rem; border-top: 1px solid var(--border); }
@@ -561,7 +577,7 @@ a.button.secondary { color: var(--text); }
     min-width: 15rem; padding: .45rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
     box-shadow: var(--shadow-lg); }
   /* In the menu all buttons look alike: a list of entries. */
-  .more-items > .button, .more-items > form > button { width: 100%; justify-content: flex-start; padding: .6rem .75rem;
+  .more-items > .button, .more-items > form > button { width: 100%; height: auto; justify-content: flex-start; padding: .6rem .75rem;
     color: var(--text); background: transparent; border-color: transparent; font-weight: 500; }
   .more-items > .button:hover, .more-items > form > button:hover { background: var(--surface-2); color: var(--text); }
   /* No menu in the menu: the setup entries follow the everyday ones, below a line. */
@@ -632,10 +648,10 @@ a.button.secondary { color: var(--text); }
 form.upload, form.search { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
 form.search input[type=text] { flex: 1; min-width: 220px; }
 input[type=file] { max-width: 100%; font: inherit; font-size: .9rem; color: var(--muted); }
-input[type=file]::file-selector-button { margin-right: .7rem; padding: .45rem .8rem; font: inherit; font-weight: 600; cursor: pointer;
+input[type=file]::file-selector-button { height: var(--control-h); margin-right: .7rem; padding: 0 .8rem; font: inherit; font-weight: 600; cursor: pointer;
   color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
 ul.plain { margin: .3rem 0 0; padding-left: 1.1rem; }
-input.compact { padding: .35rem .5rem; font-size: .88rem; min-width: 14rem; }
+input.compact { min-width: 14rem; }
 
 details.panel > summary.card-head { border-bottom: 0; }
 details.panel[open] > summary.card-head { border-bottom: 1px solid var(--border); }
@@ -649,7 +665,7 @@ ol.order-list li { display: flex; align-items: center; gap: .75rem; padding: .55
 ol.order-list li:first-child { border-top: 0; }
 ol.order-list .order-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 ol.order-list .order-name .sub { display: block; color: var(--muted); font-size: .82rem; }
-ol.order-list input.pos { width: 5.5rem; padding: .35rem .5rem; font-size: .88rem; }
+ol.order-list input.pos { width: 5.5rem; }
 ol.order-list .handle, ol.order-list .move { display: none; }
 ol.order-list.js .handle { display: inline-flex; cursor: grab; color: var(--muted); touch-action: none; }
 ol.order-list.js .move { display: inline-flex; gap: .2rem; }
