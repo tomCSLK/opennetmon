@@ -698,7 +698,7 @@ Paket macht die ganze Abfrage zum Fehlschlag (Warnung). Künftig wie PRTG mehrer
    Verlust in %), Migration (vorhandene Ping-Sensoren bekommen die Kanäle, Verlauf bleibt), Einstellungsformular (Paketanzahl gültig/ungültig);
    im Browser prüfen (Tabelle, Graph, Einstellungen, Handybreiten), danach Test-.deb 0.5.5 neu bauen.
 
-### Violette Seitenleiste und violett getöntes dunkles Design – Information aus openpacketmon (2026-10-29, noch nicht umgesetzt)
+### Violette Seitenleiste und violett getöntes dunkles Design – Information aus openpacketmon (2026-10-29, umgesetzt)
 
 Im Schwesterprojekt openpacketmon (`../Sniffnet_Fork`, Commit „Violet sidebar …“ auf `main`) hat der Nutzer am 2026-10-29
 nach zwei Musterseiten diese Farben übernommen; vorgemerkt, um sie hier ebenfalls zu übernehmen (Umsetzung nur nach Freigabe).
@@ -741,6 +741,10 @@ etwas heller, damit sie zur Leiste passen; Akzent-, Status- und Diagrammfarben (
   die ganze Höhe); `.menu-toggle:hover` ebenfalls auf `--sidebar-hover`.
 - `.user-role` und weitere Elemente in der Leiste (Benutzer, Abmelden) auf Lesbarkeit auf Violett prüfen.
 - Seiten mit eigenen Status-/Graphenfarben (PRTG-Grün/Gelb/Rot) bleiben unverändert; im Browser hell/dunkel und am Handy prüfen.
+
+**Umgesetzt (2026-10-29)** in `static/app.css` wie oben, dazu: Avatar in der Leiste `rgb(255 255 255 / 18%)` mit weißer Schrift statt Blau,
+`a.user:hover` auf `--sidebar-hover` (die helle `--sidebar-active` hätte die weiße Schrift unlesbar gemacht). Im Browser geprüft (Kopie der
+Dev-Daten): Übersicht, Protokoll, Mein Konto hell/dunkel (System und Umschalter), Handy 390 px mit geschlossenem und offenem Menü.
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
