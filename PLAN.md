@@ -698,6 +698,50 @@ Paket macht die ganze Abfrage zum Fehlschlag (Warnung). Künftig wie PRTG mehrer
    Verlust in %), Migration (vorhandene Ping-Sensoren bekommen die Kanäle, Verlauf bleibt), Einstellungsformular (Paketanzahl gültig/ungültig);
    im Browser prüfen (Tabelle, Graph, Einstellungen, Handybreiten), danach Test-.deb 0.5.5 neu bauen.
 
+### Violette Seitenleiste und violett getöntes dunkles Design – Information aus openpacketmon (2026-10-29, noch nicht umgesetzt)
+
+Im Schwesterprojekt openpacketmon (`../Sniffnet_Fork`, Commit „Violet sidebar …“ auf `main`) hat der Nutzer am 2026-10-29
+nach zwei Musterseiten diese Farben übernommen; vorgemerkt, um sie hier ebenfalls zu übernehmen (Umsetzung nur nach Freigabe).
+Herkunft: Violett-Skala des Designsystems „Ops Console“ (`../design-system/tokens.css`), sonst nichts daraus (Schrift, Größen,
+Knöpfe, Karten bleiben). Die `static/app.css` beider Projekte hat dieselben Variablen, die Änderung lässt sich also fast 1:1 übertragen.
+
+**Hell** – nur die Seitenleiste (`:root`), Verlauf violet-800 → violet-950, aktive Seite als helle Kachel mit violetter Schrift:
+
+    --sidebar: linear-gradient(180deg, #5d12af 0%, #220f4b 100%);
+    --sidebar-text: #ffffff;
+    --sidebar-muted: rgb(255 255 255 / 62%);
+    --sidebar-active: #efe7f8;
+    --sidebar-active-text: #5d12af;   /* neu */
+    --sidebar-hover: rgb(255 255 255 / 12%);   /* neu */
+    --sidebar-border: rgb(255 255 255 / 16%);
+    --sidebar-focus: #d9f55b;   /* neu, Fokusring in der Leiste */
+
+**Dunkel** (beide Blöcke: `@media (prefers-color-scheme: dark)` und `:root[data-theme="dark"]`) – Flächen leicht violett getönt und
+etwas heller, damit sie zur Leiste passen; Akzent-, Status- und Diagrammfarben (Blau/Grün/Rot) bleiben:
+
+    --bg: #130d24;  --surface: #1b1430;  --surface-2: #221a3b;  --surface-hover: #241c40;
+    --border: #2c2347;  --border-strong: #3c3260;  --text: #ece8f4;  --muted: #aaa1c3;  --faint: #7b7197;
+    --neutral-soft: #251d3e;  --accent-soft: #24234f;
+    --sidebar: linear-gradient(180deg, #2a0b52 0%, #0e0620 100%);
+    --sidebar-text: #e6dcf5;  --sidebar-muted: rgb(230 220 245 / 52%);
+    --sidebar-active: rgb(255 255 255 / 10%);  --sidebar-active-text: #ffffff;
+    --sidebar-hover: rgb(255 255 255 / 7%);  --sidebar-border: rgb(255 255 255 / 9%);
+
+**Regeln** in `static/app.css` (Abschnitt „shell: sidebar + content“):
+- `.sidebar`: `border-right` entfernen (der Verlauf braucht keine Kante); `.brand-mark`-Rahmen auf `rgb(255 255 255 / 25%)`.
+- `.nav a:hover` und `.side-button:hover`: `background: var(--sidebar-hover)` statt `--sidebar-active`.
+- `.nav a[aria-current="page"]`: `background: var(--sidebar-active); color: var(--sidebar-active-text);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%)` (statt blauer Kante `inset 3px 0 0 #3b82f6`).
+- Symbole: `.nav a svg.icon { color: var(--sidebar-text) }`, beim Überfahren `#fff`, aktive Seite `var(--sidebar-active-text)`
+  (statt `#93c5fd`).
+- Neu: `.sidebar :focus-visible { box-shadow: 0 0 0 2px var(--sidebar-focus); }`; `.sidebar-update a` in `--sidebar-muted`.
+
+**Nur hier zu beachten** (gibt es in openpacketmon nicht):
+- Handy-Ansicht (`@media (max-width: 900px)`): Die Leiste wird zur Kopfleiste – Verlauf dort prüfen (bei geöffnetem Menü läuft er über
+  die ganze Höhe); `.menu-toggle:hover` ebenfalls auf `--sidebar-hover`.
+- `.user-role` und weitere Elemente in der Leiste (Benutzer, Abmelden) auf Lesbarkeit auf Violett prüfen.
+- Seiten mit eigenen Status-/Graphenfarben (PRTG-Grün/Gelb/Rot) bleiben unverändert; im Browser hell/dunkel und am Handy prüfen.
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
 - Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen außer dem Master noch nicht.
