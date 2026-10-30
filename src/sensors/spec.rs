@@ -1,6 +1,8 @@
 //! Sensor configuration: what the user chose, validation, channel layout and construction.
 //! Messages are user-facing (German).
 
+use super::fritzbox::{FritzCheck, FritzMetric, FritzSensor};
+use super::huawei::{self, HuaweiCheck, HuaweiMetric, HuaweiSensor};
 use super::local::{LocalMetric, LocalSensor, Paths};
 use super::ping::{PingCheck, PingSensor};
 use super::service::{
@@ -45,6 +47,10 @@ pub enum SensorSpec {
     Dns(DnsCheck),
     /// The TLS certificate a port of the device presents.
     Tls(TlsCheck),
+    /// A value of the internet connection of a FRITZ!Box.
+    Fritzbox(FritzCheck),
+    /// A value of the mobile link of a Huawei router.
+    Huawei(HuaweiCheck),
 }
 
 /// Packet loss above which a new ping sensor warns (percent; changeable per channel).
@@ -116,11 +122,13 @@ impl SensorSpec {
             Self::Tcp(_) => "tcp",
             Self::Dns(_) => "dns",
             Self::Tls(_) => "tls",
+            Self::Fritzbox(_) => "fritzbox",
+            Self::Huawei(_) => "huawei",
         }
     }
 
-    /// Settings of the ping and service sensors as stored in `sensors.params` (JSON); `None` for
-    /// the others.
+    /// Settings of the ping, service and router sensors as stored in `sensors.params` (JSON);
+    /// `None` for the others.
     pub fn params(&self) -> Option<String> {
         match self {
             Self::Ping(c) => serde_json::to_string(c).ok(),
@@ -128,11 +136,14 @@ impl SensorSpec {
             Self::Tcp(c) => serde_json::to_string(c).ok(),
             Self::Dns(c) => serde_json::to_string(c).ok(),
             Self::Tls(c) => serde_json::to_string(c).ok(),
+            Self::Fritzbox(c) => serde_json::to_string(c).ok(),
+            Self::Huawei(c) => serde_json::to_string(c).ok(),
             _ => None,
         }
     }
 
-    /// The ping or service sensor of `kind` with the stored `params`; `None` if they do not fit.
+    /// The ping, service or router sensor of `kind` with the stored `params`; `None` if they do
+    /// not fit.
     pub fn from_params(kind: &str, params: &str) -> Option<Self> {
         Some(match kind {
             "ping" => Self::Ping(serde_json::from_str(params).ok()?),
@@ -140,6 +151,8 @@ impl SensorSpec {
             "tcp" => Self::Tcp(serde_json::from_str(params).ok()?),
             "dns" => Self::Dns(serde_json::from_str(params).ok()?),
             "tls" => Self::Tls(serde_json::from_str(params).ok()?),
+            "fritzbox" => Self::Fritzbox(serde_json::from_str(params).ok()?),
+            "huawei" => Self::Huawei(serde_json::from_str(params).ok()?),
             _ => return None,
         })
     }
@@ -154,6 +167,14 @@ impl SensorSpec {
             },
             (Self::Ping(_), "loss") => Thresholds {
                 warn_above: Some(PING_WARN_LOSS),
+                ..Thresholds::default()
+            },
+            (Self::Huawei(_), "signal") => Thresholds {
+                warn_below: Some(huawei::WARN_BARS),
+                ..Thresholds::default()
+            },
+            (Self::Huawei(_), "in") => Thresholds {
+                warn_above: Some(huawei::WARN_RATE),
                 ..Thresholds::default()
             },
             _ => Thresholds::default(),
@@ -204,6 +225,15 @@ impl SensorSpec {
                 ],
             ),
             Self::Tls(c) => t.get1("service-describe-tls", "port", c.port),
+            Self::Fritzbox(c) => t.get(match c.metric {
+                FritzMetric::Traffic => "fritzbox-describe-traffic",
+                FritzMetric::Connection => "fritzbox-describe-connection",
+            }),
+            Self::Huawei(c) => t.get(match c.metric {
+                HuaweiMetric::Connection => "huawei-describe-connection",
+                HuaweiMetric::Traffic => "huawei-describe-traffic",
+                HuaweiMetric::Volume => "huawei-describe-volume",
+            }),
         }
     }
 
@@ -264,15 +294,19 @@ impl SensorSpec {
             Self::Local(metric) => metric.channels(),
             Self::Http(_) | Self::Tcp(_) | Self::Dns(_) => one("rtt", Unit::Milliseconds),
             Self::Tls(_) => one("days", Unit::Days),
+            Self::Fritzbox(c) => c.channels(),
+            Self::Huawei(c) => c.channels(),
         }
     }
 
     /// Whether channel `key` shows in lists and their small charts. A ping sensor shows only its
-    /// average there; minimum, maximum, jitter and loss are on its own page.
+    /// average there; minimum, maximum, jitter and loss are on its own page. A router connection
+    /// shows what can degrade (sync rates, signal), not the ever rising uptime.
     pub fn in_lists(&self, key: &str) -> bool {
         !matches!(
             (self, key),
             (Self::Ping(_), "rtt_min" | "rtt_max" | "jitter" | "loss")
+                | (Self::Fritzbox(_) | Self::Huawei(_), "uptime")
         )
     }
 
@@ -325,6 +359,8 @@ impl SensorSpec {
             Self::Tcp(c) => c.validate(),
             Self::Dns(c) => c.validate(),
             Self::Tls(c) => c.validate(),
+            Self::Fritzbox(c) => c.validate(),
+            Self::Huawei(c) => c.validate(),
             _ => Ok(()),
         }
     }
@@ -344,6 +380,8 @@ impl SensorSpec {
             Self::Tcp(c) => Box::new(TcpSensor::new(c)),
             Self::Dns(c) => Box::new(DnsSensor::new(c.clone())),
             Self::Tls(c) => Box::new(TlsSensor::new(c.clone())),
+            Self::Fritzbox(c) => Box::new(FritzSensor::new(*c)),
+            Self::Huawei(c) => Box::new(HuaweiSensor::new(*c)),
         }
     }
 }

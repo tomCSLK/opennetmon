@@ -130,6 +130,12 @@ pub fn channel_label(key: &str) -> Msg {
         "free" => Msg::new("channel-free"),
         "temperature" => Msg::new("channel-temperature"),
         "days" => Msg::new("channel-days"),
+        "sync_down" => Msg::new("channel-sync-down"),
+        "sync_up" => Msg::new("channel-sync-up"),
+        "signal" => Msg::new("channel-signal"),
+        "month_down" => Msg::new("channel-month-down"),
+        "month_up" => Msg::new("channel-month-up"),
+        "day_used" => Msg::new("channel-day-used"),
         other => Msg::Text(other.to_owned()),
     }
 }

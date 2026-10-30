@@ -195,6 +195,8 @@
           <option value="{{ value }}"{% if form.kind == *value %} selected{% endif %}>{{ t.get(label) }}</option>
           {% endfor %}
           <option value="server">{{ t.get("sensors-type-server") }}</option>
+          <option value="fritzbox">{{ t.get("sensors-type-fritzbox") }}</option>
+          <option value="huawei">{{ t.get("sensors-type-huawei") }}</option>
         </select>
       </div>
       <div>

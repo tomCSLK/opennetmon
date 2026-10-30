@@ -5,7 +5,7 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::{Method, Request, StatusCode, Uri, header};
 use hyper_util::rt::TokioIo;
@@ -65,6 +65,28 @@ pub struct Response {
     pub headers: header::HeaderMap,
     /// Time until the response head of the last request arrived.
     pub elapsed: Duration,
+}
+
+/// One request to the API of a device: own method, headers and body, no redirects.
+#[derive(Debug, Clone)]
+pub struct ApiCall<'a> {
+    pub method: Method,
+    pub url: &'a str,
+    pub headers: &'a [(&'a str, &'a str)],
+    pub body: &'a str,
+    /// Bytes of the response body that are kept at most; the rest is not read.
+    pub max_body: usize,
+    /// Deadline for the whole request.
+    pub timeout: Duration,
+}
+
+/// What goes out on one connection.
+struct Outgoing<'a> {
+    method: Method,
+    headers: &'a [(&'a str, &'a str)],
+    body: Bytes,
+    max_body: usize,
+    verify_tls: bool,
 }
 
 /// Where a URL points to.
@@ -154,7 +176,14 @@ async fn fetch_from(mut target: Target, options: &Options) -> Result<Response, H
         Method::HEAD
     };
     for _ in 0..=MAX_REDIRECTS {
-        let response = request_once(&target, method.clone(), options).await?;
+        let outgoing = Outgoing {
+            method: method.clone(),
+            headers: &[],
+            body: Bytes::new(),
+            max_body: options.max_body,
+            verify_tls: options.verify_tls,
+        };
+        let response = request_once(&target, &outgoing).await?;
         let location = response
             .headers
             .get(header::LOCATION)
@@ -172,18 +201,30 @@ async fn fetch_from(mut target: Target, options: &Options) -> Result<Response, H
     Err(HttpError::TooManyRedirects)
 }
 
-async fn request_once(
-    target: &Target,
-    method: Method,
-    options: &Options,
-) -> Result<Response, HttpError> {
+/// Sends one request to the API of a device. Certificates are not checked: devices present their
+/// own (the request goes to an address the administrator entered).
+pub async fn call(request: &ApiCall<'_>) -> Result<Response, HttpError> {
+    let target = parse_url(request.url)?;
+    let outgoing = Outgoing {
+        method: request.method.clone(),
+        headers: request.headers,
+        body: Bytes::copy_from_slice(request.body.as_bytes()),
+        max_body: request.max_body,
+        verify_tls: false,
+    };
+    tokio::time::timeout(request.timeout, request_once(&target, &outgoing))
+        .await
+        .unwrap_or(Err(HttpError::Timeout))
+}
+
+async fn request_once(target: &Target, outgoing: &Outgoing<'_>) -> Result<Response, HttpError> {
     let started = Instant::now();
     let tcp = connect_tcp(&target.host, target.port).await?;
     if target.tls {
-        let (tls, _) = connect_tls(tcp, &target.host, options.verify_tls, false).await?;
-        exchange(tls, target, method, options, started).await
+        let (tls, _) = connect_tls(tcp, &target.host, outgoing.verify_tls, false).await?;
+        exchange(tls, target, outgoing, started).await
     } else {
-        exchange(tcp, target, method, options, started).await
+        exchange(tcp, target, outgoing, started).await
     }
 }
 
@@ -206,8 +247,7 @@ impl Drop for AbortOnDrop {
 async fn exchange<S>(
     stream: S,
     target: &Target,
-    method: Method,
-    options: &Options,
+    outgoing: &Outgoing<'_>,
     started: Instant,
 ) -> Result<Response, HttpError>
 where
@@ -220,8 +260,8 @@ where
     let _connection = AbortOnDrop(tokio::spawn(async move {
         let _ = connection.await;
     }));
-    let request = Request::builder()
-        .method(method)
+    let mut request = Request::builder()
+        .method(outgoing.method.clone())
         .uri(target.path.as_str())
         .header(header::HOST, target.authority.as_str())
         .header(
@@ -229,18 +269,22 @@ where
             concat!("opennetmon/", env!("CARGO_PKG_VERSION")),
         )
         .header(header::ACCEPT, "*/*")
-        .header(header::CONNECTION, "close")
-        .body(Empty::<Bytes>::new())
+        .header(header::CONNECTION, "close");
+    for (name, value) in outgoing.headers {
+        request = request.header(*name, *value);
+    }
+    let request = request
+        .body(Full::new(outgoing.body.clone()))
         .map_err(|_| HttpError::InvalidUrl)?;
     let response = sender.send_request(request).await.map_err(protocol)?;
     let elapsed = started.elapsed();
     let (head, mut body) = response.into_parts();
     let mut kept = Vec::new();
-    while kept.len() < options.max_body {
+    while kept.len() < outgoing.max_body {
         match body.frame().await {
             Some(Ok(frame)) => {
                 if let Ok(data) = frame.into_data() {
-                    let room = options.max_body - kept.len();
+                    let room = outgoing.max_body - kept.len();
                     kept.extend_from_slice(&data[..data.len().min(room)]);
                 }
             }
@@ -404,6 +448,7 @@ pub(crate) mod testserver {
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+    use tokio::sync::mpsc;
     use tokio_rustls::TlsAcceptor;
     use tokio_rustls::rustls::ServerConfig;
     use tokio_rustls::rustls::crypto::ring;
@@ -431,6 +476,15 @@ pub(crate) mod testserver {
     /// Serves `responses` (raw HTTP responses), one per connection, then stops accepting.
     /// With `tls`, it uses a certificate from [`certificate`] valid for `tls` days.
     pub async fn serve(responses: Vec<String>, tls: Option<i64>) -> SocketAddr {
+        serve_and_record(responses, tls).await.0
+    }
+
+    /// Like [`serve`]; every request arrives on the receiver as text, head and body.
+    pub async fn serve_and_record(
+        responses: Vec<String>,
+        tls: Option<i64>,
+    ) -> (SocketAddr, mpsc::UnboundedReceiver<String>) {
+        let (requests, received) = mpsc::unbounded_channel();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let acceptor = tls.map(|days| {
@@ -451,28 +505,49 @@ pub(crate) mod testserver {
                 match &acceptor {
                     Some(acceptor) => {
                         if let Ok(stream) = acceptor.accept(tcp).await {
-                            answer(stream, &response).await;
+                            answer(stream, &response, &requests).await;
                         }
                     }
-                    None => answer(tcp, &response).await,
+                    None => answer(tcp, &response, &requests).await,
                 }
             }
         });
-        addr
+        (addr, received)
+    }
+
+    /// Bytes of the body that follow the head of a request.
+    fn content_length(head: &str) -> usize {
+        head.lines()
+            .filter_map(|line| line.split_once(':'))
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+            .and_then(|(_, value)| value.trim().parse().ok())
+            .unwrap_or(0)
     }
 
     async fn answer<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
         mut stream: S,
         response: &str,
+        requests: &mpsc::UnboundedSender<String>,
     ) {
         let mut buf = vec![0u8; 4096];
         let mut seen = Vec::new();
-        while !seen.windows(4).any(|w| w == b"\r\n\r\n") {
+        let head_end = loop {
+            if let Some(at) = seen.windows(4).position(|w| w == b"\r\n\r\n") {
+                break at + 4;
+            }
+            match stream.read(&mut buf).await {
+                Ok(0) | Err(_) => return,
+                Ok(n) => seen.extend_from_slice(&buf[..n]),
+            }
+        };
+        let total = head_end + content_length(&String::from_utf8_lossy(&seen[..head_end]));
+        while seen.len() < total {
             match stream.read(&mut buf).await {
                 Ok(0) | Err(_) => return,
                 Ok(n) => seen.extend_from_slice(&buf[..n]),
             }
         }
+        let _ = requests.send(String::from_utf8_lossy(&seen).into_owned());
         let _ = stream.write_all(response.as_bytes()).await;
         let _ = stream.shutdown().await;
     }
@@ -493,7 +568,7 @@ pub(crate) mod testserver {
 
 #[cfg(test)]
 mod tests {
-    use super::testserver::{ok, serve, status};
+    use super::testserver::{ok, serve, serve_and_record, status};
     use super::*;
 
     fn options() -> Options {
@@ -549,6 +624,33 @@ mod tests {
         assert_eq!(to("other"), "true|example.org|8443|/dir/other");
         assert_eq!(to("//cdn.example.org/x"), "true|cdn.example.org|443|/x");
         assert_eq!(to("http://example.net/"), "false|example.net|80|/");
+    }
+
+    #[tokio::test]
+    async fn api_calls_send_method_headers_and_body_and_stop_at_redirects() {
+        let (addr, mut requests) =
+            serve_and_record(vec![status(302, "Location: /next\r\n")], None).await;
+        let url = format!("http://{addr}/control");
+        let reply = call(&ApiCall {
+            method: Method::POST,
+            url: &url,
+            headers: &[("soapaction", "urn:x#Get"), ("content-type", "text/xml")],
+            body: "<a/>",
+            max_body: 16,
+            timeout: Duration::from_secs(5),
+        })
+        .await
+        .unwrap();
+        assert_eq!(reply.status, StatusCode::FOUND);
+        let request = requests.recv().await.unwrap();
+        assert!(
+            request.starts_with("POST /control HTTP/1.1\r\n"),
+            "{request}"
+        );
+        let lower = request.to_ascii_lowercase();
+        assert!(lower.contains("soapaction: urn:x#get\r\n"), "{request}");
+        assert!(lower.contains("content-length: 4\r\n"), "{request}");
+        assert!(request.ends_with("\r\n\r\n<a/>"), "{request}");
     }
 
     #[tokio::test]

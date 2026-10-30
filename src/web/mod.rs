@@ -16,6 +16,7 @@ pub mod order;
 pub mod overview;
 pub mod pause;
 pub mod reports;
+pub mod router_values;
 pub mod schedules;
 pub mod sensor_detail;
 pub mod sensor_settings;
@@ -184,6 +185,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/devices/{id}/server",
             get(server_values::page).post(server_values::create),
+        )
+        .route(
+            "/devices/{id}/router/{family}",
+            get(router_values::page).post(router_values::create),
         )
         .route("/devices/{id}/values/create", post(sensor_values::create))
         .route("/devices/{id}/sensors/bulk", post(sensors::bulk))

@@ -5,11 +5,14 @@
 pub mod counter;
 pub mod dns;
 pub mod format;
+pub mod fritzbox;
+pub mod huawei;
 pub mod local;
 pub mod ping;
 pub mod service;
 pub mod snmp;
 pub mod spec;
+mod xml;
 
 use std::future::Future;
 use std::pin::Pin;

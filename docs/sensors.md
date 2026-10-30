@@ -84,6 +84,24 @@ own (e.g. a website) add a device without SNMP. They are added with “Add senso
 - The timeout is the device's; as with SNMP, choose the interval of a certificate sensor freely (e.g. 3600 s per sensor).
 - Tests: local HTTP, HTTPS and DNS test servers (`http_client::testserver`, `dns::testserver`); certificates from `rcgen` with chosen expiry.
 
+## Routers (`src/sensors/fritzbox.rs`, `src/sensors/huawei.rs`, page `web::router_values`)
+
+Routers in front of the network that offer no SNMP. Both types read without a login. Choose "FRITZ!Box" or "Huawei mobile router" in "Add sensor" on a device whose address is the router: like "Values of this server", the page `/devices/<id>/router/<family>` asks the router once, shows the current values and creates the ticked ones. The settings are `{"metric":…,"port":…}` in `sensors.params`.
+
+| Type | Value | Channels | Fails when |
+|---|---|---|---|
+| `fritzbox` | `connection` | uptime, sync rate down and up | the connection is not `Connected` |
+| `fritzbox` | `traffic` | in, out (bit/s, from the 64-bit counters) | – |
+| `huawei` | `connection` | signal bars (warning below 2), uptime | flight mode, SIM not ready, mobile data off, not connected |
+| `huawei` | `traffic` | in (warning above 1 Mbit/s: the backup link is in use), out | – |
+| `huawei` | `volume` | month down and up, today (bytes) | – |
+
+- **FRITZ!Box:** UPnP-IGD as SOAP on port 49000. An error status usually means that "Transmit status information over UPnP" is switched off. Tested with a FRITZ!Box 6660 Cable on FRITZ!OS 8.25; DSL boxes may use another connection service.
+- **Huawei:** the HiLink API on port 80, tested with a 5G CPE 5s (H153-381). Every poll opens a session (`/api/webserver/SesTokInfo`) and sends it as cookie and token. Errors arrive with HTTP 200 as `<error><code>`. The meaning of the status numbers is not documented: only what a working link reported counts as fine, anything else is shown as the router sent it. The network type in the message is the router's raw value and can change between polls.
+- All requests of one poll share one deadline. A value that is missing from an answer fails the poll ("unreadable answer") instead of storing something wrong.
+
+FRITZ!Box and FRITZ!OS are trademarks of AVM (now FRITZ!), Huawei is a trademark of Huawei Technologies. The names only say which devices are supported; opennetmon is not connected to these companies.
+
 ## Counters and rates (`src/sensors/counter.rs`)
 
 Rate = difference / time delta. **No value is written** (instead of an outlier) if

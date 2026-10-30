@@ -14,6 +14,8 @@ use crate::devices::MAX_NAME_LEN;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::Error;
 use crate::i18n::{Lang, Msg};
+use crate::sensors::fritzbox::FritzCheck;
+use crate::sensors::huawei::HuaweiCheck;
 use crate::sensors::ping::PingCheck;
 use crate::sensors::service::{DnsCheck, HttpCheck, TcpCheck, TlsCheck};
 use crate::sensors::snmp::{OidMode, numeric};
@@ -209,7 +211,7 @@ impl OidItem {
 /// Stands for the device's host in the URL of an HTTP sensor of a template.
 pub const HOST_PLACEHOLDER: &str = "{host}";
 
-/// The settings of a service sensor (HTTP, TCP, DNS, TLS).
+/// The settings of a service or router sensor (HTTP, TCP, DNS, TLS, FRITZ!Box, Huawei).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Service {
@@ -217,6 +219,8 @@ pub enum Service {
     Tcp(TcpCheck),
     Dns(DnsCheck),
     Tls(TlsCheck),
+    Fritzbox(FritzCheck),
+    Huawei(HuaweiCheck),
 }
 
 impl Service {
@@ -246,6 +250,8 @@ impl Service {
             SensorSpec::Tcp(c) => Self::Tcp(c.clone()),
             SensorSpec::Dns(c) => Self::Dns(c.clone()),
             SensorSpec::Tls(c) => Self::Tls(c.clone()),
+            SensorSpec::Fritzbox(c) => Self::Fritzbox(*c),
+            SensorSpec::Huawei(c) => Self::Huawei(*c),
             _ => return None,
         })
     }
@@ -266,6 +272,8 @@ impl Service {
             Self::Tcp(c) => SensorSpec::Tcp(c.clone()),
             Self::Dns(c) => SensorSpec::Dns(c.clone()),
             Self::Tls(c) => SensorSpec::Tls(c.clone()),
+            Self::Fritzbox(c) => SensorSpec::Fritzbox(*c),
+            Self::Huawei(c) => SensorSpec::Huawei(*c),
         }
     }
 }
@@ -579,7 +587,12 @@ pub fn build(
                 limits,
                 master: options.master == Some(s.id),
             }),
-            SensorSpec::Http(_) | SensorSpec::Tcp(_) | SensorSpec::Dns(_) | SensorSpec::Tls(_) => {
+            SensorSpec::Http(_)
+            | SensorSpec::Tcp(_)
+            | SensorSpec::Dns(_)
+            | SensorSpec::Tls(_)
+            | SensorSpec::Fritzbox(_)
+            | SensorSpec::Huawei(_) => {
                 if let Some(service) = Service::from_spec(&s.spec, &options.host) {
                     body.services.push(ServiceItem {
                         service,

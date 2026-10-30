@@ -123,11 +123,13 @@ async fn allow_devices_without_profile(pool: &SqlitePool) -> Result<()> {
 /// since 0.5.6, ping sensors with settings in `params` (the number of packets).
 /// Like [`allow_devices_without_profile`], the check only changes by rebuilding the table outside a
 /// migration transaction; it runs once per schema change (detected by the newest column or by the
-/// rule for `ping` in the table's definition) and copies the columns the old table has. Later
-/// migrations that add columns to `sensors` must add them here as well, and a new sensor type needs
-/// a new newest column (or another check) to trigger it.
+/// rule for `ping` in the table's definition, or by the list of kinds that older tables still have)
+/// and copies the columns the old table has. Later migrations that add columns to `sensors` must add
+/// them here as well. New sensor types with `params` need no change here: the table does not list
+/// the kinds any more, the program checks them when it reads a sensor.
 async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
     const PING_RULE: &str = "WHEN 'ping'";
+    const KIND_LIST: &str = "CHECK (kind IN";
     let existing: Vec<String> = sqlx::query_scalar("SELECT name FROM pragma_table_info('sensors')")
         .fetch_all(pool)
         .await?;
@@ -136,7 +138,10 @@ async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
     )
     .fetch_one(pool)
     .await?;
-    if existing.iter().any(|c| c == "params") && definition.contains(PING_RULE) {
+    if existing.iter().any(|c| c == "params")
+        && definition.contains(PING_RULE)
+        && !definition.contains(KIND_LIST)
+    {
         return Ok(());
     }
     const COLUMNS: [&str; 21] = [
@@ -175,7 +180,7 @@ async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
                     id             INTEGER PRIMARY KEY,
                     device_id      INTEGER NOT NULL REFERENCES devices (id) ON DELETE CASCADE,
                     name           TEXT NOT NULL COLLATE NOCASE,
-                    kind           TEXT NOT NULL CHECK (kind IN ('ping', 'uptime', 'if_traffic', 'if_status', 'oid', 'local', 'http', 'tcp', 'dns', 'tls')),
+                    kind           TEXT NOT NULL,
                     if_index       INTEGER,
                     oid            TEXT,
                     oid_mode       TEXT CHECK (oid_mode IN ('gauge', 'counter')),
@@ -188,7 +193,7 @@ async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
                     pause_reason   TEXT NOT NULL DEFAULT '',
                     -- what a local sensor measures, e.g. 'cpu' or 'disk:/var'
                     target         TEXT,
-                    -- settings of a ping or service sensor (JSON, checked by the program)
+                    -- settings of a ping, service or router sensor (JSON, checked by the program)
                     params         TEXT CHECK (params IS NULL OR json_valid(params)),
                     -- own polling interval (migration 0017); NULL = the device's
                     interval_secs  INTEGER CHECK (interval_secs IS NULL OR interval_secs BETWEEN 10 AND 3600),
@@ -210,7 +215,7 @@ async fn current_sensors_table(pool: &SqlitePool) -> Result<()> {
                             WHEN 'tcp'        THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NOT NULL
                             WHEN 'dns'        THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NOT NULL
                             WHEN 'tls'        THEN if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NOT NULL
-                            ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL
+                            ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL
                         END
                     )
                 ) STRICT",
@@ -570,6 +575,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_table_of_0_5_7_is_rebuilt_for_new_sensor_kinds() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = connect(&dir.path().join("old.db")).await.unwrap();
+        migrate(&pool).await.unwrap();
+        // The table as 0.5.7 left it: a list of kinds, `params` only where a rule allows them.
+        let current: String = sqlx::query_scalar(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sensors'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let open = current.find('(').unwrap();
+        let older = current[open..]
+            .replace(
+                "kind           TEXT NOT NULL,",
+                "kind           TEXT NOT NULL CHECK (kind IN ('ping', 'tcp')),",
+            )
+            .replace(
+                "ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL",
+                "ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL",
+            );
+        assert!(older.contains("CHECK (kind IN"));
+        rebuild_without_foreign_keys(&pool, "sensors", |tx| {
+            Box::pin(async move {
+                for statement in [
+                    format!("CREATE TABLE sensors_old {older}"),
+                    "INSERT INTO sensors_old SELECT * FROM sensors".to_owned(),
+                    "DROP TABLE sensors".to_owned(),
+                    "ALTER TABLE sensors_old RENAME TO sensors".to_owned(),
+                ] {
+                    sqlx::query(&statement).execute(&mut **tx).await?;
+                }
+                Ok(())
+            })
+        })
+        .await
+        .unwrap();
+        for statement in [
+            "INSERT INTO devices (name, host, profile_id) VALUES ('box', '192.0.2.1', NULL)",
+            "INSERT INTO sensors (device_id, name, kind, params) VALUES (1, 'TCP', 'tcp', '{\"port\":22}')",
+        ] {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+        let router = "INSERT INTO sensors (device_id, name, kind, params) \
+                      VALUES (1, 'WAN', 'fritzbox', '{\"metric\":\"traffic\",\"port\":49000}')";
+        assert!(sqlx::query(router).execute(&pool).await.is_err());
+
+        migrate(&pool).await.unwrap();
+        migrate(&pool).await.unwrap(); // a second start changes nothing
+        sqlx::query(router).execute(&pool).await.unwrap();
+        let kept: Vec<(String, Option<String>)> =
+            sqlx::query_as("SELECT kind, params FROM sensors ORDER BY id")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            kept[0],
+            ("tcp".to_owned(), Some("{\"port\":22}".to_owned()))
+        );
+        assert_eq!(kept[1].0, "fritzbox");
+    }
+
+    #[tokio::test]
     async fn the_table_of_the_first_055_packages_is_rebuilt_for_ping_settings() {
         let dir = tempfile::tempdir().unwrap();
         let pool = connect(&dir.path().join("old.db")).await.unwrap();
@@ -586,7 +654,11 @@ mod tests {
             .lines()
             .filter(|l| !l.contains("WHEN 'ping'"))
             .collect::<Vec<_>>()
-            .join("\n");
+            .join("\n")
+            .replace(
+                "ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL",
+                "ELSE if_index IS NULL AND oid IS NULL AND oid_mode IS NULL AND scale IS NULL AND target IS NULL AND params IS NULL",
+            );
         rebuild_without_foreign_keys(&pool, "sensors", |tx| {
             Box::pin(async move {
                 for statement in [

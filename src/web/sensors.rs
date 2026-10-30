@@ -35,6 +35,7 @@ use crate::web::auth::{CsrfForm, CurrentUser};
 use crate::web::devices::DeleteForm;
 use crate::web::overview::FlashQuery;
 use crate::web::pause::{PauseNote, note};
+use crate::web::router_values::Family;
 use crate::web::sensor_text::ValueFormat;
 use crate::web::sparkline::{self, Trend};
 use crate::web::{AppState, Crumb, Layout, flash_message, group_trail};
@@ -728,9 +729,12 @@ pub async fn create(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let device = load_device(&state, id).await?;
-    // The values of this server are picked on a page of their own.
+    // The values of this server and of routers are picked on pages of their own.
     if form.kind == "server" {
         return Ok(Redirect::to(&format!("/devices/{}/server", device.id)).into_response());
+    }
+    if let Some(family) = Family::parse(&form.kind) {
+        return Ok(Redirect::to(&family.href(device.id)).into_response());
     }
     let mibs = state.mib_index();
     let outcome = match form.to_spec(user.lang, &mibs, &device.host) {

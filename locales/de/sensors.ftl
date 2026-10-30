@@ -78,7 +78,7 @@ sensors-scale = Faktor
 sensors-unit = Einheit (optional)
 sensors-unit-placeholder = leer: aus der MIB
 sensors-name-hint = Ohne Namen heißt der Sensor wie das MIB-Objekt (z. B. „tpSysMonitorCpu5Seconds.1“).
-sensors-no-snmp-hint = Dieses Gerät hat kein SNMP-Profil, daher gibt es nur Ping, Dienste (HTTP, TCP, DNS, TLS) und die Werte dieses Servers. Für Uptime, Interfaces und eigene Werte unter „Gerät bearbeiten“ ein SNMP-Profil wählen.
+sensors-no-snmp-hint = Dieses Gerät hat kein SNMP-Profil, daher gibt es nur Ping, Dienste (HTTP, TCP, DNS, TLS), Router-Werte (FRITZ!Box, Huawei) und die Werte dieses Servers. Für Uptime, Interfaces und eigene Werte unter „Gerät bearbeiten“ ein SNMP-Profil wählen.
 add = Hinzufügen
 
 discover-heading = Interfaces von { $device }

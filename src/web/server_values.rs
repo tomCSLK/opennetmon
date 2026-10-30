@@ -317,7 +317,12 @@ pub async fn create(
 }
 
 /// Creates the sensor; a name taken on this device gets ` #2`, ` #3` … appended.
-async fn create_named(state: &AppState, device: i64, name: &str, spec: &SensorSpec) -> Result<i64> {
+pub(super) async fn create_named(
+    state: &AppState,
+    device: i64,
+    name: &str,
+    spec: &SensorSpec,
+) -> Result<i64> {
     let base: String = name
         .chars()
         .filter(|c| !c.is_control())

@@ -20,7 +20,7 @@ fn with_index(base: &[u64], index: u32) -> Vec<u64> {
     oid
 }
 
-fn reading(key: &str, unit: Unit, value: Option<f64>) -> ChannelReading {
+pub(super) fn reading(key: &str, unit: Unit, value: Option<f64>) -> ChannelReading {
     ChannelReading {
         key: key.to_owned(),
         unit,
@@ -55,7 +55,7 @@ fn uptime_ticks(value: Option<&SnmpValue>) -> Option<u32> {
     }
 }
 
-fn rate_value(rate: Rate, factor: f64) -> Option<f64> {
+pub(super) fn rate_value(rate: Rate, factor: f64) -> Option<f64> {
     match rate {
         Rate::PerSecond(r) => Some(r * factor),
         Rate::First | Rate::Skipped(_) => None,

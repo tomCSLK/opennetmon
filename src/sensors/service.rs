@@ -106,7 +106,7 @@ impl HttpCheck {
     }
 }
 
-fn check_port(port: u16) -> Result<(), Msg> {
+pub(super) fn check_port(port: u16) -> Result<(), Msg> {
     if port == 0 {
         Err(Msg::new("service-port-invalid"))
     } else {
@@ -164,7 +164,7 @@ fn failed(id: &'static str, detail: impl ToString) -> SensorError {
     SensorError::Check(Msg::new(id).with("detail", detail.to_string()))
 }
 
-fn http_failure(e: HttpError) -> SensorError {
+pub(super) fn http_failure(e: HttpError) -> SensorError {
     match e {
         HttpError::Timeout => SensorError::Check(Msg::new("service-timeout")),
         HttpError::Connect(d) => failed("service-connect-failed", d),

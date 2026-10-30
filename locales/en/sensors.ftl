@@ -78,7 +78,7 @@ sensors-scale = Factor
 sensors-unit = Unit (optional)
 sensors-unit-placeholder = empty: from the MIB
 sensors-name-hint = Without a name the sensor is named after the MIB object (e.g. “tpSysMonitorCpu5Seconds.1”).
-sensors-no-snmp-hint = This device has no SNMP profile, so only ping, services (HTTP, TCP, DNS, TLS) and the values of this server are available. For uptime, interfaces and custom values choose an SNMP profile under “Edit device”.
+sensors-no-snmp-hint = This device has no SNMP profile, so only ping, services (HTTP, TCP, DNS, TLS), router values (FRITZ!Box, Huawei) and the values of this server are available. For uptime, interfaces and custom values choose an SNMP profile under “Edit device”.
 add = Add
 
 discover-heading = Interfaces of { $device }

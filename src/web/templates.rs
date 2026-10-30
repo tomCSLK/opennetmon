@@ -528,6 +528,8 @@ async fn render_new(
                     | SensorSpec::Tcp(_)
                     | SensorSpec::Dns(_)
                     | SensorSpec::Tls(_)
+                    | SensorSpec::Fritzbox(_)
+                    | SensorSpec::Huawei(_)
             )
         })
         .map(|s| SourceSensor {

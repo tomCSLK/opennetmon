@@ -118,7 +118,7 @@ fn spec_from_row(r: &SensorRow) -> Result<SensorSpec> {
                 .and_then(LocalMetric::parse)
                 .ok_or_else(|| corrupt("target"))?,
         ),
-        kind @ ("http" | "tcp" | "dns" | "tls") => r
+        kind @ ("http" | "tcp" | "dns" | "tls" | "fritzbox" | "huawei") => r
             .params
             .as_deref()
             .and_then(|p| SensorSpec::from_params(kind, p))
@@ -398,7 +398,9 @@ pub async fn create_sensor_with_state(
         | SensorSpec::Http(_)
         | SensorSpec::Tcp(_)
         | SensorSpec::Dns(_)
-        | SensorSpec::Tls(_) => (None, None, None, None, None),
+        | SensorSpec::Tls(_)
+        | SensorSpec::Fritzbox(_)
+        | SensorSpec::Huawei(_) => (None, None, None, None, None),
     };
     let target = match spec {
         SensorSpec::Local(metric) => Some(metric.target()),

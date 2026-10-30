@@ -12,7 +12,8 @@ Design und einheitliche Höhen der Bedienelemente; keine Migration, Screenshot i
 der Seitenköpfe (D) und aus den Vorhaben E–M (2026-10-27) Dienst-Sensoren (E), Verfügbarkeit und Berichte (G), `cargo audit` in der CI (H),
 Update-Hinweis (I), Wartungsfenster (J) und das Änderungsprotokoll (M), dazu fehlgeschlagene Abfragen in der Messwerttabelle und eine
 Einstellungsseite je Sensor, Messwerttabelle in Seiten und Ping mit mehreren Paketen. Vorher als Test-Paket **0.5.5** (`dev/deb.sh`, kein Tag) auf dem
-Ubuntu-Server vom Nutzer getestet (ohne Befund), danach als v0.5.6 released. **Später:** Push (F), 2FA (K), Schlüsselrotation (L). Der Mailversand mit dem
+Ubuntu-Server vom Nutzer getestet (ohne Befund), danach als v0.5.6 released. **Später:** Push (F), 2FA (K), Schlüsselrotation (L). **Eingeplant
+(2026-10-30):** Sensoren für die vorgeschalteten Router (N). Der Mailversand mit dem
 **echten Mailserver** des Nutzers funktioniert, ebenso der Ablauf Ende zu Ende im Betrieb und die Omada-Geräte (vom Nutzer getestet, 2026-10-27).
 
 Umgesetzt (Details in `docs/`):
@@ -362,7 +363,7 @@ neue Abhängigkeiten nur mit Begründung und `THIRD-PARTY-LICENSES.txt`, Migrati
 
 - E (Dienst-Sensoren) bringt einen **HTTP(S)-Client** mit (`hyper-util` mit Feature `client-legacy`, `tokio-rustls`, `webpki-roots`, alle schon im
   Build, kein neues Crate). F (Push) und I (Update-Hinweis) brauchen ihn auch. Wer zuerst umgesetzt wird, baut ihn als eigenes Modul `http_client`.
-- L (Schlüsselrotation) muss alle verschlüsselten Spalten kennen, auch die neuen aus F (Tokens) und K (TOTP-Secrets). Dafür bekommt L ein
+- L (Schlüsselrotation) muss alle verschlüsselten Spalten kennen, auch die neuen aus F (Tokens), K (TOTP-Secrets) und N (Anmeldeprofile). Dafür bekommt L ein
   Verzeichnis der verschlüsselten Spalten mit einem Test gegen das Schema. Damit ist die Reihenfolge egal.
 - G (Verfügbarkeit) zählt pausierte Zeit nicht mit. Damit zählen auch die Wartungsfenster aus J automatisch nicht mit.
 - M (Änderungsprotokoll) protokolliert auch die Ereignisse aus K (2FA ein/aus, Zurücksetzen), wenn K schon da ist.
@@ -762,6 +763,125 @@ mit Mindesthöhe 3,2rem, `.card-tools` `.55rem`. Seitenleiste, Handy-Menü-Knopf
 Maße (`height: auto`). Gemessen nachher per Skript auf allen Seiten, hell und dunkel: in jeder Leiste eine Höhe (Seitenköpfe,
 Formulare 36 px, Kartenköpfe 30 px bzw. 28 px für Symbolknöpfe), Filterleiste 49 px, Kartenkopf 51 px; Handy 390 px ohne
 waagerechtes Scrollen.
+
+### N. Sensoren für die vorgeschalteten Router (FRITZ!Box, Huawei 5G) – Stufe 1 gebaut 2026-10-30 (Branch `router-sensors`), nicht released
+
+**Stand 2026-10-30:** Grundlage und beide Sensoren der Stufe 1 sind gebaut und laufen in einer Testinstanz auf dem Laptop gegen die echten Router. Die Prüfung vom
+Server aus (Grundlage 1) steht noch aus und muss vor dem Test-Paket erfolgen. Gegenüber dem Plan unten geändert: Statt Feldern im Formular führt der Typ in „Sensor
+hinzufügen“ auf eine Häkchen-Seite wie „Dieser Server“ (`/devices/<id>/router/<family>`, `web::router_values`), Wunsch des Nutzers; sie fragt den Router beim Öffnen einmal
+lesend ab. Der Verkehrs-Sensor des Huawei warnt ab Werk über 1 Mbit/s Empfang. In den Listen zeigt eine Router-Verbindung Sync-Raten bzw. Signal, die Laufzeit nur auf der
+Detailseite. Geklärt: `TotalDownload` steigt laufend (394 bit/s gemessen, während der Router Rate 0 meldet), also bleiben die Zähler die Quelle. `SesInfo` kommt ohne Präfix
+`SessionID=`, das Cookie setzt der Sensor selbst zusammen. Der Netztyp wechselte zwischen zwei Abfragen (1011, dann 101), die Meldung zeigt ihn roh. Als verbunden
+zählt weiter nur 901, alles andere erscheint mit dem Rohwert. Offen: Verträgt der Router die Sitzungen dauerhaft (beobachten), Statuswerte bei
+getrennter Verbindung (nur der Nutzer kann das auslösen), Vergleich der FRITZ!Box-Raten mit ihrer Oberfläche.
+
+Wunsch des Nutzers (2026-10-30): Von den beiden Routern vor dem ER605 soll mehr kommen als der Ping. Grundlage ist eine lesende Abfrage beider Geräte
+ohne Anmeldung vom Arbeitsrechner aus; Messwerte und Heimnetz-Details stehen außerhalb des Repos (Verweis in `CLAUDE.local.md`). Die Stellen im Code sind
+gegen v0.5.7 geprüft. Der ER605 braucht nichts Neues, er liefert per SNMPv3 Werte (Nutzertest 2026-10-27).
+
+**Warum ein neuer Sensortyp:** Die FRITZ!Box spricht vermutlich kein SNMP (nicht getestet), der Huawei wurde nicht auf SNMP geprüft; seine Werte kommen über die HiLink-API.
+Der HTTP-Sensor kann nur GET/HEAD ohne Body und eigene Kopfzeilen und liefert nur Antwortzeit und Statuscode.
+
+**Reihenfolge (Empfehlung):** Grundlage, FRITZ!Box Stufe 1, Huawei Stufe 1, Test-Paket auf dem Server und Werte beobachten; FRITZ!Box Stufe 2, wenn der
+Nutzer dort einen Benutzer anlegt; Huawei Stufe 2 nur bei Bedarf. Die ersten drei Schritte brauchen keine Zugangsdaten und kein neues Crate.
+
+#### Grundlage für beide
+
+1. **Erreichbarkeit vom Server prüfen:** Bisher ist alles nur vom Arbeitsrechner getestet. Beide Abfragen per `curl` auf dem Server wiederholen, nur
+   lesend, nach den Regeln in `Serveradmin`. Das kommt zuerst, weil ohne Weg vom Server alles Weitere hinfällig ist.
+2. **HTTP-Client** (`src/http_client.rs`): neue Funktion mit Methode, eigenen Kopfzeilen und optionalem Body, ohne Weiterleitungen. `exchange` sendet heute
+   `Empty<Bytes>` und bekommt dafür `Full<Bytes>`; `fetch` und `Options` bleiben für ihre Aufrufer gleich. `Response.headers` gibt es schon. Der
+   `testserver` muss den Body lesen, damit Tests die Anfrage prüfen können.
+3. **XML-Hilfe** (`src/sensors/xml.rs`): gezielt bekannte Tags suchen, Entitäten wie `&#x2F;` auflösen, kein neues Crate. Antworten höchstens 64 KiB.
+   Texte vom Gerät kürzen; `truncate` in `src/status.rs` ist privat, also freigeben oder vorher prüfen, ob die Bewertung ohnehin kürzt.
+4. **Tabelle `sensors` einmalig umbauen** (`current_sensors_table`): Der CHECK `kind IN (…)` entfällt, der `ELSE`-Zweig lässt `params` zu. Damit ist es der
+   letzte Umbau für neue Typen (wie bei den Gerätearten in Migration `0015`). Die heutige Prüfung (`params` vorhanden und `WHEN 'ping'` in der Definition)
+   löst das nicht aus, sie muss zusätzlich auf den alten CHECK schauen. Den Upgrade-Test in `src/storage/mod.rs` erweitern und den Umbau an einer Kopie
+   echter Daten prüfen (alle Spalten gleich, `integrity_check`).
+5. **Ein Typ je Gerätefamilie, Messgröße in `params`** nach dem Muster von `LocalMetric`, z. B. `{"metric":"traffic","port":49000}`. Jede Messgröße hat so
+   ihr eigenes Diagramm (je Einheit eins, sonst ginge der Durchsatz neben der Sync-Rate unter), neue Messgrößen brauchen keinen Umbau.
+   Betroffen: `SensorSpec` (`kind`, `params`, `from_params`, `describe`, `channels`, `validate`, `build`), `format::channel_label`, `kind @ (…)` in
+   `src/storage/sensors.rs`, `src/web/sensors.rs`, `src/web/sensor_settings.rs`, `src/web/templates.rs`, `Service` in `src/templates.rs`.
+6. **Eine Frist je Abfrage:** Der Poller bricht einen Sensor nach `timeout * (retries + 1) + POLL_GRACE` ab. Ein Sensor mit mehreren Anfragen (Huawei
+   `connection`: Sitzung plus vier Pfade) teilt sich eine Frist, sonst endet ein halb langsames Gerät in `service-timeout` ohne brauchbare Meldung.
+7. **Oberfläche:** Typ in „Sensor hinzufügen“ mit Feld für die Messgröße (`templates/sensors.html`, `templates/sensor_fields.html`), Texte in
+   `locales/de` und `locales/en`. Wie bisher im Browser prüfen.
+8. **Öffentliches Repo:** Testantworten anonymisieren (keine Seriennummer, myfritz-Adresse, Heimnetz-IP, Sitzungsdaten). `docs/sensors.md` und README auf
+   Englisch, dort klar sagen, dass die Marken nur die unterstützten Geräte benennen. Getestet ist nur je ein Gerät mit seiner Firmware; das in der Doku nennen.
+
+#### FRITZ!Box, Stufe 1: ohne Anmeldung (UPnP-IGD per SOAP, Port 49000)
+
+Typ `fritzbox`:
+
+| Messgröße | Aufrufe | Kanäle | Bewertung |
+|---|---|---|---|
+| `traffic` | `GetAddonInfos` | `in`, `out` (bit/s) aus den 64-Bit-Zählern | keine Grenzwerte vorgegeben |
+| `connection` | `GetStatusInfo`, `GetAddonInfos` | `uptime` (s), `sync_down`, `sync_up` (bit/s) | Fehler, wenn nicht `Connected` |
+
+- Raten mit `CounterTracker` (`Bits64`, kein `max_rate`, keine `uptime_ticks`, wie die übrigen 64-Bit-Zähler), Faktor 8. Die erste Abfrage liefert
+  `value: None`, ein Neustart der Box kostet einen Messwert. Die Rate der Box (`NewByteReceiveRate`) wird nicht benutzt, sie wich in der Messung stark
+  vom Zähler ab, die Ursache ist offen. Bei der Abnahme mit der Oberfläche der Box vergleichen.
+- Getrennte Verbindung als `SensorError::Check` mit `NewLastConnectionError`: erster Fehler Warnung, zweiter Ausfall, kein Statuskanal nötig.
+- Nicht-200-Antworten mit Hinweis auf die Einstellung „Statusinformationen über UPnP übertragen“ (Name in FRITZ!OS 8.25 noch prüfen).
+- Nur für Kabel getestet: DSL-Boxen nutzen vermutlich `WANPPPConn1`. Das wird in der Doku genannt, nicht geraten.
+- Tests: anonymisierte echte Antworten, getrennte Verbindung, HTTP 500, fehlendes Tag, Timeout, fallender Zähler.
+
+#### Huawei 5G CPE, Stufe 1: ohne Anmeldung (HiLink-API, Port 80)
+
+Typ `huawei`. Sitzung per `/api/webserver/SesTokInfo`, dann GET mit Cookie und Token. Fehler kommen mit HTTP 200 als `<error><code>`, also jede Antwort prüfen.
+
+| Messgröße | Pfade | Kanäle | Bewertung |
+|---|---|---|---|
+| `connection` | `/api/monitoring/status`, `traffic-statistics`, `/api/dialup/mobile-dataswitch`, `/api/net/current-plmn` | `signal` (Balken 0–5), `uptime` | Fehler, wenn nicht verbunden, SIM nicht bereit, mobile Daten aus oder Flugmodus; Warnung unter 2 Balken (änderbar) |
+| `traffic` | `/api/monitoring/traffic-statistics` | `in`, `out` (bit/s) | Warnung über einer einstellbaren Rate zeigt: Reserve läuft |
+| `volume` | `/api/monitoring/month_statistics` | `month_down`, `month_up`, `day_used` (Bytes) | keine Vorgabe; ein Datenlimit stellt der Nutzer als Grenzwert am Sensor ein (entschieden 2026-10-30, nicht fest eingebaut) |
+
+`connection` beantwortet die eigentliche Frage: Wäre die Reserve bereit, wenn die FRITZ!Box ausfällt? Die Meldung nennt Netzbetreiber und Netztyp.
+
+Vor dem Programmieren klären:
+
+- **Statuswerte:** Die Bedeutung von `ConnectionStatus`, `SimStatus`, `CurrentNetworkType` und `CurrentNetworkTypeEx` ist bisher nur vermutet. Unbekannte Werte
+  roh anzeigen, nicht raten. Das Verhalten bei getrennter Verbindung (SIM gezogen, mobile Daten aus) kann nur der Nutzer beobachten.
+- **Zähler:** Steigt `TotalDownload` während einer Verbindung laufend oder erst beim Trennen? Das zeigt sich nur, wenn Daten fließen. Steigt er nicht
+  laufend, gelten `CurrentDownloadRate`/`CurrentUploadRate`.
+- **Sitzungen:** Bei einer neuen Sitzung je Abfrage entstehen mit drei Sensoren drei Sitzungen pro Intervall. Ob der Router das unbegrenzt mitmacht und ob
+  es eine Anmeldung im Browser stört, ist ungeprüft. Darum eine Weile beobachten; falls nötig, die Sitzung im Sensorobjekt halten (es überlebt zwischen den
+  Abfragen, `reconcile` in `src/poller.rs`) und nur bei Code `125002` erneuern.
+
+Tests wie bei der FRITZ!Box, zusätzlich die Codes `100003` und `125002` mit HTTP 200.
+
+#### FRITZ!Box, Stufe 2: mit Anmeldung (DOCSIS, System)
+
+1. **Erst Daten ansehen:** Der Nutzer legt in der Box einen Benutzer `opennetmon` an (Browser-Schritt). Dann echte Antworten von `data.lua` (`docInfo`, `ecoStat`)
+   ansehen und klären, welche Rechte nötig sind. Inhalt und Schnittstelle sind bisher Annahme.
+2. **Anmeldeprofile wie die SNMP-Profile** (entschieden 2026-10-30): eigene Tabelle `login_profiles` (`name` eindeutig, `username`, `password_enc`), nicht
+   `credential_profiles`, denn deren CHECK kennt nur `v2c`/`v3` und `devices.profile_id` bedeutet SNMP. Neue Spalte `devices.login_profile_id` (NULL erlaubt,
+   `ON DELETE RESTRICT`), die Umbaufunktion für `devices` muss sie mitkopieren. `SecretBox` mit Kontext `login.password`; `sensors.params` ist Klartext-JSON und
+   kommt für Passwörter nicht in Frage. Oberfläche unter `/credentials`, nur Admins, Passwort nie sichtbar, benutztes Profil nicht löschbar, Auswahl im
+   Geräteformular, `audit::record` mit `secret`, nicht in Gerätevorlagen. Das Verzeichnis der verschlüsselten Spalten aus L muss die Spalte kennen.
+3. **Poller:** `PollContext` um die Anmeldedaten erweitern, nur für Sensoren, die sie brauchen (Vorbild `uses_snmp`, `poll-profile-missing`), entschlüsselt
+   nur für den Poller.
+4. **Anmeldung:** Challenge von `login_sid.lua?version=2` per PBKDF2 lösen (Crate oder eigene Schleife, Lizenzregel beachten). Sitzung wiederverwenden, sonst
+   füllt sich das Protokoll der Box. HTTPS auf Port 443 ohne Zertifikatsprüfung, damit die Session-ID nicht im Klartext läuft.
+5. **Sperre beachten:** Bei falschem Passwort sofort aufhören und `BlockTime` abwarten, damit die Überwachung die Box nicht aussperrt.
+6. **Messgrößen:** `docsis` als Zusammenfassung, weil `ChannelDef.key` statisch ist und die Zahl der Kanäle wechselt (Pegel Min/Max, kleinster MER, Zahl der
+   Kanäle, Fehler je Sekunde), neue Einheiten dBmV und dB in `Unit`, Intervall 300 s. `system`: CPU, Temperatur, RAM, soweit `ecoStat` sie liefert.
+7. **Risiko:** `data.lua` ist nicht dokumentiert und kann sich mit FRITZ!OS ändern. Dann „Antwort nicht lesbar“ melden, nie falsche Werte speichern.
+
+TR-064 mit Anmeldung (Geräte, WLAN) ist nicht vorgesehen: Clients und WLAN laufen über Omada, und es bräuchte zusätzlich HTTP-Digest.
+
+#### Huawei, Stufe 2: mit Anmeldung (zurückgestellt)
+
+`/api/device/signal` liefert vermutlich RSRP, RSRQ, SINR und Band. Das Anmeldeverfahren ist ungeklärt, ein Sensor-Login könnte die Web-Anmeldung verdrängen,
+und falsche Passwörter sperren den Zugang. Empfehlung: zurückstellen, für einen fest aufgestellten Reserverouter genügen die Balken aus Stufe 1.
+
+#### Betrieb und Abschluss
+
+- **Abhängigkeiten nutzen:** Beide Geräte in opennetmon vom Ping des ER605 abhängig machen, sonst kommen bei dessen Ausfall zusätzliche Mails.
+- **Zurück auf eine ältere Version:** Ein altes Binary liest unbekannte Typen als defekt (`corrupt("kind")` in `src/storage/sensors.rs`). Vor einem Rückschritt
+  müssen die neuen Sensoren also gelöscht werden; das kommt in die Release-Notes.
+- Wie immer: `cargo fmt`, `clippy`, `cargo test`; `docs/sensors.md`, `README.md`, `CLAUDE.md` nachziehen. Erst Test-Paket auf dem Server, Release nur auf Ansage.
+- **Abnahme:** gegen die echten Geräte, zwei Abfragen im Abstand, Werte mit den Oberflächen der Geräte vergleichen.
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
