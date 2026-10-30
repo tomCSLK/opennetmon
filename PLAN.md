@@ -3,10 +3,11 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-10-27, Release v0.5.6)
+## Stand (2026-10-30, Release v0.5.7)
 
 Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft als `.deb` auf dem Ubuntu-Server des Nutzers (dort seit 2026-10-27
-0.5.6); die Instanz auf dem Laptop dient nur noch zum Testen. In v0.5.0 kamen die mobile Ansicht, Symbole in den Listen,
+0.5.6); die Instanz auf dem Laptop dient nur noch zum Testen. **v0.5.7** (2026-10-30) ändert nur das Design: violette Seitenleiste, violett getöntes dunkles
+Design und einheitliche Höhen der Bedienelemente; keine Migration, Screenshot in den Release-Notes (Demo-Daten). In v0.5.0 kamen die mobile Ansicht, Symbole in den Listen,
 **Abhängigkeiten wie in PRTG** und die Behebungen aus dem Sicherheitstest dazu (Vorhaben A–C); in **v0.5.6** (2026-10-27): Knopfleisten
 der Seitenköpfe (D) und aus den Vorhaben E–M (2026-10-27) Dienst-Sensoren (E), Verfügbarkeit und Berichte (G), `cargo audit` in der CI (H),
 Update-Hinweis (I), Wartungsfenster (J) und das Änderungsprotokoll (M), dazu fehlgeschlagene Abfragen in der Messwerttabelle und eine
