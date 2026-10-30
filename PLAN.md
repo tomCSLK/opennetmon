@@ -766,14 +766,16 @@ waagerechtes Scrollen.
 
 ### N. Sensoren für die vorgeschalteten Router (FRITZ!Box, Huawei 5G) – Stufe 1 gebaut 2026-10-30 (Branch `router-sensors`), nicht released
 
-**Stand 2026-10-30:** Grundlage und beide Sensoren der Stufe 1 sind gebaut und laufen in einer Testinstanz auf dem Laptop gegen die echten Router. Die Prüfung vom
-Server aus (Grundlage 1) steht noch aus und muss vor dem Test-Paket erfolgen. Gegenüber dem Plan unten geändert: Statt Feldern im Formular führt der Typ in „Sensor
+**Stand 2026-10-30:** Grundlage und beide Sensoren der Stufe 1 sind gebaut und laufen in einer Testinstanz auf dem Laptop gegen die echten Router. Der Server hängt laut
+Nutzer im selben Netz und erreicht beide Router ebenso (Grundlage 1 damit geklärt; nicht gemessen, das zeigt das Test-Paket). Gegenüber dem Plan unten geändert: Statt Feldern im Formular führt der Typ in „Sensor
 hinzufügen“ auf eine Häkchen-Seite wie „Dieser Server“ (`/devices/<id>/router/<family>`, `web::router_values`), Wunsch des Nutzers; sie fragt den Router beim Öffnen einmal
 lesend ab. Der Verkehrs-Sensor des Huawei warnt ab Werk über 1 Mbit/s Empfang. In den Listen zeigt eine Router-Verbindung Sync-Raten bzw. Signal, die Laufzeit nur auf der
 Detailseite. Geklärt: `TotalDownload` steigt laufend (394 bit/s gemessen, während der Router Rate 0 meldet), also bleiben die Zähler die Quelle. `SesInfo` kommt ohne Präfix
 `SessionID=`, das Cookie setzt der Sensor selbst zusammen. Der Netztyp wechselte zwischen zwei Abfragen (1011, dann 101), die Meldung zeigt ihn roh. Als verbunden
-zählt weiter nur 901, alles andere erscheint mit dem Rohwert. Offen: Verträgt der Router die Sitzungen dauerhaft (beobachten), Statuswerte bei
-getrennter Verbindung (nur der Nutzer kann das auslösen), Vergleich der FRITZ!Box-Raten mit ihrer Oberfläche.
+zählt weiter nur 901, alles andere erscheint mit dem Rohwert. Vom Nutzer getestet (2026-10-30): Mobile Daten aus ergab
+`huawei-data-off` als Warnung, eine Abfrage später wieder „verbunden“; gezogene SIM ergab „SIM nicht bereit“ mit `SimStatus` 255, erst Warnung, bei der nächsten Abfrage Ausfall;
+die FRITZ!Box-Raten stimmen mit ihrer Oberfläche überein. Tabellenumbau auf einer Kopie der Server-Datenbank geprüft (99 Sensoren, 216 Kanäle, 1,99 Mio. Messwerte unverändert,
+`integrity_check` ok, zweiter Start ohne Umbau). Test-Paket 0.5.8 gebaut. Offen: Verträgt der Router die Sitzungen dauerhaft? Das zeigt nur der Dauerbetrieb auf dem Server.
 
 Wunsch des Nutzers (2026-10-30): Von den beiden Routern vor dem ER605 soll mehr kommen als der Ping. Grundlage ist eine lesende Abfrage beider Geräte
 ohne Anmeldung vom Arbeitsrechner aus; Messwerte und Heimnetz-Details stehen außerhalb des Repos (Verweis in `CLAUDE.local.md`). Die Stellen im Code sind

@@ -149,7 +149,8 @@ fn needed(answer: &str, tag: &str) -> Result<u32, SensorError> {
 }
 
 fn failed(id: &'static str, value: u32) -> SensorError {
-    SensorError::Check(Msg::new(id).with("value", value))
+    // As text: a status number is shown as the router sent it, without number formatting.
+    SensorError::Check(Msg::new(id).with("value", value.to_string()))
 }
 
 /// Why the link would not carry traffic right now, if so.
@@ -400,7 +401,7 @@ mod tests {
                 "<response><dataswitch>0</dataswitch></response>",
                 "Mobile data",
             ),
-            (STATUS.replace(">901<", ">902<"), SWITCH_ON, "902"),
+            (STATUS.replace(">901<", ">1902<"), SWITCH_ON, "1902"),
         ] {
             let replies = vec![ok(SESSION), ok(&status_answer), ok(switch)];
             let addr = serve(replies, None).await;
