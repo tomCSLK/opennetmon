@@ -775,7 +775,7 @@ Detailseite. Geklärt: `TotalDownload` steigt laufend (394 bit/s gemessen, währ
 zählt weiter nur 901, alles andere erscheint mit dem Rohwert. Vom Nutzer getestet (2026-10-30): Mobile Daten aus ergab
 `huawei-data-off` als Warnung, eine Abfrage später wieder „verbunden“; gezogene SIM ergab „SIM nicht bereit“ mit `SimStatus` 255, erst Warnung, bei der nächsten Abfrage Ausfall;
 die FRITZ!Box-Raten stimmen mit ihrer Oberfläche überein. Tabellenumbau auf einer Kopie der Server-Datenbank geprüft (99 Sensoren, 216 Kanäle, 1,99 Mio. Messwerte unverändert,
-`integrity_check` ok, zweiter Start ohne Umbau). Test-Paket 0.5.8 gebaut. Offen: Verträgt der Router die Sitzungen dauerhaft? Das zeigt nur der Dauerbetrieb auf dem Server.
+`integrity_check` ok, zweiter Start ohne Umbau). Test-Paket 0.5.8 läuft seit 2026-10-30 22:37 auf dem Server (Umbau dort ohne Befund, alle 99 Sensoren liefern Werte), die Sensoren legt der Nutzer im Browser an. Offen: Verträgt der Router die Sitzungen dauerhaft? Das zeigt der Dauerbetrieb; das nächste Release muss höher als 0.5.8 sein, sonst hält `opennetmon-update` den Server für aktuell.
 
 Wunsch des Nutzers (2026-10-30): Von den beiden Routern vor dem ER605 soll mehr kommen als der Ping. Grundlage ist eine lesende Abfrage beider Geräte
 ohne Anmeldung vom Arbeitsrechner aus; Messwerte und Heimnetz-Details stehen außerhalb des Repos (Verweis in `CLAUDE.local.md`). Die Stellen im Code sind

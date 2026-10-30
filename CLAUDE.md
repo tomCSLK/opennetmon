@@ -344,7 +344,7 @@ und `cargo test` müssen fehlerfrei durchlaufen.
   F Push (ntfy, Gotify, Telegram, Webhook), G Verfügbarkeit und Berichte, H `cargo audit` in der CI, I Hinweis auf neue Versionen, J Wartungsfenster nach Zeitplan,
   K Zwei-Faktor-Anmeldung (TOTP), L Rotation von `secret.key`, M Änderungsprotokoll
 - Vorhaben N (2026-10-30, `PLAN.md`): Sensoren für die vorgeschalteten Router, Typen `fritzbox` (UPnP-IGD) und `huawei` (HiLink-API); Stufe 1 ohne Anmeldung gebaut (Branch `router-sensors`,
-  nicht released, Test-Paket 0.5.8 ohne Tag), später Anmeldeprofile (`login_profiles`) für DOCSIS-Werte der FRITZ!Box
+  nicht released, Test-Paket 0.5.8 ohne Tag läuft seit 2026-10-30 auf dem Server), später Anmeldeprofile (`login_profiles`) für DOCSIS-Werte der FRITZ!Box
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,
