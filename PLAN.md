@@ -885,6 +885,52 @@ und falsche Passwörter sperren den Zugang. Empfehlung: zurückstellen, für ein
 - Wie immer: `cargo fmt`, `clippy`, `cargo test`; `docs/sensors.md`, `README.md`, `CLAUDE.md` nachziehen. Erst Test-Paket auf dem Server, Release nur auf Ansage.
 - **Abnahme:** gegen die echten Geräte, zwei Abfragen im Abstand, Werte mit den Oberflächen der Geräte vergleichen.
 
+### O. „Letzte Statuswechsel“ der Sensorseite in Seiten – geplant 2026-11-02 (Wunsch des Nutzers; N und Färben entschieden, Umsetzung noch nicht freigegeben)
+
+**Heute:** Die Karte zeigt die 20 neuesten Wechsel des Sensors (`EVENT_LIMIT` in `src/web/sensor_detail.rs`), vom Server als HTML gezeichnet. Gespeichert
+werden nur die **500 neuesten Wechsel aller Sensoren zusammen** (`EVENTS_KEPT`, `trim_events` in `src/storage/status.rs`). Stand auf dem Server
+2026-11-02 21:15: 459 von 500, ältester vom 2026-10-22; zwei Sensoren haben zusammen 265 davon (die Huawei-Verbindung pendelt um die Grenze
+„unter 2 Balken“, 76 Warnungen seit 2026-10-30; ein Ping-Sensor warnt immer wieder kurz wegen Paketverlust, 55 Warnungen). In etwa einem Tag
+ist die Grenze erreicht, danach verdrängen diese beiden die Wechsel ruhiger Sensoren. Blättern allein nützt deshalb wenig: erst die Aufbewahrung ändern.
+
+1. **Aufbewahrung je Sensor statt global:** `trim_events` löscht nur noch beim betroffenen Sensor, behalten werden die neuesten **N je Sensor**
+   (**N = 1000**, entschieden 2026-11-02, Konstante `EVENTS_KEPT_PER_SENSOR`; Index `events_sensor (sensor_id, ts_ms)` gibt es schon, keine Migration). Aufruf in
+   `record_poll` und `mark_paused` mit der Sensor-ID. Folgen:
+   - Das Protokoll `/log` (`problem_log`) liest heute alle Wechsel; mit N je Sensor könnten es bei 100 Sensoren bis 100 000 werden. Deshalb bekommt
+     `problem_log` eine Obergrenze (die neuesten 500 Einträge, wie bisher sichtbar), Blättern im Protokoll wäre ein eigener späterer Schritt.
+     Text `log-kept` anpassen („je Sensor werden die letzten N Statuswechsel gespeichert“).
+   - `status_history` (Statusband der Graphen) profitiert: Alte Wechsel ruhiger Sensoren fallen nicht mehr heraus.
+   - Gelöschte Sensoren: Ihre Wechsel gehen schon heute mit dem Sensor (`ON DELETE CASCADE`, Migration `0006`).
+2. **Abfrage mit Seiten:** `events_of_sensor(pool, id, limit, offset)` und `count_events_of_sensor`. Neuer JSON-Endpoint
+   `GET /sensors/<id>/events?offset=&limit=` (alle angemeldeten Benutzer wie die Sensorseite; `limit` auf 20/50/100 begrenzt, `offset` geprüft),
+   Antwort: Gesamtzahl, ältester Zeitpunkt und die Zeilen mit fertig übersetztem Wechsel und Meldung (dieselbe Aufbereitung wie heute, in eine
+   gemeinsame Funktion gezogen) und dem Zielstatus.
+   Anders als bei der Messwerttabelle **Seiten auf dem Server**: Hier gibt es keine Zusammenfassung über alle Zeilen, die der Browser rechnen müsste,
+   und so bleibt jede Antwort klein.
+3. **Seite ohne Skript unverändert:** Der Server zeichnet weiter die erste Seite (20 Zeilen) ins HTML; `static/events.js` übernimmt, wenn es läuft.
+4. **Blätterleiste wie bei den Messwerten:** Den Teil von `static/samples.js`, der die Leiste `« ‹ Seite 3 von 8 › »` und „Zeilen 41–60 von 152“
+   zeichnet, in `static/pager.js` herauslösen und von beiden Tabellen nutzen (Aussehen `.pager` aus `static/app.css`, Handy einzeilig). Auswahl
+   „Zeilen“ 20 / 50 / 100 (Standard 20) im Kartenkopf, per `localStorage` gemerkt (eigener Schlüssel, in `try/catch`). Infozeile im Kartenkopf
+   wie `#samples-info`: „152 Wechsel seit 30.10.2026“. Bei nur einer Seite keine Leiste.
+5. **Aktualisieren:** „Automatisch“ lädt die ganze Seite neu; wie bei den Messwerten bleibt die gezeigte Seite nur beim Neuladen des Tabs erhalten
+   (`sessionStorage`, Schlüssel = ID der obersten Zeile; der Server liefert dazu die Position dieser ID), ein neuer Besuch beginnt auf Seite 1.
+   Auf Seite 1 kommen neue Wechsel oben dazu.
+6. **Zeilen färben (entschieden 2026-11-02):** Wechsel nach Warnung gelb, nach Ausfall rot getönt, mit denselben Zeilenklassen wie die Messwerttabelle.
+7. **Dateien:** `src/storage/status.rs`, `src/web/sensor_detail.rs` (Endpoint, Route), `templates/sensor_detail.html`, `static/pager.js` (neu),
+   `static/samples.js`, `static/events.js` (neu), `static/app.css` falls nötig, `locales/de|en/` (`js-events-…`, `log-kept`), `docs/poller.md`
+   (Aufbewahrung), `docs/charts-and-thresholds.md` (Karte auf der Sensorseite), CLAUDE.md.
+8. **Tests:** Aufbewahrung je Sensor (ein Sensor mit vielen Wechseln verdrängt keinen anderen; Grenze N), `problem_log` mit Obergrenze, Endpoint
+   (Seiten, Grenzen, fremder Sensor 404, Leser darf lesen, ohne Anmeldung nicht), Seite enthält die neuen Elemente. Im Browser mit Wegwerfkopie
+   und einem Sensor mit > 100 Wechseln: Blättern, Seitengröße, Neuladen, neuer Wechsel auf Seite 1 und 3, Messwerttabelle blättert wie vorher,
+   hell/dunkel, 360/430/1280 px.
+9. **Auslieferung:** zusammen mit Vorhaben N im nächsten Test-Paket (Version über 0.5.8), Release nur auf Ansage.
+
+Entschieden (Nutzer, 2026-11-02): 1000 Wechsel je Sensor, Zeilen färben. Unabhängig davon: die Grenze am Huawei-Verbindungssensor (z. B. erst
+unter 1 Balken warnen) und am pendelnden Ping-Sensor (Paketverlust) prüfen – das ist Einstellung, kein Code.
+
+Verworfen: alle Wechsel ins HTML schreiben und im Browser blättern (bei N = 1000 je Sensor und Neuladen alle 30 s unnötig groß); nur die 20 auf
+50 erhöhen (löst das Verdrängen nicht).
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
 - Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen außer dem Master noch nicht.
