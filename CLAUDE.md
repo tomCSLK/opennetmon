@@ -323,6 +323,37 @@ Neues Video: wieder per Upload in der Weboberfläche, Datei unter 10 MB.
 **Vor jedem Abschluss einer Aufgabe:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`
 und `cargo test` müssen fehlerfrei durchlaufen.
 
+## Vorgemerkt: Inventar-Endpunkt für opensecmon (noch nicht umgesetzt)
+
+Stand 2026-11-06. opensecmon (`../SecurityDashboad/`, Phase 6c) liest die Geräte von opennetmon und schlägt daraus
+Assets vor. Die Seite in opensecmon ist fertig und gegen eine Attrappe getestet. **Hier ist noch nichts gebaut:**
+Der Nutzer setzt den Endpunkt selbst mit dem nächsten Release um (Entscheidung 2026-11-06). Bis dahin wird dafür am
+Code nichts geändert. Erwarteter Vertrag (Quelle: `SecurityDashboad/src/inventory/opennetmon.rs`):
+
+- **Anfrage:** `GET /api/v1/inventory`, nur lesend, angemeldet mit `Authorization: Bearer <token>` (keine Sitzung,
+  kein CSRF). Falsches oder fehlendes Token → `401`, sonst `200` mit `Content-Type: application/json`.
+- **Antwort:** `{"devices": [{"id": 17, "name": "Router", "address": "192.0.2.1", "sys_descr": "…", "sys_object_id": "1.3.6.1.4.1.…"}]}`
+  - `id`: die stabile Geräte-ID von opennetmon (> 0). Darüber verknüpft opensecmon seine Assets.
+  - `name`: der Gerätename.
+  - `address`: Host oder IP, wie eingetragen.
+  - `sys_descr`, `sys_object_id`: die zuletzt per SNMP gelesenen Werte, leer, wenn unbekannt oder ohne SNMP.
+  - Weitere Felder sind erlaubt und werden ignoriert. Pausierte Geräte mitliefern.
+- **Grenzen in opensecmon:**
+  - Abfrage alle 6 h und auf Knopfdruck.
+  - Antwort höchstens 4 MiB, 5000 Geräte, 30 s.
+  - Texte werden gekürzt (Name und Adresse 100 Zeichen, `sys_descr` 500) und nur als Daten behandelt.
+  - `ETag`/`304` sind optional.
+- **Transport:** opensecmon akzeptiert nur HTTPS oder HTTP auf Loopback. Beide laufen auf demselben Server; der Weg
+  über Traefik mit HTTPS geht auch.
+- **Dafür nötig in opennetmon:**
+  - `sysDescr` und `sysObjectID` je Gerät speichern (neue Migration). Heute werden beide nur gelesen
+    (`snmp::test` beim Verbindungstest, `templates.rs` für die Vorlagen), aber nicht gespeichert. Aktualisieren beim
+    Anlegen und Prüfen des Geräts und bei SNMP-Abfragen.
+  - API-Tokens verwalten: anlegen, nur einmal anzeigen, gehasht speichern, widerrufen, im Änderungsprotokoll festhalten.
+  - Rate-Limit wie bei der Anmeldung.
+  - Tests für 401/200 und den JSON-Aufbau.
+- **Danach:** in opensecmon unter Assets → „Import aus opennetmon“ Adresse und Token eintragen.
+
 ## Offene Punkte (vom Nutzer zu klären)
 
 - Angaben zum Heimnetz des Nutzers (Site, Adressen, SNMP-Benutzer und offene Punkte dazu) stehen nur lokal in `CLAUDE.local.md` (gitignored)
