@@ -27,7 +27,10 @@ use crate::web::auth::CurrentUser;
 use crate::web::sensor_text::ValueFormat;
 use crate::web::{AppState, Crumb, Layout, flash_message, group_trail, time_html};
 
+/// Status changes in the first page of the sensor page; the script then takes over.
 const EVENT_LIMIT: u32 = 20;
+/// Page sizes the events endpoint serves (the first one is the default).
+const EVENT_PAGE_SIZES: [u32; 3] = [20, 50, 100];
 /// Safety bound for the table of values (7 days at a 60-second interval are about 10,000 rows).
 const TABLE_ROWS_MAX: u32 = 20_000;
 
@@ -83,6 +86,25 @@ struct EventView {
     at: String,
     change: String,
     message: String,
+    /// `up`, `warning`, `down` or `paused`; warnings and outages are tinted.
+    status: &'static str,
+}
+
+/// One status change as the page and the events endpoint show it.
+fn event_view(t: Lang, e: &status_store::Event) -> EventView {
+    EventView {
+        at: time_html(e.ts_ms),
+        change: event_change(t, e),
+        message: crate::status::shown(t, &e.message),
+        status: e.to.as_str(),
+    }
+}
+
+fn event_change(t: Lang, e: &status_store::Event) -> String {
+    match e.from {
+        Some(from) => format!("{} → {}", t.get(from.label_id()), t.get(e.to.label_id())),
+        None => t.get1("event-first-poll", "status", t.get(e.to.label_id())),
+    }
 }
 
 #[derive(Template)]
@@ -112,6 +134,8 @@ struct DetailTemplate {
     spans: Vec<SpanOption>,
     range: &'static str,
     events: Vec<EventView>,
+    /// Status changes kept for the sensor.
+    events_total: i64,
     flash: Option<String>,
     /// The interval the sensor is polled at (its own or the device's).
     interval: u32,
@@ -177,25 +201,12 @@ async fn render(
         why.as_ref().and_then(|w| w.dependency()),
     );
     let status = crate::status::shown_status(why.is_some(), state_row.as_ref().map(|s| s.status));
-    let events = status_store::events_of_sensor(&state.pool, sensor.id, EVENT_LIMIT)
+    let events = status_store::events_of_sensor(&state.pool, sensor.id, EVENT_LIMIT, 0)
         .await?
-        .into_iter()
-        .map(|e| EventView {
-            at: time_html(e.ts_ms),
-            change: match e.from {
-                Some(from) => format!(
-                    "{} → {}",
-                    user.lang.get(from.label_id()),
-                    user.lang.get(e.to.label_id())
-                ),
-                None => {
-                    user.lang
-                        .get1("event-first-poll", "status", user.lang.get(e.to.label_id()))
-                }
-            },
-            message: crate::status::shown(user.lang, &e.message),
-        })
+        .iter()
+        .map(|e| event_view(user.lang, e))
         .collect();
+    let (events_total, _) = status_store::event_totals(&state.pool, sensor.id).await?;
     let availability = crate::web::reports::sensor_summary(state, user.lang, sensor.id).await?;
     let page = DetailTemplate {
         availability,
@@ -234,6 +245,7 @@ async fn render(
             .collect(),
         range: range.as_str(),
         events,
+        events_total,
         flash,
         interval: sensor.interval(device.polling.interval_secs),
         states,
@@ -495,6 +507,78 @@ pub async fn samples(
                     .map(|p| crate::status::shown(user.lang, &p.message))
             })
             .collect(),
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct EventsQuery {
+    offset: Option<u32>,
+    limit: Option<u32>,
+    /// Id of the event that was on top of the page shown before: the page then begins with it (or
+    /// with the next older one if it is gone), however many changes were added since.
+    anchor: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct EventsJson {
+    /// Status changes kept for the sensor.
+    total: i64,
+    /// Time of the oldest one, in ms; `null` without any.
+    oldest_ms: Option<i64>,
+    /// Number of changes before the first one returned.
+    offset: u32,
+    events: Vec<EventJson>,
+}
+
+#[derive(Serialize)]
+struct EventJson {
+    id: i64,
+    ts_ms: i64,
+    change: String,
+    message: String,
+    status: &'static str,
+}
+
+/// The status changes of a sensor, newest first, one page at a time (`?offset=&limit=`, limit 20,
+/// 50 or 100) for the script of the sensor page.
+pub async fn events(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<i64>,
+    Query(query): Query<EventsQuery>,
+) -> Result<Json<EventsJson>> {
+    let (sensor, _) = load(&state, id).await?;
+    let limit = query
+        .limit
+        .filter(|l| EVENT_PAGE_SIZES.contains(l))
+        .unwrap_or(EVENT_PAGE_SIZES[0]);
+    let (total, oldest_ms) = status_store::event_totals(&state.pool, sensor.id).await?;
+    let wanted = match query.anchor {
+        Some(anchor) => {
+            let newer = status_store::events_newer_than(&state.pool, sensor.id, anchor).await?;
+            u32::try_from(newer).unwrap_or(u32::MAX)
+        }
+        None => query.offset.unwrap_or(0),
+    };
+    // Past the end: the last page, so a page that lost its rows to the retention limit is not empty.
+    let last_page = u32::try_from((total - 1).max(0)).unwrap_or(u32::MAX) / limit * limit;
+    let offset = wanted.min(last_page);
+    let events = status_store::events_of_sensor(&state.pool, sensor.id, limit, offset)
+        .await?
+        .iter()
+        .map(|e| EventJson {
+            id: e.id,
+            ts_ms: e.ts_ms,
+            change: event_change(user.lang, e),
+            message: crate::status::shown(user.lang, &e.message),
+            status: e.to.as_str(),
+        })
+        .collect();
+    Ok(Json(EventsJson {
+        total,
+        oldest_ms,
+        offset,
+        events,
     }))
 }
 
@@ -767,7 +851,13 @@ mod tests {
             "/static/vendor/uplot/uPlot.iife.min.js",
             "/static/chart.js",
             "/static/time.js",
+            "/static/pager.js",
             "/static/samples.js",
+            "/static/events.js",
+            "id=\"events\" class=\"table-wrap\" data-src=\"/sensors/1/events\"",
+            "id=\"events-rows\"",
+            "id=\"events-pager\"",
+            "1 Wechsel",
             "id=\"samples\"",
             "data-src=\"/sensors/1/samples?range=24h\"",
             "id=\"samples-span\" data-range=\"24h\"",
@@ -954,6 +1044,122 @@ mod tests {
         );
         assert_eq!(
             send(&h.app, get("/sensors/99/samples", Some(&viewer)))
+                .await
+                .status,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[tokio::test]
+    async fn the_events_endpoint_serves_status_changes_page_by_page() {
+        let h = harness(true).await;
+        let (sensor, _) = traffic_sensor(&h).await;
+        let (viewer, _) = login(&h, "bert").await;
+        // The first poll wrote one change; 44 more flip between warning and up.
+        let flip = |i: i64| {
+            if i % 2 == 0 {
+                Assessment::Failed("no reply".into())
+            } else {
+                Assessment::Healthy("OK".into())
+            }
+        };
+        for i in 0..44 {
+            record_poll(
+                &h.state.pool,
+                sensor,
+                now_ms() - 100_000 + i * 1_000,
+                &[],
+                &flip(i),
+            )
+            .await
+            .unwrap();
+        }
+        let fetch = |query: &'static str| {
+            let h = &h;
+            let viewer = &viewer;
+            async move {
+                let reply = send(
+                    &h.app,
+                    get(&format!("/sensors/{sensor}/events{query}"), Some(viewer)),
+                )
+                .await;
+                assert_eq!(reply.status, StatusCode::OK, "{query}");
+                serde_json::from_str::<serde_json::Value>(&reply.body).unwrap()
+            }
+        };
+
+        let first = fetch("").await;
+        assert_eq!(first["total"], 45);
+        assert_eq!(first["offset"], 0);
+        assert_eq!(first["events"].as_array().unwrap().len(), 20);
+        assert!(first["oldest_ms"].is_i64());
+        // Newest first: the last flip went back to up, the one before it warned.
+        assert_eq!(first["events"][0]["status"], "up");
+        assert_eq!(first["events"][1]["status"], "warning");
+        assert_eq!(first["events"][1]["message"], "no reply");
+        assert!(
+            first["events"][1]["change"]
+                .as_str()
+                .unwrap()
+                .contains(" → ")
+        );
+
+        // Only 20, 50 and 100 are page sizes.
+        assert_eq!(
+            fetch("?limit=7").await["events"].as_array().unwrap().len(),
+            20
+        );
+        assert_eq!(
+            fetch("?limit=50").await["events"].as_array().unwrap().len(),
+            45
+        );
+        let last = fetch("?limit=20&offset=40").await;
+        assert_eq!(
+            (
+                last["offset"].clone(),
+                last["events"].as_array().unwrap().len()
+            ),
+            (40.into(), 5)
+        );
+        // Past the end: the last page instead of nothing.
+        let past = fetch("?limit=20&offset=500").await;
+        assert_eq!(
+            (
+                past["offset"].clone(),
+                past["events"].as_array().unwrap().len()
+            ),
+            (40.into(), 5)
+        );
+
+        // A page is found again by the id of its top row, however many changes came in meanwhile.
+        let second = fetch("?limit=20&offset=20").await;
+        let top = second["events"][0]["id"].as_i64().unwrap();
+        for i in 0..3 {
+            record_poll(&h.state.pool, sensor, now_ms() + i * 1_000, &[], &flip(i))
+                .await
+                .unwrap();
+        }
+        let query: &'static str = Box::leak(format!("?limit=20&anchor={top}").into_boxed_str());
+        let again = fetch(query).await;
+        assert_eq!(again["offset"], 23);
+        assert_eq!(again["events"][0]["id"].as_i64().unwrap(), top);
+
+        // The sensor page itself draws the first page with warnings tinted.
+        let page = send(&h.app, get(&format!("/sensors/{sensor}"), Some(&viewer))).await;
+        assert!(
+            page.body.contains("<tr class=\"state-warning\">"),
+            "{}",
+            page.body
+        );
+
+        assert_eq!(
+            send(&h.app, get(&format!("/sensors/{sensor}/events"), None))
+                .await
+                .status,
+            StatusCode::SEE_OTHER
+        );
+        assert_eq!(
+            send(&h.app, get("/sensors/99/events", Some(&viewer)))
                 .await
                 .status,
             StatusCode::NOT_FOUND
@@ -1211,6 +1417,8 @@ mod tests {
             ("/static/time.js", "javascript"),
             ("/static/format.js", "javascript"),
             ("/static/samples.js", "javascript"),
+            ("/static/pager.js", "javascript"),
+            ("/static/events.js", "javascript"),
             ("/static/vendor/uplot/LICENSE", ""),
         ] {
             let reply = send(&h.app, get(path, None)).await;

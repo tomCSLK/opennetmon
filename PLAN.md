@@ -885,7 +885,16 @@ und falsche Passwörter sperren den Zugang. Empfehlung: zurückstellen, für ein
 - Wie immer: `cargo fmt`, `clippy`, `cargo test`; `docs/sensors.md`, `README.md`, `CLAUDE.md` nachziehen. Erst Test-Paket auf dem Server, Release nur auf Ansage.
 - **Abnahme:** gegen die echten Geräte, zwei Abfragen im Abstand, Werte mit den Oberflächen der Geräte vergleichen.
 
-### O. „Letzte Statuswechsel“ der Sensorseite in Seiten – geplant 2026-11-02 (Wunsch des Nutzers; N und Färben entschieden, Umsetzung noch nicht freigegeben)
+### O. „Letzte Statuswechsel“ der Sensorseite in Seiten – umgesetzt 2026-11-06 (Branch `router-sensors`, nicht released)
+
+**Umgesetzt wie unten geplant** (Nutzer, 2026-11-06: „umsetzen“): 1000 Wechsel je Sensor (`EVENTS_KEPT_PER_SENSOR`), `problem_log` auf 500 Einträge begrenzt (`LOG_ENTRIES`; beim
+Geräte- oder Sensorprotokoll zählt die Grenze innerhalb des Geräts bzw. Sensors, Parameter `only`), Endpunkt `GET /sensors/<id>/events?offset=&limit=&anchor=`, `static/pager.js`
+(aus `samples.js` herausgelöst), `static/events.js`, gefärbte Zeilen. Abweichungen vom Plan: Die Seiten sind nach `id` geordnet (Reihenfolge des Schreibens), damit `anchor`
+(Id der obersten Zeile) die Seite nach dem Neuladen wiederfindet, statt dass der Server eine Position liefert; steht ein Offset hinter dem Ende, kommt die letzte Seite. Im Browser
+(Chrome ohne Fenster, Wegwerf-Instanz mit 153 Wechseln) geprüft: erste und letzte Seite, hell und dunkel, 1280 und 390 px. Nicht von Hand geprüft: Wiederfinden der Seite nach „Neu laden“
+im Browser (nur der Endpunkt mit `anchor` ist getestet).
+
+**Ursprünglicher Plan:**
 
 **Heute:** Die Karte zeigt die 20 neuesten Wechsel des Sensors (`EVENT_LIMIT` in `src/web/sensor_detail.rs`), vom Server als HTML gezeichnet. Gespeichert
 werden nur die **500 neuesten Wechsel aller Sensoren zusammen** (`EVENTS_KEPT`, `trim_events` in `src/storage/status.rs`). Stand auf dem Server

@@ -7,7 +7,9 @@
   <script src="/static/vendor/uplot/uPlot.iife.min.js?v=2" defer></script>
   <script src="/static/format.js?v=2" defer></script>
   <script src="/static/chart.js?v=2" defer></script>
-  <script src="/static/samples.js?v=2" defer></script>
+  <script src="/static/pager.js?v=1" defer></script>
+  <script src="/static/samples.js?v=3" defer></script>
+  <script src="/static/events.js?v=1" defer></script>
 {% endblock %}
 {% block content %}
 <div class="page-head">
@@ -129,20 +131,35 @@
 {% endif %}
 
 <section class="card flush">
-  <div class="card-head"><h2>{{ t.get("detail-events") }}</h2></div>
+  <div class="card-head">
+    <h2>{{ t.get("detail-events") }}</h2>
+    {% if events_total > 0 %}
+    <div class="actions">
+      <span class="muted small" id="events-info">{{ t.get1("events-count", "count", events_total) }}</span>
+      <label class="rows-select" for="events-rows">{{ t.get("detail-rows") }}
+        <select id="events-rows">
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+    </div>
+    {% endif %}
+  </div>
   {% if events.is_empty() %}
   <p class="empty small">{{ t.get("detail-no-events") }}</p>
   {% else %}
-  <div class="table-wrap">
+  <div id="events" class="table-wrap" data-src="/sensors/{{ sensor.id }}/events">
   <table class="m-cards m-events">
     <thead><tr><th>{{ t.get("detail-when") }}</th><th>{{ t.get("detail-change") }}</th><th>{{ t.get("message") }}</th></tr></thead>
     <tbody>
     {% for e in events %}
-      <tr><td class="num m-when">{{ e.at|safe }}</td><td class="m-name">{{ e.change }}</td><td class="wrap muted m-msg">{{ e.message }}</td></tr>
+      <tr{% if e.status == "warning" || e.status == "down" %} class="state-{{ e.status }}"{% endif %}><td class="num m-when">{{ e.at|safe }}</td><td class="m-name">{{ e.change }}</td><td class="wrap muted m-msg">{{ e.message }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
+  <nav id="events-pager" class="pager" aria-label="{{ t.get("detail-event-pages") }}" hidden></nav>
   {% endif %}
 </section>
 

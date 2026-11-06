@@ -33,4 +33,7 @@ js-samples-first = Erste Seite
 js-samples-previous = Vorige Seite
 js-samples-next = Nächste Seite
 js-samples-last = Letzte Seite
+js-events-count = %1 Wechsel
+js-events-since = %1 Wechsel seit %2
+js-events-since-one = 1 Wechsel seit %1
 js-filter-count = %1 von %2

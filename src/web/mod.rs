@@ -208,6 +208,7 @@ pub fn router(state: AppState) -> Router {
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))
         .route("/sensors/{id}/samples", get(sensor_detail::samples))
+        .route("/sensors/{id}/events", get(sensor_detail::events))
         .route("/devices/{id}/template/new", get(templates::new_form))
         .route("/devices/{id}/template", post(templates::create))
         .route(

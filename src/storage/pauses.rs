@@ -786,7 +786,7 @@ mod tests {
         let why = pauses.sensor(env.sensor, env.device).unwrap();
         assert_eq!(why.source, Source::Group("Netzwerk".into()));
         assert_eq!(stored(&env).await, Some(Status::Paused));
-        let events = status::events_of_sensor(&env.pool, env.sensor, 10)
+        let events = status::events_of_sensor(&env.pool, env.sensor, 10, 0)
             .await
             .unwrap();
         assert_eq!(

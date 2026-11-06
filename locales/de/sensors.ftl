@@ -115,6 +115,11 @@ detail-chart-needs-js = Für den Graphen wird JavaScript benötigt.
 detail-samples = Messwerte
 detail-rows = Zeilen
 detail-pages = Seiten der Messwerte
+detail-event-pages = Seiten der Statuswechsel
+events-count = { $count ->
+    [one] 1 Wechsel
+   *[other] { $count } Wechsel
+}
 # Wie weit die Tabelle der Messwerte zurückreicht ($minutes: 15, 30, 60, 360, 1440 oder 10080).
 detail-span = { $minutes ->
     [60] letzte Stunde

@@ -20,8 +20,13 @@ pub struct StatusChange {
     pub ts_ms: i64,
 }
 
-/// Status changes kept in `events`; older ones are deleted whenever a new one is written.
-pub const EVENTS_KEPT: i64 = 500;
+/// Status changes kept per sensor in `events`; older ones of that sensor are deleted whenever a
+/// new one is written. A sensor that flaps all day therefore never pushes out the changes of the
+/// quiet ones.
+pub const EVENTS_KEPT_PER_SENSOR: i64 = 1000;
+
+/// Entries the problem log shows (`/log`), the newest ones.
+pub const LOG_ENTRIES: i64 = 500;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Event {
@@ -167,17 +172,20 @@ pub async fn record_poll(
         .bind(change.message.encode())
         .execute(&mut *tx)
         .await?;
-        trim_events(&mut tx).await?;
+        trim_events(&mut tx, sensor_id).await?;
     }
     tx.commit().await?;
     Ok(change)
 }
 
-async fn trim_events(conn: &mut sqlx::SqliteConnection) -> Result<()> {
+/// Deletes all but the newest [`EVENTS_KEPT_PER_SENSOR`] events of one sensor.
+async fn trim_events(conn: &mut sqlx::SqliteConnection, sensor_id: i64) -> Result<()> {
     sqlx::query(
-        "DELETE FROM events WHERE id <= (SELECT id FROM events ORDER BY id DESC LIMIT 1 OFFSET ?)",
+        "DELETE FROM events WHERE sensor_id = ?1 AND id <= \
+         (SELECT id FROM events WHERE sensor_id = ?1 ORDER BY id DESC LIMIT 1 OFFSET ?2)",
     )
-    .bind(EVENTS_KEPT)
+    .bind(sensor_id)
+    .bind(EVENTS_KEPT_PER_SENSOR)
     .execute(conn)
     .await?;
     Ok(())
@@ -213,7 +221,7 @@ pub(crate) async fn mark_paused(
     .bind(&message)
     .execute(&mut *conn)
     .await?;
-    trim_events(conn).await
+    trim_events(conn, sensor_id).await
 }
 
 type EventRow = (i64, i64, i64, Option<String>, String, String);
@@ -245,18 +253,48 @@ pub async fn recent_events(pool: &SqlitePool, limit: u32) -> Result<Vec<Event>> 
     .collect()
 }
 
-/// The newest events of one sensor first.
-pub async fn events_of_sensor(pool: &SqlitePool, sensor_id: i64, limit: u32) -> Result<Vec<Event>> {
+/// `limit` events of one sensor, the newest first, after skipping the newest `offset` of them.
+/// Ordered by `id` (the order they were written in), so a page can be found again by the id of
+/// its first row (see [`events_newer_than`]).
+pub async fn events_of_sensor(
+    pool: &SqlitePool,
+    sensor_id: i64,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Event>> {
     sqlx::query_as::<_, EventRow>(&format!(
-        "{EVENT_SELECT} WHERE sensor_id = ? ORDER BY ts_ms DESC, id DESC LIMIT ?"
+        "{EVENT_SELECT} WHERE sensor_id = ? ORDER BY id DESC LIMIT ? OFFSET ?"
     ))
     .bind(sensor_id)
     .bind(i64::from(limit))
+    .bind(i64::from(offset))
     .fetch_all(pool)
     .await?
     .into_iter()
     .map(event_from_row)
     .collect()
+}
+
+/// How many events of a sensor are kept, and the time of the oldest one.
+pub async fn event_totals(pool: &SqlitePool, sensor_id: i64) -> Result<(i64, Option<i64>)> {
+    Ok(
+        sqlx::query_as("SELECT COUNT(*), MIN(ts_ms) FROM events WHERE sensor_id = ?")
+            .bind(sensor_id)
+            .fetch_one(pool)
+            .await?,
+    )
+}
+
+/// How many events of a sensor were written after the one with `id`: the offset at which a page
+/// that began with that event begins now. If the event is gone, the offset of the next older one.
+pub async fn events_newer_than(pool: &SqlitePool, sensor_id: i64, id: i64) -> Result<i64> {
+    Ok(
+        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE sensor_id = ? AND id > ?")
+            .bind(sensor_id)
+            .bind(id)
+            .fetch_one(pool)
+            .await?,
+    )
 }
 
 /// An entry of the problem log: a change to warning or down, or back to up from one of them.
@@ -280,16 +318,22 @@ type LogRow = (
     Option<i64>,
 );
 
-/// Warnings, outages and their ends, newest first.
-pub async fn problem_log(pool: &SqlitePool) -> Result<Vec<LogEntry>> {
+/// Warnings, outages and their ends, newest first, at most [`LOG_ENTRIES`]. `only` limits the log
+/// to those sensors (the limit then counts within them, so a device's log is not crowded out by
+/// busier sensors elsewhere).
+pub async fn problem_log(pool: &SqlitePool, only: Option<&[i64]>) -> Result<Vec<LogEntry>> {
+    let only = only.map(|ids| serde_json::to_string(ids).unwrap_or_else(|_| "[]".to_owned()));
     let rows: Vec<LogRow> = sqlx::query_as(
         "SELECT id, ts_ms, sensor_id, from_status, to_status, message, prev_ts, next_ts FROM ( \
                SELECT *, LAG(ts_ms) OVER w AS prev_ts, LEAD(ts_ms) OVER w AS next_ts FROM events \
                WINDOW w AS (PARTITION BY sensor_id ORDER BY ts_ms, id)) \
-             WHERE to_status IN ('warning', 'down') \
-                OR (to_status = 'up' AND from_status IN ('warning', 'down')) \
-             ORDER BY ts_ms DESC, id DESC",
+             WHERE (to_status IN ('warning', 'down') \
+                OR (to_status = 'up' AND from_status IN ('warning', 'down'))) \
+               AND (?1 IS NULL OR sensor_id IN (SELECT value FROM json_each(?1))) \
+             ORDER BY ts_ms DESC, id DESC LIMIT ?2",
     )
+    .bind(only)
+    .bind(LOG_ENTRIES)
     .fetch_all(pool)
     .await?;
     rows.into_iter()
@@ -386,6 +430,13 @@ mod tests {
             .await
             .unwrap();
         (dir, pool, sensor)
+    }
+
+    /// Another sensor on the device of [`setup`].
+    async fn add_sensor(pool: &SqlitePool, name: &str) -> i64 {
+        create_sensor(pool, 1, name, &SensorSpec::Uptime)
+            .await
+            .unwrap()
     }
 
     fn ok() -> Assessment {
@@ -523,7 +574,7 @@ mod tests {
         ] {
             record_poll(&pool, sensor, ts, &[], &a).await.unwrap();
         }
-        let log: Vec<_> = problem_log(&pool)
+        let log: Vec<_> = problem_log(&pool, None)
             .await
             .unwrap()
             .into_iter()
@@ -541,10 +592,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn only_the_newest_events_are_kept() {
+    async fn only_the_newest_events_of_a_sensor_are_kept() {
         let (_dir, pool, sensor) = setup().await;
         // Every poll flips between up and warning, so each one logs an event.
-        let polls = EVENTS_KEPT + 20;
+        let polls = EVENTS_KEPT_PER_SENSOR + 20;
         for i in 0..polls {
             let a = if i % 2 == 0 { ok() } else { fail() };
             record_poll(&pool, sensor, (i + 1) * 1_000, &[], &a)
@@ -555,7 +606,7 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(count, EVENTS_KEPT);
+        assert_eq!(count, EVENTS_KEPT_PER_SENSOR);
         let oldest: i64 = sqlx::query_scalar("SELECT MIN(ts_ms) FROM events")
             .fetch_one(&pool)
             .await
@@ -563,12 +614,95 @@ mod tests {
         assert_eq!(oldest, 21_000);
         // Before the oldest kept change, the history falls back to that change's "from".
         let (before, changes) = status_history(&pool, sensor, 20_500).await.unwrap();
-        assert_eq!((before, changes.len()), (Some(Status::Warning), 500));
+        assert_eq!((before, changes.len()), (Some(Status::Warning), 1000));
         // Without any change in the window, the current status applies.
         let (before, changes) = status_history(&pool, sensor, polls * 1_000 + 1)
             .await
             .unwrap();
         assert_eq!((before, changes.len()), (Some(Status::Warning), 0));
+    }
+
+    #[tokio::test]
+    async fn a_busy_sensor_does_not_push_out_the_changes_of_a_quiet_one() {
+        let (_dir, pool, quiet) = setup().await;
+        let busy = add_sensor(&pool, "Busy").await;
+        record_poll(&pool, quiet, 500, &[], &ok()).await.unwrap();
+        record_poll(&pool, quiet, 600, &[], &fail()).await.unwrap();
+        for i in 0..EVENTS_KEPT_PER_SENSOR + 50 {
+            let a = if i % 2 == 0 { ok() } else { fail() };
+            record_poll(&pool, busy, (i + 1) * 1_000, &[], &a)
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            event_totals(&pool, quiet).await.unwrap(),
+            (2, Some(500)),
+            "the quiet sensor keeps both of its changes"
+        );
+        assert_eq!(
+            event_totals(&pool, busy).await.unwrap().0,
+            EVENTS_KEPT_PER_SENSOR
+        );
+    }
+
+    #[tokio::test]
+    async fn events_come_in_pages_and_a_page_is_found_again_by_its_first_event() {
+        let (_dir, pool, sensor) = setup().await;
+        for i in 0..7 {
+            let a = if i % 2 == 0 { ok() } else { fail() };
+            record_poll(&pool, sensor, (i + 1) * 1_000, &[], &a)
+                .await
+                .unwrap();
+        }
+        let first = events_of_sensor(&pool, sensor, 3, 0).await.unwrap();
+        let second = events_of_sensor(&pool, sensor, 3, 3).await.unwrap();
+        let last = events_of_sensor(&pool, sensor, 3, 6).await.unwrap();
+        let ts = |v: &[Event]| v.iter().map(|e| e.ts_ms).collect::<Vec<_>>();
+        assert_eq!(ts(&first), [7_000, 6_000, 5_000]);
+        assert_eq!(ts(&second), [4_000, 3_000, 2_000]);
+        assert_eq!(ts(&last), [1_000]);
+        assert!(
+            events_of_sensor(&pool, sensor, 3, 7)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        // Two more changes arrive: the page that began with `second[0]` now begins 2 events further down.
+        record_poll(&pool, sensor, 8_000, &[], &fail())
+            .await
+            .unwrap();
+        record_poll(&pool, sensor, 9_000, &[], &ok()).await.unwrap();
+        assert_eq!(
+            events_newer_than(&pool, sensor, second[0].id)
+                .await
+                .unwrap(),
+            5
+        );
+        // An id that is gone (older than everything kept) counts everything as newer.
+        assert_eq!(events_newer_than(&pool, sensor, 0).await.unwrap(), 9);
+    }
+
+    #[tokio::test]
+    async fn the_problem_log_is_capped_and_can_be_limited_to_sensors() {
+        let (_dir, pool, a) = setup().await;
+        let b = add_sensor(&pool, "Other").await;
+        for i in 0..(LOG_ENTRIES + 10) {
+            let x = if i % 2 == 0 { ok() } else { fail() };
+            record_poll(&pool, a, (i + 1) * 1_000, &[], &x)
+                .await
+                .unwrap();
+        }
+        record_poll(&pool, b, 1, &[], &ok()).await.unwrap();
+        record_poll(&pool, b, 2, &[], &fail()).await.unwrap();
+        assert_eq!(
+            problem_log(&pool, None).await.unwrap().len(),
+            usize::try_from(LOG_ENTRIES).unwrap()
+        );
+        // Sensor `b` is older than everything in the capped list, yet its own log is complete.
+        let only_b = problem_log(&pool, Some(&[b])).await.unwrap();
+        assert_eq!(only_b.len(), 1);
+        assert_eq!(only_b[0].event.sensor_id, b);
+        assert!(problem_log(&pool, Some(&[])).await.unwrap().is_empty());
     }
 
     #[tokio::test]

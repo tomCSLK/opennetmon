@@ -1,8 +1,8 @@
 //! Problem log: warnings, outages and their end over all sensors, who paused or resumed what, and
 //! when a sensor started or stopped pausing others through dependencies (one entry each), newest first unless sorted by another column (`?sort=…&dir=…`, like the status lists); a filter field
 //! (`static/table-filter.js`) searches the entries. `?device=<id>` or `?sensor=<id>` limits the log to one device (its
-//! sensors and pauses) or one sensor, opened by the "Log" buttons of the device and sensor pages. Only the newest [`status::EVENTS_KEPT`] status changes and
-//! [`pauses::LOG_KEPT`] pause entries are stored, so the log reaches back that far.
+//! sensors and pauses) or one sensor, opened by the "Log" buttons of the device and sensor pages. At most the newest [`status::LOG_ENTRIES`] warnings and
+//! outages are listed (per sensor [`status::EVENTS_KEPT_PER_SENSOR`] status changes are stored) and [`pauses::LOG_KEPT`] pause entries are stored.
 
 use std::collections::HashMap;
 
@@ -175,6 +175,7 @@ struct LogTemplate {
     columns: Vec<Column>,
     entries: Vec<Entry>,
     kept: i64,
+    stored: i64,
 }
 
 impl LogTemplate {
@@ -249,8 +250,19 @@ pub async fn log(
         (None, None) => None,
     };
     let now = now_ms();
+    let only: Option<Vec<i64>> = match (query.sensor, query.device) {
+        (Some(id), _) => Some(vec![id]),
+        (None, Some(id)) => Some(
+            sensors
+                .iter()
+                .filter(|(_, (_, device_id))| *device_id == id)
+                .map(|(sensor_id, _)| *sensor_id)
+                .collect(),
+        ),
+        (None, None) => None,
+    };
     let mut entries = Vec::new();
-    for e in status::problem_log(&state.pool).await? {
+    for e in status::problem_log(&state.pool, only.as_deref()).await? {
         let ev = e.event;
         let Some((sensor_name, device_id)) = sensors.get(&ev.sensor_id) else {
             continue;
@@ -502,7 +514,8 @@ pub async fn log(
         scope,
         columns,
         entries,
-        kept: status::EVENTS_KEPT,
+        kept: status::LOG_ENTRIES,
+        stored: status::EVENTS_KEPT_PER_SENSOR,
     };
     Ok(Html(page.render()?))
 }

@@ -11,7 +11,7 @@
     <p class="subtitle">{{ s.title }} · {{ t.get1("log-count", "count", entries.len()) }} · <a href="/log">{{ t.get("log-show-all") }}</a></p>
     {% else %}
     <h1>{{ t.get("log") }}</h1>
-    <p class="subtitle">{{ t.get1("log-count", "count", entries.len()) }} · {{ t.get1("log-kept", "count", kept) }}</p>
+    <p class="subtitle">{{ t.get1("log-count", "count", entries.len()) }} · {{ t.get2("log-kept", "count", kept, "stored", stored) }}</p>
     {% endif %}
   </div>
   <div class="actions">{% include "refresh.html" %}</div>

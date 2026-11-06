@@ -15,7 +15,7 @@
   var T = window.opennetmonText;
   var select = document.getElementById('samples-span');
   var rowsSelect = document.getElementById('samples-rows');
-  var pager = document.getElementById('samples-pager');
+  var pager = document.getElementById('samples-pager'); // drawn by static/pager.js
   var data = null;
   // First row shown (0 = newest) and the time of that row: a refresh keeps the same row on top
   // instead of letting every new poll shift the page by one. On page 1 new polls come in on top.
@@ -216,7 +216,7 @@
     }
     table.appendChild(body);
     box.appendChild(table);
-    renderPager(count, size, end);
+    window.opennetmonPager(pager, { count: count, start: start, size: size, go: goTo });
   }
 
   function goTo(first) {
@@ -224,36 +224,6 @@
     anchor = null;
     if (start > 0 && data) { anchor = data.ts[data.ts.length - 1 - start]; }
     render();
-  }
-
-  function pagerButton(label, title, first, disabled) {
-    var b = el('button', 'secondary small', label);
-    b.type = 'button';
-    b.title = title;
-    b.setAttribute('aria-label', title);
-    b.disabled = disabled;
-    b.addEventListener('click', function () { goTo(first); });
-    return b;
-  }
-
-  // "Rows 101–150 of 1440" and « ‹ Page 3 of 29 › »; hidden while everything fits on one page.
-  function renderPager(count, size, end) {
-    if (!pager) { return; }
-    pager.textContent = '';
-    if (count <= size) { pager.hidden = true; return; }
-    var pages = Math.ceil(count / size);
-    var page = Math.min(pages, Math.floor(start / size) + 1);
-    var last = (pages - 1) * size;
-    var atStart = start === 0, atEnd = end >= count;
-    pager.appendChild(el('span', 'muted small pager-rows', T('samples-rows', start + 1, end, count)));
-    var nav = el('span', 'pager-buttons');
-    nav.appendChild(pagerButton('«', T('samples-first'), 0, atStart));
-    nav.appendChild(pagerButton('‹', T('samples-previous'), Math.max(0, start - size), atStart));
-    nav.appendChild(el('span', 'pager-page', T('samples-page', page, pages)));
-    nav.appendChild(pagerButton('›', T('samples-next'), start + size, atEnd));
-    nav.appendChild(pagerButton('»', T('samples-last'), last, atEnd || start >= last));
-    pager.appendChild(nav);
-    pager.hidden = false;
   }
 
   // The newest request wins; an older reply arriving late is dropped.

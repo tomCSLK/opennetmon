@@ -494,6 +494,9 @@ table.samples tr.state-down td { background: var(--down-soft); border-bottom-col
 table.samples tr.state-warning td { background: var(--warn-soft); border-bottom-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 table.samples tr.state-down td.problem { color: var(--down); }
 table.samples tr.state-warning td.problem { color: var(--warn); }
+/* status changes of the sensor page (static/events.js): warnings and outages tinted like the table of values */
+table.m-events tr.state-down td { background: var(--down-soft); border-bottom-color: color-mix(in srgb, var(--down) 35%, transparent); }
+table.m-events tr.state-warning td { background: var(--warn-soft); border-bottom-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 label.rows-select { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .85rem; font-weight: 500; color: var(--muted); }
 label.rows-select select { width: auto; }
 /* pages of the table of values: rows shown on the left, buttons on the right */
@@ -628,6 +631,10 @@ a.button.secondary { color: var(--text); }
   table.m-cards .m-when { grid-area: when; }
   table.m-cards .m-dur { grid-area: dur; }
   table.m-cards .m-act { grid-area: act; justify-self: end; }
+  /* the block is the row on phones: tint it, not the cells */
+  table.m-events tr.state-down td, table.m-events tr.state-warning td { background: none; border-bottom: 0; }
+  table.m-events tbody tr.state-down { background: var(--down-soft); }
+  table.m-events tbody tr.state-warning { background: var(--warn-soft); }
   table.m-cards .m-check { grid-area: check; }
   table.m-sensors tbody tr { grid-template-areas: "name name value" "status msg act"; }
   table.m-status-list tbody tr { grid-template-areas: "name name value" "status device device" "msg msg when"; }

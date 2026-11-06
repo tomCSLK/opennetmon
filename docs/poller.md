@@ -51,8 +51,9 @@ Device status = worst status of the active sensors (`Down` > `Warning` > `Unknow
 - `sensor_status`: the current state per sensor (status, since when, last poll, message, failures in a row). Messages are stored as catalog messages and shown
   in the reader's language.
 - `events`: log of the status changes (time, sensor, from → to, message); the first value of a sensor is logged with `from = NULL`.
-  Only the **newest 500 status changes** across all sensors are kept (`storage::status::EVENTS_KEPT`): `record_poll` deletes older ones in the same
-  transaction. The “Recent status changes” on the sensor detail page therefore only reach back that far; for the beginning of the hour, the status band of the
+  Only the **newest 1000 status changes of each sensor** are kept (`storage::status::EVENTS_KEPT_PER_SENSOR`): `record_poll` (and `mark_paused`) delete
+  the older ones of that sensor in the same transaction, so a sensor that flaps all day never pushes out the changes of the quiet ones. The “Recent
+  status changes” on the sensor detail page therefore reach back that far; for the beginning of the hour, the status band of the
   sensor list falls back to the “from” of the oldest stored change or to the current state (`status_history`).
 
 ## Log (`/log`)
@@ -62,7 +63,8 @@ Menu item **“Log”** under Monitoring, for all users: warnings and failures a
 ended” at the planned end; for devices and groups “whole device”/“whole group” instead of the sensor), both together **newest first** (`web::log`,
 `storage::status::problem_log`). Columns: time, status with the previous status, sensor, device with group path, message, duration. For a warning/failure
 the duration is the time until the next change, or “ongoing” with the time so far; for a recovery “after …” it is the duration of the problem before (from
-`LAG`/`LEAD` over the changes of the same sensor). First polls, pausing and “Unknown” are not in the log but count towards the 500 stored changes. The pause
+`LAG`/`LEAD` over the changes of the same sensor). The log lists at most the newest 500 warnings, failures and recoveries (`storage::status::LOG_ENTRIES`; on a device or sensor log the limit counts
+within that device or sensor). First polls, pausing and “Unknown” are not in the log but count towards the 1000 stored changes per sensor. The pause
 log (`pause_log`) also keeps the newest 500 entries. **Dependencies** appear with one entry when a sensor starts pausing others (“Dependency active”,
 how many sensors on how many devices, duration until it ends) and one when that ends (`storage::pauses::dependency_entries`, table `dependency_log`,
 newest 500); the sensors it pauses get no lines of their own. At the top right, “Refresh” with “Auto”.

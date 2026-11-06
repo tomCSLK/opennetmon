@@ -3,7 +3,10 @@
 ## Detail page (`/sensors/<id>`, all signed-in users)
 
 A header with type, device, status, message and last poll; the time range switch **1 hour / 24 hours / 7 days / 30 days** (`?range=1h|24h|7d|30d`,
-invalid values result in 24 hours); the chart; a table with the latest value per channel; the last 20 status changes of this sensor. The sensor list of
+invalid values result in 24 hours); the chart; a table with the latest value per channel; the status changes of this sensor, 20 per page (50 or 100 by the “Rows” selector, remembered in the browser). The server draws the first page into the
+HTML; `static/events.js` then loads the pages as JSON from `GET /sensors/<id>/events?offset=&limit=` (limit 20/50/100; all signed-in users, like the page) and
+`static/pager.js` draws the controls shared with the table of values. “Auto” reloads the whole page: the page shown survives a reload of the tab (the id of
+its top row is sent as `anchor`, so new changes do not shift it), a new visit starts on page 1. Changes to warning are tinted yellow, to down red. The sensor list of
 a device (`/devices/<id>/sensors`) links every sensor there. Name, interval, what the sensor checks, thresholds and ratings are changed on the settings page.
 
 ## Settings page (`/sensors/<id>/edit`, administrators only)
@@ -118,7 +121,7 @@ The poller also starts a maintenance task (30 s after the start, then every 10 m
 1. **Rollup:** `samples_1h` (hour, min/avg/max/count) from the raw values, `samples_1d` (day, weighted average) from the hourly values. The last 2 hours or
    1 day before the newest rollup entry are recalculated (unfinished hour, late values); running it again changes nothing.
 2. **Retention:** raw values `retention_raw_days` (default 7), hourly values and events `retention_hourly_days` (default 365; events additionally at most
-   the newest 500, see `docs/poller.md`); **daily values are kept forever**. Aggregation always happens before deletion.
+   the newest 1000 per sensor, see `docs/poller.md`); **daily values are kept forever**. Aggregation always happens before deletion.
 
 Config: `retention_raw_days` (1–3650), `retention_hourly_days` (at least `retention_raw_days`, at most 36500). If the server does not run for longer than the
 raw data retention, the hourly values of that time are missing. Without a running poller (`poller_enabled = false`) there is no maintenance either.

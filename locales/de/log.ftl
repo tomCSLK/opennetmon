@@ -4,7 +4,7 @@ log-count = { $count ->
     [one] 1 Eintrag
    *[other] { $count } Einträge
 }
-log-kept = gespeichert werden die letzten { $count } Statuswechsel, Pausen und Abhängigkeiten
+log-kept = höchstens { $count } Einträge; je Sensor werden die letzten { $stored } Statuswechsel gespeichert
 log-empty = Noch keine Warnungen, Ausfälle oder Pausen.
 log-paused-by = von { $user }
 log-resumed = Fortgesetzt
