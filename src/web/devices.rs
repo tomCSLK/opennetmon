@@ -661,6 +661,22 @@ pub async fn test_connection(
     let outcome = snmp::probe(&target, &credentials).await;
     tracing::info!(user = %user.username, device = id, ok = outcome.is_ok(), "connection test");
 
+    if let Ok(result) = &outcome {
+        let identity = snmp::Identity {
+            sys_descr: result.sys_descr.clone(),
+            sys_object_id: result.sys_object_id.clone(),
+        };
+        if let Err(e) = store::set_identity(
+            &state.pool,
+            id,
+            &identity,
+            crate::auth::now_secs().saturating_mul(1000),
+        )
+        .await
+        {
+            tracing::warn!(device = id, error = %e, "storing the device identity failed");
+        }
+    }
     let (success, failure) = match outcome {
         Ok(result) => (
             Some(ProbeView {
@@ -1167,6 +1183,9 @@ mod tests {
         assert!(reply.body.contains("Omada 8-Port Gigabit Smart Switch"));
         assert!(reply.body.contains("187 Tage 8 Std. 47 Min."));
         assert!(!reply.body.contains("geheim-community"));
+        // What the device said is kept for the inventory API.
+        let seen = store::list_inventory(&h.state.pool).await.unwrap();
+        assert_eq!(seen[0].sys_descr, "Omada 8-Port Gigabit Smart Switch");
     }
 
     #[tokio::test]

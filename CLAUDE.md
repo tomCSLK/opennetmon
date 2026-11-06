@@ -204,7 +204,7 @@ Ein Binary, ein Prozess, Module:
   (`web::status_list`, `/status/all|up|warning|down|inactive`, sortierbar per Spaltenkopf `?sort=…&dir=…`, aktuelle Werte über `web::sensors::fresh_values`); oben rechts auf Übersicht, Statuslisten, Sensor- und Detailseite „Aktualisieren“ mit
   „Automatisch“ (alle 30 s wie PRTG, pausiert bei Eingaben; `templates/refresh.html`, `static/refresh.js`); Protokoll `/log` (`web::log`: sortierbar per Spaltenkopf wie die Statuslisten, Suchfeld über `static/table-filter.js`, `?device=<id>`/`?sensor=<id>` über den
   Knopf „Protokoll“ der Geräte- und Sensorseite; Warnungen, Ausfälle und
-  ihr Ende, `storage::status::problem_log`, dazu Pausen aus `storage::pauses::log_entries` und Abhängigkeiten aus `storage::pauses::dependency_entries`; `events` hält nur die neuesten 500 Wechsel, `EVENTS_KEPT`)
+  ihr Ende, `storage::status::problem_log`, dazu Pausen aus `storage::pauses::log_entries` und Abhängigkeiten aus `storage::pauses::dependency_entries`; `events` hält je Sensor die neuesten 1000 Wechsel, `EVENTS_KEPT_PER_SENSOR`, das Protokoll zeigt höchstens `LOG_ENTRIES` = 500 Einträge; die Sensorseite blättert ihre Wechsel über `GET /sensors/<id>/events` mit `static/events.js` und `static/pager.js`)
 
 ### Messdaten
 
@@ -323,36 +323,28 @@ Neues Video: wieder per Upload in der Weboberfläche, Datei unter 10 MB.
 **Vor jedem Abschluss einer Aufgabe:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`
 und `cargo test` müssen fehlerfrei durchlaufen.
 
-## Vorgemerkt: Inventar-Endpunkt für opensecmon (noch nicht umgesetzt)
+## Inventar-Endpunkt für opensecmon (umgesetzt 2026-11-06, Branch `router-sensors`, nicht released)
 
-Stand 2026-11-06. opensecmon (`../SecurityDashboad/`, Phase 6c) liest die Geräte von opennetmon und schlägt daraus
-Assets vor. Die Seite in opensecmon ist fertig und gegen eine Attrappe getestet. **Hier ist noch nichts gebaut:**
-Der Nutzer setzt den Endpunkt selbst mit dem nächsten Release um (Entscheidung 2026-11-06). Bis dahin wird dafür am
-Code nichts geändert. Erwarteter Vertrag (Quelle: `SecurityDashboad/src/inventory/opennetmon.rs`):
+opensecmon (`../SecurityDashboad/`, Phase 6c) liest die Geräte von opennetmon und schlägt daraus Assets vor. Der Nutzer wollte den Endpunkt
+zuerst selbst bauen und hat ihn am 2026-11-06 doch in Auftrag gegeben („committe und umsetzen“). Doku für Anwender: `docs/api.md` (Englisch).
+Vertrag (Quelle: `SecurityDashboad/src/inventory/opennetmon.rs`), wie umgesetzt:
 
-- **Anfrage:** `GET /api/v1/inventory`, nur lesend, angemeldet mit `Authorization: Bearer <token>` (keine Sitzung,
-  kein CSRF). Falsches oder fehlendes Token → `401`, sonst `200` mit `Content-Type: application/json`.
-- **Antwort:** `{"devices": [{"id": 17, "name": "Router", "address": "192.0.2.1", "sys_descr": "…", "sys_object_id": "1.3.6.1.4.1.…"}]}`
-  - `id`: die stabile Geräte-ID von opennetmon (> 0). Darüber verknüpft opensecmon seine Assets.
-  - `name`: der Gerätename.
-  - `address`: Host oder IP, wie eingetragen.
-  - `sys_descr`, `sys_object_id`: die zuletzt per SNMP gelesenen Werte, leer, wenn unbekannt oder ohne SNMP.
-  - Weitere Felder sind erlaubt und werden ignoriert. Pausierte Geräte mitliefern.
-- **Grenzen in opensecmon:**
-  - Abfrage alle 6 h und auf Knopfdruck.
-  - Antwort höchstens 4 MiB, 5000 Geräte, 30 s.
-  - Texte werden gekürzt (Name und Adresse 100 Zeichen, `sys_descr` 500) und nur als Daten behandelt.
-  - `ETag`/`304` sind optional.
-- **Transport:** opensecmon akzeptiert nur HTTPS oder HTTP auf Loopback. Beide laufen auf demselben Server; der Weg
-  über Traefik mit HTTPS geht auch.
-- **Dafür nötig in opennetmon:**
-  - `sysDescr` und `sysObjectID` je Gerät speichern (neue Migration). Heute werden beide nur gelesen
-    (`snmp::test` beim Verbindungstest, `templates.rs` für die Vorlagen), aber nicht gespeichert. Aktualisieren beim
-    Anlegen und Prüfen des Geräts und bei SNMP-Abfragen.
-  - API-Tokens verwalten: anlegen, nur einmal anzeigen, gehasht speichern, widerrufen, im Änderungsprotokoll festhalten.
-  - Rate-Limit wie bei der Anmeldung.
-  - Tests für 401/200 und den JSON-Aufbau.
-- **Danach:** in opensecmon unter Assets → „Import aus opennetmon“ Adresse und Token eintragen.
+- **Anfrage:** `GET /api/v1/inventory`, nur lesend, `Authorization: Bearer <token>` (keine Sitzung, kein CSRF; eine Browser-Sitzung zählt nicht). Falsches oder
+  fehlendes Token → `401` mit `WWW-Authenticate: Bearer`, zu viele Fehlversuche → `429` mit `Retry-After`; sonst `200`, `application/json`.
+- **Antwort:** `{"devices": [{"id": 17, "name": "Router", "address": "192.0.2.1", "sys_descr": "…", "sys_object_id": "1.3.6.1.4.1.…"}]}`, alle Geräte nach `id`,
+  pausierte mit; `sys_descr`/`sys_object_id` leer, wenn unbekannt oder ohne SNMP. `sys_descr` höchstens 1024 Zeichen gespeichert (opensecmon kürzt auf 500).
+- **Grenzen in opensecmon:** Abfrage alle 6 h und auf Knopfdruck, Antwort höchstens 4 MiB, 5000 Geräte, 30 s; Texte nur als Daten; nur HTTPS oder HTTP auf Loopback.
+- **Code:**
+  - `web::api` (Endpunkt, `new_token`: `onm_` + 64 Hex-Zeichen, Prüfung des Headers, `AppState::api_throttle` = eigene `LoginThrottle` je Client-Adresse, Fehlversuch zählt
+    schon vor der Prüfung, Erfolg löscht), `web::api_tokens` (Seite `/api-tokens` nur für Admins: anlegen, Token **einmal** in der Antwort zeigen, widerrufen in zwei Schritten),
+    `storage::api_tokens` (Tabelle `api_tokens`, nur SHA-256 des Tokens, Name eindeutig 1–64 Zeichen, `last_used_ms`), `audit::Kind::ApiToken` (Anlegen/Widerrufen, nie das Token).
+  - Migration `0025_inventory_api.sql`: Tabellen `device_identity` (`sysDescr`, `sysObjectID`, eigene Tabelle, weil `devices` einmal vom Programm neu aufgebaut wird und neue Spalten
+    verlöre) und `api_tokens`.
+  - `snmp::identity` (liest beides; `sysObjectID` ist optional), `snmp::probe` liefert jetzt auch `sys_object_id`; `poller::refresh_identity` fragt bei jedem Zyklus mit offener
+    SNMP-Sitzung höchstens einmal je 24 h (nach Fehlschlag nach 1 h), `web::devices::test_connection` speichert das Ergebnis des Verbindungstests ebenfalls
+    (`storage::devices::set_identity`, `list_inventory`). Geräte ohne SNMP-Sensoren werden nicht gefragt (ihre Felder bleiben leer).
+- **Danach:** in opensecmon unter Assets → „Import aus opennetmon“ Adresse und Token eintragen (Browser-Schritt des Nutzers). Das Token erst auf dem Server anlegen, nachdem
+  dort eine Version mit dem Endpunkt läuft; das Test-Paket 0.5.8 auf dem Server kennt ihn nicht.
 
 ## Offene Punkte (vom Nutzer zu klären)
 

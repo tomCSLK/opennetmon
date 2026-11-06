@@ -27,6 +27,7 @@ audit-kind-mib = MIB file
 audit-kind-mail = Email settings
 audit-kind-schedule = Schedule
 audit-kind-session = Sign-in
+audit-kind-api-token = API token
 
 audit-change = { $field }: { $old } → { $new }
 audit-value = { $field }: { $value }

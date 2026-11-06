@@ -497,6 +497,14 @@ table.samples tr.state-warning td.problem { color: var(--warn); }
 /* status changes of the sensor page (static/events.js): warnings and outages tinted like the table of values */
 table.m-events tr.state-down td { background: var(--down-soft); border-bottom-color: color-mix(in srgb, var(--down) 35%, transparent); }
 table.m-events tr.state-warning td { background: var(--warn-soft); border-bottom-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+/* API tokens page: the new token (shown once), the example request, the two-step revoke */
+code.token { display: block; padding: .6rem .8rem; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 6px; overflow-wrap: anywhere; user-select: all; }
+pre.token-usage { margin: 0; padding: .6rem .8rem; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 6px; overflow-x: auto; }
+details.revoke > summary { display: inline-flex; list-style: none; cursor: pointer; }
+details.revoke > summary::-webkit-details-marker { display: none; }
+details.revoke[open] > form { margin-top: .6rem; text-align: left; }
 label.rows-select { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .85rem; font-weight: 500; color: var(--muted); }
 label.rows-select select { width: auto; }
 /* pages of the table of values: rows shown on the left, buttons on the right */

@@ -1,5 +1,6 @@
 //! SQLite storage: connection pool (WAL mode) and migrations.
 
+pub mod api_tokens;
 pub mod audit;
 pub mod availability;
 pub mod credentials;

@@ -1,6 +1,8 @@
 //! Web layer: axum router, shared state and handlers.
 
 mod account;
+pub mod api;
+pub mod api_tokens;
 mod assets;
 pub mod audit;
 pub mod auth;
@@ -61,6 +63,8 @@ pub struct AppState {
     /// Sign-out after this time without activity (`None`: off).
     pub session_idle_secs: Option<i64>,
     pub login_throttle: Arc<crate::auth::throttle::LoginThrottle>,
+    /// Failed attempts at the API, per client address (kept apart from the sign-ins).
+    pub api_throttle: Arc<crate::auth::throttle::LoginThrottle>,
     /// Slots for password checks, see [`AppState::check_password`].
     password_checks: Arc<tokio::sync::Semaphore>,
     pub client_ip_header: Option<crate::auth::throttle::ClientIpHeader>,
@@ -77,6 +81,7 @@ impl AppState {
             secrets,
             cookie_secure: config.cookie_secure,
             login_throttle: Arc::default(),
+            api_throttle: Arc::default(),
             password_checks: Arc::new(tokio::sync::Semaphore::new(PASSWORD_CHECKS)),
             client_ip_header: config.client_ip_header,
             mibs: Arc::new(std::sync::RwLock::new(crate::mib::bundled_index())),
@@ -204,6 +209,12 @@ pub fn router(state: AppState) -> Router {
         .route("/log", get(log::log))
         .route("/reports", get(reports::page))
         .route("/audit", get(audit::page))
+        .route("/api/v1/inventory", get(api::inventory))
+        .route(
+            "/api-tokens",
+            get(api_tokens::list).post(api_tokens::create),
+        )
+        .route("/api-tokens/{id}/delete", post(api_tokens::delete))
         .route("/reports.csv", get(reports::csv))
         .route("/sensors/{id}", get(sensor_detail::detail))
         .route("/sensors/{id}/data", get(sensor_detail::data))

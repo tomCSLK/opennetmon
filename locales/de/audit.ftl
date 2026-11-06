@@ -27,6 +27,7 @@ audit-kind-mib = MIB-Datei
 audit-kind-mail = E-Mail-Einstellungen
 audit-kind-schedule = Zeitplan
 audit-kind-session = Anmeldung
+audit-kind-api-token = API-Token
 
 audit-change = { $field }: { $old } → { $new }
 audit-value = { $field }: { $value }

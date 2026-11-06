@@ -50,6 +50,10 @@ const MAX_START_OFFSET: Duration = Duration::from_secs(30);
 const POLL_GRACE: Duration = Duration::from_secs(2);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(10);
 const NOTIFIER_GRACE: Duration = Duration::from_secs(20);
+/// How often a device is asked what it says about itself (`sysDescr`, `sysObjectID`) for the
+/// inventory API, and how soon to try again after a failure.
+const IDENTITY_REFRESH: Duration = Duration::from_secs(24 * 3600);
+const IDENTITY_RETRY: Duration = Duration::from_secs(3600);
 const MAINTENANCE_FIRST_RUN: Duration = Duration::from_secs(30);
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(600);
 
@@ -292,6 +296,8 @@ pub struct SensorSet {
     sensors: HashMap<i64, (SensorSpec, Box<dyn Sensor>)>,
     /// When each sensor is due next (scheduled polling only; missing = due now).
     due: HashMap<i64, tokio::time::Instant>,
+    /// When the device is asked for its identity next (missing = at the next cycle with an SNMP session).
+    identity_next: Option<tokio::time::Instant>,
 }
 
 impl SensorSet {
@@ -510,6 +516,12 @@ async fn poll_sensors(
             });
         }
     }
+    // The SNMP session is open anyway: note what the device says about itself, about once a day.
+    if let Some(client) = client.as_mut()
+        && snmp_failure.is_none()
+    {
+        refresh_identity(pool, &device, client, cutoff, state).await;
+    }
     if !changes.is_empty()
         && let Err(e) = crate::storage::pauses::sync_all(pool, now_ms()).await
     {
@@ -519,6 +531,35 @@ async fn poll_sensors(
         changes,
         next_due: state_next_due(state, at),
     }))
+}
+
+/// Asks the device for `sysDescr` and `sysObjectID` and stores the answer, if it has not been done
+/// within [`IDENTITY_REFRESH`] (or [`IDENTITY_RETRY`] after a failure). Never fails the cycle.
+async fn refresh_identity(
+    pool: &SqlitePool,
+    device: &Device,
+    client: &mut SnmpClient,
+    cutoff: Duration,
+    state: &mut SensorSet,
+) {
+    let now = tokio::time::Instant::now();
+    if state.identity_next.is_some_and(|next| next > now) {
+        return;
+    }
+    let outcome = match tokio::time::timeout(cutoff, crate::snmp::identity(client)).await {
+        Ok(Ok(identity)) => devices::set_identity(pool, device.id, &identity, now_ms())
+            .await
+            .map_err(|e| e.to_string()),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(_) => Err("timeout".to_owned()),
+    };
+    state.identity_next = Some(match outcome {
+        Ok(()) => now + IDENTITY_REFRESH,
+        Err(e) => {
+            tracing::debug!(device = %device.name, error = %e, "reading the device identity failed");
+            now + IDENTITY_RETRY
+        }
+    });
 }
 
 /// The earliest time a sensor is due, for scheduled polling.
@@ -652,6 +693,51 @@ mod tests {
         assert_eq!(samples.len(), 1);
         assert_eq!(samples[0].value, 2500.0);
         assert!(env.poll(&mut state).await.is_empty(), "no change, no event");
+    }
+
+    #[tokio::test]
+    async fn a_cycle_notes_what_the_device_says_about_itself_about_once_a_day() {
+        use crate::snmp::SYS_OBJECT_ID;
+        use crate::snmp::testagent::FakeValue;
+        let env = env().await;
+        create_sensor(&env.pool, env.device, "Uptime", &SensorSpec::Uptime)
+            .await
+            .unwrap();
+        env.agent.set(
+            SYS_OBJECT_ID,
+            FakeValue::ObjectId(vec![1, 3, 6, 1, 4, 1, 11863]),
+        );
+        let mut state = SensorSet::default();
+        env.poll(&mut state).await;
+        let seen = devices::list_inventory(&env.pool).await.unwrap();
+        assert_eq!(
+            (seen[0].sys_descr.as_str(), seen[0].sys_object_id.as_str()),
+            ("fake switch", "1.3.6.1.4.1.11863")
+        );
+
+        // The next cycles do not ask again ...
+        env.agent.set(
+            SYS_OBJECT_ID,
+            FakeValue::ObjectId(vec![1, 3, 6, 1, 4, 1, 1]),
+        );
+        env.poll(&mut state).await;
+        let seen = devices::list_inventory(&env.pool).await.unwrap();
+        assert_eq!(seen[0].sys_object_id, "1.3.6.1.4.1.11863");
+        // ... until the day is over.
+        state.identity_next = Some(tokio::time::Instant::now() - Duration::from_secs(1));
+        env.poll(&mut state).await;
+        let seen = devices::list_inventory(&env.pool).await.unwrap();
+        assert_eq!(seen[0].sys_object_id, "1.3.6.1.4.1.1");
+    }
+
+    #[tokio::test]
+    async fn a_device_without_an_snmp_session_has_no_identity() {
+        let env = env().await;
+        let mut state = SensorSet::default();
+        // No sensor at all: no session is opened, nothing is asked.
+        env.poll(&mut state).await;
+        let seen = devices::list_inventory(&env.pool).await.unwrap();
+        assert_eq!((seen.len(), seen[0].sys_descr.as_str()), (1, ""));
     }
 
     #[tokio::test]

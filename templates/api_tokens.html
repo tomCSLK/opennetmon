@@ -1,0 +1,68 @@
+{% extends "app.html" %}
+{% block title %}{{ t.get("nav-api-tokens") }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ t.get("nav-api-tokens") }}</h1>
+    <p class="subtitle">{{ t.get("api-tokens-subtitle") }}</p>
+  </div>
+</div>
+{% if let Some(message) = flash %}
+<p class="flash" role="status">{{ message }}</p>
+{% endif %}
+{% if let Some(message) = error %}
+<p class="error" role="alert">{{ message }}</p>
+{% endif %}
+{% if let Some(new) = created %}
+<section class="card">
+  <h2>{{ t.get1("api-token-new", "name", new.name.as_str()) }}</h2>
+  <p class="flash" role="status">{{ t.get("api-token-shown-once") }}</p>
+  <p><code id="new-token" class="token">{{ new.token }}</code></p>
+  <h3>{{ t.get("api-tokens-usage") }}</h3>
+  <pre class="token-usage"><code>curl -H "Authorization: Bearer {{ new.token }}" https://&lt;opennetmon&gt;/api/v1/inventory</code></pre>
+</section>
+{% endif %}
+
+<section class="card flush">
+  {% if tokens.is_empty() %}
+  <div class="empty"><strong>{{ t.get("api-tokens-none") }}</strong>{{ t.get("api-tokens-none-hint") }}</div>
+  {% else %}
+  <div class="table-wrap">
+  <table class="m-cards m-simple">
+    <thead><tr><th>{{ t.get("api-token-name") }}</th><th>{{ t.get("api-token-created") }}</th><th>{{ t.get("api-token-last-used") }}</th><th></th></tr></thead>
+    <tbody>
+    {% for tok in tokens %}
+      <tr>
+        <td class="m-name"><strong>{{ tok.name }}</strong></td>
+        <td class="m-msg">{{ tok.created|safe }} · {{ tok.created_by }}</td>
+        <td class="m-hide">{% if tok.last_used.is_empty() %}<span class="muted">{{ t.get("api-token-never-used") }}</span>{% else %}{{ tok.last_used|safe }}{% endif %}</td>
+        <td class="right m-act">
+          <details class="revoke">
+            <summary class="button secondary small">{{ t.get("api-token-revoke") }}</summary>
+            <form method="post" action="/api-tokens/{{ tok.id }}/delete" class="stack">
+              <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+              <p class="muted small">{{ t.get("api-token-revoke-hint") }}</p>
+              <button type="submit" class="danger small">{{ t.get("api-token-revoke-confirm") }}</button>
+            </form>
+          </details>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <form method="post" action="/api-tokens" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
+    <div>
+      <label for="name">{{ t.get("api-token-name") }}</label>
+      <input id="name" name="name" type="text" value="{{ name }}" required maxlength="64" autocomplete="off">
+      <p class="muted small">{{ t.get("api-token-name-hint") }}</p>
+    </div>
+    <div><button type="submit">{{ t.get("api-token-create") }}</button></div>
+  </form>
+</section>
+{% endblock %}

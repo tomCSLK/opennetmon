@@ -64,6 +64,69 @@ pub async fn list_devices(pool: &SqlitePool) -> Result<Vec<Device>> {
     rows.into_iter().map(Device::try_from).collect()
 }
 
+/// Longest `sysDescr` stored, in characters. A device sends untrusted text of any length.
+const SYS_DESCR_MAX_CHARS: usize = 1024;
+
+/// Stores what the device says about itself (`sysDescr`, `sysObjectID`), replacing the earlier values.
+pub async fn set_identity(
+    pool: &SqlitePool,
+    device_id: i64,
+    identity: &crate::snmp::Identity,
+    now_ms: i64,
+) -> Result<()> {
+    let sys_descr: String = identity
+        .sys_descr
+        .chars()
+        .take(SYS_DESCR_MAX_CHARS)
+        .collect();
+    sqlx::query(
+        "INSERT INTO device_identity (device_id, sys_descr, sys_object_id, updated_ms) \
+         VALUES (?, ?, ?, ?) \
+         ON CONFLICT (device_id) DO UPDATE SET sys_descr = excluded.sys_descr, \
+         sys_object_id = excluded.sys_object_id, updated_ms = excluded.updated_ms",
+    )
+    .bind(device_id)
+    .bind(sys_descr)
+    .bind(&identity.sys_object_id)
+    .bind(now_ms)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// A device as the inventory API lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InventoryDevice {
+    pub id: i64,
+    pub name: String,
+    pub address: String,
+    /// Empty if unknown (never read, or a device without SNMP).
+    pub sys_descr: String,
+    pub sys_object_id: String,
+}
+
+/// All devices, paused ones included, with what they said about themselves, by id.
+pub async fn list_inventory(pool: &SqlitePool) -> Result<Vec<InventoryDevice>> {
+    let rows: Vec<(i64, String, String, String, String)> = sqlx::query_as(
+        "SELECT d.id, d.name, d.host, COALESCE(i.sys_descr, ''), COALESCE(i.sys_object_id, '') \
+         FROM devices d LEFT JOIN device_identity i ON i.device_id = d.id ORDER BY d.id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, name, address, sys_descr, sys_object_id)| InventoryDevice {
+                id,
+                name,
+                address,
+                sys_descr,
+                sys_object_id,
+            },
+        )
+        .collect())
+}
+
 /// Stores the manual order of the devices in `group` (`None` = without group); empty = automatic.
 pub async fn set_positions(pool: &SqlitePool, group: Option<i64>, ids: &[i64]) -> Result<()> {
     write_positions(pool, OrderScope::Devices(group), ids).await

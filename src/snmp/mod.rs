@@ -287,6 +287,8 @@ fn parse_id_string(id: &str) -> Result<Vec<u64>, SnmpError> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProbeResult {
     pub sys_descr: String,
+    /// Dotted `sysObjectID`; empty if the device does not report one.
+    pub sys_object_id: String,
     pub uptime_ticks: u32,
     pub round_trip: Duration,
 }
@@ -300,6 +302,7 @@ pub async fn probe(
     let mut client = SnmpClient::connect(target, credentials).await?;
     let values = client.get(&[SYS_DESCR, SYS_UPTIME]).await?;
     let round_trip = started.elapsed();
+    let sys_object_id = read_sys_object_id(&mut client).await;
 
     let find = |oid: &[u64]| {
         let id = oid.iter().map(u64::to_string).collect::<Vec<_>>().join(".");
@@ -312,6 +315,7 @@ pub async fn probe(
         (Some(SnmpValue::Text(sys_descr)), Some(SnmpValue::Timeticks(uptime_ticks))) => {
             Ok(ProbeResult {
                 sys_descr,
+                sys_object_id,
                 uptime_ticks,
                 round_trip,
             })
@@ -320,6 +324,48 @@ pub async fn probe(
             "sysDescr/sysUpTime fehlen oder haben einen unerwarteten Typ".to_owned(),
         )),
     }
+}
+
+/// The `sysObjectID` in dotted form; empty if the device reports none or the request fails (it is
+/// optional information, so a failure here never fails the caller).
+async fn read_sys_object_id(client: &mut SnmpClient) -> String {
+    match client.get(&[SYS_OBJECT_ID]).await {
+        Ok(values) => values
+            .into_iter()
+            .find_map(|(_, v)| match v {
+                SnmpValue::ObjectId(oid) => Some(oid),
+                _ => None,
+            })
+            .unwrap_or_default(),
+        Err(_) => String::new(),
+    }
+}
+
+/// What a device says about itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identity {
+    pub sys_descr: String,
+    /// Dotted `sysObjectID`; empty if the device reports none.
+    pub sys_object_id: String,
+}
+
+/// Reads `sysDescr` and `sysObjectID` over an open session. `sysDescr` is required (an error if it is
+/// missing), `sysObjectID` is not.
+pub async fn identity(client: &mut SnmpClient) -> Result<Identity, SnmpError> {
+    let values = client.get(&[SYS_DESCR]).await?;
+    let sys_descr = values
+        .into_iter()
+        .find_map(|(_, v)| match v {
+            SnmpValue::Text(text) => Some(text),
+            _ => None,
+        })
+        .ok_or_else(|| {
+            SnmpError::Protocol("sysDescr fehlt oder hat einen unerwarteten Typ".to_owned())
+        })?;
+    Ok(Identity {
+        sys_descr,
+        sys_object_id: read_sys_object_id(client).await,
+    })
 }
 
 /// Formats TimeTicks (1/100 s) as e.g. `187 Tage 3 Std. 12 Min.`.

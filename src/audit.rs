@@ -70,10 +70,11 @@ pub enum Kind {
     Mail,
     Schedule,
     Session,
+    ApiToken,
 }
 
 impl Kind {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Group,
         Self::Device,
         Self::Sensor,
@@ -84,6 +85,7 @@ impl Kind {
         Self::Mail,
         Self::Schedule,
         Self::Session,
+        Self::ApiToken,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -98,6 +100,7 @@ impl Kind {
             Self::Mail => "mail",
             Self::Schedule => "schedule",
             Self::Session => "session",
+            Self::ApiToken => "api_token",
         }
     }
 
@@ -117,6 +120,7 @@ impl Kind {
             Self::Mail => "audit-kind-mail",
             Self::Schedule => "audit-kind-schedule",
             Self::Session => "audit-kind-session",
+            Self::ApiToken => "audit-kind-api-token",
         }
     }
 
@@ -130,7 +134,7 @@ impl Kind {
             Self::User => Some(format!("/users/{id}")),
             Self::Template => Some(format!("/templates/{id}")),
             Self::Schedule => Some(format!("/schedules/{id}")),
-            Self::Mib | Self::Mail | Self::Session => None,
+            Self::Mib | Self::Mail | Self::Session | Self::ApiToken => None,
         }
     }
 }
