@@ -462,6 +462,60 @@ pub fn temperatures(paths: &Paths) -> Vec<Temperature> {
     found
 }
 
+/// A key (`chip/label`) reduced to what survives a kernel update: the chip name without a
+/// trailing `_<number>` (an Intel PCH chip was `pch_skylake_0` and became `pch_skylake`), the
+/// `#2`, `#3` … of further chips of the same name, and the label.
+fn key_identity(key: &str) -> (String, String, String) {
+    let (chip, label) = key.split_once('/').unwrap_or((key, ""));
+    let (name, more) = chip.split_once('#').unwrap_or((chip, ""));
+    let name = match name.rsplit_once('_') {
+        Some((base, number))
+            if !base.is_empty()
+                && !number.is_empty()
+                && number.chars().all(|c| c.is_ascii_digit()) =>
+        {
+            base
+        }
+        _ => name,
+    };
+    (name.to_owned(), more.to_owned(), label.to_owned())
+}
+
+/// The input stored as `key`. If the exact key is gone, the one input that differs only in the
+/// chip's `_<number>` ending (a renamed chip after a kernel update) is taken; zero or several
+/// candidates are an error that lists what looks similar.
+pub fn find_temperature<'a>(
+    found: &'a [Temperature],
+    key: &str,
+) -> Result<&'a Temperature, String> {
+    if let Some(exact) = found.iter().find(|t| t.key == key) {
+        return Ok(exact);
+    }
+    let wanted = key_identity(key);
+    let mut similar = found.iter().filter(|t| key_identity(&t.key) == wanted);
+    if let (Some(only), None) = (similar.next(), similar.next()) {
+        return Ok(only);
+    }
+    // Same chip or same label: the likely candidates, at most five.
+    let hints: Vec<&str> = found
+        .iter()
+        .filter(|t| {
+            let other = key_identity(&t.key);
+            other.0 == wanted.0 || other.2 == wanted.2
+        })
+        .take(5)
+        .map(|t| t.key.as_str())
+        .collect();
+    Err(if hints.is_empty() {
+        format!("temperature sensor {key} not found")
+    } else {
+        format!(
+            "temperature sensor {key} not found (renamed? available: {})",
+            hints.join(", ")
+        )
+    })
+}
+
 impl Temperature {
     /// Warning at the hardware's maximum, down at its critical limit (if it reports them).
     pub fn limits(&self) -> Thresholds {
@@ -580,12 +634,8 @@ impl LocalSensor {
                 ]
             }
             LocalMetric::Temperature { sensor } => {
-                let input = temperatures(&self.paths)
-                    .into_iter()
-                    .find(|t| t.key == *sensor)
-                    .ok_or_else(|| {
-                        SensorError::BadValue(format!("temperature sensor {sensor} not found"))
-                    })?;
+                let all = temperatures(&self.paths);
+                let input = find_temperature(&all, sensor).map_err(SensorError::BadValue)?;
                 let celsius = input.celsius.ok_or_else(|| {
                     SensorError::BadValue(format!("{} gives no temperature", input.input.display()))
                 })?;
@@ -817,6 +867,58 @@ mod tests {
             (None, Some(100.0))
         );
         assert_eq!(found[2].limits().warn_above, Some(84.85));
+    }
+
+    #[test]
+    fn a_renamed_chip_is_still_found() {
+        let fake = Fake::new();
+        fake.write("sys/class/hwmon/hwmon1/name", "coretemp\n");
+        fake.write("sys/class/hwmon/hwmon1/temp1_input", "45000\n");
+        fake.write("sys/class/hwmon/hwmon1/temp1_label", "Package id 0\n");
+        fake.write("sys/class/hwmon/hwmon3/name", "pch_skylake\n");
+        fake.write("sys/class/hwmon/hwmon3/temp1_input", "50000\n");
+        let found = temperatures(&fake.paths());
+        // Stored under the old name of the chip.
+        let moved = find_temperature(&found, "pch_skylake_0/temp1").expect("renamed chip");
+        assert_eq!(moved.key, "pch_skylake/temp1");
+        // The other direction: stored without the ending, the chip now has one.
+        let fake = Fake::new();
+        fake.write("sys/class/hwmon/hwmon3/name", "pch_skylake_0\n");
+        fake.write("sys/class/hwmon/hwmon3/temp1_input", "50000\n");
+        let found = temperatures(&fake.paths());
+        assert!(find_temperature(&found, "pch_skylake/temp1").is_ok());
+        // The exact key wins; other labels and other chips are not guessed.
+        let fake = Fake::new();
+        fake.write("sys/class/hwmon/hwmon1/name", "pch_skylake\n");
+        fake.write("sys/class/hwmon/hwmon1/temp1_input", "40000\n");
+        fake.write("sys/class/hwmon/hwmon2/name", "pch_skylake_0\n");
+        fake.write("sys/class/hwmon/hwmon2/temp1_input", "41000\n");
+        let found = temperatures(&fake.paths());
+        assert_eq!(
+            find_temperature(&found, "pch_skylake_0/temp1")
+                .expect("exact")
+                .celsius,
+            Some(41.0)
+        );
+        // Two candidates without an exact match: no guess, the error names them.
+        let fake = Fake::new();
+        fake.write("sys/class/hwmon/hwmon1/name", "pch_skylake\n");
+        fake.write("sys/class/hwmon/hwmon1/temp1_input", "40000\n");
+        fake.write("sys/class/hwmon/hwmon2/name", "pch_skylake_1\n");
+        fake.write("sys/class/hwmon/hwmon2/temp1_input", "41000\n");
+        let found = temperatures(&fake.paths());
+        let err = find_temperature(&found, "pch_skylake_2/temp1").expect_err("ambiguous");
+        assert!(
+            err.contains("pch_skylake/temp1") && err.contains("pch_skylake_1/temp1"),
+            "{err}"
+        );
+        // Another label is another input.
+        assert!(find_temperature(&found, "pch_skylake_0/temp2").is_err());
+        // Nothing similar: a short message.
+        assert_eq!(
+            find_temperature(&found, "acpitz/temp9").expect_err("gone"),
+            "temperature sensor acpitz/temp9 not found"
+        );
     }
 
     #[test]

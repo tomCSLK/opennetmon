@@ -19,7 +19,8 @@ use crate::devices::Device;
 use crate::error::{Error, Result};
 use crate::i18n::{Lang, Msg};
 use crate::sensors::Unit;
-use crate::sensors::format::{channel_label, input_unit};
+use crate::sensors::format::{channel_label, format_value, input_unit};
+use crate::sensors::local::{self, LocalMetric, Paths};
 use crate::sensors::snmp::OidMode;
 use crate::sensors::spec::SensorSpec;
 use crate::status::{Status, Thresholds, ValueState};
@@ -33,6 +34,45 @@ use crate::web::sensor_detail::{
 use crate::web::sensor_text::ValueFormat;
 use crate::web::sensors::{SensorForm, SensorFormValues, has_settings};
 use crate::web::{AppState, Crumb, Layout, group_trail};
+
+/// The choice of the hardware temperature a local sensor reads.
+struct TargetView {
+    /// The selected key (the stored one, or the one in a rejected form).
+    selected: String,
+    /// The stored key is not among the inputs now (renamed or removed).
+    missing: bool,
+    /// Key and label of every input with a value, plus the stored one when it is missing.
+    options: Vec<(String, String)>,
+}
+
+/// The temperature inputs of this machine, for the settings page of a local temperature sensor.
+fn target_view(t: Lang, stored: &str, selected: Option<String>) -> TargetView {
+    let found = local::temperatures(&Paths::default());
+    let mut options: Vec<(String, String)> = found
+        .iter()
+        .filter_map(|input| {
+            let celsius = input.celsius?;
+            Some((
+                input.key.clone(),
+                format!(
+                    "{} ({})",
+                    input.key,
+                    format_value(t, Unit::Celsius, celsius)
+                ),
+            ))
+        })
+        .collect();
+    // An input that is gone stays selectable, so saving the page does not change it by itself.
+    let missing = !found.iter().any(|input| input.key == stored);
+    if missing {
+        options.insert(0, (stored.to_owned(), stored.to_owned()));
+    }
+    TargetView {
+        selected: selected.unwrap_or_else(|| stored.to_owned()),
+        missing,
+        options,
+    }
+}
 
 /// The limit inputs of one channel.
 struct LimitsView {
@@ -61,6 +101,8 @@ struct SettingsTemplate {
     own_interval: bool,
     /// What the sensor checks (custom OID, service sensors); `None` for the other types.
     form: Option<SensorFormValues>,
+    /// The temperature input of a local temperature sensor.
+    target: Option<TargetView>,
     limits: Vec<LimitsView>,
     states: Option<StatesView>,
     error: Option<String>,
@@ -139,6 +181,12 @@ async fn render(
     } else {
         None
     };
+    let target = match &sensor.spec {
+        SensorSpec::Local(LocalMetric::Temperature { sensor: key }) => {
+            Some(target_view(t, key, sent("local_target")))
+        }
+        _ => None,
+    };
     let page = SettingsTemplate {
         t,
         layout: user.layout(),
@@ -154,6 +202,7 @@ async fn render(
         }),
         own_interval: sensor.interval_secs.is_some(),
         form,
+        target,
         limits,
         states,
         error,
@@ -219,6 +268,23 @@ fn plan(
         form.kind = sensor.spec.kind().to_owned();
         form.name.clone_from(&sensor.name);
         let (_, spec) = form.to_spec(user.lang, &state.mib_index(), &device.host)?;
+        spec.validate().map_err(Error::invalid)?;
+        (spec != sensor.spec).then_some(spec)
+    } else if let (SensorSpec::Local(LocalMetric::Temperature { sensor: stored }), Some(key)) =
+        (&sensor.spec, fields.get("local_target"))
+    {
+        // Only an input that exists now, or the stored one (a page saved unchanged).
+        let key = key.trim();
+        let known = key == stored
+            || local::temperatures(&Paths::default())
+                .iter()
+                .any(|input| input.key == key);
+        if !known {
+            return Err(Error::invalid(Msg::new("sensor-settings-target-unknown")));
+        }
+        let spec = SensorSpec::Local(LocalMetric::Temperature {
+            sensor: key.to_owned(),
+        });
         spec.validate().map_err(Error::invalid)?;
         (spec != sensor.spec).then_some(spec)
     } else {
@@ -454,6 +520,10 @@ fn settings_changes(old: &SensorSpec, new: &SensorSpec) -> Changes {
                 text(&n.server_name),
             )
             .label("service-verify-tls", yes_no(o.verify), yes_no(n.verify)),
+        (
+            SensorSpec::Local(LocalMetric::Temperature { sensor: o }),
+            SensorSpec::Local(LocalMetric::Temperature { sensor: n }),
+        ) => changes.field("sensor-settings-target", o, n),
         _ => changes,
     }
 }

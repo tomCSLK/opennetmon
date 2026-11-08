@@ -44,7 +44,10 @@ Sensors for the machine opennetmon itself runs on – without `snmpd`, without c
   appears once (bind mounts such as systemd's read-only view of `/` do not count). Under the unit's hardening, `/home` is not visible (`ProtectHome=yes`);
   if `/home` is a file system of its own, it is missing from the list.
 - **Temperatures:** the hwmon numbers change between reboots, so the key consists of chip name and label (`coretemp/Package id 0`); a second chip with the
-  same name is called `nvme#2`. If the sensor disappears after a hardware change, the sensor reports “Unusable value”.
+  same name is called `nvme#2`. Some kernel updates rename a chip (an Intel PCH chip was `pch_skylake_0` and became `pch_skylake`): if the stored key is gone, the sensor takes the one input that differs only in that
+  `_<number>` ending of the chip name (`pch_skylake_0/temp1` → `pch_skylake/temp1`) and keeps its history. If nothing or several inputs fit, the sensor reports “Unusable value” and the
+  message lists the inputs with the same chip or label. The input can be changed on the **settings page** of the sensor (“Temperature input”, a list of the inputs found now);
+  the history stays. A key that is gone stays in the list so that saving the page does not change it.
 - **Network:** all interfaces except `lo`; “Network card” means that a device is behind it (`/sys/class/net/<interface>/device`), otherwise “Virtual”
   (bridge, VPN, container). An interface that has disappeared reports an error.
 - **Unit:** the sensors need the system files in `/proc`; `deploy/opennetmon.service` therefore no longer sets `ProcSubset=pid`

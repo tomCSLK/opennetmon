@@ -2339,4 +2339,85 @@ mod tests {
                 && order.body.contains("Sort automatically")
         );
     }
+
+    #[tokio::test]
+    async fn a_local_temperature_sensor_can_read_another_input() {
+        use crate::sensors::local::{self, LocalMetric, Paths};
+        let h = harness(true).await;
+        let device = device_on(&h, 161).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        // A key that does not exist on any machine, like a chip that a kernel update renamed.
+        let gone = "no_such_chip_0/temp1";
+        let sensor = store::create_sensor(
+            &h.state.pool,
+            device,
+            "Temperatur PCH",
+            &SensorSpec::Local(LocalMetric::Temperature {
+                sensor: gone.to_owned(),
+            }),
+        )
+        .await
+        .unwrap();
+        let path = format!("/sensors/{sensor}/edit");
+
+        // The page offers the stored key, says that it is gone and keeps it selected.
+        let page = send(&h.app, get(&path, Some(&admin))).await;
+        assert_eq!(page.status, StatusCode::OK);
+        for part in [
+            "name=\"local_target\"",
+            &format!("<option value=\"{gone}\" selected>"),
+            "nicht mehr zu finden",
+        ] {
+            assert!(page.body.contains(part), "{part}");
+        }
+        // Saving it unchanged is fine and changes nothing.
+        let body = format!("csrf_token={csrf}&name=Temperatur+PCH&local_target={gone}");
+        let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
+        assert_eq!(
+            reply.location(),
+            format!("/sensors/{sensor}?msg=sensor_settings_saved")
+        );
+        // An input that is not there is refused and nothing changes.
+        let body = format!("csrf_token={csrf}&local_target=other_chip%2Ftemp1");
+        let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
+        assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(
+            reply.body.contains("existiert auf dem Server nicht"),
+            "{}",
+            reply.body
+        );
+        let kept = store::get_sensor(&h.state.pool, sensor)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(kept.spec.kind(), "local");
+
+        // An input of this machine (if it has one): the target is stored, the history stays.
+        if let Some(input) = local::temperatures(&Paths::default())
+            .into_iter()
+            .find(|t| t.celsius.is_some())
+        {
+            let key = input.key.replace('/', "%2F").replace(' ', "+");
+            let body = format!("csrf_token={csrf}&local_target={key}");
+            let reply = send(&h.app, post(&path, Some(&admin), &body)).await;
+            assert_eq!(
+                reply.location(),
+                format!("/sensors/{sensor}?msg=sensor_settings_saved")
+            );
+            let saved = store::get_sensor(&h.state.pool, sensor)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                saved.spec,
+                SensorSpec::Local(LocalMetric::Temperature { sensor: input.key })
+            );
+            let audit = crate::storage::audit::list(&h.state.pool, 1).await.unwrap();
+            let text = Lang::De.msg(&audit[0].detail);
+            assert!(
+                text.contains("Temperatur-Eingang: no_such_chip_0/temp1 → "),
+                "{text}"
+            );
+        }
+    }
 }

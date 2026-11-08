@@ -43,6 +43,25 @@
   </section>
   {% endif %}
 
+  {% if let Some(target) = target %}
+  <section class="card">
+    <h2>{{ t.get("sensor-settings-check") }}</h2>
+    <div>
+      <label for="local_target">{{ t.get("sensor-settings-target") }}</label>
+      <select id="local_target" name="local_target">
+        {% for (key, label) in target.options %}
+        <option value="{{ key }}"{% if *key == target.selected %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if target.missing %}
+      <p class="notice" role="status">{{ t.get("sensor-settings-target-missing") }}</p>
+      {% else %}
+      <p class="hint">{{ t.get("sensor-settings-target-hint") }}</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
   {% if !limits.is_empty() %}
   <section class="card">
     <h2>{{ t.get("detail-thresholds") }}</h2>

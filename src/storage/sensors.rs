@@ -271,15 +271,21 @@ pub async fn update_spec(pool: &SqlitePool, id: i64, spec: &SensorSpec) -> Resul
         ),
         _ => (None, None, None, None),
     };
+    // Local sensors keep what they read in `target`; the others have none.
+    let target = match spec {
+        SensorSpec::Local(metric) => Some(metric.target()),
+        _ => None,
+    };
     let mut tx = pool.begin().await?;
     sqlx::query(
-        "UPDATE sensors SET oid = ?, oid_mode = ?, scale = ?, unit_label = ?, params = ? WHERE id = ?",
+        "UPDATE sensors SET oid = ?, oid_mode = ?, scale = ?, unit_label = ?, params = ?, target = COALESCE(?, target) WHERE id = ?",
     )
     .bind(oid)
     .bind(oid_mode)
     .bind(scale)
     .bind(unit_label)
     .bind(spec.params())
+    .bind(target)
     .bind(id)
     .execute(&mut *tx)
     .await?;
