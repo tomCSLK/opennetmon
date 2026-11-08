@@ -27,6 +27,14 @@ template-would-be-empty = Die Vorlage wäre leer. Bitte mindestens einen Sensor 
 template-skipped-unread = { $what }: Die Interfaces wurden nicht gelesen.
 template-skipped-interface = { $name }: Das Gerät hat kein Interface „{ $interface }“.
 template-skipped-oid = { $name }: Das Gerät liefert für { $oid } keinen Wert.
+template-note-interval = alle { $seconds } s
+template-note-depends-on = hängt ab von „{ $name }“
+template-note-depends-on-nothing = ohne Abhängigkeit
+template-note-delay = Verzögerung { $seconds } s
+template-interval-invalid = Das Intervall muss zwischen 10 und 3600 Sekunden liegen.
+template-dependency-invalid = Ungültige Abhängigkeit: Sie muss einen anderen Sensor der Vorlage nennen.
+template-skipped-interval = { $name }: Eigenes Intervall nicht gesetzt. { $message }
+template-skipped-dependency = { $name }: Abhängigkeit nicht gesetzt. { $message }
 
 template-with-thresholds-and-states = mit Schwellwerten und Statusbewertung
 template-with-thresholds = mit Schwellwerten

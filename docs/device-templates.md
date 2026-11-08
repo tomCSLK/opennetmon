@@ -17,6 +17,13 @@ On the sensor page of a device, in the section **Device template** (`/devices/<i
 
 - Name, state (active/paused), factor, unit, thresholds and the rating of status values are taken over. With “active/all ports”, the thresholds only apply
   if all interface sensors of this kind on the source device have the same ones; the new sensors are active if at least one on the source device is active.
+- The **polling interval of a sensor** and its **dependency** are taken over too (for sensors with their own interval or dependency; the master sensor as before):
+  - A dependency on **another sensor of the template** is kept by its name (“depends on Ping”) and points to the new sensor on the target device. Applying sets it after all sensors exist.
+    A name that is not part of the template, or a sensor of **another device**, cannot be kept; only the delay after recovery stays.
+  - “No dependency” and the delay after recovery are taken over as they are. “Like the device” (the default) is stored as nothing.
+  - With “active/all ports”, interval and delay apply only if all interface sensors of this kind on the source device share them; dependencies on sensors are not kept there (use “the same ports”).
+  - If an interval or dependency cannot be set on the target device (an interval too short for its timeout, a cycle), the sensor is created anyway and the result page says what was left out.
+  - Templates saved earlier have neither and work as before.
 - “Ports” are interfaces of the types Ethernet and WLAN – the same selection as the preselection in “Find interfaces”
   (on TP-Link, `Vlan-interface1` counts as well).
 - “The same ports” needs the interfaces of the source device; if it is not reachable, the option is locked.

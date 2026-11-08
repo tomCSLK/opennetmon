@@ -146,7 +146,7 @@ fn rule_items(t: Lang, what: &str, rule: &PortRule) -> Vec<ItemView> {
             .map(|p| ItemView {
                 name: p.name.clone(),
                 detail: format!(
-                    "{}{}",
+                    "{}{}{}",
                     t.get2(
                         "template-rule-port",
                         "what",
@@ -154,7 +154,8 @@ fn rule_items(t: Lang, what: &str, rule: &PortRule) -> Vec<ItemView> {
                         "interface",
                         p.interface.as_str()
                     ),
-                    limits_note(t, &p.limits)
+                    limits_note(t, &p.limits),
+                    p.extras.note(t)
                 ),
                 state: state_label(t, p.enabled),
             })
@@ -162,9 +163,10 @@ fn rule_items(t: Lang, what: &str, rule: &PortRule) -> Vec<ItemView> {
         PortSelection::Up | PortSelection::All => vec![ItemView {
             name: format!("{what} {}", tpl::selection_label(t, rule)),
             detail: format!(
-                "{}{}",
+                "{}{}{}",
                 t.get1("template-rule-each-port", "what", what),
-                limits_note(t, &rule.limits)
+                limits_note(t, &rule.limits),
+                rule.extras.note(t)
             ),
             state: state_label(t, rule.enabled),
         }],
@@ -186,13 +188,14 @@ fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
         .map(|b| ItemView {
             name: b.name.clone(),
             detail: format!(
-                "{}{}{}",
+                "{}{}{}{}",
                 match b.kind {
                     BasicKind::Ping => "Ping",
                     BasicKind::Uptime => "Uptime",
                 },
                 limits_note(t, &b.limits),
-                master_note(t, b.master)
+                master_note(t, b.master),
+                b.extras.note(t)
             ),
             state: state_label(t, b.enabled),
         })
@@ -206,7 +209,7 @@ fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
     items.extend(body.oids.iter().map(|o| ItemView {
         name: o.name.clone(),
         detail: format!(
-            "OID {} · {}{}{}{}{}",
+            "OID {} · {}{}{}{}{}{}",
             o.oid,
             t.get(if o.counter {
                 "template-oid-counter"
@@ -223,17 +226,19 @@ fn items_of(t: Lang, body: &tpl::Body) -> Vec<ItemView> {
                 t.get1("oid-detail-unit", "unit", u)
             )),
             limits_note(t, &o.limits),
-            master_note(t, o.master)
+            master_note(t, o.master),
+            o.extras.note(t)
         ),
         state: state_label(t, o.enabled),
     }));
     items.extend(body.services.iter().map(|item| ItemView {
         name: item.name.clone(),
         detail: format!(
-            "{}{}{}",
+            "{}{}{}{}",
             item.service.spec(tpl::HOST_PLACEHOLDER).describe(t),
             limits_note(t, &item.limits),
-            master_note(t, item.master)
+            master_note(t, item.master),
+            item.extras.note(t)
         ),
         state: state_label(t, item.enabled),
     }));
@@ -614,6 +619,8 @@ pub async fn create(
         }
     };
     let all = sensors::list_sensors(&state.pool, id).await?;
+    let pauses =
+        crate::storage::pauses::load_all(&state.pool, crate::web::sensors::now_ms()).await?;
     let built = tpl::build(
         &all,
         facts.interfaces.as_deref(),
@@ -621,10 +628,12 @@ pub async fn create(
             include: include.clone(),
             traffic: PortChoice::parse(traffic),
             status: PortChoice::parse(status),
-            master: crate::storage::pauses::load_all(&state.pool, crate::web::sensors::now_ms())
-                .await?
-                .master_of(id),
+            master: pauses.master_of(id),
             host: device.host.clone(),
+            settings: all
+                .iter()
+                .filter_map(|s| pauses.sensor_info(s.id).map(|i| (s.id, i.setting)))
+                .collect(),
         },
     );
     let outcome = match built {
@@ -1401,5 +1410,116 @@ mod tests {
         ] {
             assert!(page.body.contains(text), "{text} missing");
         }
+    }
+
+    #[tokio::test]
+    async fn a_template_takes_over_intervals_and_dependencies() {
+        use crate::pause::{Dependency, Setting, Target};
+        let source = switch(4, &[1, 2], 4).await;
+        let h = harness(true).await;
+        let profile = add_v2c_profile(&h, "Fake", "public").await;
+        let dev = configured_source(&h, source.port, profile).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let pool = &h.state.pool;
+        // Ping (1) and Uptime (2); Uplink (3) and the other traffic sensor (4) are ports.
+        let polling = devices::get_device(pool, dev)
+            .await
+            .unwrap()
+            .unwrap()
+            .polling;
+        crate::storage::sensors::set_interval(pool, 2, Some(30), &polling)
+            .await
+            .unwrap();
+        crate::storage::sensors::set_interval(pool, 3, Some(120), &polling)
+            .await
+            .unwrap();
+        for (sensor, dependency, delay_secs) in [
+            (2, Dependency::Sensor(1), Some(20)),
+            (3, Dependency::Sensor(2), None),
+            (4, Dependency::None, None),
+        ] {
+            crate::storage::pauses::set_dependency(
+                pool,
+                Target::Sensor(sensor),
+                Setting {
+                    dependency,
+                    delay_secs,
+                },
+                None,
+                0,
+            )
+            .await
+            .unwrap();
+        }
+
+        let reply = send(
+            &h.app,
+            post(
+                &format!("/devices/{dev}/template"),
+                Some(&admin),
+                &format!(
+                    "csrf_token={csrf}&name=TP-Link+SG2008&object_id=1.3.6.1.4.1.11863.1.1.11\
+                     &traffic=same&status=skip&i_1=on&i_2=on"
+                ),
+            ),
+        )
+        .await;
+        assert_eq!(reply.location(), "/templates/1?msg=template_created");
+        let detail = send(&h.app, get(reply.location(), Some(&admin))).await;
+        for text in [
+            "alle 30 s, hängt ab von „Ping“, Verzögerung 20 s",
+            "alle 120 s, hängt ab von „Uptime“",
+            "ohne Abhängigkeit",
+        ] {
+            assert!(detail.body.contains(text), "{text}: {}", detail.body);
+        }
+
+        // A second switch gets the same settings, pointing at its own sensors.
+        let target = switch(4, &[1, 2], 4).await;
+        let result = send(
+            &h.app,
+            post(
+                "/devices",
+                Some(&admin),
+                &device_form(&csrf, "Switch+Keller", target.port, profile, "auto"),
+            ),
+        )
+        .await;
+        assert!(
+            result.body.contains("Gerät „Switch Keller“ angelegt"),
+            "{}",
+            result.body
+        );
+        assert!(!result.body.contains("nicht gesetzt"), "{}", result.body);
+        let new_id = devices::list_devices(pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|d| d.name == "Switch Keller")
+            .unwrap()
+            .id;
+        let created = list_sensors(pool, new_id).await.unwrap();
+        let by_name = |name: &str| created.iter().find(|s| s.name == name).unwrap();
+        let pauses = crate::storage::pauses::load_all(pool, 0).await.unwrap();
+        let setting = |name: &str| pauses.sensor_info(by_name(name).id).unwrap().setting;
+        assert_eq!(by_name("Ping").interval_secs, None);
+        assert_eq!(by_name("Uptime").interval_secs, Some(30));
+        assert_eq!(by_name("Uplink").interval_secs, Some(120));
+        assert_eq!(
+            setting("Uptime"),
+            Setting {
+                dependency: Dependency::Sensor(by_name("Ping").id),
+                delay_secs: Some(20),
+            }
+        );
+        assert_eq!(
+            setting("Uplink").dependency,
+            Dependency::Sensor(by_name("Uptime").id)
+        );
+        assert_eq!(
+            setting("Traffic gigabitEthernet 1/0/2").dependency,
+            Dependency::None
+        );
+        assert_eq!(setting("Ping"), Setting::default());
     }
 }

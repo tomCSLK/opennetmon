@@ -27,6 +27,14 @@ template-would-be-empty = The template would be empty. Please take over at least
 template-skipped-unread = { $what }: the interfaces were not read.
 template-skipped-interface = { $name }: the device has no interface “{ $interface }”.
 template-skipped-oid = { $name }: the device returns no value for { $oid }.
+template-note-interval = every { $seconds } s
+template-note-depends-on = depends on “{ $name }”
+template-note-depends-on-nothing = no dependency
+template-note-delay = delay { $seconds } s
+template-interval-invalid = The interval must be between 10 and 3600 seconds.
+template-dependency-invalid = Invalid dependency: it must name another sensor of the template.
+template-skipped-interval = { $name }: own interval not set. { $message }
+template-skipped-dependency = { $name }: dependency not set. { $message }
 
 template-with-thresholds-and-states = with thresholds and status rating
 template-with-thresholds = with thresholds

@@ -14,6 +14,7 @@ use crate::devices::MAX_NAME_LEN;
 use crate::discovery::{DiscoveredInterface, discover_interfaces};
 use crate::error::Error;
 use crate::i18n::{Lang, Msg};
+use crate::pause::{Dependency, MAX_DELAY_SECS, Setting, Target};
 use crate::sensors::fritzbox::FritzCheck;
 use crate::sensors::huawei::HuaweiCheck;
 use crate::sensors::ping::PingCheck;
@@ -22,6 +23,7 @@ use crate::sensors::snmp::{OidMode, numeric};
 use crate::sensors::spec::{SensorSpec, format_oid, parse_oid};
 use crate::snmp::{SYS_OBJECT_ID, SnmpClient, SnmpError, SnmpValue};
 use crate::status::{Status, Thresholds, ValueState};
+use crate::storage::pauses::DependencyError;
 use crate::storage::sensors::{self as store, ChannelRecord, SensorRecord};
 
 /// Upper bound of rules in one template.
@@ -29,6 +31,124 @@ pub const MAX_ITEMS: usize = 2_000;
 const FORMAT_VERSION: u32 = 1;
 /// OIDs per GET request when checking which values a device delivers.
 const GET_BATCH: usize = 10;
+
+/// What a dependency rule does (see [`crate::pause::Dependency`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyMode {
+    /// Like the device (only a delay is set).
+    Parent,
+    /// Not dependent on anything.
+    None,
+    /// Paused while the sensor named in `on` is down or paused.
+    Sensor,
+}
+
+/// The dependency of a sensor of a template. A dependency on a sensor is kept by the **name** of
+/// another sensor of the same template (a sensor of another device cannot be named in a template).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DependencyRule {
+    pub mode: DependencyMode,
+    /// The sensor in the template, for [`DependencyMode::Sensor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<String>,
+    /// How long the sensor stays paused after the other one is fine again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay_secs: Option<u32>,
+}
+
+/// The polling interval and dependency of a sensor of a template; both are optional.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Extras {
+    /// The sensor's own interval in seconds (`None`: the device's).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interval_secs: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dependency: Option<DependencyRule>,
+}
+
+impl Extras {
+    /// A line for the template page: ", every 30 s, depends on Ping".
+    pub fn note(&self, t: Lang) -> String {
+        let mut parts = Vec::new();
+        if let Some(secs) = self.interval_secs {
+            parts.push(t.get1("template-note-interval", "seconds", secs));
+        }
+        if let Some(rule) = &self.dependency {
+            parts.push(match (rule.mode, &rule.on) {
+                (DependencyMode::Sensor, Some(on)) => {
+                    t.get1("template-note-depends-on", "name", on.as_str())
+                }
+                (DependencyMode::None, _) => t.get("template-note-depends-on-nothing"),
+                _ => String::new(),
+            });
+            if let Some(secs) = rule.delay_secs {
+                parts.push(t.get1("template-note-delay", "seconds", secs));
+            }
+        }
+        parts.retain(|p| !p.is_empty());
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!(" · {}", parts.join(", "))
+        }
+    }
+}
+
+/// The extras of a sensor from its stored interval and dependency setting. `names` maps the
+/// sensors that are part of the template to their names in it; a dependency on any other sensor
+/// (another device) cannot go into a template and only keeps its delay.
+fn extras_of(
+    sensor: &SensorRecord,
+    options: &BuildOptions,
+    names: &HashMap<i64, String>,
+) -> Extras {
+    let setting = options
+        .settings
+        .get(&sensor.id)
+        .copied()
+        .unwrap_or_default();
+    let rule = match setting.dependency {
+        Dependency::None => Some(DependencyRule {
+            mode: DependencyMode::None,
+            on: None,
+            delay_secs: setting.delay_secs,
+        }),
+        Dependency::Sensor(other) if other != sensor.id && names.contains_key(&other) => {
+            Some(DependencyRule {
+                mode: DependencyMode::Sensor,
+                on: names.get(&other).cloned(),
+                delay_secs: setting.delay_secs,
+            })
+        }
+        _ => setting.delay_secs.map(|secs| DependencyRule {
+            mode: DependencyMode::Parent,
+            on: None,
+            delay_secs: Some(secs),
+        }),
+    };
+    Extras {
+        interval_secs: sensor.interval_secs,
+        dependency: rule,
+    }
+}
+
+/// The extras that all of `sensors` share (the rule of "all ports" applies to many sensors).
+fn shared_extras(sensors: &[&SensorRecord], options: &BuildOptions) -> Extras {
+    // No sensor names here: a dependency on a sensor is not shared between many ports.
+    let none = HashMap::new();
+    match sensors.split_first() {
+        Some((first, rest)) => {
+            let shared = extras_of(first, options, &none);
+            if rest.iter().all(|s| extras_of(s, options, &none) == shared) {
+                shared
+            } else {
+                Extras::default()
+            }
+        }
+        None => Extras::default(),
+    }
+}
 
 /// Thresholds of one channel, by channel key (`in`, `out`, `value`, …).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -126,6 +246,8 @@ pub struct Basic {
     /// Echo requests per poll of a ping sensor; templates from before 0.5.6 have none (default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub packets: Option<u8>,
+    #[serde(default, flatten)]
+    pub extras: Extras,
 }
 
 impl Basic {
@@ -162,6 +284,8 @@ pub struct Port {
     pub enabled: bool,
     #[serde(default)]
     pub limits: Vec<Limits>,
+    #[serde(default, flatten)]
+    pub extras: Extras,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -174,6 +298,9 @@ pub struct PortRule {
     pub enabled: bool,
     #[serde(default)]
     pub limits: Vec<Limits>,
+    /// Interval and delay of new sensors for `Up` and `All`.
+    #[serde(default, flatten)]
+    pub extras: Extras,
 }
 
 /// A custom OID sensor.
@@ -191,6 +318,8 @@ pub struct OidItem {
     /// The master sensor of the device.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub master: bool,
+    #[serde(default, flatten)]
+    pub extras: Extras,
 }
 
 impl OidItem {
@@ -288,6 +417,8 @@ pub struct ServiceItem {
     pub limits: Vec<Limits>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub master: bool,
+    #[serde(default, flatten)]
+    pub extras: Extras,
 }
 
 /// What a template contains (stored as JSON).
@@ -333,6 +464,37 @@ fn check_limits(name: &str, limits: &[Limits]) -> Result<(), Msg> {
     })
 }
 
+/// The interval and the dependency of a template item: ranges as for the sensor settings, and a
+/// dependency on a sensor must name another sensor of the template.
+fn check_extras(name: &str, extras: &Extras, names: &HashSet<String>) -> Result<(), Msg> {
+    if let Some(secs) = extras.interval_secs
+        && !(10..=3600).contains(&secs)
+    {
+        return Err(named(name, Msg::new("template-interval-invalid")));
+    }
+    let Some(rule) = &extras.dependency else {
+        return Ok(());
+    };
+    if rule.delay_secs.is_some_and(|secs| secs > MAX_DELAY_SECS) {
+        return Err(named(
+            name,
+            Msg::new("dependency-delay-invalid").with("max", MAX_DELAY_SECS),
+        ));
+    }
+    let valid = match (rule.mode, &rule.on) {
+        (DependencyMode::Sensor, Some(on)) => {
+            !on.eq_ignore_ascii_case(name) && names.contains(&on.to_lowercase())
+        }
+        (DependencyMode::Sensor, None) => false,
+        (_, on) => on.is_none(),
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(named(name, Msg::new("template-dependency-invalid")))
+    }
+}
+
 impl Body {
     pub fn is_empty(&self) -> bool {
         self.basics.is_empty()
@@ -346,10 +508,56 @@ impl Body {
         self.traffic.iter().chain(self.status.iter())
     }
 
+    /// The names of the sensors that other sensors of the template can depend on.
+    fn sensor_names(&self) -> HashSet<String> {
+        let mut names: HashSet<String> = HashSet::new();
+        names.extend(self.basics.iter().map(|b| b.name.to_lowercase()));
+        names.extend(self.oids.iter().map(|o| o.name.to_lowercase()));
+        names.extend(self.services.iter().map(|i| i.name.to_lowercase()));
+        for rule in self.rules() {
+            names.extend(rule.ports.iter().map(|p| p.name.to_lowercase()));
+        }
+        names
+    }
+
+    /// Turns a dependency on a sensor that the template does not contain into a plain delay.
+    fn drop_unknown_dependencies(&mut self) {
+        let names = self.sensor_names();
+        let fix = |name: &str, extras: &mut Extras| {
+            if let Some(rule) = &mut extras.dependency
+                && rule.mode == DependencyMode::Sensor
+                && rule.on.as_ref().is_none_or(|on| {
+                    on.eq_ignore_ascii_case(name) || !names.contains(&on.to_lowercase())
+                })
+            {
+                rule.mode = DependencyMode::Parent;
+                rule.on = None;
+                if rule.delay_secs.is_none() {
+                    extras.dependency = None;
+                }
+            }
+        };
+        for b in &mut self.basics {
+            fix(&b.name, &mut b.extras);
+        }
+        for o in &mut self.oids {
+            fix(&o.name, &mut o.extras);
+        }
+        for i in &mut self.services {
+            fix(&i.name, &mut i.extras);
+        }
+        for rule in self.traffic.iter_mut().chain(self.status.iter_mut()) {
+            for p in &mut rule.ports {
+                fix(&p.name, &mut p.extras);
+            }
+        }
+    }
+
     pub fn validate(&self) -> Result<(), Msg> {
         if self.version != FORMAT_VERSION {
             return Err(Msg::new("template-version-unknown").with("version", self.version));
         }
+        let names = self.sensor_names();
         let ports: usize = self.rules().map(|r| r.ports.len()).sum();
         if self.basics.len() + ports + self.oids.len() + self.services.len() > MAX_ITEMS {
             return Err(Msg::new("template-too-many").with("count", MAX_ITEMS));
@@ -357,16 +565,19 @@ impl Body {
         for b in &self.basics {
             check_name(&b.name)?;
             check_limits(&b.name, &b.limits)?;
+            check_extras(&b.name, &b.extras, &names)?;
             b.spec().validate()?;
         }
         for rule in self.rules() {
             check_limits("Interfaces", &rule.limits)?;
+            check_extras("Interfaces", &rule.extras, &names)?;
             for p in &rule.ports {
                 check_name(&p.name)?;
                 if p.interface.trim().is_empty() || p.interface.chars().count() > MAX_NAME_LEN {
                     return Err(named(&p.name, Msg::new("template-interface-invalid")));
                 }
                 check_limits(&p.name, &p.limits)?;
+                check_extras(&p.name, &p.extras, &names)?;
             }
         }
         for o in &self.oids {
@@ -374,6 +585,7 @@ impl Body {
             let spec = o.spec().map_err(|m| named(&o.name, m))?;
             spec.validate().map_err(|m| named(&o.name, m))?;
             check_limits(&o.name, &o.limits)?;
+            check_extras(&o.name, &o.extras, &names)?;
         }
         for item in &self.services {
             check_name(&item.name)?;
@@ -382,6 +594,7 @@ impl Body {
                 .validate()
                 .map_err(|m| named(&item.name, m))?;
             check_limits(&item.name, &item.limits)?;
+            check_extras(&item.name, &item.extras, &names)?;
         }
         Ok(())
     }
@@ -466,6 +679,8 @@ pub struct BuildOptions {
     pub master: Option<i64>,
     /// Host of the source device (URLs to it become [`HOST_PLACEHOLDER`]).
     pub host: String,
+    /// The dependency setting of the sensors (by id) that have one of their own.
+    pub settings: HashMap<i64, Setting>,
 }
 
 fn port_rule(
@@ -473,6 +688,8 @@ fn port_rule(
     index_of: fn(&SensorSpec) -> Option<u32>,
     choice: PortChoice,
     interfaces: Option<&[DiscoveredInterface]>,
+    options: &BuildOptions,
+    names: &HashMap<i64, String>,
 ) -> Result<Option<PortRule>, Msg> {
     let selection = match choice {
         PortChoice::Skip => return Ok(None),
@@ -496,6 +713,7 @@ fn port_rule(
                     name: s.name.clone(),
                     enabled: s.enabled,
                     limits: limits_of(&s.channels),
+                    extras: extras_of(s, options, names),
                 });
             }
         }
@@ -516,11 +734,17 @@ fn port_rule(
         }
         None => Vec::new(),
     };
+    let extras = if selection == PortSelection::Same {
+        Extras::default()
+    } else {
+        shared_extras(&of_kind, options)
+    };
     Ok(Some(PortRule {
         selection,
         ports,
         enabled,
         limits,
+        extras,
     }))
 }
 
@@ -546,11 +770,36 @@ pub fn build(
     options: &BuildOptions,
 ) -> Result<Body, Msg> {
     let all: Vec<&SensorRecord> = sensors.iter().collect();
+    // Sensors that other sensors can depend on, by their names in the template: the ones taken
+    // over one by one and the named ports (unknown ones are dropped again below).
+    let names: HashMap<i64, String> = sensors
+        .iter()
+        .filter(|s| {
+            options.include.contains(&s.id)
+                || (options.traffic == PortChoice::Same && traffic_index(&s.spec).is_some())
+                || (options.status == PortChoice::Same && status_index(&s.spec).is_some())
+        })
+        .map(|s| (s.id, s.name.clone()))
+        .collect();
     let mut body = Body {
         version: FORMAT_VERSION,
         basics: Vec::new(),
-        traffic: port_rule(&all, traffic_index, options.traffic, interfaces)?,
-        status: port_rule(&all, status_index, options.status, interfaces)?,
+        traffic: port_rule(
+            &all,
+            traffic_index,
+            options.traffic,
+            interfaces,
+            options,
+            &names,
+        )?,
+        status: port_rule(
+            &all,
+            status_index,
+            options.status,
+            interfaces,
+            options,
+            &names,
+        )?,
         oids: Vec::new(),
         services: Vec::new(),
     };
@@ -571,6 +820,7 @@ pub fn build(
                     SensorSpec::Ping(c) => Some(c.packets),
                     _ => None,
                 },
+                extras: extras_of(s, options, &names),
             }),
             SensorSpec::Oid {
                 oid,
@@ -586,6 +836,7 @@ pub fn build(
                 enabled: s.enabled,
                 limits,
                 master: options.master == Some(s.id),
+                extras: extras_of(s, options, &names),
             }),
             SensorSpec::Http(_)
             | SensorSpec::Tcp(_)
@@ -600,6 +851,7 @@ pub fn build(
                         enabled: s.enabled,
                         limits,
                         master: options.master == Some(s.id),
+                        extras: extras_of(s, options, &names),
                     });
                 }
             }
@@ -612,6 +864,7 @@ pub fn build(
     if body.is_empty() {
         return Err(Msg::new("template-would-be-empty"));
     }
+    body.drop_unknown_dependencies();
     body.validate()?;
     Ok(body)
 }
@@ -625,6 +878,10 @@ pub struct NewSensor {
     pub limits: Vec<Limits>,
     /// Becomes the master sensor of the device, unless it has one.
     pub master: bool,
+    /// The name in the template (the sensor may get another one on the device), which other
+    /// sensors of the template name in their dependency.
+    pub template_name: String,
+    pub extras: Extras,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -645,6 +902,12 @@ pub struct Facts<'a> {
     pub answering: &'a HashSet<Vec<u64>>,
     /// Host of the device (for URLs with [`HOST_PLACEHOLDER`]).
     pub host: &'a str,
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 /// Sensor names in use on a device (case-insensitive like the database) and numbering of duplicates.
@@ -733,6 +996,8 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
             enabled: b.enabled,
             limits: b.limits.clone(),
             master: b.master,
+            template_name: b.name.clone(),
+            extras: b.extras.clone(),
         });
     }
 
@@ -751,14 +1016,18 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
                 SensorSpec::InterfaceStatus { if_index: index }
             }
         };
-        let mut wanted: Vec<(u32, String, bool, Vec<Limits>)> = Vec::new();
+        let mut wanted: Vec<(u32, String, bool, Vec<Limits>, Extras)> = Vec::new();
         match rule.selection {
             PortSelection::Same => {
                 for p in &rule.ports {
                     match interfaces.iter().find(|i| i.name == p.interface) {
-                        Some(i) => {
-                            wanted.push((i.index, p.name.clone(), p.enabled, p.limits.clone()))
-                        }
+                        Some(i) => wanted.push((
+                            i.index,
+                            p.name.clone(),
+                            p.enabled,
+                            p.limits.clone(),
+                            p.extras.clone(),
+                        )),
                         None => out.skipped.push(
                             Msg::new("template-skipped-interface")
                                 .with("name", p.name.as_str())
@@ -777,11 +1046,12 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
                         sensor_name(what, &i.name),
                         rule.enabled,
                         rule.limits.clone(),
+                        rule.extras.clone(),
                     ));
                 }
             }
         }
-        for (index, name, enabled, limits) in wanted {
+        for (index, name, enabled, limits, extras) in wanted {
             if !interface_keys.insert((traffic, index)) {
                 out.present += 1;
                 continue;
@@ -792,6 +1062,8 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
                 enabled,
                 limits,
                 master: false,
+                template_name: name,
+                extras,
             });
         }
     }
@@ -820,6 +1092,8 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
             enabled: o.enabled,
             limits: o.limits.clone(),
             master: o.master,
+            template_name: o.name.clone(),
+            extras: o.extras.clone(),
         });
     }
 
@@ -835,6 +1109,8 @@ pub fn plan(body: &Body, facts: &Facts<'_>) -> Plan {
             enabled: item.enabled,
             limits: item.limits.clone(),
             master: item.master,
+            template_name: item.name.clone(),
+            extras: item.extras.clone(),
         });
     }
     out
@@ -939,11 +1215,33 @@ pub async fn apply(
             host,
         },
     );
+    let device = crate::storage::devices::get_device(pool, device_id)
+        .await?
+        .ok_or(Error::NotFound)?;
+    let mut skipped = plan.skipped;
     let mut created = Vec::with_capacity(plan.create.len());
+    // New sensors by their name in the template, and the dependencies to set once all exist.
+    let mut by_name: HashMap<String, i64> = HashMap::new();
+    let mut dependencies: Vec<(i64, String, DependencyRule)> = Vec::new();
     for new in plan.create {
         let id =
             store::create_sensor_with_state(pool, device_id, &new.name, &new.spec, new.enabled)
                 .await?;
+        by_name.insert(new.template_name.to_lowercase(), id);
+        if let Some(secs) = new.extras.interval_secs {
+            match store::set_interval(pool, id, Some(secs), &device.polling).await {
+                Ok(()) => {}
+                Err(Error::Invalid(message)) => skipped.push(
+                    Msg::new("template-skipped-interval")
+                        .with("name", new.name.as_str())
+                        .with("message", message),
+                ),
+                Err(e) => return Err(e.into()),
+            }
+        }
+        if let Some(rule) = &new.extras.dependency {
+            dependencies.push((id, new.name.clone(), rule.clone()));
+        }
         if new.master {
             crate::storage::pauses::set_master_if_none(pool, device_id, id).await?;
         }
@@ -970,10 +1268,57 @@ pub async fn apply(
         }
         created.push(new.name);
     }
+    // Sensors that were there before can be named too (a dependency on "Ping").
+    for s in &existing {
+        by_name.entry(s.name.to_lowercase()).or_insert(s.id);
+    }
+    for (id, name, rule) in dependencies {
+        let dependency = match (rule.mode, &rule.on) {
+            (DependencyMode::Parent, _) => Dependency::Parent,
+            (DependencyMode::None, _) => Dependency::None,
+            (DependencyMode::Sensor, on) => {
+                match on.as_ref().and_then(|on| by_name.get(&on.to_lowercase())) {
+                    Some(other) => Dependency::Sensor(*other),
+                    None => {
+                        skipped.push(
+                            Msg::new("template-skipped-dependency")
+                                .with("name", name.as_str())
+                                .with("message", Msg::new("dependency-sensor-missing")),
+                        );
+                        continue;
+                    }
+                }
+            }
+        };
+        let setting = Setting {
+            dependency,
+            delay_secs: rule.delay_secs,
+        };
+        if setting == Setting::default() {
+            continue;
+        }
+        match crate::storage::pauses::set_dependency(
+            pool,
+            Target::Sensor(id),
+            setting,
+            None,
+            now_ms(),
+        )
+        .await
+        {
+            Ok(()) => {}
+            Err(DependencyError::Invalid(message)) => skipped.push(
+                Msg::new("template-skipped-dependency")
+                    .with("name", name.as_str())
+                    .with("message", message),
+            ),
+            Err(DependencyError::Storage(e)) => return Err(e.into()),
+        }
+    }
     Ok(Outcome {
         created,
         present: plan.present,
-        skipped: plan.skipped,
+        skipped,
     })
 }
 
@@ -1082,6 +1427,7 @@ mod tests {
             status,
             master: None,
             host: "192.0.2.10".to_owned(),
+            settings: HashMap::new(),
         }
     }
 
@@ -1171,6 +1517,7 @@ mod tests {
             status: PortChoice::Skip,
             master: None,
             host: "192.0.2.10".to_owned(),
+            settings: HashMap::new(),
         };
         assert!(
             build(&sensors, None, &none)
@@ -1463,5 +1810,127 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(found, [POE_1.to_vec()].into());
+    }
+
+    fn setting(dependency: Dependency, delay_secs: Option<u32>) -> Setting {
+        Setting {
+            dependency,
+            delay_secs,
+        }
+    }
+
+    #[test]
+    fn intervals_and_dependencies_go_into_the_template_by_name() {
+        let (mut sensors, interfaces) = source();
+        sensors[1].interval_secs = Some(30); // Uptime
+        sensors[2].interval_secs = Some(120); // a traffic sensor
+        let options = BuildOptions {
+            include: [1, 2, 6].into(),
+            settings: HashMap::from([
+                (1, setting(Dependency::Parent, Some(15))),
+                // Uptime depends on Ping (in the template) and waits 20 s.
+                (2, setting(Dependency::Sensor(1), Some(20))),
+                // A dependency on a sensor outside the template cannot be kept.
+                (6, setting(Dependency::Sensor(99), None)),
+                (3, setting(Dependency::None, None)),
+            ]),
+            ..options(PortChoice::Same, PortChoice::Skip)
+        };
+        let body = build(&sensors, Some(&interfaces), &options).unwrap();
+        let ping = &body.basics[0].extras;
+        assert_eq!(ping.interval_secs, None);
+        assert_eq!(
+            ping.dependency,
+            Some(DependencyRule {
+                mode: DependencyMode::Parent,
+                on: None,
+                delay_secs: Some(15)
+            })
+        );
+        let uptime = &body.basics[1].extras;
+        assert_eq!(uptime.interval_secs, Some(30));
+        assert_eq!(
+            uptime.dependency,
+            Some(DependencyRule {
+                mode: DependencyMode::Sensor,
+                on: Some("Ping".to_owned()),
+                delay_secs: Some(20)
+            })
+        );
+        let ports = &body.traffic.as_ref().unwrap().ports;
+        assert_eq!(ports[0].extras.interval_secs, Some(120));
+        assert_eq!(
+            ports[0].extras.dependency.as_ref().map(|d| d.mode),
+            Some(DependencyMode::None)
+        );
+        assert_eq!(
+            body.oids[0].extras.dependency, None,
+            "outside: no rule left"
+        );
+        // The JSON round trip keeps it, and the settings are written next to the other fields.
+        let json = body.to_json().unwrap();
+        assert!(
+            json.contains("\"interval_secs\":30") && json.contains("\"on\":\"Ping\""),
+            "{json}"
+        );
+        assert_eq!(Body::from_json(&json).unwrap(), body);
+
+        // The plan hands them on, with the template names the dependencies refer to.
+        let planned = plan(&body, &facts(&[], Some(&interfaces), &HashSet::new()));
+        let uptime = planned.create.iter().find(|n| n.name == "Uptime").unwrap();
+        assert_eq!(uptime.template_name, "Uptime");
+        assert_eq!(uptime.extras, body.basics[1].extras);
+    }
+
+    #[test]
+    fn templates_from_before_have_no_extras_and_wrong_ones_are_refused() {
+        let (sensors, _) = source();
+        let body = build(&sensors, None, &options(PortChoice::Skip, PortChoice::Skip)).unwrap();
+        let json = body.to_json().unwrap();
+        assert!(
+            !json.contains("interval_secs") && !json.contains("dependency"),
+            "{json}"
+        );
+        assert_eq!(Body::from_json(&json).unwrap(), body);
+
+        let rule = |mode, on: Option<&str>, delay_secs| DependencyRule {
+            mode,
+            on: on.map(str::to_owned),
+            delay_secs,
+        };
+        let with = |extras: Extras| {
+            let mut b = body.clone();
+            b.basics[1].extras = extras;
+            b.validate()
+        };
+        let own = |dependency| Extras {
+            interval_secs: None,
+            dependency,
+        };
+        // Fine: another sensor of the template, a delay, an interval in range.
+        assert!(
+            with(Extras {
+                interval_secs: Some(10),
+                dependency: Some(rule(DependencyMode::Sensor, Some("ping"), Some(3600))),
+            })
+            .is_ok()
+        );
+        for bad in [
+            Extras {
+                interval_secs: Some(9),
+                dependency: None,
+            },
+            Extras {
+                interval_secs: Some(3601),
+                dependency: None,
+            },
+            own(Some(rule(DependencyMode::Sensor, Some("Nicht da"), None))),
+            own(Some(rule(DependencyMode::Sensor, Some("Uptime"), None))),
+            own(Some(rule(DependencyMode::Sensor, None, None))),
+            own(Some(rule(DependencyMode::None, Some("Ping"), None))),
+            own(Some(rule(DependencyMode::Parent, None, Some(3601)))),
+        ] {
+            assert!(with(bad.clone()).is_err(), "{bad:?}");
+        }
     }
 }
