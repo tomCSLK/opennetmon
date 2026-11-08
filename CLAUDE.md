@@ -344,7 +344,7 @@ Vertrag (Quelle: `SecurityDashboad/src/inventory/opennetmon.rs`), wie umgesetzt:
     SNMP-Sitzung höchstens einmal je 24 h (nach Fehlschlag nach 1 h), `web::devices::test_connection` speichert das Ergebnis des Verbindungstests ebenfalls
     (`storage::devices::set_identity`, `list_inventory`). Geräte ohne SNMP-Sensoren werden nicht gefragt (ihre Felder bleiben leer).
 - **Danach:** in opensecmon unter Assets → „Import aus opennetmon“ Adresse und Token eintragen (Browser-Schritt des Nutzers). Das Token erst auf dem Server anlegen, nachdem
-  dort eine Version mit dem Endpunkt läuft; das Test-Paket 0.5.8 auf dem Server kennt ihn nicht; 0.5.9 (gebaut 2026-11-06, `target/debian/opennetmon_0.5.9-1_amd64.deb`, mit Endpunkt und Punkt O) ist noch nicht auf dem Server.
+  dort eine Version mit dem Endpunkt läuft; das Test-Paket 0.5.8 kennt ihn nicht. **v0.5.9 released** (2026-11-08, mit Endpunkt, Punkt O und den Router-Sensoren; auf dem Server läuft seit 2026-11-06 22:41 das gleiche Test-Paket 0.5.9).
 
 ## Offene Punkte (vom Nutzer zu klären)
 

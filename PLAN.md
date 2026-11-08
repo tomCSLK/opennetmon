@@ -932,7 +932,7 @@ ist die Grenze erreicht, danach verdrängen diese beiden die Wechsel ruhiger Sen
    (Seiten, Grenzen, fremder Sensor 404, Leser darf lesen, ohne Anmeldung nicht), Seite enthält die neuen Elemente. Im Browser mit Wegwerfkopie
    und einem Sensor mit > 100 Wechseln: Blättern, Seitengröße, Neuladen, neuer Wechsel auf Seite 1 und 3, Messwerttabelle blättert wie vorher,
    hell/dunkel, 360/430/1280 px.
-9. **Auslieferung:** zusammen mit Vorhaben N im nächsten Test-Paket (Version über 0.5.8), Release nur auf Ansage. Test-Paket 0.5.9 gebaut 2026-11-06 (Endpunkt, O), Update auf dem Server steht aus.
+9. **Auslieferung:** zusammen mit Vorhaben N im nächsten Test-Paket (Version über 0.5.8), Release nur auf Ansage. Test-Paket 0.5.9 gebaut 2026-11-06 (Endpunkt, O), läuft auf dem Server; als **v0.5.9 released** (2026-11-08).
 
 Entschieden (Nutzer, 2026-11-02): 1000 Wechsel je Sensor, Zeilen färben. Unabhängig davon: die Grenze am Huawei-Verbindungssensor (z. B. erst
 unter 1 Balken warnen) und am pendelnden Ping-Sensor (Paketverlust) prüfen – das ist Einstellung, kein Code.
