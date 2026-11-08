@@ -345,6 +345,7 @@ Vertrag (Quelle: `SecurityDashboad/src/inventory/opennetmon.rs`), wie umgesetzt:
     (`storage::devices::set_identity`, `list_inventory`). Geräte ohne SNMP-Sensoren werden nicht gefragt (ihre Felder bleiben leer).
 - **Danach:** in opensecmon unter Assets → „Import aus opennetmon“ Adresse und Token eintragen (Browser-Schritt des Nutzers). Das Token erst auf dem Server anlegen, nachdem
   dort eine Version mit dem Endpunkt läuft; das Test-Paket 0.5.8 kennt ihn nicht. **v0.5.9 released** (2026-11-08, mit Endpunkt, Punkt O und den Router-Sensoren; auf dem Server läuft seit 2026-11-06 22:41 das gleiche Test-Paket 0.5.9).
+  Danach (2026-11-08): lokale Temperatursensoren überstehen umbenannte Chips, Gerätevorlagen übernehmen Intervall und Abhängigkeit; **Test-Paket 0.5.10** gebaut (`target/debian/opennetmon_0.5.10-1_amd64.deb`, SHA-256 `b1ea6bc4…`, kein Tag), die Installation auf dem Server macht der Nutzer selbst.
 
 ## Offene Punkte (vom Nutzer zu klären)
 
