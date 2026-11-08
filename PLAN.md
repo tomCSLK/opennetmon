@@ -944,6 +944,18 @@ Verworfen: alle Wechsel ins HTML schreiben und im Browser blättern (bei N = 100
 
 - Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen außer dem Master noch nicht.
 - ER605: liefert inzwischen viele Werte, nicht mehr nur Ping (laut Nutzer, 2026-10-27); die Omada-API ist dafür nicht nötig.
+- **Lokale Temperatursensoren nach einem Kernel-Update weg** (Befund 2026-11-07, Ubuntu 26.04, Kernel 7.0.0-38 → 7.0.0-43):
+  Der hwmon-Baustein des Intel-PCH hieß vorher `pch_skylake_0`, danach `pch_skylake` (`/sys/class/hwmon/*/name`).
+  `local::temperatures()` baut den Schlüssel `<name>/<label>` wörtlich aus diesem Namen, der Sensor
+  `temp:pch_skylake_0/temp1` lief danach auf „sensor-bad-value … not found“ und ging auf `down`. `coretemp/Package id 0`
+  blieb. Behoben auf der Betriebsinstanz von Hand per `UPDATE sensors SET target = …` (Doku in
+  `Serveradmin/CLAUDE.md`, Protokoll 2026-11-07 15:47), weil die Einstellungsseite das Ziel lokaler Sensoren nicht
+  ändern kann. Vorschläge: (1) beim Lesen ausweichen, wenn der Schlüssel fehlt: Name ohne bzw. mit angehängtem
+  `_<zahl>` vergleichen und genau einen passenden Baustein mit demselben Label nehmen (mehrdeutig → Fehler wie bisher);
+  besser zusätzlich (2) beim Anlegen den Gerätepfad merken (`device` → z. B. `thermal_zone0` bzw. PCI-Adresse), der
+  zwischen Kernel-Versionen stabiler ist als der Name; (3) im Formular „Sensor bearbeiten“ für lokale Sensoren das Ziel
+  aus der aktuellen Liste wählbar machen (Verlauf bleibt); (4) Meldung im Protokoll mit Hinweis „Baustein umbenannt?
+  verfügbar: …“. Gleiches Risiko bei `#2`-Schlüsseln, wenn sich die Reihenfolge der hwmon-Bausteine ändert.
 
 ## Bewusst nicht im MVP
 
