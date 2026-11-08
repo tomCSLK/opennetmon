@@ -942,9 +942,9 @@ Verworfen: alle Wechsel ins HTML schreiben und im Browser blättern (bei N = 100
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
-- Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen außer dem Master noch nicht.
+- ~~Gerätevorlagen übernehmen das Intervall je Sensor und die Abhängigkeitseinstellungen noch nicht.~~ Umgesetzt 2026-11-08 (`templates::Extras`, `DependencyRule`): Intervall und Abhängigkeit (keine, von einem Sensor der Vorlage per Name, Verzögerung) gehen in die Vorlage und werden beim Anwenden gesetzt; Abhängigkeit von einem Sensor eines anderen Geräts bleibt nur als Verzögerung; bei „aktive/alle Ports“ nur, wenn alle Quellsensoren sie teilen.
 - ER605: liefert inzwischen viele Werte, nicht mehr nur Ping (laut Nutzer, 2026-10-27); die Omada-API ist dafür nicht nötig.
-- **Lokale Temperatursensoren nach einem Kernel-Update weg** (Befund 2026-11-07, Ubuntu 26.04, Kernel 7.0.0-38 → 7.0.0-43):
+- **Lokale Temperatursensoren nach einem Kernel-Update weg – umgesetzt 2026-11-08** (Vorschläge 1, 3 und 4; 2 „Gerätepfad merken“ bewusst nicht): `local::find_temperature` weicht auf den einzigen Baustein aus, der sich nur im `_<zahl>` des Chipnamens unterscheidet, die Fehlermeldung nennt ähnliche Eingänge, und die Einstellungsseite hat die Auswahl „Temperatur-Eingang“ (Verlauf bleibt). Befund 2026-11-07, Ubuntu 26.04, Kernel 7.0.0-38 → 7.0.0-43):
   Der hwmon-Baustein des Intel-PCH hieß vorher `pch_skylake_0`, danach `pch_skylake` (`/sys/class/hwmon/*/name`).
   `local::temperatures()` baut den Schlüssel `<name>/<label>` wörtlich aus diesem Namen, der Sensor
   `temp:pch_skylake_0/temp1` lief danach auf „sensor-bad-value … not found“ und ging auf `down`. `coretemp/Package id 0`
