@@ -323,7 +323,7 @@ Neues Video: wieder per Upload in der Weboberfläche, Datei unter 10 MB.
 **Vor jedem Abschluss einer Aufgabe:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`
 und `cargo test` müssen fehlerfrei durchlaufen.
 
-## Inventar-Endpunkt für opensecmon (umgesetzt 2026-11-06, Branch `router-sensors`, nicht released)
+## Inventar-Endpunkt für opensecmon (umgesetzt 2026-11-06, in v0.5.9 released)
 
 opensecmon (`../SecurityDashboad/`, Phase 6c) liest die Geräte von opennetmon und schlägt daraus Assets vor. Der Nutzer wollte den Endpunkt
 zuerst selbst bauen und hat ihn am 2026-11-06 doch in Auftrag gegeben („committe und umsetzen“). Doku für Anwender: `docs/api.md` (Englisch).
@@ -345,7 +345,7 @@ Vertrag (Quelle: `SecurityDashboad/src/inventory/opennetmon.rs`), wie umgesetzt:
     (`storage::devices::set_identity`, `list_inventory`). Geräte ohne SNMP-Sensoren werden nicht gefragt (ihre Felder bleiben leer).
 - **Danach:** in opensecmon unter Assets → „Import aus opennetmon“ Adresse und Token eintragen (Browser-Schritt des Nutzers). Das Token erst auf dem Server anlegen, nachdem
   dort eine Version mit dem Endpunkt läuft; das Test-Paket 0.5.8 kennt ihn nicht. **v0.5.9 released** (2026-11-08, mit Endpunkt, Punkt O und den Router-Sensoren; auf dem Server läuft seit 2026-11-06 22:41 das gleiche Test-Paket 0.5.9).
-  Danach (2026-11-08): lokale Temperatursensoren überstehen umbenannte Chips, Gerätevorlagen übernehmen Intervall und Abhängigkeit; **Test-Paket 0.5.10** gebaut (`target/debian/opennetmon_0.5.10-1_amd64.deb`, SHA-256 `b1ea6bc4…`, kein Tag), die Installation auf dem Server macht der Nutzer selbst.
+  Danach (2026-11-08): lokale Temperatursensoren überstehen umbenannte Chips, Gerätevorlagen übernehmen Intervall und Abhängigkeit; **Test-Paket 0.5.10** gebaut (`target/debian/opennetmon_0.5.10-1_amd64.deb`, SHA-256 `b1ea6bc4…`, kein Tag), die Installation auf dem Server macht der Nutzer selbst (läuft dort seit 2026-11-08 17:11).
 
 ## Offene Punkte (vom Nutzer zu klären)
 
@@ -367,8 +367,8 @@ Vertrag (Quelle: `SecurityDashboad/src/inventory/opennetmon.rs`), wie umgesetzt:
 - Geplant (2026-10-27, `PLAN.md`, „Weitere Vorhaben E–M“; E, G, H, I, J, M jetzt, F, K, L in einer späteren Version): E Sensoren HTTP(S)/TCP/DNS/TLS-Zertifikat,
   F Push (ntfy, Gotify, Telegram, Webhook), G Verfügbarkeit und Berichte, H `cargo audit` in der CI, I Hinweis auf neue Versionen, J Wartungsfenster nach Zeitplan,
   K Zwei-Faktor-Anmeldung (TOTP), L Rotation von `secret.key`, M Änderungsprotokoll
-- Vorhaben N (2026-10-30, `PLAN.md`): Sensoren für die vorgeschalteten Router, Typen `fritzbox` (UPnP-IGD) und `huawei` (HiLink-API); Stufe 1 ohne Anmeldung gebaut (Branch `router-sensors`,
-  nicht released, Test-Paket 0.5.8 ohne Tag läuft seit 2026-10-30 auf dem Server), später Anmeldeprofile (`login_profiles`) für DOCSIS-Werte der FRITZ!Box
+- Vorhaben N (2026-10-30, `PLAN.md`): Sensoren für die vorgeschalteten Router, Typen `fritzbox` (UPnP-IGD) und `huawei` (HiLink-API); Stufe 1 ohne Anmeldung gebaut und in
+  v0.5.9 released (2026-11-08, Branch `router-sensors` ist in `main` aufgegangen), später Anmeldeprofile (`login_profiles`) für DOCSIS-Werte der FRITZ!Box
 
 Geklärt: GitHub-Repo `tomCSLK/opennetmon` ist seit 2026-10-22 **öffentlich** (Historie ohne Secrets; Site-Name, SNMP-Benutzer und private Adressen
 stehen nur noch in alten Commits, wie vereinbart nicht umgeschrieben; Autor-Adresse bleibt), mit „Private vulnerability reporting“, Dependabot-Warnungen,

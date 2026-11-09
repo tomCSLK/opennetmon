@@ -3,7 +3,14 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-10-30, Release v0.5.7)
+## Stand (2026-11-09, Release v0.5.9, Test-Paket 0.5.10)
+
+**Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
+opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
+Tag, läuft auf dem Server) enthält zwei Korrekturen: lokale Temperatursensoren überstehen einen umbenannten hwmon-Baustein und das Ziel ist auf der
+Einstellungsseite wählbar, und Gerätevorlagen übernehmen Intervall und Abhängigkeit je Sensor. Keine neue Migration (0001–0025).
+
+**Stand bei v0.5.7 (2026-10-30):**
 
 Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft als `.deb` auf dem Ubuntu-Server des Nutzers (dort seit 2026-10-30
 0.5.7); die Instanz auf dem Laptop dient nur noch zum Testen. **v0.5.7** (2026-10-30) ändert nur das Design: violette Seitenleiste, violett getöntes dunkles
@@ -121,13 +128,13 @@ opennetmon/
   Cargo.toml, CLAUDE.md, PLAN.md, README.md, CONTRIBUTING.md, SECURITY.md, LICENSE, THIRD-PARTY-LICENSES.txt
   .github/              # CI (workflows/ci.yml), Issue- und Pull-Request-Vorlagen
   src/
-    main.rs             # CLI: serve (Standard), user add|passwd|list, key generate, backup, tls generate
-    lib.rs, config.rs, error.rs, i18n.rs, tls.rs, http_client.rs, update_check.rs
+    main.rs             # CLI: serve (Standard), user add|passwd|list, key generate, backup <datei>, tls generate
+    lib.rs, config.rs, error.rs, i18n.rs, tls.rs, http_client.rs, update_check.rs, audit.rs (Änderungsprotokoll)
     auth/               # Rollen, Argon2, Tokens, Validierung, throttle (Anmeldeversuche)
     crypto.rs           # SecretBox (XChaCha20-Poly1305), Schlüsseldatei
     credentials.rs      # SNMP-Profile
     devices.rs          # Geräte, Gruppen, Gerätetypen
-    snmp/               # SnmpClient, probe; testagent.rs (Fake-v2c-Agent, nur Tests)
+    snmp/               # SnmpClient, probe, identity (sysDescr/sysObjectID); testagent.rs (Fake-v2c-Agent, nur Tests)
     discovery.rs        # Interface-Discovery
     mib/                # Lexer, Parser, Index, catalog (bekannte Tabellen)
     value_discovery.rs  # „Werte suchen“
@@ -136,18 +143,18 @@ opennetmon/
     pause.rs            # Pausen und ihre Vererbung
     schedule.rs         # Wartungsfenster: Fenster, Zeitzone
     availability.rs     # Verfügbarkeit: Zählung, Rechnung, Geräte
-    sensors/            # Trait Sensor, ping, snmp, local (Dieser Server), spec, counter, format
+    sensors/            # Trait Sensor, ping, snmp, local (Dieser Server), service/dns (Dienste), fritzbox, huawei, xml, spec, counter, format
     status.rs           # Schwellwerte, Bewertungen, Zustandsautomat
     poller.rs           # Supervisor, eine Aufgabe je Gerät
     maintenance.rs      # Rollups, Retention
     alerting.rs, mail.rs, mail/   # Benachrichtigung, SMTP (testsmtp.rs nur Tests)
-    storage/            # Repository je Thema (users, credentials, groups, devices, sensors, status, pauses, measurements, mail, mibs, templates)
+    storage/            # Repository je Thema (users, credentials, groups, devices, sensors, status, pauses, schedules, availability, measurements, mail, mibs, templates, audit, api_tokens)
     web/                # Router, Handler je Seite, assets, testutil.rs (nur Tests)
   templates/            # askama
   static/               # app.css, eigene Skripte (theme, app, chart, refresh, order, samples, time, …), vendor/uplot
   locales/              # de/, en/ (Fluent)
   mibs/                 # mitgelieferte Standard-MIBs
-  migrations/           # 0001–0021
+  migrations/           # 0001–0025
   examples/snmp_probe.rs
   tests/                # snmp_local.rs (lokaler snmpd), omada_manual.rs (echte Hardware, #[ignore])
   deploy/               # Unit, Installer, Backup, sysctl, Proxy-Beispiele, deb/ (Maintainer-Skripte)
@@ -764,7 +771,7 @@ Maße (`height: auto`). Gemessen nachher per Skript auf allen Seiten, hell und d
 Formulare 36 px, Kartenköpfe 30 px bzw. 28 px für Symbolknöpfe), Filterleiste 49 px, Kartenkopf 51 px; Handy 390 px ohne
 waagerechtes Scrollen.
 
-### N. Sensoren für die vorgeschalteten Router (FRITZ!Box, Huawei 5G) – Stufe 1 gebaut 2026-10-30 (Branch `router-sensors`), nicht released
+### N. Sensoren für die vorgeschalteten Router (FRITZ!Box, Huawei 5G) – Stufe 1 gebaut 2026-10-30, in v0.5.9 released (2026-11-08)
 
 **Stand 2026-10-30:** Grundlage und beide Sensoren der Stufe 1 sind gebaut und laufen in einer Testinstanz auf dem Laptop gegen die echten Router. Der Server hängt laut
 Nutzer im selben Netz und erreicht beide Router ebenso (Grundlage 1 damit geklärt; nicht gemessen, das zeigt das Test-Paket). Gegenüber dem Plan unten geändert: Statt Feldern im Formular führt der Typ in „Sensor
@@ -885,7 +892,7 @@ und falsche Passwörter sperren den Zugang. Empfehlung: zurückstellen, für ein
 - Wie immer: `cargo fmt`, `clippy`, `cargo test`; `docs/sensors.md`, `README.md`, `CLAUDE.md` nachziehen. Erst Test-Paket auf dem Server, Release nur auf Ansage.
 - **Abnahme:** gegen die echten Geräte, zwei Abfragen im Abstand, Werte mit den Oberflächen der Geräte vergleichen.
 
-### O. „Letzte Statuswechsel“ der Sensorseite in Seiten – umgesetzt 2026-11-06 (Branch `router-sensors`, nicht released)
+### O. „Letzte Statuswechsel“ der Sensorseite in Seiten – umgesetzt 2026-11-06, in v0.5.9 released (2026-11-08)
 
 **Umgesetzt wie unten geplant** (Nutzer, 2026-11-06: „umsetzen“): 1000 Wechsel je Sensor (`EVENTS_KEPT_PER_SENSOR`), `problem_log` auf 500 Einträge begrenzt (`LOG_ENTRIES`; beim
 Geräte- oder Sensorprotokoll zählt die Grenze innerhalb des Geräts bzw. Sensors, Parameter `only`), Endpunkt `GET /sensors/<id>/events?offset=&limit=&anchor=`, `static/pager.js`

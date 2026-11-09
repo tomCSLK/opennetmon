@@ -64,7 +64,7 @@ Working state after MVP step 6 of 6. Details and order: [`PLAN.md`](PLAN.md).
 - **Users:** administrators and readers; managed in the UI (create, change role, set password, delete; the last administrator stays protected); an audit log for administrators (who changed what and when, old → new, sign-ins; never secrets); signed out after 30 minutes without activity (configurable; an exception per user for wall displays); under “My account” everyone changes their own password and language. The first administrator is created on the command line.
 - **Devices without SNMP:** add routers, printers, cameras or websites without SNMP as “No SNMP – ping and services”; the ping sensor is added automatically.
 - **Status values:** rate named values (e.g. PoE status overload, fan failed, port down) individually as OK, warning or down; new sensors get a suggestion based on the names.
-- **Device templates:** save the sensors of a fully set-up device as a template (ports as “active”, “all” or “the same”) and apply it automatically to further devices by their device ID (`sysObjectID`); only missing sensors are created.
+- **Device templates:** save the sensors of a fully set-up device as a template (ports as “active”, “all” or “the same”) and apply it automatically to further devices by their device ID (`sysObjectID`); only missing sensors are created. Templates also keep each sensor's polling interval and dependency (on another sensor of the template, with the delay).
 - **MIB files:** standard MIBs built in, vendor MIBs (e.g. TP-Link) by upload, listed by vendor (from the enterprise number of their objects) with problems first and a filter; custom OID sensors by name instead of a string of numbers, with type, unit and plain text for status values from the MIB.
 - **Charts:** [uPlot](https://github.com/leeoniya/uPlot), bundled locally (no CDN); all times (charts and tables) in the browser's time zone.
 - **Log:** warnings, outages, recoveries, pauses, dependencies and maintenance windows of all sensors, searchable and sortable by every column; the “Log” button of a device or sensor opens just its entries.
@@ -114,6 +114,7 @@ retention_raw_days = 7
 retention_hourly_days = 365                # daily values are kept forever
 retention_audit_days = 365                 # audit log (changes, sign-ins)
 update_check = false                       # once a day ask GitHub for a newer release (on in the installed config)
+# client_ip_header = "x-forwarded-for"     # behind a reverse proxy: where the real client address is (or "x-real-ip")
 # time_zone = "Europe/Berlin"              # zone of the maintenance windows; unset = the system's
 ```
 
