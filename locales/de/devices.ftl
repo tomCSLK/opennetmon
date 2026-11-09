@@ -95,3 +95,11 @@ device-kind-printer = Drucker
 device-kind-camera = Kamera
 device-kind-smart-home = Smart Home / IoT
 device-kind-internet = Internetdienst
+
+attention-title = Braucht Aufmerksamkeit
+attention-count = { $count } von { $total } Sensoren
+attention-more =
+    { $count ->
+        [one] 1 weiterer in der Sensorliste
+       *[other] { $count } weitere in der Sensorliste
+    }

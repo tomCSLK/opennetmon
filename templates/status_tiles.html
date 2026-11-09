@@ -1,6 +1,7 @@
 {# Status tiles of the overview and the status lists (needs `tiles`). -#}
+{% import "icons.html" as icons %}
 <section class="tiles" aria-label="{{ t.get("overview-sensor-status") }}">
   {% for tile in tiles %}
-  <a class="tile{{ tile.class }}" href="{{ tile.href }}"{% if tile.current %} aria-current="page"{% endif %}><div class="tile-value">{{ tile.count }}</div><div class="tile-label">{{ tile.label }}</div></a>
+  <a class="tile{{ tile.class }}" href="{{ tile.href }}"{% if tile.current %} aria-current="page"{% endif %}><div class="tile-label">{{ crate::web::icon(tile.kind, "")|safe }}{{ tile.label }}</div><div class="tile-value">{{ tile.count }}</div></a>
   {% endfor %}
 </section>

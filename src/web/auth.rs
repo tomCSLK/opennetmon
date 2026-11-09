@@ -55,6 +55,10 @@ pub struct CurrentUser {
     pub update: Option<crate::update_check::Release>,
     /// Address of the client (behind a proxy from `client_ip_header`), for the audit log.
     pub address: Option<std::net::IpAddr>,
+    /// Path of the request, for the navigation of the settings.
+    pub path: String,
+    /// Sensors per status for the header, counted for pages only (see [`is_page`]).
+    pub counts: Option<crate::web::HeaderCounts>,
 }
 
 impl CurrentUser {
@@ -87,6 +91,8 @@ impl CurrentUser {
             is_admin: self.role.is_admin(),
             session_left: self.session_left,
             update: self.update.clone(),
+            path: self.path.clone(),
+            counts: self.counts,
         }
     }
 }
@@ -103,6 +109,8 @@ impl CurrentUser {
             session_left,
             update: None,
             address: None,
+            path: String::new(),
+            counts: None,
         }
     }
 }
@@ -113,15 +121,19 @@ fn is_activity(parts: &Parts) -> bool {
     if parts.method != Method::GET && parts.method != Method::HEAD {
         return true;
     }
-    let page = match parts.headers.get("sec-fetch-mode") {
+    is_page(parts) && cookie_value(&parts.headers, AUTO_RELOAD_COOKIE).is_none()
+}
+
+/// Whether the browser asks for a page (opened or sent as a form), not a script for data.
+fn is_page(parts: &Parts) -> bool {
+    match parts.headers.get("sec-fetch-mode") {
         Some(mode) => mode == "navigate",
         None => parts
             .headers
             .get(header::ACCEPT)
             .and_then(|v| v.to_str().ok())
             .is_some_and(|v| v.contains("text/html")),
-    };
-    page && cookie_value(&parts.headers, AUTO_RELOAD_COOKIE).is_none()
+    }
 }
 
 /// The preferred supported language of the browser (`Accept-Language`), German otherwise.
@@ -191,8 +203,16 @@ impl FromRequestParts<AppState> for CurrentUser {
         let left = idle.map(|limit| limit.saturating_sub(now.saturating_sub(last_seen)));
         let mut user = Self::from_session(session, &parts.headers, left);
         user.address = address;
+        user.path = parts.uri.path().to_owned();
         if user.role.is_admin() {
             user.update = state.latest_release.get();
+        }
+        // The counters of the header; a page without them is better than no page.
+        if is_page(parts) {
+            user.counts = crate::web::status_list::header_counts(state)
+                .await
+                .inspect_err(|e| tracing::warn!(error = %e, "header counts unavailable"))
+                .ok();
         }
         // Error pages of this request use the user's language as well.
         i18n::set_current(user.lang);
@@ -711,7 +731,7 @@ mod tests {
         let h = harness(false).await;
         let (admin, _) = login(&h, "anna").await;
         let (viewer, _) = login(&h, "bert").await;
-        let hint = "class=\"sidebar-update\"";
+        let hint = "class=\"updbadge\"";
         assert!(
             !send(&h.app, get("/", Some(&admin)))
                 .await
@@ -730,7 +750,18 @@ mod tests {
         assert!(
             page.contains("href=\"https://github.com/example/opennetmon/releases/tag/v9.1.0\"")
         );
-        assert!(page.contains("9.1.0"));
+        assert!(page.contains("Neue Version 9.1.0"));
+        assert!(page.contains("href=\"/settings/updates\""));
+        // The settings page names it as well, with the package to install.
+        let updates = send(&h.app, get("/settings/updates", Some(&admin))).await;
+        assert_eq!(updates.status, StatusCode::OK);
+        assert!(updates.body.contains("opennetmon_9.1.0-1_amd64.deb"));
+        assert_eq!(
+            send(&h.app, get("/settings/updates", Some(&viewer)))
+                .await
+                .status,
+            StatusCode::FORBIDDEN
+        );
         let page = send(&h.app, get("/", Some(&viewer))).await.body;
         assert!(!page.contains(hint));
         assert!(!page.contains("9.1.0"));
@@ -748,6 +779,8 @@ mod tests {
             session_left: None,
             update: None,
             address: None,
+            path: String::new(),
+            counts: None,
         };
         assert!(user(Role::Admin).require_admin().is_ok());
         assert!(matches!(

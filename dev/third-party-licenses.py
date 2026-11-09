@@ -22,6 +22,8 @@ LICENSE_FILE = re.compile(r"^(licen[cs]e|copying|notice|unlicense)([-._].*)?$", 
 
 BUNDLED = [
     ("uPlot 1.6.32", "static/vendor/uplot/", "MIT", "static/vendor/uplot/LICENSE"),
+    ("Fira Sans (Fontsource 5.3.0)", "static/fonts/fira-sans-*.woff2", "OFL-1.1", "static/fonts/OFL-fira-sans.txt"),
+    ("Fira Code (Fontsource 5.3.0)", "static/fonts/fira-code-*.woff2", "OFL-1.1", "static/fonts/OFL-fira-code.txt"),
 ]
 MIB_NOTE = (
     "Standard MIB modules (mibs/): taken from IETF RFCs (via net-snmp 5.9.4 and RFC 4133/3433, see\n"

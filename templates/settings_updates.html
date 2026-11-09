@@ -1,0 +1,46 @@
+{% extends "app.html" %}
+{% import "icons.html" as icons %}
+{% block title %}{{ t.get("nav-updates") }} – opennetmon{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ t.get("nav-updates") }}</h1>
+    <p class="subtitle">{{ t.get("updates-subtitle") }}</p>
+  </div>
+</div>
+
+{% if let Some(release) = release %}
+<p class="notice" role="status">{{ crate::web::icon("update", "")|safe }}<span>{{ t.get2("update-released", "version", release.version.as_str(), "installed", crate::web::VERSION) }} <a href="{{ release.url }}" target="_blank" rel="noopener noreferrer">{{ t.get("update-whats-new") }}</a></span></p>
+{% else if checked.is_some() %}
+<p class="flash" role="status">{{ crate::web::icon("up", "")|safe }}<span>{{ t.get1("updates-current", "version", crate::web::VERSION) }}</span></p>
+{% endif %}
+
+<section class="card">
+  <h2>{{ t.get("updates-version") }}</h2>
+  <dl class="kv">
+    <dt>{{ t.get("updates-installed") }}</dt><dd><code>{{ crate::web::VERSION }}</code></dd>
+    <dt>{{ t.get("updates-latest") }}</dt>
+    <dd>{% if let Some(release) = release %}<code>{{ release.version }}</code>{% else if checked.is_some() %}<code>{{ crate::web::VERSION }}</code>{% else %}<span class="muted">{{ t.get("updates-unknown") }}</span>{% endif %}</dd>
+    <dt>{{ t.get("updates-checked") }}</dt>
+    <dd>{% if let Some(when) = checked %}{{ when|safe }}{% else if check_on %}<span class="muted">{{ t.get("updates-not-yet") }}</span>{% else %}<span class="muted">–</span>{% endif %}</dd>
+    <dt>{{ t.get("updates-check") }}</dt>
+    <dd>{% if check_on %}{{ t.get("updates-check-on") }}{% else %}{{ t.get("updates-check-off") }}{% endif %} <span class="muted">{{ t.get("updates-check-hint") }}</span></dd>
+    <dt>{{ t.get("source-code") }}</dt>
+    <dd><a href="{{ crate::web::SOURCE_URL }}">{{ crate::web::SOURCE_URL }}</a> (AGPL-3.0-or-later)</dd>
+  </dl>
+</section>
+
+<section class="card updsteps">
+  <h2>{{ t.get("updates-how") }}</h2>
+  <ol>
+    <li>{{ t.get1("updates-step-download", "file", package.as_str()) }}</li>
+    <li>{{ t.get("updates-step-install") }}</li>
+  </ol>
+  <pre class="codebox">sha256sum -c --ignore-missing SHA256SUMS
+sudo systemctl start opennetmon-backup
+sudo apt install ./{{ package }}</pre>
+  <p class="hint">{{ t.get("updates-after") }}</p>
+</section>
+
+{% if check_on %}<p class="hint">{{ t.get1("updates-privacy", "version", crate::web::VERSION) }}</p>{% endif %}
+{% endblock %}

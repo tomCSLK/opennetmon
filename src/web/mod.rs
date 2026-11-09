@@ -11,6 +11,8 @@ pub mod dependency;
 pub mod devices;
 mod error_page;
 pub mod groups;
+mod icons;
+pub use icons::icon;
 pub mod log;
 pub mod mail_settings;
 pub mod mibs;
@@ -26,6 +28,7 @@ pub mod sensor_text;
 pub mod sensor_values;
 pub mod sensors;
 pub mod server_values;
+mod settings;
 pub mod sparkline;
 pub mod status_list;
 pub mod templates;
@@ -72,6 +75,8 @@ pub struct AppState {
     mibs: Arc<std::sync::RwLock<Arc<crate::mib::MibIndex>>>,
     /// Filled by the update check (config `update_check`), shown to administrators.
     pub latest_release: crate::update_check::Latest,
+    /// Whether the update check runs (config `update_check`), for the page Settings → Updates.
+    pub update_check: bool,
 }
 
 impl AppState {
@@ -86,6 +91,7 @@ impl AppState {
             client_ip_header: config.client_ip_header,
             mibs: Arc::new(std::sync::RwLock::new(crate::mib::bundled_index())),
             latest_release: crate::update_check::Latest::default(),
+            update_check: config.update_check,
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
                 .unwrap_or(i64::MAX),
             session_idle_secs: (config.session_idle_minutes > 0)
@@ -274,6 +280,8 @@ pub fn router(state: AppState) -> Router {
             get(mail_settings::show).post(mail_settings::save),
         )
         .route("/settings/mail/test", post(mail_settings::send_test))
+        .route("/settings", get(settings::index))
+        .route("/settings/updates", get(settings::updates))
         .route("/mibs", get(mibs::show))
         .route(
             "/mibs/upload",
@@ -536,12 +544,25 @@ pub fn iso_time_html(iso: &str) -> String {
     format!("<time class=\"ts\" datetime=\"{clean}\">{text} UTC</time>")
 }
 
+/// `text` as the value of a query parameter: everything but letters, digits and `-._~` percent-encoded.
+pub fn url_param(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for b in text.bytes() {
+        if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+            out.push(char::from(b));
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 /// Where this program's source code is offered to its users (AGPL-3.0, section 13); `repository` in Cargo.toml.
 pub const SOURCE_URL: &str = env!("CARGO_PKG_REPOSITORY");
 /// Program version shown next to the source link.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Data every logged-in page needs for the header (navigation, user, logout form).
+/// Data every logged-in page needs for the header (navigation, user menu, logout form).
 pub struct Layout {
     pub username: String,
     pub role_label: String,
@@ -551,16 +572,77 @@ pub struct Layout {
     pub session_left: Option<i64>,
     /// A newer release found by the update check; shown to administrators only.
     pub update: Option<crate::update_check::Release>,
+    /// Path of the request.
+    pub path: String,
+    /// Sensors up, in warning and down, for the counters in the header (`None`: not shown).
+    pub counts: Option<HeaderCounts>,
+}
+
+/// The counters in the header: sensors up, in warning and down (paused and unknown ones are left out).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HeaderCounts {
+    pub up: usize,
+    pub warning: usize,
+    pub down: usize,
+}
+
+/// The pages of the settings area (administrators only): key, address, label and the paths that belong to it.
+pub const SETTINGS: [(&str, &str, &str, &[&str]); 8] = [
+    (
+        "credentials",
+        "/credentials",
+        "nav-credentials",
+        &["/credentials"],
+    ),
+    ("users", "/users", "nav-users", &["/users"]),
+    ("mail", "/settings/mail", "nav-mail", &["/settings/mail"]),
+    ("templates", "/templates", "nav-templates", &["/templates"]),
+    ("schedules", "/schedules", "nav-schedules", &["/schedules"]),
+    ("api", "/api-tokens", "nav-api-tokens", &["/api-tokens"]),
+    ("mibs", "/mibs", "nav-mibs", &["/mibs"]),
+    (
+        "updates",
+        "/settings/updates",
+        "nav-updates",
+        &["/settings/updates"],
+    ),
+];
+
+/// An entry of the navigation of the settings area.
+pub struct SettingsLink {
+    pub key: &'static str,
+    pub href: &'static str,
+    /// Message id of the label.
+    pub label: &'static str,
+    pub current: bool,
 }
 
 impl Layout {
-    /// First letter of the user name for the avatar.
-    pub fn initial(&self) -> String {
-        self.username
-            .chars()
-            .next()
-            .map(|c| c.to_uppercase().collect())
-            .unwrap_or_default()
+    /// The entries of the settings navigation, the current page marked.
+    pub fn settings_nav(&self) -> Vec<SettingsLink> {
+        let current = self.settings_section();
+        SETTINGS
+            .iter()
+            .map(|(key, href, label, _)| SettingsLink {
+                key,
+                href,
+                label,
+                current: current == Some(*key),
+            })
+            .collect()
+    }
+
+    /// The page of the settings area this request belongs to (`None` outside the settings).
+    pub fn settings_section(&self) -> Option<&'static str> {
+        if !self.is_admin {
+            return None;
+        }
+        SETTINGS.iter().find_map(|(key, _, _, prefixes)| {
+            prefixes
+                .iter()
+                .any(|p| self.path == *p || self.path.starts_with(&format!("{p}/")))
+                .then_some(*key)
+        })
     }
 }
 

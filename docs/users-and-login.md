@@ -29,7 +29,7 @@ Under **Settings → Users**:
 
 ## My account (`/account`, all users)
 
-Reached through the name and role at the bottom of the sidebar. Shows user name and role, chooses **your own language** and changes **your own password**:
+Reached through the user menu (person icon at the right of the header) → “My account”. Shows user name and role, chooses **your own language** and changes **your own password**:
 
 - You need the current password and the new one twice (10 to 128 characters, different from the current one).
 - Wrong current passwords count like failed logins for the user name (`auth::throttle`); from 5 failed attempts on, requests are slowed down.
@@ -76,7 +76,7 @@ Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), pas
 
 ## Audit log (`/audit`, administrators only)
 
-“Changes” in the sidebar lists who changed what and when, newest first (at most the latest 2,000 on the page, with a filter field; a click on a
+“Changes” in the header lists who changed what and when, newest first (at most the latest 2,000 on the page, with a filter field; a click on a
 user name shows only that user's entries):
 
 - created, changed and deleted groups, devices, sensors, SNMP profiles, users, device templates, MIB files and schedules, the mail settings,

@@ -434,8 +434,12 @@ mod tests {
                 "{path}"
             );
         }
-        let home = send(&h.app, get("/", Some(&admin))).await;
-        assert!(home.body.contains("href=\"/settings/mail\""));
+        let settings = send(&h.app, get("/settings/mail", Some(&admin))).await;
+        assert!(
+            settings
+                .body
+                .contains("<a href=\"/settings/mail\" aria-current=\"page\">")
+        );
         assert!(
             !crate::storage::mail::get_view(&h.state.pool)
                 .await

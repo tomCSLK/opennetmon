@@ -3,9 +3,8 @@
 
 ## Navigation and page frame
 
-nav-menu = Menu
+nav-home = opennetmon, to the overview
 nav-main = Main navigation
-nav-monitoring = Monitoring
 nav-overview = Overview
 nav-settings = Settings
 nav-credentials = SNMP profiles
@@ -13,12 +12,53 @@ nav-users = Users
 nav-mail = E-mail
 nav-templates = Device templates
 nav-mibs = MIB files
+nav-updates = Updates
 nav-account = My account
-nav-theme = Theme
-nav-theme-toggle = Toggle theme
+nav-user-menu = User menu
+nav-signed-in-as = Signed in as
+nav-theme-toggle = Switch light / dark
 nav-logout = Sign out
-update-available = Version { $version } available
 source-code = Source code
+search-label = Search
+search-placeholder = Search devices or sensors
+search-short = Search
+search-for = search “{ $text }”
+search-clear = clear search
+keys-title = Keyboard shortcuts
+keys-search = Open the search (sensor, device, address, group or message)
+keys-go-overview = Go to the overview
+keys-go-log = Go to the log
+keys-go-reports = Go to the reports
+keys-go-changes = Go to the changes
+keys-go-settings = Go to the settings
+keys-help = This help
+keys-close = Close
+
+## New versions (administrators only): badge in the header and Settings → Updates
+
+update-badge = New version { $version }
+update-released = opennetmon { $version } has been released (installed: { $installed }).
+update-how = On a server: download the package from the release page, check it against SHA256SUMS and install it with apt (back up first).
+update-whats-new = What's new?
+update-guide = Instructions
+update-foot = Only administrators see this notice. opennetmon downloads and installs nothing by itself.
+updates-subtitle = Installed version, the check for new versions and how to update
+updates-current = opennetmon is up to date ({ $version }).
+updates-version = Version
+updates-installed = Installed
+updates-latest = Latest version
+updates-unknown = unknown, not checked yet
+updates-checked = Last checked
+updates-not-yet = not yet (the first check runs five minutes after the start)
+updates-check = Check
+updates-check-on = once a day at GitHub
+updates-check-off = switched off
+updates-check-hint = (switch update_check in /etc/opennetmon/config.toml)
+updates-how = How to update
+updates-step-download = Download { $file } and SHA256SUMS from the release page.
+updates-step-install = On the server, check, back up and install:
+updates-after = Configuration, key and data stay, the service restarts, new migrations run at startup. Going back to an older version needs the backup, because migrations only run forward.
+updates-privacy = Once a day GitHub sees the address of this server and opennetmon/{ $version }; nothing else is sent. opennetmon downloads and installs nothing by itself; the service lacks the rights to do so.
 
 ## Roles
 

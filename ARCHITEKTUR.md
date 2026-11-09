@@ -4,8 +4,8 @@ Ausgelagert aus `CLAUDE.md` am 2026-11-09 (Text unverändert übernommen, nur Pf
 `CLAUDE.md` klein bleibt. Diese Datei wird **nicht** automatisch geladen: vor Arbeit an einem Modul den passenden Abschnitt lesen, nach Änderungen hier nachziehen.
 Sprache Deutsch wie `CLAUDE.md` und `PLAN.md`. Regeln, die in jeder Sitzung gelten, stehen weiter in `CLAUDE.md`; Stand, Vorhaben und Verlauf in `PLAN.md`.
 
-Der Absatz „Design“ und die Handy-Angaben im Abschnitt „Stack“ beschreiben die **heutige** Oberfläche (violette Seitenleiste, Handy-Menü); sie werden erst mit
-Vorhaben P (`PLAN.md`) geändert.
+Der Absatz „Design“ im Abschnitt „Stack“ beschreibt seit 0.6.0 die neue Oberfläche nach opensecmon (Vorhaben P in `PLAN.md`; bis 0.5.x violette Seitenleiste,
+Fassung in der Git-Historie).
 
 Inhalt: Stack · Funktionsumfang (MVP) · Architektur (mit Messdaten) · Sicherheit · Betrieb auf Ubuntu Server · Releases und README · Inventar-Endpunkt für opensecmon ·
 Ziel und Sprachentscheidung · Python-Fallback (verworfen)
@@ -17,17 +17,30 @@ Ziel und Sprachentscheidung · Python-Fallback (verworfen)
   (kein htmx: am 2026-10-21 gestrichen, die Oberfläche kommt ohne aus).
   JS/CSS lokal vendoren (kein CDN – die Oberfläche soll ohne fremde Server funktionieren), per `rust-embed` ins Binary.
   Kein npm, kein WASM-Frontend.
-- Design: `static/app.css` ist ein kleines Designsystem (Farb-Tokens für hell/dunkel, Seitenleiste, Kacheln, Karten, Badges, Tabellen, Formulare);
-  Seitenleiste violett mit Verlauf, dunkles Schema leicht violett getönt (2026-10-29, wie openpacketmon, `PLAN.md`); Akzent-, Status- und Diagrammfarben bleiben Blau/Grün/Gelb/Rot;
-  Bedienelemente in zwei festen Höhen `--control-h` (36 px) und `--control-h-sm` (≈ 30 px, Kartenköpfe und `.card-tools`), kleine Symbolknöpfe 28 px, `select` ohne Systemstil mit gezeichnetem Pfeil (2026-10-29, `PLAN.md`);
-  Schema folgt dem System, Umschalter in der Seitenleiste (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js` für Umschalter, aktiven Menüpunkt
-  und Handy-Menü). Keine Inline-Styles (CSP): Breiten z. B. des Statusbands der Mini-Graphen als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen
-  und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`).
-  Handy (`docs/devices-and-groups.md`, „Phones“): Zeilenaktionen als Symbole aus den Makros in `templates/icons.html`; Knöpfe der Seitenköpfe im Menü
-  `details.more-actions` (breit eine Knopfreihe, bis 640 px Dropdown über `static/app.js`; `theme.js` setzt die Klasse `js` an `<html>`); auf Geräte-, Gruppen-
-  und Sensorseite steht in der Reihe nur Pausieren/Fortsetzen und Protokoll, die Einrichtung im inneren `details.more-actions.setup` (Dropdown auf jeder Breite,
-  auf dem Handy Einträge des äußeren Menüs unter einer Linie; Sprunglinks wie `#delete` schließen das Menü; Test `page_heads_show_everyday_actions…`); Tabellen bis 640 px
-  als Blöcke (`table.m-cards` + Layoutklasse wie `m-sensors`/`m-log`/`m-simple`, dazu `m-has-status` für `m-simple` mit Statuszelle; jede Zellklasse braucht einen Bereich im Layout, sonst entsteht eine schmale Zusatzspalte; Zellklassen `m-name`, `m-status`, `m-value`, `m-hide` …)
+- Design (seit 0.6.0, Vorhaben P, Vorbild opensecmon): `static/app.css` ist ein kleines Designsystem mit Tokens für hell/dunkel (grau mit ruhigem Blau
+  `--accent` #1c5ea8 bzw. #7aaeea, Zustandsfarben `--ok/--warn/--err/--off` mit `-bg`/`-line`, Diagrammreihen `--s1`…`--s4`), Schriften **Fira Sans** und
+  **Fira Code** lokal in `static/fonts/` (OFL-1.1, Fontsource 5.3.0, in `dev/third-party-licenses.py` unter `BUNDLED`), Radius 6 px, Bedienelemente
+  `--control-h` 32 px und `--control-h-sm` 28 px, Tabellenzeilen `--row-h` 34 px. Alte Variablennamen (`--muted`, `--down` …) sind Aliase der neuen Tokens.
+  Schema folgt dem System; Umschalter (Mond/Sonne) in der Kopfleiste und im Benutzermenü wechselt hell/dunkel, landet er auf dem Schema des Systems, folgt
+  die Seite wieder dem System (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js`). Keine Inline-Styles (CSP): Breiten z. B. des Statusbands der
+  Mini-Graphen als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`).
+- Rahmen (`templates/app.html`): Kopfleiste 48 px mit Logo, Navigation Übersicht/Protokoll/Berichte/Änderungen (Admins; aktiver Eintrag per `data-match`
+  in `static/app.js`), Suche (`/status/all?q=`, Taste `/`), Abzeichen „Neue Version“ (nur Admins, `details.updmenu` mit Hinweis und Links), Statuschip
+  Ok/Warnung/Ausfall (`Layout.counts` aus `status_list::header_counts`, vom Extractor `CurrentUser` nur bei Seitenaufrufen berechnet: `Sec-Fetch-Mode:
+  navigate` oder Accept `text/html`), Schema-Knopf und Benutzermenü (`details.user-menu`: Mein Konto, Einstellungen (Admins), hell/dunkel, Tastenkürzel,
+  Abmelden, Version mit Quellcode-Link nach AGPL §13). Einstellungen als eigener Bereich: `web::SETTINGS` (Profile, Benutzer, E-Mail, Vorlagen,
+  Wartungsfenster, API, MIB, Aktualisierungen) mit Unternavigation `Layout::settings_nav()`, `/settings` leitet auf den ersten Eintrag um. Symbole als
+  eigene SVG-Pfade über `web::icon(name, class)` (`src/web/icons.rs`; askama kann keine Zeichenketten vergleichen), Statussymbole der Plaketten als
+  CSS-Masken aus `static/icons/*.svg`. Tastenkürzel im `<dialog id="keys-help">` (`?`, `/`, `g u|p|b|a|e`, `t`, Esc). Übersicht mit Karte „Braucht
+  Aufmerksamkeit“ (`overview::Attention`, höchstens `ATTENTION_ROWS` = 8, nach Zustand und Dauer).
+  Handy (bis 899 px; `docs/devices-and-groups.md`, „Phones“): Kopfleiste nur Logo, Suche, Statuschip und Benutzermenü, Navigation als Leiste unten
+  (`nav.bottomnav`), Unternavigation der Einstellungen als waagerecht scrollende Reiter; Zeilenaktionen als Symbole aus den Makros in `templates/icons.html`;
+  Knöpfe der Seitenköpfe im Menü `details.more-actions` (breit eine Knopfreihe, bis 640 px Dropdown über `static/app.js`; `theme.js` setzt die Klasse `js`
+  an `<html>`); auf Geräte-, Gruppen- und Sensorseite steht in der Reihe nur Pausieren/Fortsetzen und Protokoll, die Einrichtung im inneren
+  `details.more-actions.setup` (Dropdown auf jeder Breite, auf dem Handy Einträge des äußeren Menüs unter einer Linie; Sprunglinks wie `#delete` schließen
+  das Menü; Test `page_heads_show_everyday_actions…`); Tabellen bis 640 px als Blöcke (`table.m-cards` + Layoutklasse wie `m-sensors`/`m-log`/`m-simple`,
+  dazu `m-has-status` für `m-simple` mit Statuszelle; jede Zellklasse braucht einen Bereich im Layout, sonst entsteht eine schmale Zusatzspalte;
+  Zellklassen `m-name`, `m-status`, `m-value`, `m-hide` …)
 - Statische Dateien (`web::assets`): `Cache-Control: no-cache` + ETag (SHA-256 des eingebetteten Inhalts), Antwort `304` bei unverändertem Stand –
   neue Versionen gelten nach einem Update sofort, ohne Versionsnummern in den Adressen pflegen zu müssen
 - SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
@@ -150,7 +163,7 @@ Ein Binary, ein Prozess, Module:
   `connect_tls` (prüft die Kette mit `webpki-roots`, meldet das Zertifikat und das Problem, `accept_expired`); Testserver `http_client::testserver`
 - `update_check` – Hinweis auf neue Versionen (Config `update_check`, Code-Standard aus, ausgelieferte Config an): `spawn` fragt fünf Minuten nach dem Start, dann
   täglich `api.github.com/repos/<repository>/releases/latest` (`api_url` aus `CARGO_PKG_REPOSITORY`, Vorabversionen zählen nicht, Link muss auf die Releases
-  des Repos zeigen), Ergebnis in `AppState::latest_release` (`Latest`), `CurrentUser.update` nur für Admins, Anzeige `.sidebar-update` in `templates/app.html`;
+  des Repos zeigen), Ergebnis in `AppState::latest_release` (`Latest`), `CurrentUser.update` nur für Admins, Anzeige als Abzeichen `.updbadge` in der Kopfleiste (`templates/app.html`) und auf der Seite `/settings/updates` (`web::settings`, zeigt auch den Zeitpunkt der letzten Suche, `Latest::checked_ms`);
   Fehler nur auf `debug` (`docs/operations.md`, „Notice of new versions“)
 - `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s und optional `note` als Meldung bei Erfolg; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets; seit 0.5.6 wie PRTG mehrere Pakete je Abfrage: `PingCheck.packets` 1–10, Standard 5, JSON in `sensors.params` (fehlt = 5), gestaffelt alle 100 ms und parallel wartend in einem `JoinSet`, Kanäle `rtt` (Mittel), `rtt_min`, `rtt_max`, `jitter`, `loss` (%, neue Sensoren warnen über 20 %, `PING_WARN_LOSS`); Fehlschlag nur ohne jede Antwort; Migration `0024` legt die Kanäle bei alten Sensoren ohne Grenzwerte an; `storage::current_sensors_table` baut `sensors` neu, wenn die CHECK-Regel noch keine Zeile für `ping` hat; Listen und Mini-Graphen nur `rtt` (`SensorSpec::in_lists`), Tabelle auf dem Handy ohne Min/Max/Jitter (`SensorSpec::minor`); Vorlagen `Basic.packets`), `sensors::local` („Dieser Server“: `LocalMetric` CPU, Load, Speicher, Uptime, Dateisystem, Temperatur (`find_temperature` weicht bei umbenanntem Chip `_<zahl>` aus, Ziel auf der Einstellungsseite wählbar), Traffic aus `/proc`, `/sys` und `statvfs`; Typ `local`, Spalte `sensors.target`, Tabelle einmalig neu aufgebaut von `storage::migrate`/`allow_local_sensors`; Seite `web::server_values` unter `/devices/<id>/server`, erreichbar über den Typ „Dieser Server“ in „Sensor hinzufügen“ (jedes Gerät) und als Knopf bei Gerätetyp Server, Loopback-Adresse oder vorhandenen lokalen Sensoren; die Unit setzt kein `ProcSubset=pid`; `docs/sensors.md`), `sensors::service` (Dienste ohne SNMP, 2026-10-27: `http`, `tcp`, `dns`, `tls`; Einstellungen als JSON in `sensors.params`, `SensorSpec::params`/`from_params`;
   Fehlschläge als `SensorError::Check(Msg)`; Zertifikat mit Kanal `days`, `Unit::Days`, Grenzen 14/3 Tage über `SensorSpec::default_thresholds`; Formular mit
@@ -168,7 +181,7 @@ Ein Binary, ein Prozess, Module:
   (`web::overview`: Gruppen mit Sprungmarke `#group-<id>`; ein Baum wie in PRTG mit Linien und ⊟/⊞, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, Sensorplaketten je Zustand (`Counts::pills`), aufklappbar, Zustand in `localStorage` über `static/app.js`; Baum-Makros gemeinsam in `templates/tree.html`), Gruppenseite `/groups/<id>`
   (`overview::group`, `templates/group.html`: Teilbaum, Kacheln mit `/status/<filter>?group=<id>`, Aktionen; Ziel des Gruppennamens im Baum und der Pfadleiste
   `web::group_trail`/`device_trail.html` auf Geräte-, Sensor- und Gruppenseiten; Formulare kehren mit `back=group-<id>` zurück, `web::back_to_group`), Gruppen-, Geräte-, Profil- und Benutzerseiten (`web::groups`, `web::devices`, `web::credentials`, `web::users`: letzter Admin geschützt, eigenes Konto nicht löschbar, Passwortwechsel beendet die übrigen Sitzungen, Sprache je Benutzer; `web::account` „Mein Konto“ für alle: eigene Sprache, eigenes Passwort mit dem bisherigen, Fehlversuche über `login_throttle`), Sensorseiten mit Discovery und Mini-Graphen der letzten Stunde (`web::sensors`, `web::sparkline`: Linien bzw. Statusband als SVG), Detailseite mit JSON-Endpoint für uPlot (ohne Formulare außer Löschen), Tabelle „Messwerte“ wie die PRTG-Livedaten (`static/samples.js`, immer Rohwerte über `/sensors/<id>/samples`, `storage::measurements::recent_samples`; Abfragen mit Warnung/Ausfall aus `poll_problems` (Migration `0023`, von `record_poll`) als rot/gelb gefärbte Zeilen, ohne Werte mit Meldung; in Seiten zu 50/100/250 Zeilen (`#samples-rows`, `#samples-pager`), Zusammenfassung über den ganzen Zeitraum, gezeigte Seite übersteht das Neuladen per `sessionStorage`; `web::sensor_detail`); Statuslisten hinter den Kacheln der Übersicht
-  (`web::status_list`, `/status/all|up|warning|down|inactive`, sortierbar per Spaltenkopf `?sort=…&dir=…`, aktuelle Werte über `web::sensors::fresh_values`); oben rechts auf Übersicht, Statuslisten, Sensor- und Detailseite „Aktualisieren“ mit
+  (`web::status_list`, `/status/all|up|warning|down|inactive`, sortierbar per Spaltenkopf `?sort=…&dir=…`, Suche `?q=` über Sensor, Gerät, Adresse, Gruppe und Meldung (alle Wörter, höchstens `MAX_SEARCH_CHARS` = 100), aktuelle Werte über `web::sensors::fresh_values`); oben rechts auf Übersicht, Statuslisten, Sensor- und Detailseite „Aktualisieren“ mit
   „Automatisch“ (alle 30 s wie PRTG, pausiert bei Eingaben; `templates/refresh.html`, `static/refresh.js`); Protokoll `/log` (`web::log`: sortierbar per Spaltenkopf wie die Statuslisten, Suchfeld über `static/table-filter.js`, `?device=<id>`/`?sensor=<id>` über den
   Knopf „Protokoll“ der Geräte- und Sensorseite; Warnungen, Ausfälle und
   ihr Ende, `storage::status::problem_log`, dazu Pausen aus `storage::pauses::log_entries` und Abhängigkeiten aus `storage::pauses::dependency_entries`; `events` hält je Sensor die neuesten 1000 Wechsel, `EVENTS_KEPT_PER_SENSOR`, das Protokoll zeigt höchstens `LOG_ENTRIES` = 500 Einträge; die Sensorseite blättert ihre Wechsel über `GET /sensors/<id>/events` mit `static/events.js` und `static/pager.js`)
@@ -200,7 +213,7 @@ Ein Binary, ein Prozess, Module:
   (Cookie `opennetmon_auto` von `static/refresh.js`), Skripte (Graph, Messwerte) auch nicht. Ausnahme je Benutzer `users.stay_signed_in`
   („angemeldet bleiben“, z. B. Wandbildschirm; nur Admins auf `/users/<id>`, Route `/users/<id>/idle`)
 - Sicherheits-Header auf allen Antworten (CSP mit `base-uri 'self'` und `object-src 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`,
-  `Cache-Control: no-store` außer bei den statischen Dateien); Fehler von Seitenaufrufen (Accept `text/html`) zeigt `web::error_page` als Seite im Design (mit Seitenleiste bzw. Anmeldekarte; Meldung aus `error::ErrorMessage`, sonst je Status, nie axums englische Texte), JSON-Abfragen bleiben Klartext
+  `Cache-Control: no-store` außer bei den statischen Dateien); Fehler von Seitenaufrufen (Accept `text/html`) zeigt `web::error_page` als Seite im Design (mit Kopfleiste bzw. Anmeldekarte; Meldung aus `error::ErrorMessage`, sonst je Status, nie axums englische Texte), JSON-Abfragen bleiben Klartext
 - Begrenzung der Anmeldeversuche (`auth::throttle`): Fehlversuche je Benutzername (ab 5, bis 60 s Wartezeit) und je Adresse (ab 10, bis 15 min), Ablehnung mit 429 ohne Passwortprüfung, nur bremsen (nie dauerhaft sperren); hinter einem Proxy `client_ip_header` setzen (`docs/users-and-login.md`).
   Jeder Versuch zählt schon vor der Prüfung als Fehlversuch (`LoginThrottle::begin_attempt`, Prüfen und Zählen unter einer Sperre; Erfolg löscht),
   sonst kämen gleichzeitige Versuche alle durch. Argon2-Prüfungen nur über `AppState::check_password`: höchstens 4 gleichzeitig (`PASSWORD_CHECKS`, je ~19 MiB),

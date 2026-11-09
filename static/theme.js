@@ -1,4 +1,4 @@
-// Applies the color scheme chosen with the toggle before the page paints (no flash).
+// Applies the color scheme chosen with the light/dark switch before the page paints (no flash).
 // Without a choice the system preference applies (CSS media query).
 // Also provides window.opennetmonText for the other scripts: texts in the page's language from the
 // data block #i18n (catalog locales/<lang>/js.ftl), with %1, %2 … filled in.

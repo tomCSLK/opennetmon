@@ -26,7 +26,9 @@ The action messages (“Device created.” etc.) come in through `?msg=` and are
   outer menu below a line instead of a menu in the menu. Readers see neither menu.
 - Row actions everywhere are icons with the name as tooltip (`templates/icons.html`: edit ✎, delete 🗑, pause ‖, order ↕); deleting a sensor or a device
   always asks for confirmation, only an uploaded MIB file is deleted at once (it can be uploaded again).
-- Up to 560 px the tiles take three columns, the tree hides the row actions and the address line, and sensor labels show just their count.
+- Up to 899 px the navigation moves to a bar at the bottom of the screen; the header keeps the logo, the search, the status counts and the user menu,
+  and the settings pages show their sections as tabs that scroll sideways. The status tiles come two per row below the total.
+- Up to 560 px the tree hides the row actions and the address line, and sensor labels show just their count.
 - Up to 640 px the lists (sensors, status lists, log, events, users, profiles, templates, MIB files) turn into one block per row (`table.m-cards`
   with a layout class such as `m-sensors` or `m-log`, cells marked `m-name`, `m-status`, `m-value` …, `m-hide` for left-out columns); sortable column heads
   become a bar of sort links. On the detail page the period selector spans the width, value tiles come two per row and the measurement table drops the
@@ -115,7 +117,7 @@ router instead of one per switch sensor.
 Like the schedules of PRTG (`src/schedule.rs`, `storage::schedules`, pages `web::schedules`): planned interruptions such as the nightly backup of the
 Omada controller or a server update pause the objects instead of causing outage mails, without pausing them by hand each time.
 
-- **Schedules** on the page “Maintenance windows” (`/schedules`, sidebar): named, each with any number of **windows**:
+- **Schedules** on the page “Maintenance windows” (`/schedules`, under Settings): named, each with any number of **windows**:
   - *weekly*: weekdays, start time and duration in minutes (1 minute to one week), e.g. “Mon–Fri from 03:00, 15 min”; a window over midnight belongs
     to the day it starts on;
   - *once*: start and end, e.g. “2026-10-31 10:00 to 2026-10-31 11:00”.

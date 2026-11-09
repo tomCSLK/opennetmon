@@ -1,7 +1,8 @@
 //! Sensor lists by status, opened from the tiles on the start page: all sensors, those that are
 //! up, in warning, down, or inactive/unknown. Sortable by status, sensor, device, current value
 //! and the time of the last status change. `?group=<id>` limits a list to a group and its
-//! subgroups (the tiles of a group page).
+//! subgroups (the tiles of a group page), `?q=<text>` to the sensors whose name, device, address,
+//! group or message contain the text (the search in the header).
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -21,7 +22,30 @@ use crate::status::Status;
 use crate::storage::{devices, groups, sensors, status};
 use crate::web::auth::CurrentUser;
 use crate::web::sensors::{fresh_values, now_ms};
-use crate::web::{AppState, Layout, time_html};
+use crate::web::{AppState, HeaderCounts, Layout, time_html, url_param};
+
+/// Longest search text; anything after it is ignored.
+const MAX_SEARCH_CHARS: usize = 100;
+
+/// The counters of the header: sensors up, in warning and down, counted like the tiles of the overview.
+pub async fn header_counts(state: &AppState) -> Result<HeaderCounts> {
+    let states = status::list_states(&state.pool).await?;
+    let pauses = crate::storage::pauses::load_all(&state.pool, now_ms()).await?;
+    let mut counts = HeaderCounts::default();
+    for sensor in sensors::list_all_sensors(&state.pool).await? {
+        let shown = crate::status::shown_status(
+            pauses.sensor(sensor.id, sensor.device_id).is_some(),
+            states.get(&sensor.id).map(|s| s.status),
+        );
+        match shown {
+            Status::Up => counts.up += 1,
+            Status::Warning => counts.warning += 1,
+            Status::Down => counts.down += 1,
+            Status::Unknown | Status::Paused => {}
+        }
+    }
+    Ok(counts)
+}
 
 /// Which sensors a list shows; the same split as the tiles on the start page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -290,6 +314,8 @@ pub(crate) fn group_paths(groups: &[Group]) -> HashMap<i64, String> {
 
 /// One status tile; the overview and the lists show the same tiles.
 pub struct Tile {
+    /// `all`, `up`, `warning`, `down` or `inactive` (chooses the symbol).
+    pub kind: &'static str,
     pub label: String,
     pub count: usize,
     pub href: String,
@@ -326,6 +352,7 @@ pub fn tiles(
         .into_iter()
         .zip(counts)
         .map(|(f, count)| Tile {
+            kind: f.as_str(),
             // The first tile is "Sensoren" as on the overview; the page title says "Alle Sensoren".
             label: t.get(if f == Filter::All {
                 "sensors"
@@ -365,6 +392,10 @@ struct StatusListTemplate {
     tiles: Vec<Tile>,
     columns: Vec<Column>,
     rows: Vec<Row>,
+    /// The search text (empty without a search).
+    search: String,
+    /// The same list without the search.
+    clear_href: String,
 }
 
 #[derive(Deserialize)]
@@ -372,6 +403,17 @@ pub struct SortQuery {
     sort: Option<String>,
     dir: Option<String>,
     group: Option<i64>,
+    q: Option<String>,
+}
+
+/// Whether a row contains every word of `words` (already in lower case) in its names, address, group or message.
+fn row_matches(words: &[String], row: &Row, host: &str) -> bool {
+    let text = format!(
+        "{}\n{}\n{}\n{}\n{}",
+        row.name, row.device_name, host, row.group, row.message
+    )
+    .to_lowercase();
+    words.iter().all(|w| text.contains(w.as_str()))
 }
 
 pub async fn list(
@@ -396,6 +438,17 @@ pub async fn list(
         } else {
             key.first_dir()
         });
+
+    let search: String = query
+        .q
+        .as_deref()
+        .unwrap_or_default()
+        .trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_SEARCH_CHARS)
+        .collect();
+    let words: Vec<String> = search.split_whitespace().map(str::to_lowercase).collect();
 
     let t = user.lang;
     let mibs = state.mib_index();
@@ -458,7 +511,7 @@ pub async fn list(
             .first()
             .map_or(u8::MAX, |c| unit_rank(c.unit));
         let total = total.map(|v| (rank, v));
-        rows.push(Row {
+        let row = Row {
             id: sensor.id,
             name: sensor.name,
             device_id: device.id,
@@ -482,13 +535,24 @@ pub async fn list(
             values,
             value_title,
             total,
-        });
+        };
+        if words.is_empty() || row_matches(&words, &row, &device.host) {
+            rows.push(row);
+        }
     }
     sort_rows(&mut rows, key, dir);
 
     let group = scope.as_ref().map(|(id, _)| *id);
     let tiles = tiles(t, counts, Some(filter), group);
-    let group_param = group.map(|g| format!("group={g}&")).unwrap_or_default();
+    let mut group_param = group.map(|g| format!("group={g}&")).unwrap_or_default();
+    let clear_href = format!(
+        "/status/{}{}",
+        filter.as_str(),
+        group.map(|g| format!("?group={g}")).unwrap_or_default()
+    );
+    if !search.is_empty() {
+        group_param.push_str(&format!("q={}&", url_param(&search)));
+    }
     let mut columns: Vec<Column> = SortKey::ALL
         .into_iter()
         .map(|k| {
@@ -527,6 +591,8 @@ pub async fn list(
         tiles,
         columns,
         rows,
+        search,
+        clear_href,
         t,
     };
     Ok(Html(page.render()?))
@@ -701,15 +767,16 @@ mod tests {
         ));
         // The same tiles as on the overview, the shown list marked.
         assert!(page.body.contains(
-            "<a class=\"tile status-down active\" href=\"/status/down\" aria-current=\"page\"><div class=\"tile-value\">1</div><div class=\"tile-label\">Ausfall</div></a>"
+            "<a class=\"tile status-down active\" href=\"/status/down\" aria-current=\"page\"><div class=\"tile-label\">"
         ));
-        assert!(page.body.contains(
-            "href=\"/status/inactive\"><div class=\"tile-value\">1</div><div class=\"tile-label\">Pausiert / unbekannt</div>"
-        ));
+        assert!(
+            page.body
+                .contains("Pausiert / unbekannt</div><div class=\"tile-value\">1</div></a>")
+        );
         assert!(
             !home
                 .body
-                .contains("aria-current=\"page\"><div class=\"tile-value")
+                .contains("aria-current=\"page\"><div class=\"tile-label")
         );
 
         let all = send(
@@ -721,6 +788,36 @@ mod tests {
         assert!(
             pos(paused) < pos(down) && pos(down) < pos(ok),
             "Alt, Gateway, Ping"
+        );
+
+        // The search of the header: every word in the names, address, group or message, any case.
+        let found = send(&h.app, get("/status/all?q=SWITCH%20weg", Some(&viewer))).await;
+        assert!(found.body.contains(&format!("href=\"/sensors/{down}\"")));
+        assert!(!found.body.contains(&format!("href=\"/sensors/{ok}\"")));
+        assert!(!found.body.contains(&format!("href=\"/sensors/{paused}\"")));
+        assert!(found.body.contains("Suche „SWITCH weg“"));
+        assert!(
+            found.body.contains("q=SWITCH%20weg&#38;sort=status"),
+            "sorting keeps the search"
+        );
+        let by_address = send(&h.app, get("/status/all?q=192.0.2.1", Some(&viewer))).await;
+        assert!(by_address.body.contains("3 Sensoren"));
+
+        // Needs attention on the overview: the failed sensor with its message.
+        assert!(home.body.contains("Braucht Aufmerksamkeit"));
+        assert!(home.body.contains("1 von 3 Sensoren"));
+        // The counters of the header, for pages the browser opens.
+        let mut request = get("/log", Some(&viewer));
+        request
+            .headers_mut()
+            .insert(axum::http::header::ACCEPT, "text/html".parse().unwrap());
+        let log = send(&h.app, request).await.body;
+        assert!(log.contains("<a class=\"up\" href=\"/status/up\""), "{log}");
+        assert!(log.contains("<a class=\"warn zero\" href=\"/status/warning\""));
+        assert!(log.contains("<a class=\"down\" href=\"/status/down\""));
+        assert!(
+            !home.body.contains("class=\"status-chip\""),
+            "not for scripts"
         );
         let inactive = send(&h.app, get("/status/inactive", Some(&viewer))).await;
         assert!(

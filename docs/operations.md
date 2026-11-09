@@ -290,8 +290,9 @@ When stopping, the service first stops polling and then still sends pending aler
 
 With `update_check = true` (set in the shipped `/etc/opennetmon/config.toml`; off when the key is missing) the server asks GitHub once a day,
 the first time five minutes after the start, for the latest release (`https://api.github.com/repos/tomCSLK/opennetmon/releases/latest`).
-If it is newer than the running version, administrators see “Version x.y.z available” above the version number in the sidebar, linked to the release page;
-readers see nothing. Pre-releases and drafts do not count. Nothing is downloaded or installed: updating stays `apt install` (below), because that needs root
+If it is newer than the running version, administrators see the badge “New version x.y.z” in the header; it opens a short note with links to the
+release notes and to **Settings → Updates** (`/settings/updates`), which shows the installed and the latest version, the time of the last check and
+the commands for the update. Readers see nothing. Pre-releases and drafts do not count. Nothing is downloaded or installed: updating stays `apt install` (below), because that needs root
 and the service runs without privileges.
 
 - **Privacy:** GitHub sees the address of the server and the `User-Agent` `opennetmon/<version>` once a day; nothing else is sent (no cookies, no data

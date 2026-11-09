@@ -213,6 +213,9 @@ struct HomeTemplate {
     /// Groups at the top level; their order is only worth a button when there are several.
     top_groups: usize,
     flash: Option<String>,
+    /// The first sensors in warning or down, and how many there are in all.
+    attention: Vec<Attention>,
+    attention_total: usize,
 }
 
 #[derive(Deserialize)]
@@ -287,6 +290,24 @@ fn subtree(
     (devices, counts)
 }
 
+/// Rows of the card "Needs attention" on the overview; the sensor list has the rest.
+const ATTENTION_ROWS: usize = 8;
+
+/// A sensor in warning or down, for the card "Needs attention" on the overview.
+pub struct Attention {
+    pub id: i64,
+    pub name: String,
+    pub device_id: i64,
+    pub device_name: String,
+    pub status: Status,
+    pub status_label: String,
+    pub message: String,
+    /// Since when, as `<time>` (rendered with `|safe`), and how long that is.
+    pub since: String,
+    pub duration: String,
+    since_ms: i64,
+}
+
 /// Every device as a card, by group in display order, with what the pages count.
 struct Forest {
     groups: Vec<Group>,
@@ -295,6 +316,8 @@ struct Forest {
     totals: Counts,
     device_count: usize,
     devices_down: usize,
+    /// Sensors in warning or down: failures first, then the newest problems.
+    attention: Vec<Attention>,
 }
 
 async fn load(state: &AppState, t: Lang) -> Result<Forest> {
@@ -302,16 +325,37 @@ async fn load(state: &AppState, t: Lang) -> Result<Forest> {
     let devices = devices::list_devices(&state.pool).await?;
     let all_sensors = sensors::list_all_sensors(&state.pool).await?;
     let states = status::list_states(&state.pool).await?;
-    let pauses = pauses::load_all(&state.pool, crate::web::sensors::now_ms()).await?;
+    let now = crate::web::sensors::now_ms();
+    let pauses = pauses::load_all(&state.pool, now).await?;
 
     let mut totals = Counts::default();
     let mut devices_down = 0;
+    let mut attention = Vec::new();
     let mut cards: HashMap<Option<i64>, Vec<DeviceCard>> = HashMap::new();
     for d in &devices {
         let own: Vec<&SensorRecord> = all_sensors.iter().filter(|s| s.device_id == d.id).collect();
         let mut counts = Counts::default();
         for s in &own {
-            counts.add(effective(s, &states, &pauses));
+            let status = effective(s, &states, &pauses);
+            counts.add(status);
+            if let (Status::Down | Status::Warning, Some(stored)) = (status, states.get(&s.id)) {
+                attention.push(Attention {
+                    id: s.id,
+                    name: s.name.clone(),
+                    device_id: d.id,
+                    device_name: d.name.clone(),
+                    status,
+                    status_label: t.get(status.label_id()),
+                    message: crate::status::shown(t, &stored.message),
+                    since: crate::web::time_html(stored.since_ms),
+                    duration: crate::sensors::format::format_value(
+                        t,
+                        crate::sensors::Unit::Seconds,
+                        ((now - stored.since_ms) / 1_000) as f64,
+                    ),
+                    since_ms: stored.since_ms,
+                });
+            }
         }
         totals.merge(&counts);
         let overall = device_status(own.iter().map(|s| {
@@ -334,6 +378,11 @@ async fn load(state: &AppState, t: Lang) -> Result<Forest> {
             counts,
         });
     }
+    attention.sort_by(|a, b| {
+        crate::web::status_list::rank(a.status)
+            .cmp(&crate::web::status_list::rank(b.status))
+            .then(b.since_ms.cmp(&a.since_ms))
+    });
     Ok(Forest {
         groups,
         cards,
@@ -341,6 +390,7 @@ async fn load(state: &AppState, t: Lang) -> Result<Forest> {
         totals,
         device_count: devices.len(),
         devices_down,
+        attention,
     })
 }
 
@@ -356,7 +406,10 @@ pub async fn home(
         totals,
         device_count,
         devices_down,
+        mut attention,
     } = load(&state, user.lang).await?;
+    let attention_total = attention.len();
+    attention.truncate(ATTENTION_ROWS);
 
     let ungrouped = cards.remove(&None).map(|devices| {
         let mut counts = Counts::default();
@@ -412,6 +465,8 @@ pub async fn home(
         devices_down,
         top_groups: top.len(),
         flash: flash_message(user.lang, query.msg.as_deref()),
+        attention,
+        attention_total,
     };
     Ok(Html(page.render()?))
 }
@@ -705,11 +760,15 @@ mod tests {
         assert!(page.body.contains("<span class=\"badge status-down\">"));
         // Tiles count the subtree and open its status lists.
         assert!(page.body.contains(&format!(
-            "<a class=\"tile status-down active\" href=\"/status/down?group={network}\"><div class=\"tile-value\">1</div>"
+            "<a class=\"tile status-down active\" href=\"/status/down?group={network}\"><div class=\"tile-label\">"
         )));
         assert!(page.body.contains(&format!(
-            "href=\"/status/all?group={network}\"><div class=\"tile-value\">2</div>"
+            "href=\"/status/all?group={network}\"><div class=\"tile-label\">"
         )));
+        assert!(
+            page.body
+                .contains("Sensoren</div><div class=\"tile-value\">2</div>")
+        );
         assert!(
             !page.body.contains("/edit?back="),
             "no admin actions for viewers"

@@ -27,7 +27,7 @@ Like the reports of PRTG: how reliable a device or sensor was over the last 24 h
 
 ## Pages
 
-- **Reports** (`/reports`, sidebar): table per device (with its group and basis) or per sensor (with its device), for 7 days,
+- **Reports** (`/reports`, header): table per device (with its group and basis) or per sensor (with its device), for 7 days,
   30 days or one of the last twelve calendar months. Months are in the time zone of the server (like maintenance windows: the
   system's or config `time_zone`), the current month up to now. Sortable by name, availability (lowest first) and downtime (longest
   first); rows without data stay last. Colors: at least 99 % green, at least 95 % yellow, below red.

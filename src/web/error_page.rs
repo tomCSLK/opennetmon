@@ -200,7 +200,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn signed_in_users_get_the_page_with_the_sidebar() {
+    async fn signed_in_users_get_the_page_with_the_header() {
         let h = harness(true).await;
         let (viewer, _) = login(&h, "bert").await;
         let reply = send(&h.app, page(get("/sensors/99", Some(&viewer)))).await;
@@ -212,7 +212,7 @@ mod tests {
                 .starts_with("text/html")
         );
         for needle in [
-            "class=\"sidebar\"",
+            "class=\"topbar\"",
             "Fehler 404",
             "<h1>Seite nicht gefunden</h1>",
             "Nicht gefunden",
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(reply.status, StatusCode::NOT_FOUND);
         assert!(reply.body.contains("class=\"auth-card\""), "{}", reply.body);
         assert!(reply.body.contains("Diese Seite gibt es nicht (mehr)."));
-        assert!(!reply.body.contains("class=\"sidebar\""));
+        assert!(!reply.body.contains("class=\"topbar\""));
 
         let (viewer, _) = login(&h, "bert").await;
         let mut json = get("/sensors/99/data", Some(&viewer));

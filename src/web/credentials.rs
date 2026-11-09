@@ -405,7 +405,7 @@ mod tests {
     use super::*;
     use crate::credentials::Credentials;
     use crate::web::testutil::*;
-    use axum::http::StatusCode;
+    use axum::http::{StatusCode, header};
 
     const COMMUNITY: &str = "geheime-community-42";
     const AUTH_PW: &str = "auth-passwort-4711";
@@ -461,17 +461,27 @@ mod tests {
         let h = harness(true).await;
         let (admin, _) = login(&h, "anna").await;
         let (viewer, _) = login(&h, "bert").await;
+        // Administrators reach the settings through the user menu; the area has its own navigation.
+        let home = send(&h.app, get("/", Some(&admin))).await.body;
+        assert!(home.contains("href=\"/settings\""));
         assert!(
-            send(&h.app, get("/", Some(&admin)))
-                .await
-                .body
-                .contains("/credentials")
+            !home.contains("class=\"subnav\""),
+            "only inside the settings"
         );
-        assert!(
-            !send(&h.app, get("/", Some(&viewer)))
-                .await
-                .body
-                .contains("/credentials")
+        let reply = send(&h.app, get("/settings", Some(&admin))).await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        assert_eq!(reply.headers[header::LOCATION], "/credentials");
+        let list = send(&h.app, get("/credentials", Some(&admin))).await.body;
+        assert!(list.contains("class=\"subnav\""));
+        assert!(list.contains("<a href=\"/credentials\" aria-current=\"page\">"));
+        assert!(list.contains("<a href=\"/settings/updates\">"));
+
+        let home = send(&h.app, get("/", Some(&viewer))).await.body;
+        assert!(!home.contains("href=\"/settings\""));
+        assert!(!home.contains("/credentials"));
+        assert_eq!(
+            send(&h.app, get("/settings", Some(&viewer))).await.status,
+            StatusCode::FORBIDDEN
         );
     }
 

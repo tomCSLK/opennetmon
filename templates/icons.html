@@ -30,3 +30,8 @@
 
 {# A submit button that deletes at once; only for things that are easy to restore (e.g. an uploaded file). #}
 {% macro delete_button(t, label) %}<button type="submit" class="ghost small icon-only danger-icon" title="{{ t.get("delete") }}" aria-label="{{ label }}">{% call trash() %}{% endcall %}</button>{% endmacro %}
+
+{# The other symbols of the page frame (header, user menu, settings, status) come from `crate::web::icon`. -#}
+
+{# The mark of opennetmon: a monitor with a pulse line. #}
+{% macro logo(cls) %}<svg class="icon {{ cls }}" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="6 11 8.5 11 10 8 13 14 14.5 11 18 11"/></svg>{% endmacro %}

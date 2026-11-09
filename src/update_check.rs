@@ -1,5 +1,6 @@
 //! Looks once a day whether a newer release exists on GitHub (config `update_check`) and keeps the answer
-//! in memory; administrators see it in the sidebar. Nothing is installed: updating stays `apt install`.
+//! in memory; administrators see it as a badge in the header and under Settings → Updates. Nothing is
+//! installed: updating stays `apt install`.
 
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -20,20 +21,43 @@ pub struct Release {
     pub url: String,
 }
 
+/// What the last check found.
+#[derive(Debug, Clone, Default)]
+struct Found {
+    release: Option<Release>,
+    /// When the last check got an answer (Unix milliseconds); `None` before the first one.
+    checked_ms: Option<i64>,
+}
+
 /// The newer release found by the last check (shared between the check and the web server).
 #[derive(Debug, Clone, Default)]
-pub struct Latest(Arc<RwLock<Option<Release>>>);
+pub struct Latest(Arc<RwLock<Found>>);
 
 impl Latest {
     pub fn get(&self) -> Option<Release> {
-        self.0.read().ok().and_then(|r| r.clone())
+        self.0.read().ok().and_then(|r| r.release.clone())
     }
 
+    /// When the last check got an answer from GitHub.
+    pub fn checked_ms(&self) -> Option<i64> {
+        self.0.read().ok().and_then(|r| r.checked_ms)
+    }
+
+    /// Stores the answer of a check made now.
     pub fn set(&self, release: Option<Release>) {
         if let Ok(mut slot) = self.0.write() {
-            *slot = release;
+            *slot = Found {
+                release,
+                checked_ms: Some(now_ms()),
+            };
         }
     }
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 /// `1.2.3` or `v1.2.3` (a suffix like `-rc1` is not a release version).

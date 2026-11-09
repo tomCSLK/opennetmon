@@ -6,7 +6,7 @@
   <div>
     <div class="breadcrumb">{% include "device_trail.html" %}<span>{{ title }}</span></div>
     <h1>{{ title }}</h1>
-    <p class="subtitle">{{ t.get1("count-sensors", "count", rows.len()) }}{% if !group.is_empty() %} · {{ t.get1("status-list-in-group", "group", group.as_str()) }} · <a href="{{ all_href }}">{{ t.get("status-list-all-groups") }}</a>{% endif %}</p>
+    <p class="subtitle">{{ t.get1("count-sensors", "count", rows.len()) }}{% if !group.is_empty() %} · {{ t.get1("status-list-in-group", "group", group.as_str()) }} · <a href="{{ all_href }}">{{ t.get("status-list-all-groups") }}</a>{% endif %}{% if !search.is_empty() %} · {{ t.get1("search-for", "text", search.as_str()) }} · <a href="{{ clear_href }}">{{ t.get("search-clear") }}</a>{% endif %}</p>
   </div>
   <div class="actions">{% include "refresh.html" %}</div>
 </div>

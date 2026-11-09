@@ -41,7 +41,7 @@
       charts.push({ plot: { destroy: function () {} }, el: p });
       return;
     }
-    var palette = [css('--accent'), css('--ok'), '#a855f7', css('--warn')];
+    var palette = [css('--s1'), css('--s2'), css('--s3'), css('--s4')];
     var groups = {};
     data.series.forEach(function (s) { (groups[s.unit] = groups[s.unit] || []).push(s); });
     Object.keys(groups).forEach(function (unit) {

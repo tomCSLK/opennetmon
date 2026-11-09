@@ -3,16 +3,17 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-11-09, Release v0.5.9, Test-Paket 0.5.10)
+## Stand (2026-11-09, Release v0.5.9, Test-Paket 0.6.0 gebaut)
 
 **Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
 opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
 Tag, läuft auf dem Server) enthält zwei Korrekturen: lokale Temperatursensoren überstehen einen umbenannten hwmon-Baustein und das Ziel ist auf der
 Einstellungsseite wählbar, und Gerätevorlagen übernehmen Intervall und Abhängigkeit je Sensor. Keine neue Migration (0001–0025).
 
-**Geplant (2026-11-09, Vorhaben P):** neue Oberfläche nach dem Vorbild von opensecmon (Kopfleiste, graue Flächen mit ruhigem Blau, Fira, Logo C, „Braucht Aufmerksamkeit“,
-Suche mit „/“, Kürzel-Hilfe). Klickbarer Entwurf (nur lokal in `docs/entwurf/`) vom Nutzer abgenommen, danach geändert: Einstellungen ins Benutzermenü, „Änderungen“ in die Kopfleiste,
-Abzeichen „Neue Version“ statt des Hinweises in der Seitenleiste. Umsetzung erst nach „go“ (Abschnitt P).
+**Umgesetzt im Test-Paket 0.6.0 (2026-11-09, Vorhaben P, Auftrag des Nutzers „Testbuild mit dem neuen Design, Version 0.6.0“):** neue Oberfläche nach dem
+Vorbild von opensecmon (Kopfleiste mit „Änderungen“, graue Flächen mit ruhigem Blau, Fira, Logo C, „Braucht Aufmerksamkeit“, Suche mit „/“, Kürzel-Hilfe,
+Einstellungen im Benutzermenü mit eigener Unternavigation, Abzeichen „Neue Version“ und Seite Einstellungen → Aktualisierungen). Kein Tag, kein Release;
+der Nutzer installiert das Paket selbst auf dem Server und gibt Rückmeldung (Abschnitt P).
 
 **Stand bei v0.5.7 (2026-10-30):**
 
@@ -951,7 +952,7 @@ unter 1 Balken warnen) und am pendelnden Ping-Sensor (Paketverlust) prüfen – 
 Verworfen: alle Wechsel ins HTML schreiben und im Browser blättern (bei N = 1000 je Sensor und Neuladen alle 30 s unnötig groß); nur die 20 auf
 50 erhöhen (löst das Verdrängen nicht).
 
-### P. Neue Oberfläche nach dem Vorbild von opensecmon – Entwurf abgenommen 2026-11-09, Umsetzung wartet auf „go“
+### P. Neue Oberfläche nach dem Vorbild von opensecmon – umgesetzt 2026-11-09 im Test-Paket 0.6.0, wartet auf Rückmeldung
 
 Anlass: Nutzerwunsch (2026-11-09), die Oberfläche von opensecmon (`../opensecmon/`) auch für opennetmon zu verwenden; Farben und Logo von
 opennetmon dürfen ersetzt werden. Klickbarer Entwurf in `docs/entwurf/` (README dort, erfundene Daten, lokal geprüft hell/dunkel und bei 1440/1024/390 px).
@@ -1003,15 +1004,23 @@ Reihenfolge: A und B zusammen als Test-Paket 0.5.11 (Nutzer installiert selbst),
 Beim Update-Hinweis: `CurrentUser.update` bleibt die Quelle, Test in `src/web/auth.rs` anpassen, Stil `p.sidebar-update` ersetzen, `docs/operations.md`
 („Notice of new versions“ nennt die Seitenleiste) nachziehen; die AGPL-Links (`web::SOURCE_URL`, `web::VERSION`) dürfen nicht verloren gehen.
 
-**Stand (2026-11-09): nur geplant und dokumentiert, nichts in der Anwendung umgesetzt, kein „go“.** Die Änderungen des Nutzers zur Navigation und zum
-Update-Hinweis (oben) sind im Entwurf. Die Doku ist bereinigt (2026-11-09: Einzelheiten aus `CLAUDE.md` nach `ARCHITEKTUR.md`, Übersicht `~/Claude/Projekte/CLAUDE.md`
-gekürzt; die automatisch geladenen Dateien hatten zusammen über 150 000 Zeichen, jetzt rund 35 000).
+**Stand (2026-11-09): Stufen A–D in einem Schritt umgesetzt, Test-Paket 0.6.0** (statt der geplanten Stufen mit 0.5.11; Auftrag des Nutzers). Abweichungen
+vom Entwurf und vom Plan:
+
+- Im Abzeichen und auf der Seite „Aktualisierungen“ steht nur der Weg über den Server (Paket, `SHA256SUMS`, Sicherung, `apt install`); der Weg über den
+  Launcher kommt erst, wenn der Launcher erschienen ist. Der Datenschutzhinweis erscheint nur bei eingeschalteter Suche.
+- Symbole sind eigene einfache SVG-Formen (`src/web/icons.rs`, `static/icons/`), nicht aus Lucide; keine weitere Fremdlizenz. Schriften Fira Sans/Code
+  (Fontsource 5.3.0, OFL-1.1) in `static/fonts/` mit Lizenztexten und in `THIRD-PARTY-LICENSES.txt`.
+- Suche: Sensor, Gerät, Adresse, Gruppe und Meldung, alle Wörter müssen vorkommen (höchstens 100 Zeichen). Statuschip der Kopfleiste nur bei
+  Seitenaufrufen berechnet, nicht bei JSON-Abfragen.
+- `static/logo-wide.jpg` entfällt; Favicon als SVG (`static/favicon.svg`) mit PNG-Varianten, `static/logo-mark.png` neu (blaues Quadrat mit Logo C).
+- Geprüft im Browser mit Wegwerf-Daten (hell/dunkel, 1440 und 390 px, Konsole ohne Fehler); Tests, clippy, fmt grün.
 
 **Offen:**
 
-- Nach der Umsetzung nachzuziehen: Abschnitte „Stack“/„Design“ und „AGPL“ in `ARCHITEKTUR.md` und `CLAUDE.md` (violette Seitenleiste, Bedienelementhöhen,
-  Handy-Menü, Knopfleisten, Quellcode-Link), `README.md` (Bild, Logo), `docs/` (Screenshots, falls vorhanden; `docs/operations.md` zum Update-Hinweis),
-  Release-Notes (Englisch).
+- Rückmeldung des Nutzers zum Test-Paket 0.6.0 auf dem Server, danach ggf. Korrekturen und Release auf Ansage (Release-Notes Englisch).
+- `README.md`: Bild der neuen Oberfläche (`docs/assets/`), Erklärvideo; Logo `docs/assets/opennetmon-logo.jpg` noch das alte.
+- opensecmon soll denselben Hinweis auf neue Versionen bekommen (eigenes Projekt).
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 

@@ -3,8 +3,9 @@
 Agentloses Netzwerk-Monitoring per SNMP mit Weboberfläche, inspiriert vom Bedienkonzept von PRTG. Läuft headless auf einem **Ubuntu Server ohne GUI**
 (Bedienung nur im Browser), entwickelt wird auf Zorin OS. Repo `tomCSLK/opennetmon`, **öffentlich**, Lizenz **AGPL-3.0-or-later**, Copyright Thomas Cieslik.
 „PRTG“ ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert und steht in keiner Verbindung zu Paessler.
-Name seit 2026-10-19 (vorher „netmon“, markenrechtlich geschützt). Logo-Original außerhalb des Repos (`~/Bilder/opennetmon_Logo_v1.jpeg`), daraus
-`static/logo-mark.png`, `static/favicon-32.png`/`-64.png`, `static/logo-wide.jpg` und `docs/assets/opennetmon-logo.jpg`.
+Name seit 2026-10-19 (vorher „netmon“, markenrechtlich geschützt). Logo seit 0.6.0 „Logo C“ (Monitor mit Pulslinie, Makro `logo` in `templates/icons.html`),
+daraus `static/favicon.svg`, `static/favicon-32.png`/`-64.png` und `static/logo-mark.png`; das alte Logo (`~/Bilder/opennetmon_Logo_v1.jpeg`) steht nur noch
+in `docs/assets/opennetmon-logo.jpg` (README).
 
 ## Wo steht was
 
@@ -91,7 +92,7 @@ Regeln, die überall gelten:
   Benachrichtigungen in der Sprache von `mail_settings.language`. Tests prüfen die Kataloge gegeneinander und gegen Code, Templates und JS (`docs/translations.md`).
 - Kein `unwrap()`/`expect()` außerhalb von Tests und Startcode; Fehler über eigenen Error-Typ mit `IntoResponse`.
 - Kleine, thematisch abgeschlossene Commits, jeder Stand lauffähig. Commits mit `git commit -s` (DCO, `Signed-off-by`; die CI prüft es bei Pull Requests).
-- AGPL Abschnitt 13: Seitenleiste (`templates/app.html`) und Anmeldeseite verlinken den Quellcode (`web::SOURCE_URL`) mit Version (`web::VERSION`); diese
+- AGPL Abschnitt 13: Benutzermenü (`templates/app.html`) und Anmeldeseite verlinken den Quellcode (`web::SOURCE_URL`) mit Version (`web::VERSION`); diese
   Links nicht entfernen. Der Installer legt `LICENSE` und `THIRD-PARTY-LICENSES.txt` nach
   `/usr/local/share/doc/opennetmon/`, das Paket `copyright` (aus `LICENSE`) und `THIRD-PARTY-LICENSES.txt` nach `/usr/share/doc/opennetmon/`.
   Lizenzangaben in `LICENSE` und `Cargo.toml` (`license`, `repository`, `authors`).
@@ -143,12 +144,10 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–P); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-09):
 
-- **v0.5.9** released (2026-11-08); Test-Paket **0.5.10** läuft auf dem Server (Temperatursensoren überstehen umbenannte Chips, Vorlagen übernehmen
-  Intervall und Abhängigkeit; keine Migration).
-- **Vorhaben P** (neue Oberfläche nach opensecmon): Entwurf in `docs/entwurf/` abgenommen, danach vom Nutzer geändert („Änderungen“ in der Kopfleiste,
-  „Einstellungen“ im Benutzermenü unter „Mein Konto“, Abzeichen „Neue Version“ mit Einstellungen → Aktualisierungen). **Nur geplant**, Umsetzung erst nach „go“.
-  Bis dahin die Beschreibung der heutigen Oberfläche (violette Seitenleiste, Handy-Menü) in `ARCHITEKTUR.md` nicht ändern. Der Entwurf bleibt **lokal**
-  (`/docs/entwurf/` in `.gitignore`, nicht ins öffentliche Repo).
+- **v0.5.9** released (2026-11-08); auf dem Server zuletzt Test-Paket 0.5.10.
+- **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
+  ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag); der Nutzer installiert es selbst und gibt Rückmeldung, Release nur auf Ansage. Beschreibung in
+  `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P). Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`).
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,
