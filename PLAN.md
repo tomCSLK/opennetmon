@@ -10,6 +10,10 @@ opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `route
 Tag, läuft auf dem Server) enthält zwei Korrekturen: lokale Temperatursensoren überstehen einen umbenannten hwmon-Baustein und das Ziel ist auf der
 Einstellungsseite wählbar, und Gerätevorlagen übernehmen Intervall und Abhängigkeit je Sensor. Keine neue Migration (0001–0025).
 
+**Geplant (2026-11-09, Vorhaben P):** neue Oberfläche nach dem Vorbild von opensecmon (Kopfleiste, graue Flächen mit ruhigem Blau, Fira, Logo C, „Braucht Aufmerksamkeit“,
+Suche mit „/“, Kürzel-Hilfe). Klickbarer Entwurf (nur lokal in `docs/entwurf/`) vom Nutzer abgenommen, danach geändert: Einstellungen ins Benutzermenü, „Änderungen“ in die Kopfleiste,
+Abzeichen „Neue Version“ statt des Hinweises in der Seitenleiste. Umsetzung erst nach „go“ (Abschnitt P).
+
 **Stand bei v0.5.7 (2026-10-30):**
 
 Alle sechs MVP-Schritte sind umgesetzt, dazu einiges darüber hinaus. opennetmon läuft als `.deb` auf dem Ubuntu-Server des Nutzers (dort seit 2026-10-30
@@ -946,6 +950,68 @@ unter 1 Balken warnen) und am pendelnden Ping-Sensor (Paketverlust) prüfen – 
 
 Verworfen: alle Wechsel ins HTML schreiben und im Browser blättern (bei N = 1000 je Sensor und Neuladen alle 30 s unnötig groß); nur die 20 auf
 50 erhöhen (löst das Verdrängen nicht).
+
+### P. Neue Oberfläche nach dem Vorbild von opensecmon – Entwurf abgenommen 2026-11-09, Umsetzung wartet auf „go“
+
+Anlass: Nutzerwunsch (2026-11-09), die Oberfläche von opensecmon (`../opensecmon/`) auch für opennetmon zu verwenden; Farben und Logo von
+opennetmon dürfen ersetzt werden. Klickbarer Entwurf in `docs/entwurf/` (README dort, erfundene Daten, lokal geprüft hell/dunkel und bei 1440/1024/390 px).
+Der Entwurf bleibt **lokal** und kommt nicht ins öffentliche Repo (Nutzer, 2026-11-09; `/docs/entwurf/` steht in `.gitignore`).
+
+**Entschieden (Nutzer, 2026-11-09):**
+
+- Gestaltung wie opensecmon: Kopfleiste mit Navigation statt der violetten Seitenleiste, graue Flächen mit ruhigem Blau (`#1c5ea8`, dunkel `#7aaeea`),
+  Fira Sans/Fira Code (OFL, lokal eingebettet), Symbole nach Lucide (ISC), Zeilen 34 px; hell, dunkel und Handy abgenommen.
+- **Logo C** (Monitor mit Pulslinie), einfarbig; ersetzt die violette Kugel (Favicon, Anmeldeseite, README-Bild).
+- **Alle drei bisher optionalen Teile kommen mit:** (1) „Braucht Aufmerksamkeit“ auf der Übersicht (Sensoren mit Warnung/Ausfall, Meldung, Dauer, Ausfälle
+  zuerst, ohne Störung ausgeblendet), (2) Suche in der Kopfleiste mit „/“ (Ziel: `/status/all?q=…`, filtert nach Sensor-, Geräte-, Gruppenname und Meldung,
+  keine eigene Suchmaschine), (3) Hilfe zu den Tastenkürzeln (Benutzermenü und „?“: „/“, „g“ dann „u/p/b/e“, „t“ Hell/Dunkel, „Esc“).
+- Neu in der Kopfleiste: drei Zustandszähler (In Ordnung/Warnung/Ausfall) mit Link zur Sensorliste; auf dem Handy eine Leiste mit vier Punkten unten.
+- **Navigation (geändert vom Nutzer, 2026-11-09, nach der Abnahme):** Kopfleiste „Übersicht, Protokoll, Berichte, Änderungen“; „Änderungen“ ist das
+  Änderungsprotokoll (heute `/audit`, nur Admins) und steht an der Stelle, an der vorher „Einstellungen“ stand. „Einstellungen“ steht im Benutzermenü als
+  eigener Punkt direkt unter „Mein Konto“ (nicht in „Mein Konto“ hinein), nur für Admins, als ein Bereich mit Unternavigation (`/settings`: SNMP-Profile,
+  Benutzer, E-Mail, Gerätevorlagen, Wartungsfenster, API-Zugang, MIB-Dateien; heute sieben Einzelpunkte in der Seitenleiste). Kürzel „g a“ Änderungen,
+  „g e“ Einstellungen. Leser sehen drei Punkte in der Kopfleiste. Im Entwurf umgesetzt (`aenderungen.html`, Benutzermenü in `assets/app.js`).
+- **Hinweis auf neue Versionen (die angekündigte „Änderung zum Update“, Nutzer, 2026-11-09):** statt `p.sidebar-update` in der Seitenleiste für Admins ein
+  Abzeichen „Neue Version x.y“ in der Kopfleiste (vor den Zustandszählern; auf dem Handy nur das Symbol). Aufgeklappt: „opennetmon x.y ist erschienen
+  (installiert a.b)“, kurz die zwei Wege (auf diesem Rechner über den geplanten Launcher, ein eigenes, noch nicht öffentliches Projekt; auf einem Server Paket laden, mit `SHA256SUMS` prüfen,
+  mit apt installieren, vorher sichern), Knöpfe „Was ist neu?“ (Release-Seite) und „Anleitung“. Die Anleitung steht unter **Einstellungen →
+  Aktualisierungen** (neuer Punkt der Unternavigation): Version installiert/neueste, zuletzt gesucht, `update_check` (nur Anzeige, geändert wird weiter in
+  `config.toml`), Quellcode-Link, Befehle für den Server (`sha256sum -c --ignore-missing SHA256SUMS`, `systemctl start opennetmon-backup`, `apt install`),
+  Hinweis auf Migrationen und Datenschutz. Ohne neue Version kein Abzeichen, die Seite sagt „aktuell“. opennetmon lädt und installiert weiter nichts selbst.
+  Wortlaut abgestimmt mit dem Entwurf des Launchers (Pfad in `CLAUDE.local.md`); opensecmon soll dasselbe bekommen.
+- **Version und Quellcode-Link** (AGPL Abschnitt 13, heute unten in der Seitenleiste) stehen unten im Benutzermenü: „opennetmon a.b · Quellcode (AGPL-3.0)“,
+  für alle Benutzer, wie in opensecmon; die Anmeldeseite behält ihren Link. Im Entwurf umgesetzt (Abzeichen und Menü in `assets/app.js`, Seite in
+  `assets/pages.js`, umschaltbar in der Entwurfsleiste „Version: Neue verfügbar / Aktuell“).
+- Zustände immer an Symbol **und** Text erkennbar; „In Ordnung“ ruhig (nur grüner Text/Symbol), Warnung/Ausfall getönt und umrandet; Diagramm blau und
+  orange, zweite Reihe gestrichelt.
+
+**Umsetzung (nach „go“, Stufen, je Stufe Test-Paket, kein Release ohne Ansage; wahrscheinlich eine Nebenversion, z. B. 0.6.0):**
+
+| Stufe | Inhalt | Dateien |
+|---|---|---|
+| A | Farben, Schrift, Bauteile; Variablennamen bleiben, nur Werte ändern sich | `static/app.css`, `static/fonts/`, `THIRD-PARTY-LICENSES.txt`/NOTICE für die Schriften |
+| B | Kopfleiste mit „Änderungen“ und Abzeichen „Neue Version“, Benutzermenü mit „Einstellungen“ und Version/Quellcode, `/settings` mit Unternavigation (darin „Aktualisierungen“), Handy-Leiste, Aufmerksamkeitskarte, Suche mit „/“, Hilfe zu den Kürzeln | `templates/app.html`, `static/app.js`, `web::…`, `locales/de`, `locales/en` |
+| C | Seite für Seite: Übersicht, Sensor, Gerät, Listen, Formulare, Handy-Tabellen (`m-cards`) | `templates/*.html`, `static/*.js` |
+| D | Logo C, Favicon, Anmeldeseite, README-Bild, Erklärvideo | `static/`, `docs/assets/` |
+
+Reihenfolge: A und B zusammen als Test-Paket 0.5.11 (Nutzer installiert selbst), danach C und D nach Rückmeldung.
+
+**Zu beachten:** keine Inline-Styles (CSP; der Entwurf ist davon ausgenommen), Tests zu Klassennamen und Seitenköpfen
+(`page_heads_show_everyday_actions…`), Prüfung der Fluent-Kataloge (jeder neue Text in `de` und `en`, auch aus JS), Klassen der Handy-Tabellen
+(`m-cards`, `m-sensors`, …), Graphen lesen ihre Farben aus den CSS-Variablen (Event `opennetmon:theme`), Schriftlizenzen nachtragen, bei Änderung an
+`Cargo.lock` `dev/third-party-licenses.py` laufen lassen, Browserprüfung mit Wegwerf-Daten (hell/dunkel, 390 px) vor jeder Meldung.
+Beim Update-Hinweis: `CurrentUser.update` bleibt die Quelle, Test in `src/web/auth.rs` anpassen, Stil `p.sidebar-update` ersetzen, `docs/operations.md`
+(„Notice of new versions“ nennt die Seitenleiste) nachziehen; die AGPL-Links (`web::SOURCE_URL`, `web::VERSION`) dürfen nicht verloren gehen.
+
+**Stand (2026-11-09): nur geplant und dokumentiert, nichts in der Anwendung umgesetzt, kein „go“.** Die Änderungen des Nutzers zur Navigation und zum
+Update-Hinweis (oben) sind im Entwurf. Die Doku ist bereinigt (2026-11-09: Einzelheiten aus `CLAUDE.md` nach `ARCHITEKTUR.md`, Übersicht `~/Claude/Projekte/CLAUDE.md`
+gekürzt; die automatisch geladenen Dateien hatten zusammen über 150 000 Zeichen, jetzt rund 35 000).
+
+**Offen:**
+
+- Nach der Umsetzung nachzuziehen: Abschnitte „Stack“/„Design“ und „AGPL“ in `ARCHITEKTUR.md` und `CLAUDE.md` (violette Seitenleiste, Bedienelementhöhen,
+  Handy-Menü, Knopfleisten, Quellcode-Link), `README.md` (Bild, Logo), `docs/` (Screenshots, falls vorhanden; `docs/operations.md` zum Update-Hinweis),
+  Release-Notes (Englisch).
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
