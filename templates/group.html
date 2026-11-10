@@ -35,11 +35,11 @@
     <a class="button ghost" href="/maintenance/group/{{ summary.id }}">{{ t.get("maintenance") }}</a>
     {% if !rows.is_empty() %}<a class="button ghost" href="/groups/{{ summary.id }}/order?back={{ back }}">{{ t.get("order-change") }}</a>{% endif %}
     <a class="button secondary" href="/groups/new?parent={{ summary.id }}&back={{ back }}">
-      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      {{ crate::web::icon("folder", "")|safe }}
       {{ t.get("group-new-sub") }}
     </a>
     <a class="button" href="/devices/new?group={{ summary.id }}&back={{ back }}">
-      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      {{ crate::web::icon("plus", "")|safe }}
       {{ t.get("device-new") }}
     </a>
       </div>

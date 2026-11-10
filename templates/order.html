@@ -25,7 +25,7 @@
       {% for item in l.items %}
       <li>
         <span class="handle" aria-hidden="true" title="{{ t.get("order-drag") }}">
-          <svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">{{ crate::web::icon_shapes("grip")|safe }}</svg>
         </span>
         <span class="order-name"><strong>{{ item.name }}</strong>{% if !item.sub.is_empty() %}<span class="sub">{{ item.sub }}</span>{% endif %}</span>
         <input class="pos" type="number" name="{{ l.prefix }}_{{ item.id }}" value="{{ item.position }}" min="1" max="100000" inputmode="numeric" aria-label="{{ t.get1("order-position-of", "name", item.name.as_str()) }}">

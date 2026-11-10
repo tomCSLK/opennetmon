@@ -52,7 +52,7 @@
     <form method="post" action="/devices/{{ device.id }}/discover">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
       <button type="submit">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        {{ crate::web::icon("search", "")|safe }}
         {{ t.get("sensors-find-interfaces") }}
       </button>
     </form>

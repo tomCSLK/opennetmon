@@ -1012,7 +1012,7 @@ vom Entwurf und vom Plan:
 
 - Im Abzeichen und auf der Seite „Aktualisierungen“ steht nur der Weg über den Server (Paket, `SHA256SUMS`, Sicherung, `apt install`); der Weg über den
   Launcher kommt erst, wenn der Launcher erschienen ist. Der Datenschutzhinweis erscheint nur bei eingeschalteter Suche.
-- Symbole sind eigene einfache SVG-Formen (`src/web/icons.rs`, `static/icons/`), nicht aus Lucide; keine weitere Fremdlizenz. Schriften Fira Sans/Code
+- Symbole waren in 0.6.0 eigene einfache SVG-Formen; seit Schritt 2 unten (2026-11-10) kommen sie aus Lucide wie im Entwurf. Schriften Fira Sans/Code
   (Fontsource 5.3.0, OFL-1.1) in `static/fonts/` mit Lizenztexten und in `THIRD-PARTY-LICENSES.txt`.
 - Suche: Sensor, Gerät, Adresse, Gruppe und Meldung, alle Wörter müssen vorkommen (höchstens 100 Zeichen). Statuschip der Kopfleiste nur bei
   Seitenaufrufen berechnet, nicht bei JSON-Abfragen.
@@ -1040,7 +1040,7 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
 - Punkt 26: Protokoll und Änderungen bekommen beide die Auswahl der Zeilen.
 
 *Rahmen und Bauteile*
-1. **Symbole:** Lucide (ISC, `assets/icons.js` im Entwurf) statt eigener einfacher Formen (`src/web/icons.rs`, `static/icons/`), auf allen Seiten.
+1. **Symbole** (erledigt in Schritt 2): Lucide (ISC, `assets/icons.js` im Entwurf) statt eigener einfacher Formen (`src/web/icons.rs`, `static/icons/`), auf allen Seiten.
    Die Lizenz kommt in `THIRD-PARTY-LICENSES.txt`; damit entfällt die oben genannte Abweichung „eigene Symbole“.
 2. **Knöpfe in den Seitenköpfen:** „Pausieren“ und „Protokoll“ sind im Entwurf umrandete Knöpfe mit Symbol, in 0.6.0 Textknöpfe ohne Symbol.
 3. **„Automatisch“:** im Entwurf ein Schalter und ein Aktualisieren-Symbol ohne Rahmen; in 0.6.0 ein Kästchen und ein umrandeter Knopf.
@@ -1138,7 +1138,11 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    - Seiten: Übersicht, Sensorliste, Gerät, Sensor (Traffic, Ping, Link-Status), Protokoll, Berichte, Änderungen, Einstellungen, Anmeldung.
    - Jeweils bei 1440 und 390 px, hell und dunkel.
    - Ergebnis: eine Liste hier in P. Der Nutzer ergänzt seine Befunde vom Server und gibt frei, was geändert wird.
-2. **Symbole auf Lucide** (ISC, in die Lizenzliste; begonnen 2026-11-10). Betrifft alle Seiten, daher zuerst.
+2. **Symbole auf Lucide** (ISC, in die Lizenzliste) – **erledigt 2026-11-10**, noch nicht im Test-Paket.
+   - Lucide 1.61.0 (npm `lucide-static`, Prüfsumme gegen die Registry geprüft). `dev/lucide-icons.py` erzeugt daraus `src/web/lucide.rs`
+     (55 Symbole), die Statussymbole `static/icons/*.svg` und `static/icons/LICENSE-lucide.txt`; Lizenz in `THIRD-PARTY-LICENSES.txt`.
+   - Alle Inline-Symbole der Templates laufen über `web::icon`/`web::icon_shapes`; nur der Switch ist eine eigene Form (Lucide hat keinen).
+   - Im Browser geprüft: Übersicht, Gerät, Sensor, Einstellungen, Benutzermenü, hell und dunkel.
 3. **Kacheln und Zähler:**
    - Übersicht und Sensorliste mit Unterzeile.
    - Sensorseite in einer Reihe, beim Ping zwei Reihen.

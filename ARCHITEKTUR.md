@@ -29,9 +29,11 @@ Ziel und Sprachentscheidung · Python-Fallback (verworfen)
   Ok/Warnung/Ausfall (`Layout.counts` aus `status_list::header_counts`, vom Extractor `CurrentUser` nur bei Seitenaufrufen berechnet: `Sec-Fetch-Mode:
   navigate` oder Accept `text/html`), Schema-Knopf und Benutzermenü (`details.user-menu`: Mein Konto, Einstellungen (Admins), hell/dunkel, Tastenkürzel,
   Abmelden, Version mit Quellcode-Link nach AGPL §13). Einstellungen als eigener Bereich: `web::SETTINGS` (Profile, Benutzer, E-Mail, Vorlagen,
-  Wartungsfenster, API, MIB, Aktualisierungen) mit Unternavigation `Layout::settings_nav()`, `/settings` leitet auf den ersten Eintrag um. Symbole als
-  eigene SVG-Pfade über `web::icon(name, class)` (`src/web/icons.rs`; askama kann keine Zeichenketten vergleichen), Statussymbole der Plaketten als
-  CSS-Masken aus `static/icons/*.svg`. Tastenkürzel im `<dialog id="keys-help">` (`?`, `/`, `g u|p|b|a|e`, `t`, Esc). Übersicht mit Karte „Braucht
+  Wartungsfenster, API, MIB, Aktualisierungen) mit Unternavigation `Layout::settings_nav()`, `/settings` leitet auf den ersten Eintrag um. Symbole aus
+  Lucide (ISC) über `web::icon(name, class)` bzw. `web::icon_shapes(name)` in einem eigenen `<svg>` (`src/web/icons.rs`; askama kann keine
+  Zeichenketten vergleichen); die Formen stehen in `src/web/lucide.rs`, erzeugt von `dev/lucide-icons.py` aus dem npm-Paket `lucide-static`
+  (Version dort und in `dev/third-party-licenses.py`), nur der Switch ist eine eigene Form. Statussymbole der Plaketten als CSS-Masken aus
+  `static/icons/*.svg` (ebenfalls erzeugt, Lizenz `static/icons/LICENSE-lucide.txt`). Tastenkürzel im `<dialog id="keys-help">` (`?`, `/`, `g u|p|b|a|e`, `t`, Esc). Übersicht mit Karte „Braucht
   Aufmerksamkeit“ (`overview::Attention`, höchstens `ATTENTION_ROWS` = 8, nach Zustand und Dauer).
   Handy (bis 899 px; `docs/devices-and-groups.md`, „Phones“): Kopfleiste nur Logo, Suche, Statuschip und Benutzermenü, Navigation als Leiste unten
   (`nav.bottomnav`), Unternavigation der Einstellungen als waagerecht scrollende Reiter; Zeilenaktionen als Symbole aus den Makros in `templates/icons.html`;
