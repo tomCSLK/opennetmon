@@ -78,7 +78,7 @@ impl Range {
         }
     }
 
-    fn duration_ms(self) -> i64 {
+    pub fn duration_ms(self) -> i64 {
         match self {
             Self::Hour => HOUR_MS,
             Self::Day => 24 * HOUR_MS,

@@ -1084,7 +1084,7 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
     - 0.6.0 zieht Reihen mit ein oder zwei Kacheln über die ganze Breite.
     - Der Ping hat fünf Kanäle (Antwortzeit, Min, Max, Jitter, Verlust) und drei Verfügbarkeiten und bleibt bei zwei Reihen. Bei anderen Sensoren mit vielen
       Kanälen gilt eine Grenze, z. B. höchstens fünf Kacheln je Reihe.
-18. **Graph:** im Entwurf eine Karte „Verlauf“ mit Kopf (Zeitraum). Weiter:
+18. (erledigt in Schritt 4) **Graph:** im Entwurf eine Karte „Verlauf“ mit Kopf (Zeitraum). Weiter:
     - die Einheit einmal oben links statt an jeder Achsenbeschriftung
     - nur waagrechte Gitterlinien (fünf) und etwa sechs Zeitmarken (0.6.0: senkrechte Linien zu jeder Stunde)
     - die erste Reihe `--s1` mit leichter Fläche, die zweite `--s2` gestrichelt ohne Fläche (0.6.0: beide mit Fläche)
@@ -1092,9 +1092,9 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
     - die Legende unten links mit Linienmuster statt der uPlot-Legende „Zeit: --“ mit Kästchen in der Mitte
     - ein Hinweiskasten am Fadenkreuz
     - **Entschieden (Nutzer 2026-11-10):** uPlot behalten und angleichen (Zoom, Lücken und viele Punkte bleiben), kein eigenes SVG.
-19. **Ping:** **ein** Graph (Nutzer 2026-11-10): Millisekunden links, Verlust auf einer zweiten Achse rechts, als Balken oder Stufenlinie in der Farbe für
+19. (erledigt in Schritt 4) **Ping:** **ein** Graph (Nutzer 2026-11-10): Millisekunden links, Verlust auf einer zweiten Achse rechts, als Balken oder Stufenlinie in der Farbe für
     Ausfall. 0.6.0 zeichnet je Einheit einen Graphen (`static/chart.js` gruppiert nach `unit`), also zwei; alle vier ms-Reihen haben eine Fläche und wirken trüb.
-20. **Sensoren ohne Messverlauf** (Link-Status u. Ä.):
+20. (erledigt in Schritt 4) **Sensoren ohne Messverlauf** (Link-Status u. Ä.):
     - Statt des Stufengraphen ein Band „Zustand im Zeitraum“ (`.bigband`, 36 px) mit Legende.
     - Die Kacheln „Aktuell“ und die drei Verfügbarkeiten in einer Reihe.
     - **Fehler in 0.6.0:** Die Achse des Stufengraphen beschriftet Zustände doppelt („down (2)“, „down“, „down“, „up“, „up (1)“).
@@ -1152,10 +1152,20 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
      Arbeitsspeicher 3 + 3); Wert 28 px/600, Pfeile bei Eingehend/Ausgehend; auf dem Handy zwei je Reihe, eine einzelne letzte über
      die ganze Breite.
    - Im Browser geprüft bei 1440 px hell und dunkel und bei 390 px.
-4. **Graphen:**
-   - uPlot an den Entwurf angleichen.
-   - Ping in einem Graphen mit zweiter Achse für den Verlust.
-   - Zustandsband für Sensoren ohne Messverlauf.
+4. **Graphen** – **erledigt 2026-11-10** (Punkte 18–20), noch nicht im Test-Paket:
+   - uPlot angeglichen (`static/chart.js` neu): Karte „Verlauf“ mit Zeitraum im Kopf, Einheit einmal über der Achse, fünf waagrechte Linien ab 0 in
+     runden Schritten, etwa sechs Zeitmarken, erste Reihe mit leichter Fläche, weitere gestrichelt, eigene Legende unten links, Hinweiskasten am
+     Fadenkreuz; Zoom per Ziehen bleibt.
+   - Reihen ein- und ausblenden per Klick auf die Legende (Frage des Nutzers 2026-11-10; in 0.6.0 ging das über die uPlot-Legende und war mit der
+     eigenen Legende zunächst weggefallen). Die Achse passt sich den sichtbaren Reihen an; die Auswahl gilt je Sensor im Browser-Tab
+     (`sessionStorage`), übersteht also das automatische Neuladen.
+   - Ausfälle rot hinterlegt: Das JSON bringt die Zustände im Zeitraum mit (`periods`, aus den Statuswechseln; `sparkline::periods` fasst gleiche
+     Zustände zusammen). In der 1-Stunden-Ansicht reißt die Linie bei fehlenden Abfragen (mehr als 2,5 Intervalle) ab.
+   - Ping in **einem** Graphen: ms links, Verlust rechts als rote Balken (nur, wo etwas verloren ging). Allgemein: eine zweite Einheit bekommt die
+     rechte Achse (z. B. Arbeitsspeicher % und GB), ab drei Einheiten ein weiterer Graph.
+   - Link-Status u. Ä. (nur Statuswerte): Band „Zustand im Zeitraum“ mit Legende und Zeiten statt des Stufengraphen; damit ist auch die doppelte
+     Achsenbeschriftung weg.
+   - Im Browser geprüft (1440 px hell/dunkel, schmal per Skript); bei 390 px headless nicht prüfbar, weil die Seite dort keine Messdaten laden kann.
 5. **Rest der Liste:** Verlaufsspalte der Geräteseite, Berichte, Zeitraumwahl, Karte „Messwerte“.
 6. **Test-Paket bauen**, empfohlen als 0.6.1, damit auf dem Server eindeutig ist, was läuft; ein Release 0.6.0 gäbe es dann nicht. Der Nutzer testet auf dem
    Server.

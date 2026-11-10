@@ -25,11 +25,20 @@ audit entry. Values, chart and events are always kept. Readers do not see the pa
 
 - **uPlot 1.6.32** (MIT) is kept unchanged under `static/vendor/uplot/` (with license, source and checksum in the `README.md` there) and shipped with the
   binary – no CDN, no npm. Own code: `static/chart.js` (no inline script, the CSP stays `default-src 'self'`).
-- The data come as JSON from `/sensors/<id>/data?range=…`: `{"range","step_secs","interval_secs","ts":[seconds…],"series":[{"key","label","unit","values":[…|null]}]}`.
-  All channels share the time axis; a missing value is `null` (a gap in the chart, no line).
-- One chart per unit (inbound and outbound share one). Shown in the **browser's time zone** (`static/chart.js`), 24-hour clock, numbers and units in the
-  user's language (bit/s, kbit/s, Mbit/s, Gbit/s). The chart reloads every 30 s; header and value tiles are updated by “Auto” (every 30 s, see
-  `docs/devices-and-groups.md`).
+- The data come as JSON from `/sensors/<id>/data?range=…`: `{"range","from","to","periods":[{"from","to","status","label"}],"step_secs","interval_secs",
+  "ts":[seconds…],"series":[{"key","label","unit","values":[…|null]}]}`. All channels share the time axis; a missing value is `null` (a gap in the chart,
+  no line); in the 1-hour view a pause longer than 2.5 polling intervals also breaks the line. `periods` is the status of the sensor over the range,
+  from its status changes.
+- The card “History” shows one chart: the unit once above the axis (Mbit/s, ms, days …, chosen from the largest value), five horizontal grid lines from
+  0 in round steps, about six times below. The first channel is a line with a light area, the others are dashed. Times when the sensor was **down** are
+  tinted red. A second unit gets its own axis on the right: for ping the **packet loss** as red bars (only where something was lost, 0–100 %), for
+  “This server” e.g. memory in % and GB. The legend is below the chart; a click on an entry hides or shows that channel (the axis then fits the
+  channels shown; the choice holds over the reloads of the browser tab). The tooltip at the cursor names time and the values shown. Drag to zoom into
+  a stretch, double-click to zoom out.
+- Sensors with status values only (link status) show the card “Status over time” instead: a band coloured by status (green OK, yellow warning, red down,
+  grey paused or unknown; empty before the first poll) with a legend; each stretch names status and times as a tooltip.
+- Shown in the **browser's time zone** (`static/chart.js`), 24-hour clock, numbers and units in the user's language. The chart reloads every 30 s;
+  header and value tiles are updated by “Auto” (every 30 s, see `docs/devices-and-groups.md`).
 - Where the points come from: 1 h raw values (every poll); 24 h, 7 d and 30 d **120 averages** each in blocks of equal length – 12 minutes, 1 h 24 min
   and 6 hours. 24 h and 7 d average the raw values, 30 d the hourly values from `samples_1h` (as long as no rollups exist yet, the raw data directly).
   The blocks start at multiples of their length (UTC), so that they do not move on reload; the newest block is still filling.

@@ -80,9 +80,13 @@
 </section>
 {% endfor %}
 
-<section class="card">
-  <div id="charts" data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="{{ t.get("detail-no-samples") }}"></div>
-  <noscript><p class="muted">{{ t.get("detail-chart-needs-js") }}</p></noscript>
+<section class="card flush">
+  <div class="card-head">
+    <h2>{% if band %}{{ t.get("detail-band") }}{% else %}{{ t.get("detail-history") }}{% endif %}</h2>
+    <span class="muted small">{{ range_label }}</span>
+  </div>
+  <div id="charts" class="chart-body"{% if band %} data-band{% endif %} data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="{{ t.get("detail-no-samples") }}"></div>
+  <noscript><p class="muted chart-body">{{ t.get("detail-chart-needs-js") }}</p></noscript>
 </section>
 
 <section class="card flush">

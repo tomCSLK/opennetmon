@@ -83,5 +83,26 @@
     };
   }
 
-  window.opennetmonFormat = { num: num, value: value, bytes: bytes, clock: clock, day: day, dateTime: dateTime, forSeries: forSeries };
+  // The unit of a chart axis for series `s` whose largest value is `max`: the axis shows plain numbers
+  // (value / div) and names the unit once above it, e.g. { div: 1e6, unit: 'Mbit/s' }.
+  function axis(s, max) {
+    var a = Math.abs(max || 0);
+    function pick(steps) {
+      for (var i = 0; i < steps.length - 1; i += 1) { if (a >= steps[i][0]) { return { div: steps[i][0], unit: steps[i][1] }; } }
+      return { div: 1, unit: steps[steps.length - 1][1] };
+    }
+    switch (s.unit) {
+      case 'bps': return pick([[1e9, 'Gbit/s'], [1e6, 'Mbit/s'], [1e3, 'kbit/s'], [1, 'bit/s']]);
+      case 'bytes': return pick([[1e12, 'TB'], [1e9, 'GB'], [1e6, 'MB'], [1e3, 'KB'], [1, 'B']]);
+      case 's': return pick([[86400, T('unit-days')], [3600, T('unit-hours')], [60, T('unit-minutes')], [1, 's']]);
+      case 'ms': return { div: 1, unit: 'ms' };
+      case 'percent': return { div: 1, unit: '%' };
+      case 'celsius': return { div: 1, unit: '°C' };
+      case 'days': return { div: 1, unit: T('unit-days') };
+      case 'per_second': return { div: 1, unit: (s.unit_label || '') + '/s' };
+      default: return { div: 1, unit: s.unit_label || '' };
+    }
+  }
+
+  window.opennetmonFormat = { num: num, value: value, bytes: bytes, clock: clock, day: day, dateTime: dateTime, forSeries: forSeries, axis: axis };
 })();

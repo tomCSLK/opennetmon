@@ -197,6 +197,10 @@ struct DetailTemplate {
     interval: u32,
     /// The ratings of named status values, shown to readers (admins change them in the settings).
     states: Option<StatesView>,
+    /// Status values only (link status): a band of the status over the range instead of a chart.
+    band: bool,
+    /// The range shown, e.g. "24 Stunden" (card head of the chart).
+    range_label: String,
 }
 
 fn now_ms() -> i64 {
@@ -321,6 +325,8 @@ async fn render(
         flash,
         interval: sensor.interval(device.polling.interval_secs),
         states,
+        band: !sensor.channels.is_empty() && sensor.channels.iter().all(|c| c.unit == Unit::State),
+        range_label: user.lang.get(range.label_id()),
         sensor,
         trail: group_trail(&state.pool, device.group_id).await?,
         device,
@@ -460,9 +466,24 @@ struct SeriesJson {
     values: Vec<Option<f64>>,
 }
 
+/// A stretch of time in one status (seconds), for the band of status sensors and the tinted
+/// outages of the chart.
+#[derive(Serialize)]
+struct PeriodJson {
+    from: i64,
+    to: i64,
+    status: &'static str,
+    label: String,
+}
+
 #[derive(Serialize)]
 pub struct ChartJson {
     range: &'static str,
+    /// Start and end of the range (seconds); the chart spans them.
+    from: i64,
+    to: i64,
+    /// The status of the sensor over the range, from its status changes.
+    periods: Vec<PeriodJson>,
     /// Seconds covered by one point when points are averages (7 and 30 days); `None` for raw samples.
     step_secs: Option<i64>,
     /// Polling interval of the device, to estimate the time a raw sample covers.
@@ -480,9 +501,24 @@ pub async fn data(
 ) -> Result<Json<ChartJson>> {
     let (sensor, device) = load(&state, id).await?;
     let range = query.range();
-    let chart = chart_data(&state.pool, &sensor.channels, range, now_ms()).await?;
+    let now = now_ms();
+    let chart = chart_data(&state.pool, &sensor.channels, range, now).await?;
+    let from = now - range.duration_ms();
+    let (start, changes) = status_store::status_history(&state.pool, sensor.id, from).await?;
+    let periods = crate::web::sparkline::periods(start, &changes, from, now)
+        .into_iter()
+        .map(|(a, b, status)| PeriodJson {
+            from: a.div_euclid(1000),
+            to: b.div_euclid(1000),
+            status: status.as_str(),
+            label: user.lang.get(status.label_id()),
+        })
+        .collect();
     Ok(Json(ChartJson {
         range: range.as_str(),
+        from: from.div_euclid(1000),
+        to: now.div_euclid(1000),
+        periods,
         step_secs: range.step_secs(),
         interval_secs: sensor.interval(device.polling.interval_secs),
         ts: chart.ts,
@@ -1069,6 +1105,33 @@ mod tests {
         assert!(
             body.contains("\"step_secs\":null") && body.contains("\"interval_secs\":60"),
             "{body}"
+        );
+        // The range the chart spans and the status over it, from the first poll on.
+        assert!(
+            body.contains("\"from\":")
+                && body.contains("\"status\":\"up\",\"label\":\"In Ordnung\"}]"),
+            "{body}"
+        );
+        crate::storage::status::record_poll(
+            &h.state.pool,
+            sensor,
+            now_ms() - 10_000,
+            &[],
+            &Assessment::Failed("weg".into()),
+        )
+        .await
+        .unwrap();
+        let failed = send(
+            &h.app,
+            get(&format!("/sensors/{sensor}/data?range=1h"), Some(&viewer)),
+        )
+        .await;
+        assert!(
+            failed
+                .body
+                .contains("\"status\":\"warning\",\"label\":\"Warnung\"}]"),
+            "a first failure warns, up to now: {}",
+            failed.body
         );
         let week = send(
             &h.app,

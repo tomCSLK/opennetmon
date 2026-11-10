@@ -100,28 +100,23 @@ fn close_lone_point(d: &mut String, run: usize) {
     }
 }
 
-/// Status segments from `from_ms` to `to_ms`: `start` is the status at `from_ms`, `changes` the
-/// later changes, oldest first. Time without any status stays empty (the bar background).
-pub fn band(
+/// The stretches of time from `from_ms` to `to_ms` and their status as `(from, to, status)`:
+/// `start` is the status at `from_ms`, `changes` the later changes, oldest first. Time without any
+/// status (before the first poll) is left out; adjoining stretches of the same status are one.
+pub fn periods(
     start: Option<Status>,
     changes: &[(i64, Status)],
     from_ms: i64,
     to_ms: i64,
-) -> Vec<Segment> {
-    let span = (to_ms - from_ms) as f64;
-    let mut out = Vec::new();
-    if span <= 0.0 {
-        return out;
-    }
+) -> Vec<(i64, i64, Status)> {
+    let mut out: Vec<(i64, i64, Status)> = Vec::new();
     let mut push = |status: Option<Status>, a: i64, b: i64| {
-        if let Some(status) = status
-            && b > a
-        {
-            out.push(Segment {
-                x: format!("{:.3}%", (a - from_ms) as f64 * 100.0 / span),
-                width: format!("{:.3}%", (b - a) as f64 * 100.0 / span),
-                class: segment_class(status),
-            });
+        let Some(status) = status.filter(|_| b > a) else {
+            return;
+        };
+        match out.last_mut() {
+            Some(last) if last.2 == status && last.1 == a => last.1 = b,
+            _ => out.push((a, b, status)),
         }
     };
     let (mut current, mut since) = (start, from_ms);
@@ -132,6 +127,28 @@ pub fn band(
     }
     push(current, since, to_ms);
     out
+}
+
+/// Status segments from `from_ms` to `to_ms` (see [`periods`]) in percent of the width. Time
+/// without any status stays empty (the bar background).
+pub fn band(
+    start: Option<Status>,
+    changes: &[(i64, Status)],
+    from_ms: i64,
+    to_ms: i64,
+) -> Vec<Segment> {
+    let span = (to_ms - from_ms) as f64;
+    if span <= 0.0 {
+        return Vec::new();
+    }
+    periods(start, changes, from_ms, to_ms)
+        .into_iter()
+        .map(|(a, b, status)| Segment {
+            x: format!("{:.3}%", (a - from_ms) as f64 * 100.0 / span),
+            width: format!("{:.3}%", (b - a) as f64 * 100.0 / span),
+            class: segment_class(status),
+        })
+        .collect()
 }
 
 fn segment_class(status: Status) -> &'static str {
@@ -147,6 +164,30 @@ fn segment_class(status: Status) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn periods_cover_the_range_and_join_repeated_states() {
+        let changes = [
+            (150, Status::Down),
+            (200, Status::Up),
+            (220, Status::Up),
+            (500, Status::Warning),
+        ];
+        assert_eq!(
+            periods(Some(Status::Up), &changes, 100, 1_000),
+            [
+                (100, 150, Status::Up),
+                (150, 200, Status::Down),
+                (200, 500, Status::Up),
+                (500, 1_000, Status::Warning)
+            ]
+        );
+        // Before the first poll there is no status, and nothing to draw.
+        assert_eq!(
+            periods(None, &[(400, Status::Up)], 100, 1_000),
+            [(400, 1_000, Status::Up)]
+        );
+    }
 
     #[test]
     fn buckets_cover_the_hour_with_at_least_two_polls_each() {
