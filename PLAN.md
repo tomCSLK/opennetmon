@@ -3,17 +3,20 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-11-09, Release v0.5.9, Test-Paket 0.6.0 gebaut)
+## Stand (2026-11-10, Release v0.5.9, Test-Paket 0.6.0 auf dem Server)
 
 **Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
 opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
-Tag, läuft auf dem Server) enthält zwei Korrekturen: lokale Temperatursensoren überstehen einen umbenannten hwmon-Baustein und das Ziel ist auf der
+Tag, lief bis 2026-11-09 auf dem Server) enthält zwei Korrekturen: lokale Temperatursensoren überstehen einen umbenannten hwmon-Baustein und das Ziel ist auf der
 Einstellungsseite wählbar, und Gerätevorlagen übernehmen Intervall und Abhängigkeit je Sensor. Keine neue Migration (0001–0025).
 
 **Umgesetzt im Test-Paket 0.6.0 (2026-11-09, Vorhaben P, Auftrag des Nutzers „Testbuild mit dem neuen Design, Version 0.6.0“):** neue Oberfläche nach dem
 Vorbild von opensecmon (Kopfleiste mit „Änderungen“, graue Flächen mit ruhigem Blau, Fira, Logo C, „Braucht Aufmerksamkeit“, Suche mit „/“, Kürzel-Hilfe,
 Einstellungen im Benutzermenü mit eigener Unternavigation, Abzeichen „Neue Version“ und Seite Einstellungen → Aktualisierungen). Kein Tag, kein Release;
-der Nutzer installiert das Paket selbst auf dem Server und gibt Rückmeldung (Abschnitt P).
+seit 2026-11-09 23:08 auf dem Server installiert (Einzelheiten in `Serveradmin/CLAUDE.md`), der Nutzer testet und gibt Rückmeldung (Abschnitt P).
+
+**Notiert 2026-11-10 (Nutzer, noch nicht umgesetzt):** 0.6.0 weicht bei Grafiken und Graphen vom abgenommenen Entwurf ab, das soll angeglichen werden
+(Liste in Abschnitt P, „Abweichungen vom Entwurf“). Neu geplant ist eine **Docker-Version** (Vorhaben Q), damit opennetmon auf beliebiger Hardware läuft.
 
 **Stand bei v0.5.7 (2026-10-30):**
 
@@ -952,7 +955,7 @@ unter 1 Balken warnen) und am pendelnden Ping-Sensor (Paketverlust) prüfen – 
 Verworfen: alle Wechsel ins HTML schreiben und im Browser blättern (bei N = 1000 je Sensor und Neuladen alle 30 s unnötig groß); nur die 20 auf
 50 erhöhen (löst das Verdrängen nicht).
 
-### P. Neue Oberfläche nach dem Vorbild von opensecmon – umgesetzt 2026-11-09 im Test-Paket 0.6.0, wartet auf Rückmeldung
+### P. Neue Oberfläche nach dem Vorbild von opensecmon – umgesetzt 2026-11-09 im Test-Paket 0.6.0, auf dem Server im Test
 
 Anlass: Nutzerwunsch (2026-11-09), die Oberfläche von opensecmon (`../opensecmon/`) auch für opennetmon zu verwenden; Farben und Logo von
 opennetmon dürfen ersetzt werden. Klickbarer Entwurf in `docs/entwurf/` (README dort, erfundene Daten, lokal geprüft hell/dunkel und bei 1440/1024/390 px).
@@ -1018,9 +1021,87 @@ vom Entwurf und vom Plan:
 
 **Offen:**
 
-- Rückmeldung des Nutzers zum Test-Paket 0.6.0 auf dem Server, danach ggf. Korrekturen und Release auf Ansage (Release-Notes Englisch).
+- Rückmeldung des Nutzers zum Test-Paket 0.6.0 (seit 2026-11-09 auf dem Server), danach ggf. Korrekturen und Release auf Ansage (Release-Notes Englisch).
 - `README.md`: Bild der neuen Oberfläche (`docs/assets/`), Erklärvideo; Logo `docs/assets/opennetmon-logo.jpg` noch das alte.
 - opensecmon soll denselben Hinweis auf neue Versionen bekommen (eigenes Projekt).
+
+**Abweichungen vom Entwurf (Rückmeldung des Nutzers 2026-11-10 beim Test von 0.6.0: Grafiken, Graphen usw. weichen vom Entwurf ab; erst notiert,
+Umsetzung nach „go“):** Die Seiten sollen dem abgenommenen Entwurf (`docs/entwurf/`, nur lokal) entsprechen. Bekannt aus dem Vergleich der Quelltexte
+(Entwurf `assets/pages.js`, `assets/app.css`, `assets/icons.js` gegen 0.6.0):
+
+- **Symbole:** Der Entwurf nutzt Lucide (ISC, `assets/icons.js`), 0.6.0 eigene einfache Formen (`src/web/icons.rs`, `static/icons/`). Auf Lucide umstellen
+  (Namen wie im Entwurf), Lizenz in `THIRD-PARTY-LICENSES.txt`; damit entfällt die oben genannte Abweichung „eigene Symbole“.
+- **Graph der Sensorseite:** Im Entwurf eine Karte „Verlauf“ (Kopf mit Zeitraum), vier waagrechte Gitterlinien, Einheit oben links, erste Reihe `--s1` mit
+  leichter Fläche, zweite Reihe `--s2` gestrichelt, Zeiten ohne Antwort rot getönt (`.gap`), Fadenkreuz mit Hinweiskasten, Legende unter dem Graphen
+  („Eingehend“/„Ausgehend“). 0.6.0 zeigt uPlot mit Legende oben und eigener Achsenaufteilung. Zu entscheiden: uPlot an den Entwurf angleichen (Zoom, Lücken
+  und viele Punkte bleiben; Empfehlung) oder eigenes SVG wie im Entwurf (uPlot entfiele).
+- **Sensoren ohne Messverlauf** (z. B. Link-Status): Der Entwurf zeigt statt des Graphen ein Band „Zustand im Zeitraum“ (`.bigband`, 36 px) mit Legende,
+  0.6.0 einen Graphen der Zustände.
+- **Kacheln der Sensorseite:** Im Entwurf eine Reihe (`.tiles t4`/`t5`) aus aktuellen Werten (Pfeilsymbol für Eingehend/Ausgehend) und Verfügbarkeit
+  24 Stunden, 7 Tage und 30 Tage. 0.6.0 hat zwei getrennte Reihen `value-tile`. **Nutzer (2026-11-10):** möglichst in einer Reihe, außer beim Ping. Der
+  Ping hat fünf Kanäle (Antwortzeit, Min, Max, Jitter, Verlust) plus drei Verfügbarkeiten, das passt nicht in eine Reihe; dort bleiben es zwei Reihen. Gilt
+  sinngemäß für andere Sensoren mit vielen Kanälen: eine Reihe nur, solange sie lesbar bleibt (Regel bei der Umsetzung festlegen, z. B. höchstens fünf Kacheln).
+- **Graphen des Ping (Nutzer, 2026-11-10):** 0.6.0 zeichnet je Einheit einen eigenen Graphen (`static/chart.js` gruppiert nach `unit`). Beim Ping sind das
+  zwei: Millisekunden (Antwortzeit, Min, Max, Jitter) und Prozent (Verlust). Sie sollen zu **einem** Graphen werden, z. B. Millisekunden auf der linken
+  Achse und der Verlust auf einer zweiten Achse rechts, als Balken oder Stufenlinie in der Farbe für Ausfall.
+- **Kacheln der Übersicht und der Sensorliste:** Im Entwurf mit Unterzeile (z. B. „13 Geräte“, „96 % aller Sensoren“, „Grenzwert überschritten“,
+  „keine Antwort oder Fehler“, „von Hand oder per Zeitplan“) und dem Wert in Fira Code. 0.6.0 hat keine Unterzeile; auch den Satz der Kacheln abgleichen.
+- **Zähler im Gerätebaum:** Im Entwurf Symbol und Zahl in Fira Code; „In Ordnung“ ist nur grüner Text, Warnung, Ausfall und Pausiert sind getönt und umrandet.
+  0.6.0 zeigt Zeichen und Text (`pill-long`/`pill-short`).
+- **Prüfen:** Verlaufsspalte der Geräteseite („Letzte Stunde“), Verfügbarkeit in den Berichten (`.lvl`), Zeitraumwahl als Segmentschalter (`.seg`) und die
+  Karte „Messwerte“ (im Entwurf „Zeitraum“ und „Zeilen“ im Kartenkopf).
+
+Vorgehen bei der Umsetzung:
+
+1. Jede Seite des Entwurfs neben 0.6.0 legen: 1440 und 390 px, hell und dunkel, mit ähnlichen Wegwerf-Daten.
+2. Die Abweichungen vollständig auflisten, die Rückmeldungen des Nutzers vom Server ergänzen und die Liste mit ihm abgleichen.
+3. Die Abweichungen beheben, als neues Test-Paket (kein Release ohne Ansage).
+
+### Q. Docker-Version (Container-Image) – notiert 2026-11-10, Umsetzung nach „go“
+
+**Anlass:** Wunsch des Nutzers (2026-11-10): eine Docker-Version, damit opennetmon theoretisch auf jeder Hardware einsetzbar ist. Ein Docker-Image ist
+beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt seiner. Bis dahin stand „Docker-Betrieb“ unter „zurückgestellt“.
+
+**Ansatz:**
+
+- **Image:** das statische musl-Binary (Release-Build gibt es schon) auf minimaler Basis (`scratch` oder distroless `static`), ein Benutzer ohne Root mit
+  fester UID, schreibgeschützte Wurzel und ein Volume `/var/lib/opennetmon` für Datenbank und Sicherungen.
+  - CA-Wurzeln sind eingebaut (`webpki-roots`).
+  - Zeitzonendaten fehlen in `scratch`: `jiff` liest `/usr/share/zoneinfo`. Deshalb tzdata ins Image kopieren oder die tzdb einbetten (Wartungsfenster in
+    Ortszeit, `time_zone` per Config oder `TZ`).
+- **Architekturen:** `linux/amd64` und `linux/arm64` (Raspberry Pi 4/5, viele NAS), eventuell `linux/arm/v7`. Dazu Cross-Build der musl-Targets
+  (`aarch64-unknown-linux-musl` …) und ein Manifest für alle Architekturen. Nebenbei entsteht das `.deb` für arm64 (Punkt „Später“ in Phase 10).
+- **Konfiguration:** über die vorhandenen `OPENNETMON_*`-Variablen oder eine eingehängte `config.toml`.
+  - `secret.key` liegt getrennt von der Datenbank (eigenes Volume oder Docker/Podman-Secret, Rechte 0600, vgl. Vorhaben L). Er entsteht beim ersten Start oder
+    per `docker run … key generate`.
+  - Den ersten Admin legt `docker exec … opennetmon user add` an.
+- **Ping:** über unprivilegierte ICMP-Sockets. Docker setzt `net.ipv4.ping_group_range` im Container-Netz seit 20.10 in der Regel schon, sonst `--sysctl`
+  oder `--cap-add NET_RAW`. Dokumentieren und mit Podman ohne Root prüfen.
+- **Netz:** SNMP und Ping ins LAN gehen aus dem Bridge-Netz; `network_mode: host` als Option dokumentieren.
+- **Sensoren „Dieser Server“** (CPU, RAM, Temperatur, Datenträger) sehen im Container nur den Container, unter Docker Desktop (Windows, macOS) nur dessen
+  Linux-VM. Deshalb `/proc` und `/sys` des Hosts schreibgeschützt einhängen oder die Einschränkung dokumentieren.
+- **Sicherung:** Im Container gibt es keinen systemd-Timer. Deshalb `opennetmon backup` nach Zeitplan im Programm oder eine Anleitung (Cron des Hosts mit
+  `docker exec`).
+- **Healthcheck:** `/healthz`. Ohne Shell und curl im Image braucht es einen Unterbefehl (z. B. `opennetmon healthcheck`).
+- **HTTPS:** eingebaut (selbst signiert) oder hinter einem Reverse Proxy; den Standard für den Container festlegen.
+- **Hinweis auf neue Versionen:** Das Abzeichen und Einstellungen → Aktualisierungen müssen im Container `docker compose pull` bzw. `docker pull` statt
+  `apt install` nennen. Dafür muss das Programm wissen, dass es im Container läuft, z. B. über eine Umgebungsvariable im Image.
+- **Dateien:**
+  - `Containerfile`/`Dockerfile`, dazu `compose.yaml` als Beispiel
+  - `docs/docker.md` (Englisch) und ein Abschnitt im README
+  - Labels `org.opencontainers.image.*` (Quelle, Lizenz AGPL-3.0-or-later, Version); der AGPL-Quellcode-Link in der Oberfläche bleibt
+  - Test mit Podman wie beim `.deb`
+- **Veröffentlichung:** nur auf Ansage, als Teil eines Releases, z. B. in der GitHub Container Registry (`ghcr.io/tomcslk/opennetmon`, Tags `X.Y.Z` und
+  `latest`). Die CI-Regel „Actions nur von `actions/*`“ gilt weiter: gebaut wird mit `docker buildx` bzw. `podman` in `run`-Schritten oder lokal in
+  `dev/release.sh`, nicht mit fremden Actions.
+
+**Mit dem Nutzer zu klären** (er liest sich erst ein und antwortet später, Stand 2026-11-10):
+
+- Registry: GHCR öffentlich, zusätzlich Docker Hub?
+- Architekturen: reichen amd64 und arm64?
+- Basis: `scratch`/distroless (klein, ohne Shell) oder Alpine (mit Shell zum Nachsehen)?
+- Standard: HTTP hinter einem Proxy oder eingebautes HTTPS?
+- Soll der geplante Launcher später auch den Container anbieten?
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
@@ -1045,7 +1126,7 @@ vom Entwurf und vom Plan:
 
 SNMP-Traps, NetFlow/sFlow, verteilte Probes, Netzwerkkarten/Maps, SNMP SET, Mandantenfähigkeit, Omada-Controller-API,
 Herstellermibs außer gezielt benötigten TP-Link-OIDs.
-Zurückgestellt gegenüber früheren Ideen: SNMP v1, Subnetz-Scan, Docker-Betrieb, htmx.
+Zurückgestellt gegenüber früheren Ideen: SNMP v1, Subnetz-Scan, htmx. Docker-Betrieb ist seit 2026-11-10 als Vorhaben Q geplant.
 Verworfen am 2026-10-27 nach Abwägung: RPC über UDP (als Sensor für ONC-RPC reicht bei NFSv4 der TCP-Port-Sensor aus E; als Schnittstelle
 von opennetmon wäre eine JSON-API über HTTPS der bessere Weg).
 

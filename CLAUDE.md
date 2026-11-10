@@ -14,7 +14,7 @@ in `docs/assets/opennetmon-logo.jpg` (README).
 | `CLAUDE.md` | Regeln und Grundwissen für jede Sitzung | automatisch |
 | `CLAUDE.local.md` | Heimnetz, Instanzen, private offene Punkte (gitignored) | automatisch |
 | `ARCHITEKTUR.md` | Stack mit Begründungen, alle Module im Detail, Messdaten, Sicherheit im Detail, Paket und Betrieb, Releases/README, Inventar-Endpunkt | **vor Arbeit an einem Modul den Abschnitt lesen**, danach dort nachziehen |
-| `PLAN.md` | Stand, Releases, Vorhaben A–P, offene Punkte, Verlauf | bei Bedarf |
+| `PLAN.md` | Stand, Releases, Vorhaben A–Q, offene Punkte, Verlauf | bei Bedarf |
 | `docs/*.md`, `README.md` | Anwenderdoku (Englisch), Entscheidung zur Sprache in `docs/decisions/0001-language.md` | bei Bedarf |
 
 **Diese Datei kurz halten (unter 20 000 Zeichen).** Einzelheiten zu Modulen gehören nach `ARCHITEKTUR.md`, Stand und Verlauf nach `PLAN.md`; hier nur, was in
@@ -142,12 +142,14 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ## Stand und offene Punkte
 
-Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–P); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-09):
+Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-10):
 
-- **v0.5.9** released (2026-11-08); auf dem Server zuletzt Test-Paket 0.5.10.
+- **v0.5.9** released (2026-11-08); auf dem Server seit 2026-11-09 Test-Paket 0.6.0.
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
-  ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag); der Nutzer installiert es selbst und gibt Rückmeldung, Release nur auf Ansage. Beschreibung in
+  ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag); der Nutzer testet es auf dem Server und gibt Rückmeldung, Release nur auf Ansage. Beschreibung in
   `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P). Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`).
+  Laut Nutzer (2026-11-10) weichen Grafiken und Graphen vom Entwurf ab; Liste in `PLAN.md` (P), angleichen erst nach „go“.
+- **Vorhaben Q** (notiert 2026-11-10): Docker-Version (Image für amd64/arm64) zusätzlich zum `.deb`, Umsetzung nach „go“.
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,
