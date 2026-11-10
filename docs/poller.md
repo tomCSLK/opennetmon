@@ -72,7 +72,9 @@ newest 500); the sensors it pauses get no lines of their own. At the top right, 
 Every column except the message sorts the log by a click on its head (`?sort=when|status|sensor|device|duration&dir=asc|desc`, like the status
 lists; first click: newest and longest first, otherwise ascending; ties newest first). The search field above the table keeps only entries that contain
 every word typed in status, previous status, sensor, device, group or message (`static/table-filter.js`, in the browser; the text is kept in the tab, so it
-survives the automatic refresh, which waits while the field has the focus).
+survives the automatic refresh, which waits while the field has the focus). With more than 50 entries, **“Rows”** (50, 100 or 500, remembered per browser)
+shows the matching entries in pages, with the page controls of the table of values below the table (`static/pager.js`); typing in the field returns
+to the first page.
 
 The button **“Log”** on a device page opens `/log?device=<id>` (the entries of its sensors and the pauses of the device and its sensors), the one on a sensor
 page `/log?sensor=<id>`. The page then shows a breadcrumb back to the device or sensor, “Whole log” leads back to all entries, sorting keeps the limit, and

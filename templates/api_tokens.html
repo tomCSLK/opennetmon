@@ -1,12 +1,6 @@
 {% extends "app.html" %}
 {% block title %}{{ t.get("nav-api-tokens") }} – opennetmon{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>{{ t.get("nav-api-tokens") }}</h1>
-    <p class="subtitle">{{ t.get("api-tokens-subtitle") }}</p>
-  </div>
-</div>
 {% if let Some(message) = flash %}
 <p class="flash" role="status">{{ message }}</p>
 {% endif %}
@@ -24,6 +18,8 @@
 {% endif %}
 
 <section class="card flush">
+  <div class="card-head"><h2>{{ t.get("nav-api-tokens") }}</h2></div>
+  <p class="card-note">{{ t.get("api-tokens-subtitle") }}</p>
   {% if tokens.is_empty() %}
   <div class="empty"><strong>{{ t.get("api-tokens-none") }}</strong>{{ t.get("api-tokens-none-hint") }}</div>
   {% else %}

@@ -41,10 +41,11 @@ channel-error = { $channel }: { $message }
 states-none = Dieser Sensor hat keine benannten Statuswerte.
 states-choose = { $value }: Bitte eine Bewertung wählen.
 
-sensors-ping-only = kein SNMP
+sensors-ping-only = kein SNMP – nur Ping
 sensors-find-values = Werte suchen
 sensors-find-interfaces = Interfaces suchen
 count-active = { $count } aktiv
+sensors-last-hour = Letzte Stunde
 order-change = Reihenfolge ändern
 sensors-none-yet = Noch keine Sensoren.
 sensors-none-active = Keine aktiven Sensoren.

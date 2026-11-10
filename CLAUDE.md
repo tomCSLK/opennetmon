@@ -148,7 +148,8 @@ Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in 
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
   ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag); der Nutzer testet es auf dem Server und gibt Rückmeldung, Release nur auf Ansage. Beschreibung in
   `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P). Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`).
-  Laut Nutzer (2026-11-10) weichen Grafiken und Graphen vom Entwurf ab; Liste in `PLAN.md` (P), angleichen erst nach „go“.
+  Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und Schrittplan in `PLAN.md` (P), Schritte 1–5 erledigt (2026-11-10),
+  als Nächstes ein Test-Paket (empfohlen 0.6.1).
 - **Vorhaben Q** (notiert 2026-11-10): Docker-Version (Image für amd64/arm64) zusätzlich zum `.deb`, Umsetzung nach „go“.
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.

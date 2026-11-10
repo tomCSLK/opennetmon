@@ -58,6 +58,14 @@
 <main class="content">
   <div class="page{% block page_class %}{% endblock %}{% if layout.settings_section().is_some() %} in-settings{% endif %}">
 {% if layout.settings_section().is_some() %}
+    {% if layout.settings_root() %}
+    <div class="page-head">
+      <div>
+        <h1>{{ t.get("nav-settings") }}</h1>
+        <p class="subtitle">{{ t.get("settings-subtitle") }}</p>
+      </div>
+    </div>
+    {% endif %}
     <div class="settings-split">
       <nav class="subnav" aria-label="{{ t.get("nav-settings") }}">
         {% for item in layout.settings_nav() %}<a href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>{{ crate::web::icon(item.key, "")|safe }}{{ t.get(item.label) }}</a>{% endfor %}

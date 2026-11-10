@@ -145,7 +145,7 @@ pub struct ProfileView {
 }
 
 impl ProfileView {
-    /// One-line description for lists, e.g. `SNMPv3 · authNoPriv · MD5 · Benutzer monitor`.
+    /// One-line description for choices, e.g. `SNMPv3 · authNoPriv · MD5 · Benutzer monitor`.
     pub fn summary(&self, t: Lang) -> String {
         let mut parts = vec![self.version.label().to_owned()];
         if let Some(level) = self.level {
@@ -161,6 +161,31 @@ impl ProfileView {
             parts.push(t.get1("profile-summary-user", "user", user));
         }
         parts.join(" · ")
+    }
+
+    /// The security of the profile for lists, e.g. `authNoPriv · MD5` or `authPriv · SHA-256 / AES-128`;
+    /// "Community" for SNMPv2c.
+    pub fn security(&self, t: Lang) -> String {
+        if self.version == SnmpVersion::V2c {
+            return t.get("profile-security-community");
+        }
+        let mut text = self
+            .level
+            .map(SecurityLevel::label)
+            .unwrap_or_default()
+            .to_owned();
+        if let Some(auth) = self.auth_protocol {
+            text.push_str(" · ");
+            text.push_str(auth.label());
+            if let Some(p) = self
+                .priv_protocol
+                .filter(|_| self.level == Some(SecurityLevel::AuthPriv))
+            {
+                text.push_str(" / ");
+                text.push_str(p.label());
+            }
+        }
+        text
     }
 }
 
@@ -387,8 +412,8 @@ mod tests {
     }
 
     #[test]
-    fn summary_describes_without_secrets() {
-        let view = ProfileView {
+    fn security_names_level_and_protocols_without_secrets() {
+        let mut view = ProfileView {
             id: 1,
             name: "Omada".to_owned(),
             version: SnmpVersion::V3,
@@ -397,9 +422,16 @@ mod tests {
             auth_protocol: Some(AuthProtocol::Md5),
             priv_protocol: None,
         };
+        assert_eq!(view.security(Lang::De), "authNoPriv · MD5");
         assert_eq!(
             view.summary(Lang::De),
             "SNMPv3 · authNoPriv · MD5 · Benutzer monitor"
         );
+        view.level = Some(SecurityLevel::AuthPriv);
+        view.auth_protocol = Some(AuthProtocol::Sha256);
+        view.priv_protocol = Some(PrivProtocol::Aes128);
+        assert_eq!(view.security(Lang::De), "authPriv · SHA-256 / AES-128");
+        view.version = SnmpVersion::V2c;
+        assert_eq!(view.security(Lang::En), "Community");
     }
 }

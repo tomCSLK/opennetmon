@@ -421,9 +421,9 @@ pub async fn page(
                 .percent
                 .map_or_else(|| t.get("report-no-data"), |p| percent_text(t, p)),
             level: match l.percent {
-                Some(p) if p >= 99.0 => "status-up",
-                Some(p) if p >= 95.0 => "status-warning",
-                Some(_) => "status-down",
+                Some(p) if p >= 99.0 => "ok",
+                Some(p) if p >= 95.0 => "warn",
+                Some(_) => "err",
                 None => "",
             },
             downtime: l

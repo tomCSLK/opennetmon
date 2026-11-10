@@ -2,12 +2,6 @@
 {% import "icons.html" as icons %}
 {% block title %}{{ t.get("nav-users") }} – opennetmon{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>{{ t.get("nav-users") }}</h1>
-    <p class="subtitle">{{ t.get("users-subtitle") }}</p>
-  </div>
-</div>
 
 {% if let Some(message) = flash %}
 <p class="flash" role="status">{{ message }}</p>
@@ -17,7 +11,10 @@
 {% endif %}
 
 <section class="card flush">
-  <div class="card-head"><h2>{{ t.get("nav-users") }}</h2><span class="muted small">{{ rows.len() }}</span></div>
+  <div class="card-head"><h2>{{ t.get("nav-users") }}</h2>
+    <div class="actions"><span class="muted small">{{ rows.len() }}</span><a class="button small" href="#new-user">{{ crate::web::icon("plus", "")|safe }} {{ t.get("users-new") }}</a></div>
+  </div>
+  <p class="card-note">{{ t.get("users-subtitle") }}</p>
   <div class="table-wrap">
   <table class="m-cards m-simple">
     <thead><tr><th>{{ t.get("username") }}</th><th>{{ t.get("role") }}</th><th>{{ t.get("language") }}</th><th>{{ t.get("users-created") }}</th><th class="right">{{ t.get("users-sessions") }}</th><th></th></tr></thead>
@@ -37,7 +34,7 @@
   </div>
 </section>
 
-<section class="card">
+<section class="card" id="new-user">
   <h2>{{ t.get("users-new") }}</h2>
   <form method="post" action="/users" class="stack">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">

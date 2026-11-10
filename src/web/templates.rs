@@ -1404,7 +1404,8 @@ mod tests {
         let (admin, _) = login(&h, "anna").await;
         let page = send(&h.app, get("/templates", Some(&admin))).await;
         for text in [
-            "<h1>Device templates</h1>",
+            "<h1>Settings</h1>",
+            "<h2>Device templates</h2>",
             "No templates yet.",
             "How templates work",
         ] {

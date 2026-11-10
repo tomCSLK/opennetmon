@@ -829,6 +829,10 @@ mod tests {
         assert!(!page.body.contains("Switch <1>"), "escaped");
         assert!(page.body.contains("<span class=\"sub\">Netzwerk</span>"));
         assert!(page.body.contains("<time class=\"ts\""), "since when");
+        // Outages are tinted, times in Fira Code, and a field filters the rows.
+        assert!(page.body.contains("<tr class=\"state-down\">"));
+        assert!(page.body.contains("<td class=\"nowrap mono m-when\">"));
+        assert!(page.body.contains("data-table-filter=\"status-rows\""));
         // Default: newest change first; a click on the column turns it round.
         assert!(page.body.contains(
             "aria-sort=\"descending\"><a class=\"sort\" href=\"/status/down?sort=since&#38;dir=asc\">Seit</a>"

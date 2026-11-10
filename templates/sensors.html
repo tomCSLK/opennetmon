@@ -13,7 +13,7 @@
     <h1>{{ device.name }}</h1>
     <p class="subtitle status-line">
       <span class="badge status-{{ device_status_class }}">{{ device_status_label }}</span>
-      <span class="num">{{ device.host }}{% if device.has_snmp() %}:{{ device.polling.port }}{% endif %}</span> · <span>{{ t.get1("every-seconds", "seconds", device.polling.interval_secs) }}</span>{% if !device.has_snmp() %} · <span>{{ t.get("sensors-ping-only") }}</span>{% endif %}
+      <span class="mono">{{ device.host }}{% if device.has_snmp() %}:{{ device.polling.port }}{% endif %}</span> · <span>{{ t.get1("every-seconds", "seconds", device.polling.interval_secs) }}</span>{% if !device.has_snmp() %} · <span>{{ t.get("sensors-ping-only") }}</span>{% else if layout.is_admin %} · <span>{{ device.profile_label(*t) }}</span>{% endif %}
     </p>
   </div>
   <div class="actions">
@@ -25,29 +25,29 @@
     <form method="post" action="/resume/device/{{ device.id }}">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
       <input type="hidden" name="back" value="device">
-      <button type="submit" class="secondary">{{ t.get("resume") }}</button>
+      <button type="submit" class="secondary">{{ crate::web::icon("play", "")|safe }} {{ t.get("resume") }}</button>
     </form>
     {% else %}
-    <a class="button ghost" href="/pause/device/{{ device.id }}?back=device">{{ t.get("pause") }}</a>
+    <a class="button secondary" href="/pause/device/{{ device.id }}?back=device">{{ crate::web::icon("pause", "")|safe }} {{ t.get("pause") }}</a>
     {% endif %}
-    <a class="button ghost" href="/log?device={{ device.id }}">{{ t.get("log") }}</a>
+    <a class="button secondary" href="/log?device={{ device.id }}">{{ crate::web::icon("log", "")|safe }} {{ t.get("log") }}</a>
     <details class="more-actions setup" open>
       {% call icons::more_summary(t) %}{% endcall %}
       <div class="more-items">
-    <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ t.get("device-edit") }}</a>
-    <a class="button ghost" href="/dependency/device/{{ device.id }}">{{ t.get("dependency") }}</a>
-    <a class="button ghost" href="/maintenance/device/{{ device.id }}">{{ t.get("maintenance") }}</a>
+    <a class="button ghost" href="/devices/{{ device.id }}/edit">{{ crate::web::icon("pencil", "")|safe }} {{ t.get("device-edit") }}</a>
+    <a class="button ghost" href="/dependency/device/{{ device.id }}">{{ crate::web::icon("pulse", "")|safe }} {{ t.get("dependency") }}</a>
+    <a class="button ghost" href="/maintenance/device/{{ device.id }}">{{ crate::web::icon("schedules", "")|safe }} {{ t.get("maintenance") }}</a>
     {% if offer_server_values %}
-    <a class="button secondary" href="/devices/{{ device.id }}/server">{{ t.get("local-find-values") }}</a>
+    <a class="button secondary" href="/devices/{{ device.id }}/server">{{ crate::web::icon("search", "")|safe }} {{ t.get("local-find-values") }}</a>
     {% endif %}
     {% if device.has_snmp() %}
     <form method="post" action="/devices/{{ device.id }}/test">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-      <button type="submit" class="secondary">{{ t.get("device-test-connection") }}</button>
+      <button type="submit" class="secondary">{{ crate::web::icon("up", "")|safe }} {{ t.get("device-test-connection") }}</button>
     </form>
     <form method="post" action="/devices/{{ device.id }}/values">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
-      <button type="submit" class="secondary">{{ t.get("sensors-find-values") }}</button>
+      <button type="submit" class="secondary">{{ crate::web::icon("search", "")|safe }} {{ t.get("sensors-find-values") }}</button>
     </form>
     <form method="post" action="/devices/{{ device.id }}/discover">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
@@ -62,7 +62,7 @@
       </div>
     </details>
     {% else %}
-    <a class="button ghost" href="/log?device={{ device.id }}">{{ t.get("log") }}</a>
+    <a class="button secondary" href="/log?device={{ device.id }}">{{ crate::web::icon("log", "")|safe }} {{ t.get("log") }}</a>
     {% endif %}
     {% include "refresh.html" %}
   </div>
@@ -81,7 +81,7 @@
 <section class="card flush">
   <div class="card-head"><h2>{{ t.get("sensors") }}</h2>
     <div class="actions"><span class="muted small">{% if device_pause.is_some() %}{{ t.get1("count-sensors", "count", rows.len() + inactive.len()) }}{% else %}{{ t.get1("count-active", "count", rows.len()) }}{% endif %}{% if !inactive.is_empty() %} · {{ t.get1("count-inactive", "count", inactive.len()) }}{% endif %}</span>
-      {% if layout.is_admin && rows.len() + inactive.len() > 1 %}{% call icons::order_link(("/devices/" ~ device.id ~ "/sensors/order"), t.get("order-change")) %}{% endcall %}{% endif %}</div>
+      {% if layout.is_admin && rows.len() + inactive.len() > 1 %}<a class="button ghost small" href="/devices/{{ device.id }}/sensors/order">{{ t.get("order-change") }}</a>{% endif %}</div>
   </div>
   {% if rows.is_empty() %}
   <div class="empty">
@@ -92,11 +92,11 @@
   <div class="table-wrap">
   <table class="m-cards m-sensors">
     <thead>
-      <tr><th>{{ t.get("status") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("message") }}</th><th class="right">{{ t.get("sensors-current") }}</th><th class="col-trend">{{ t.get("range-hour") }}</th>{% if layout.is_admin %}<th class="right"><span class="muted">{{ t.get("actions") }}</span></th>{% endif %}</tr>
+      <tr><th>{{ t.get("status") }}</th><th>{{ t.get("sensor") }}</th><th>{{ t.get("message") }}</th><th class="right">{{ t.get("sensors-current") }}</th><th class="col-trend">{{ t.get("sensors-last-hour") }}</th>{% if layout.is_admin %}<th><span class="visually-hidden">{{ t.get("actions") }}</span></th>{% endif %}</tr>
     </thead>
     <tbody>
     {% for row in rows %}
-      <tr>
+      <tr{% if row.status_class == "warning" || row.status_class == "down" %} class="state-{{ row.status_class }}"{% endif %}>
         <td class="m-status"><span class="badge status-{{ row.status_class }}">{{ row.status_label }}</span></td>
         <td class="m-name"><a href="/sensors/{{ row.id }}"><strong>{{ row.name }}</strong></a></td>
         <td class="wrap muted m-msg">{% if let Some(n) = row.pause %}{% call pause::note(n, t) %}{% endcall %}{% else %}{{ row.message }}{% endif %}</td>
@@ -115,10 +115,10 @@
           {% endmatch %}
         </td>
         {% if layout.is_admin %}
-        <td class="m-act">
+        <td class="m-act m-hide">
           <div class="row-actions">
             {% call icons::pause_action("sensor", row.id, false, layout, t, "device") %}{% endcall %}
-            {% call icons::delete_link(("/sensors/" ~ row.id ~ "#delete"), t, t.get1("delete-named", "name", row.name.as_str())) %}{% endcall %}
+            {% call icons::edit_link(("/sensors/" ~ row.id ~ "/edit"), t.get("edit"), t.get1("edit-named", "name", row.name.as_str())) %}{% endcall %}
           </div>
         </td>
         {% endif %}

@@ -7,6 +7,7 @@ nav-home = opennetmon, zur Übersicht
 nav-main = Hauptnavigation
 nav-overview = Übersicht
 nav-settings = Einstellungen
+settings-subtitle = Nur für Administratoren
 nav-credentials = SNMP-Profile
 nav-users = Benutzer
 nav-mail = E-Mail
@@ -194,7 +195,6 @@ snmp-unreachable = Das Gerät ist nicht erreichbar oder der SNMP-Port ist geschl
 snmp-request = Die Anfrage konnte nicht aufgebaut werden: { $detail }
 snmp-protocol = Unerwartete Antwort des Geräts: { $detail }
 
-profile-summary-user = Benutzer { $user }
 
 duration-minutes-seconds = { $minutes } Min. { $seconds } s
 channel-in = Eingehend
@@ -218,3 +218,5 @@ active = aktiv
 
 backup-path-not-utf8 = Der Pfad der Sicherung ist kein gültiges UTF-8.
 backup-exists = { $path } existiert bereits; eine vorhandene Sicherung wird nie überschrieben.
+table-pages = Seiten der Tabelle
+profile-summary-user = Benutzer { $user }

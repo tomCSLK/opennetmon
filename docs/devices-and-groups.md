@@ -20,23 +20,29 @@ The action messages (“Device created.” etc.) come in through `?msg=` and are
 **Phones:** the pages are laid out for narrow screens (tested at 360–430 px), without scrolling sideways:
 - The buttons in the head of the overview, the group pages, the sensor page of a device and the detail page are an **“Actions”** menu (`details.more-actions`):
   a row of buttons on wide screens, a drop-down on screens up to 640 px (`static/app.js`; without JavaScript it stays open as a row).
-- On the device, group and sensor pages only the everyday actions stand in that row: **Pause/Resume** and **Log** (groups have no log). Setting up
+- On the device, group and sensor pages only the everyday actions stand in that row: **Pause/Resume** and **Log** (groups have no log), as bordered
+  buttons with their symbol. Setting up
   (edit, dependency, test connection, find values or interfaces, new subgroup or device, order, delete sensor) is in a second “Actions” menu inside the
   row (`details.more-actions.setup`), a drop-down on every width, so the row fits on one line down to about 800 px. On phones its entries join the
-  outer menu below a line instead of a menu in the menu. Readers see neither menu.
+  outer menu below a line instead of a menu in the menu. Readers see neither menu. The entries of both menus carry their symbol as well. On the sensor
+  detail page the whole bar (period, Pause, Log, Actions, Refresh) stands below the status line, on the left (`.page-head.stacked`).
 - Row actions everywhere are icons with the name as tooltip (`templates/icons.html`: edit ✎, delete 🗑, pause ‖, order ↕); deleting a sensor or a device
   always asks for confirmation, only an uploaded MIB file is deleted at once (it can be uploaded again).
 - Up to 899 px the navigation moves to a bar at the bottom of the screen; the header keeps the logo, the search, the status counts and the user menu,
   and the settings pages show their sections as tabs that scroll sideways. The status tiles come two per row below the total.
+- The settings area has the title **“Settings”** above its section menu on the first page of each section (`Layout::settings_root`); each section is a
+  card with its own name and, where it applies, a “New …” button in the card head (“New profile”, “New user”, “New schedule”). Forms below a section
+  (e.g. `/credentials/new`) keep their own title.
 - Up to 560 px the tree hides the row actions and the address line.
 - Up to 640 px the lists (sensors, status lists, log, events, users, profiles, templates, MIB files) turn into one block per row (`table.m-cards`
   with a layout class such as `m-sensors` or `m-log`, cells marked `m-name`, `m-status`, `m-value` …, `m-hide` for left-out columns); sortable column heads
-  become a bar of sort links. On the detail page the period selector spans the width, value tiles come two per row (an odd last one across both) and the measurement table drops the
+  become a bar of sort links. Rows with a warning or an outage are tinted, on phones the whole block. On the sensor page of a device a block shows the name
+  with the status at the top right and below them the message and the values; the row actions are left out there (they are on the sensor page). On the detail page the period selector spans the width, value tiles come two per row (an odd last one across both) and the measurement table drops the
   volume columns and the sum row.
 - The tables on the setup pages (interface and value discovery, “This server”, template rules) still scroll inside their frame.
 
 **Refresh:** the overview, the status lists, the sensor page of a device and the sensor detail page have a **“Refresh”** button at the top right (only the
-icon ↻, the name as a tooltip; reloads the page, dropping any `?msg=` message) and the switch **“Auto”**: the page then reloads every 30 s (as in PRTG), with a countdown next
+icon ↻ without a border, the name as a tooltip; reloads the page, dropping any `?msg=` message) and the switch **“Auto”** (a checkbox drawn as a switch, `role="switch"`): the page then reloads every 30 s (as in PRTG), with a countdown next
 to it. The countdown waits (“paused”) while an input field has the focus or a form was changed (e.g. ticked sensors), and only runs while the tab is visible;
 after a longer absence the page reloads immediately on return. The switch is on by default and remembered per browser (`localStorage`). Without JavaScript,
 “Refresh” stays a normal link to the page. Implementation: `templates/refresh.html`, `static/refresh.js`.

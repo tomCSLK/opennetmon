@@ -171,6 +171,8 @@ svg.icon.lg { width: 20px; height: 20px; }
 
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
 .page-head .subtitle { margin: 4px 0 0; color: var(--muted); }
+/* Sensor page (draft): the toolbar (range, pause, log, actions, refresh) in a row below the status line. */
+.page-head.stacked { flex-direction: column; align-items: flex-start; }
 .breadcrumb { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 4px; font-size: 13px; color: var(--muted); }
 .breadcrumb a { color: var(--text-2); }
 .breadcrumb a:hover { color: var(--accent); }
@@ -195,11 +197,20 @@ html.js .more-actions.setup > .more-items > .button, html.js .more-actions.setup
   height: auto; justify-content: flex-start; padding: 7px 10px; color: var(--text); background: transparent; border-color: transparent; font-weight: 400; }
 html.js .more-actions.setup > .more-items > .button:hover, html.js .more-actions.setup > .more-items > form > button:hover {
   background: var(--hover); color: var(--text); }
-.refresh { display: inline-flex; align-items: center; gap: 8px; }
-.refresh-auto { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 13px;
-  font-weight: 400; white-space: nowrap; cursor: pointer; }
+.refresh { display: inline-flex; align-items: center; gap: 4px; }
 .refresh-auto[hidden] { display: none; }
 .refresh-left { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* A checkbox drawn as a switch (draft: "Automatisch"). */
+.switch { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--text-2); font-size: 13px; font-weight: 400;
+  white-space: nowrap; cursor: pointer; }
+.switch input[type=checkbox] { appearance: none; position: relative; flex: none; width: 32px; height: 18px; margin: 0; border-radius: 9px;
+  background: var(--border-strong); cursor: pointer; transition: background .15s; }
+.switch input[type=checkbox]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--surface); box-shadow: var(--shadow-1); transition: transform .15s; }
+.switch input[type=checkbox]:checked { background: var(--accent); }
+.switch input[type=checkbox]:checked::after { transform: translateX(14px); }
+.switch input[type=checkbox]:focus-visible { border-radius: 9px; }
+@media (prefers-reduced-motion: reduce) { .switch input, .switch input::after { transition: none; } }
 
 /* ---------- surfaces ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
@@ -208,6 +219,9 @@ html.js .more-actions.setup > .more-items > .button:hover, html.js .more-actions
   min-height: 48px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
 .card-head h2 { margin: 0; }
 .card-body { padding: 16px; }
+/* A short explanation below a card head (settings lists, draft). */
+.card-note { margin: 0; padding: 10px 16px; font-size: 13px; color: var(--muted); }
+.card-head + .card-note + .empty { padding-top: 8px; }
 .card-foot { padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; }
 /* Tools between the head of a flush card and its table: filter choices, filter field, counter. */
 .card-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 16px;
@@ -331,6 +345,12 @@ tbody tr:hover { background: var(--hover); }
 tbody tr.table-group th { background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 600; }
 tbody tr.table-group:hover { background: none; }
 tbody tr:last-child td { border-bottom: 0; }
+/* Rows that warn or fail are tinted, in every table (sensors, polls, status changes; draft: row-warn, row-down). */
+tbody tr.state-down td { background: var(--down-soft); border-bottom-color: color-mix(in srgb, var(--down) 35%, transparent); }
+tbody tr.state-warning td { background: var(--warn-soft); border-bottom-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+/* Numbers, times and addresses in tables in Fira Code (draft: .tbl td.num, .tbl td.mono). */
+td.num, td.mono, table.samples td.n { font-family: var(--font-mono); font-size: 13px; }
+td.num .badge, td.mono .badge, td.num .sub, td.mono .sub { font-family: var(--font-sans); }
 .card:not(.flush) > table, .card:not(.flush) > .table-wrap { margin: 4px -16px -16px; width: calc(100% + 32px); }
 .card table th:first-child, .card table td:first-child { padding-left: 16px; }
 .card table th:last-child, .card table td:last-child { padding-right: 16px; }
@@ -498,14 +518,9 @@ table.samples td.nowrap { font-variant-numeric: tabular-nums; }
 table.samples tr.summary td { background: var(--surface-2); font-weight: 600; }
 table.samples tr.summary-last td { border-bottom: 2px solid var(--border-strong); }
 table.samples .head-short { display: none; }
-/* polls that warned or failed, tinted like in PRTG; a failed poll shows its message instead of values */
-table.samples tr.state-down td { background: var(--down-soft); border-bottom-color: color-mix(in srgb, var(--down) 35%, transparent); }
-table.samples tr.state-warning td { background: var(--warn-soft); border-bottom-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+/* polls that warned or failed are tinted (tbody tr.state-*); a failed poll shows its message instead of values */
 table.samples tr.state-down td.problem { color: var(--down); }
 table.samples tr.state-warning td.problem { color: var(--warn); }
-/* status changes of the sensor page (static/events.js): warnings and outages tinted like the table of values */
-table.m-events tr.state-down td { background: var(--down-soft); border-bottom-color: color-mix(in srgb, var(--down) 35%, transparent); }
-table.m-events tr.state-warning td { background: var(--warn-soft); border-bottom-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 /* API tokens page: the new token (shown once), the example request, the two-step revoke */
 code.token { display: block; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border);
   border-radius: var(--radius); overflow-wrap: anywhere; user-select: all; }
@@ -516,6 +531,7 @@ details.revoke > summary::-webkit-details-marker { display: none; }
 details.revoke[open] > form { margin-top: .6rem; text-align: left; }
 label.rows-select { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .85rem; font-weight: 500; color: var(--muted); }
 label.rows-select select { width: auto; }
+label.rows-select[hidden] { display: none; }
 /* pages of the table of values: rows shown on the left, buttons on the right */
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap;
   padding: 8px 16px; border-top: 1px solid var(--border); }
@@ -611,6 +627,9 @@ a.button.secondary { color: var(--text); }
     white-space: normal; overflow-wrap: anywhere; }
   table.m-cards tbody tr[hidden], .card table.m-cards td.m-hide { display: none; }
   table.m-cards tr.table-group { display: block; padding: 6px 12px; background: var(--surface-2); }
+  table.m-cards tbody tr.state-down { background: var(--down-soft); }
+  table.m-cards tbody tr.state-warning { background: var(--warn-soft); }
+  .card table.m-cards tr.state-down td, .card table.m-cards tr.state-warning td { background: none; }
   table.m-cards .m-name { grid-area: name; }
   table.m-cards .m-status { grid-area: status; align-self: start; }
   table.m-cards .m-msg { grid-area: msg; font-size: .86rem; }
@@ -622,12 +641,10 @@ a.button.secondary { color: var(--text); }
   table.m-cards .m-when { grid-area: when; }
   table.m-cards .m-dur { grid-area: dur; }
   table.m-cards .m-act { grid-area: act; justify-self: end; }
-  /* the block is the row on phones: tint it, not the cells */
-  table.m-events tr.state-down td, table.m-events tr.state-warning td { background: none; border-bottom: 0; }
-  table.m-events tbody tr.state-down { background: var(--down-soft); }
-  table.m-events tbody tr.state-warning { background: var(--warn-soft); }
   table.m-cards .m-check { grid-area: check; }
-  table.m-sensors tbody tr { grid-template-areas: "name name value" "status msg act"; }
+  /* Device page (draft): name and status, below them message and values; the actions are on the sensor page. */
+  table.m-sensors tbody tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name status" "msg value"; }
+  table.m-sensors .m-status { justify-self: end; }
   table.m-status-list tbody tr { grid-template-areas: "name name value" "status device device" "msg msg when"; }
   table.m-log tbody tr { grid-template-areas: "name name when" "status device device" "msg msg dur"; }
   table.m-inactive tbody tr { grid-template-areas: "check name status" ". msg msg"; }
@@ -671,6 +688,13 @@ ol.order-list li.dragging { opacity: .55; outline: 2px dashed var(--accent); out
 @media (max-width: 640px) { ol.order-list li { padding: .55rem .9rem; gap: .5rem; } ol.order-list input.pos { width: 4.2rem; } }
 
 form.inline-form { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.push-right, .card-tools .push-right { margin-left: auto; }
+/* Availability in reports (draft: .lvl): OK only as green text, warnings and outages tinted. */
+.lvl { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+  border: 1px solid transparent; border-radius: var(--radius-sm); white-space: nowrap; }
+.lvl.ok { color: var(--ok); }
+.lvl.warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-line); }
+.lvl.err { color: var(--err); background: var(--err-bg); border-color: var(--err-line); }
 form.inline-form input[type=text] { flex: 1; min-width: 14rem; max-width: 32rem; }
 /* short numbers (ports, packets per ping) */
 input.narrow-input { width: 7rem; max-width: 100%; }
@@ -704,7 +728,7 @@ svg.sparkline .spark-1 { stroke: var(--s1); }
 svg.sparkline .spark-2 { stroke: var(--s2); }
 svg.sparkline .spark-3 { stroke: var(--s3); }
 svg.sparkline .spark-4 { stroke: var(--s4); }
-svg.statusbar.spark-band { width: 120px; height: 10px; }
+svg.statusbar.spark-band { width: 120px; height: 10px; border-radius: 2px; }
 @media (max-width: 560px) { .col-trend { display: none; } }
 
 /* ---------- header (after the buttons, so its own buttons keep their look) ---------- */

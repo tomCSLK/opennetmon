@@ -30,8 +30,9 @@ Like the reports of PRTG: how reliable a device or sensor was over the last 24 h
 - **Reports** (`/reports`, header): table per device (with its group and basis) or per sensor (with its device), for 7 days,
   30 days or one of the last twelve calendar months. Months are in the time zone of the server (like maintenance windows: the
   system's or config `time_zone`), the current month up to now. Sortable by name, availability (lowest first) and downtime (longest
-  first); rows without data stay last. Colors: at least 99 % green, at least 95 % yellow, below red.
-- **CSV** (`/reports.csv`, button “Download CSV”, same parameters): columns `device`/`sensor`, `group`/`device`,
+  first); rows without data stay last. Colors: at least 99 % green text, at least 95 % yellow and below red, both tinted with a frame (`.lvl`).
+  Below the name: the group path and the basis in one line (“Network / Core · by “Ping””).
+- **CSV** (`/reports.csv`, button “CSV” with a download symbol at the right, same parameters): columns `device`/`sensor`, `group`/`device`,
   `availability_percent` (four decimals, decimal point), `downtime_seconds`, `counted_seconds`, `basis`, `from`, `to` (UTC, ISO 8601).
   Text fields are quoted; text that a spreadsheet would run as a formula (`=`, `+`, `-`, `@`) starts with `'`.
 - **Sensor detail page:** tiles “Availability 24 h / 7 days / 30 days” with the downtime.

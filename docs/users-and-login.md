@@ -76,8 +76,8 @@ Rules: user name 3 to 32 characters (`a-z A-Z 0-9 . _ -`, case-insensitive), pas
 
 ## Audit log (`/audit`, administrators only)
 
-“Changes” in the header lists who changed what and when, newest first (at most the latest 2,000 on the page, with a filter field; a click on a
-user name shows only that user's entries):
+“Changes” in the header lists who changed what and when, newest first (at most the latest 2,000 on the page, with a filter field and, like the log,
+“Rows” 50/100/500 with pages; a click on a user name shows only that user's entries):
 
 - created, changed and deleted groups, devices, sensors, SNMP profiles, users, device templates, MIB files and schedules, the mail settings,
   thresholds, ratings of status values, intervals, the order of groups, devices and sensors, dependencies, maintenance assignments and applied

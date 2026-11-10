@@ -633,6 +633,13 @@ impl Layout {
             .collect()
     }
 
+    /// Whether this is the first page of a settings section (e.g. `/credentials`, not a form below it): those
+    /// share the title "Einstellungen" above the section menu and show their own title in the card head.
+    pub fn settings_root(&self) -> bool {
+        SETTINGS.iter().any(|(_, href, _, _)| self.path == *href)
+            && self.settings_section().is_some()
+    }
+
     /// The page of the settings area this request belongs to (`None` outside the settings).
     pub fn settings_section(&self) -> Option<&'static str> {
         if !self.is_admin {

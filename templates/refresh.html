@@ -1,7 +1,7 @@
-{# Refresh control of pages with live status (static/refresh.js): reload now, or every 60 s. -#}
+{# Refresh control of pages with live status (static/refresh.js): reload now, or every 30 s (a switch, as in the draft). -#}
 <div class="refresh" data-refresh>
-  <label class="refresh-auto" title="{{ t.get("refresh-auto-title") }}" hidden><input type="checkbox" data-refresh-auto> {{ t.get("refresh-auto") }}<span class="refresh-left" data-refresh-left></span></label>
-  <a class="button secondary icon-only" href="" data-refresh-now title="{{ t.get("refresh") }}" aria-label="{{ t.get("refresh") }}">
+  <label class="switch refresh-auto" title="{{ t.get("refresh-auto-title") }}" hidden><input type="checkbox" role="switch" data-refresh-auto><span>{{ t.get("refresh-auto") }}<span class="refresh-left" data-refresh-left></span></span></label>
+  <a class="button ghost icon-only" href="" data-refresh-now title="{{ t.get("refresh") }}" aria-label="{{ t.get("refresh") }}">
     {{ crate::web::icon("refresh", "")|safe }}
   </a>
 </div>

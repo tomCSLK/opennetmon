@@ -1050,7 +1050,8 @@ END
         let (admin, _) = login(&h, "anna").await;
         let page = send(&h.app, get("/mibs?q=hrProcessorLoad", Some(&admin))).await;
         for text in [
-            "<h1>MIB files</h1>",
+            "<h1>Settings</h1>",
+            "<h2>MIB files</h2>",
             "Table column",
             "Bundled standard MIBs",
         ] {

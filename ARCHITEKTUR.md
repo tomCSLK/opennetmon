@@ -40,6 +40,15 @@ Ziel und Sprachentscheidung · Python-Fallback (verworfen)
   Kacheln der Sensorseite in Reihen (`sensor_detail::value_rows`, Klassen `values cols-N`): Werte und Verfügbarkeit in einer Reihe,
   wenn es zusammen höchstens fünf sind, sonst die Werte in Reihen zu höchstens fünf und die Verfügbarkeit darunter; Pfeile bei
   Eingehend/Ausgehend, Puls bei einem einzelnen Wert.
+  Bausteine nach dem Entwurf (Schritt 5, 2026-11-10): Pausieren/Protokoll als umrandete Knöpfe mit Symbol, Einträge der Aktionsmenüs mit Symbol;
+  „Automatisch“ als Schalter (`.switch`, Kästchen mit `role="switch"`, `templates/refresh.html`), Aktualisieren als Symbol ohne Rahmen; Zahlen, Zeiten
+  und Adressen in Fira Code (`td.num`, `td.mono`, Unterzeilen und Plaketten darin in Fira Sans); Zeilen mit Warnung/Ausfall in allen Tabellen getönt
+  (`tbody tr.state-warning|state-down`, auf dem Handy der ganze Block); Sensorseite mit der Leiste unter der Statuszeile (`.page-head.stacked`);
+  Verfügbarkeit in Berichten als `.lvl ok|warn|err`; Einstellungen mit dem gemeinsamen Titel „Einstellungen“ nur auf der ersten Seite eines Bereichs
+  (`Layout::settings_root`), jeder Bereich eine Karte mit Titel, Erklärung (`.card-note`) und „Neu …“ im Kartenkopf; SNMP-Profile mit Version,
+  Sicherheit (`ProfileView::security`), Benutzer und Geräten (`storage::credentials::device_counts`). Filterfeld (`static/table-filter.js`) auch in den
+  Statuslisten; mit `select[data-table-rows]` (Protokoll, Änderungen: 50/100/500, im Browser gemerkt) zeigt es die Treffer seitenweise mit den
+  Knöpfen aus `static/pager.js` (`nav[data-table-pager]`).
   Handy (bis 899 px; `docs/devices-and-groups.md`, „Phones“): Kopfleiste nur Logo, Suche, Statuschip und Benutzermenü, Navigation als Leiste unten
   (`nav.bottomnav`), Unternavigation der Einstellungen als waagerecht scrollende Reiter; Zeilenaktionen als Symbole aus den Makros in `templates/icons.html`;
   Knöpfe der Seitenköpfe im Menü `details.more-actions` (breit eine Knopfreihe, bis 640 px Dropdown über `static/app.js`; `theme.js` setzt die Klasse `js`

@@ -1,18 +1,14 @@
 {% extends "app.html" %}
 {% block title %}{{ t.get("nav-templates") }} – opennetmon{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>{{ t.get("nav-templates") }}</h1>
-    <p class="subtitle">{{ t.get("templates-subtitle") }}</p>
-  </div>
-</div>
 
 {% if let Some(message) = flash %}
 <p class="flash" role="status">{{ message }}</p>
 {% endif %}
 
 <section class="card flush">
+  <div class="card-head"><h2>{{ t.get("nav-templates") }}</h2></div>
+  <p class="card-note">{{ t.get("templates-subtitle") }}</p>
   {% if rows.is_empty() %}
   <div class="empty">
     <strong>{{ t.get("templates-none") }}</strong>

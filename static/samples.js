@@ -202,7 +202,7 @@
     for (var k = start; k < end; k++) {
       var i = count - 1 - k; // newest first
       var tr = el('tr', states[i] ? 'state-' + states[i] : null);
-      tr.appendChild(el('td', 'nowrap', F.dateTime(data.ts[i], true)));
+      tr.appendChild(el('td', 'nowrap mono', F.dateTime(data.ts[i], true)));
       var empty = cols.every(function (c) { return c.values[i] === null || c.values[i] === undefined; });
       if (states[i] && empty) {
         var td = el('td', 'problem', messages[i] || '');

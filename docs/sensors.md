@@ -172,7 +172,11 @@ Manually against real hardware: `cargo test --test omada_manual sensors_work -- 
   Rows without a value or time always come last; ties keep the sensor order per device.
   With `?group=<id>` (the tiles of a group page) a list only contains the sensors of that group and its subgroups; tiles and sort links keep the filter,
   the path shows the group, and “all groups” drops the filter. An unknown group answers 404.
-- **Sensor page** (`/devices/<id>/sensors`, all signed-in users): a table with name, type, status, last message, current value (one line per channel without
+  The field **“Filter sensors”** above the table keeps only the rows that contain every word typed (in the browser, `static/table-filter.js`; the text is
+  kept per list in the tab). Rows with a warning or an outage are tinted; current values and times are in Fira Code.
+- **Sensor page** (`/devices/<id>/sensors`, all signed-in users): the status line names the address (Fira Code), the interval and, for administrators,
+  the SNMP profile (“no SNMP – ping only” for devices without one). The card head has the number of sensors and, for administrators, the text button
+  “Change order”. A table with name, type, status, last message, current value (one line per channel without
   wrapping, e.g. traffic in/out one below the other, channel names as tooltip; only if the last value is at most three intervals plus one minute old) and a
   **mini chart of the last hour** (`src/web/sparkline.rs`, SVG from the server, without a script; a click leads to the detail page):
   - Measurements (ping, traffic, custom OID): one line per channel in the colours of the large charts, a shared scale from 0, averages in sections of at least
@@ -188,7 +192,8 @@ Manually against real hardware: `cargo test --test omada_manual sensors_work -- 
 - **Order**: automatically by type (ping, uptime, traffic, interface status, then custom values), within a type by name with numbers by value (port 2 before
   port 10). “Change order” (`/devices/<id>/sensors/order`, administrators only) arranges them by hand by dragging, ↑/↓ or position number; the rules are the
   same as for devices (`docs/devices-and-groups.md`).
-- **Delete**: the trash icon in the list leads to the section “Delete sensor” at the end of the detail page (`/sensors/<id>#delete`, administrators only);
+- **Row actions** (administrators): Pause ‖ (or Resume ▶) and Edit ✎ (the settings page of the sensor); rows with a warning or an outage are tinted.
+- **Delete**: “Delete sensor” in the menu “Actions” of the detail page leads to the section at the end of that page (`/sensors/<id>#delete`, administrators only);
   deleting needs the tick “Yes, delete this sensor” (`confirm=yes`, otherwise `422`) and removes the sensor with its measurements and events.
 - **Settings** (`/sensors/<id>/edit`, administrators only, in the menu “⋯ Actions” of the detail page; `web::sensor_settings`, described in
   `docs/charts-and-thresholds.md`, “Settings page”): name, interval, thresholds and status ratings for every sensor; for a custom OID sensor (OID, mode,

@@ -686,7 +686,8 @@ mod tests {
         let (admin, csrf) = login(&h, "anna").await;
         let page = send(&h.app, get("/settings/mail", Some(&admin))).await;
         for text in [
-            "<h1>E-mail notification</h1>",
+            "<h1>Settings</h1>",
+            "<h2>E-mail notification</h2>",
             "No encryption",
             "No e-mails sent yet.",
         ] {

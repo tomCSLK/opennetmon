@@ -2,12 +2,6 @@
 {% import "icons.html" as icons %}
 {% block title %}{{ t.get("nav-updates") }} – opennetmon{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>{{ t.get("nav-updates") }}</h1>
-    <p class="subtitle">{{ t.get("updates-subtitle") }}</p>
-  </div>
-</div>
 
 {% if let Some(release) = release %}
 <p class="notice" role="status">{{ crate::web::icon("update", "")|safe }}<span>{{ t.get2("update-released", "version", release.version.as_str(), "installed", crate::web::VERSION) }} <a href="{{ release.url }}" target="_blank" rel="noopener noreferrer">{{ t.get("update-whats-new") }}</a></span></p>
@@ -15,8 +9,11 @@
 <p class="flash" role="status">{{ crate::web::icon("up", "")|safe }}<span>{{ t.get1("updates-current", "version", crate::web::VERSION) }}</span></p>
 {% endif %}
 
-<section class="card">
-  <h2>{{ t.get("updates-version") }}</h2>
+<section class="card flush">
+  <div class="card-head"><h2>{{ t.get("nav-updates") }}</h2></div>
+  <p class="card-note">{{ t.get("updates-subtitle") }}</p>
+  <div class="card-body">
+  <h3>{{ t.get("updates-version") }}</h3>
   <dl class="kv">
     <dt>{{ t.get("updates-installed") }}</dt><dd><code>{{ crate::web::VERSION }}</code></dd>
     <dt>{{ t.get("updates-latest") }}</dt>
@@ -28,6 +25,7 @@
     <dt>{{ t.get("source-code") }}</dt>
     <dd><a href="{{ crate::web::SOURCE_URL }}">{{ crate::web::SOURCE_URL }}</a> (AGPL-3.0-or-later)</dd>
   </dl>
+  </div>
 </section>
 
 <section class="card updsteps">

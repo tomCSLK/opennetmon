@@ -581,6 +581,12 @@ mod tests {
         assert!(body.contains("Switch &#60;1&#62;") && body.contains("Netzwerk"));
         assert!(body.contains(&format!("href=\"/sensors/{sensor}\"")));
         assert!(body.contains("data-refresh-now"));
+        // Rows per page (50, 100, 500) and the page controls, drawn by static/table-filter.js.
+        assert!(
+            body.contains("<select data-table-rows>")
+                && body.contains("<option value=\"500\">500</option>")
+        );
+        assert!(body.contains("data-table-pager"));
 
         let anonymous = send(&h.app, get("/log", None)).await;
         assert_eq!(anonymous.status, axum::http::StatusCode::SEE_OTHER);

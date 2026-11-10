@@ -1,14 +1,8 @@
 {% extends "app.html" %}
 {% import "icons.html" as icons %}
 {% block title %}{{ t.get("nav-mibs") }} – opennetmon{% endblock %}
-{% block head %}<script src="/static/table-filter.js?v=2" defer></script>{% endblock %}
+{% block head %}<script src="/static/table-filter.js?v=3" defer></script>{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>{{ t.get("nav-mibs") }}</h1>
-    <p class="subtitle">{{ t.get2("mibs-subtitle", "modules", total_modules, "objects", total_objects) }}</p>
-  </div>
-</div>
 
 {% if let Some(message) = flash %}
 <p class="flash" role="status">{{ message }}</p>
@@ -24,14 +18,17 @@
 {% endif %}
 {% endif %}
 
-<section class="card">
-  <h2>{{ t.get("mibs-upload") }}</h2>
+<section class="card flush">
+  <div class="card-head"><h2>{{ t.get("nav-mibs") }}</h2></div>
+  <p class="card-note">{{ t.get2("mibs-subtitle", "modules", total_modules, "objects", total_objects) }}</p>
+  <div class="card-body">
   <form method="post" action="/mibs/upload" enctype="multipart/form-data" class="upload">
     <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
     <input type="file" name="files" multiple accept=".mib,.my,.txt,.mi2,text/plain" required aria-label="{{ t.get("mibs-choose-files") }}">
     <button type="submit">{{ t.get("mibs-upload") }}</button>
   </form>
   <p class="hint">{{ t.get("mibs-upload-hint") }}</p>
+  </div>
 </section>
 
 <section class="card">

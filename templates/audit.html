@@ -1,5 +1,5 @@
 {% extends "app.html" %}
-{% block head %}<script src="/static/table-filter.js?v=2" defer></script>{% endblock %}
+{% block head %}<script src="/static/pager.js?v=1" defer></script><script src="/static/table-filter.js?v=3" defer></script>{% endblock %}
 {% block title %}{{ t.get("nav-audit") }} – opennetmon{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -16,6 +16,13 @@
   <div class="card-tools">
     <input type="search" data-table-filter="audit-entries" data-table-filter-key="audit-entries" placeholder="{{ t.get("audit-filter") }}" aria-label="{{ t.get("audit-filter") }}" hidden>
     <span class="muted small" data-table-filter-count></span>
+    <label class="rows-select push-right" hidden>{{ t.get("detail-rows") }}
+      <select data-table-rows>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="500">500</option>
+      </select>
+    </label>
   </div>
   <div class="table-wrap">
   <table id="audit-entries" class="m-cards m-log">
@@ -23,7 +30,7 @@
     <tbody>
     {% for r in rows %}
       <tr data-filter="{{ r.filter }}">
-        <td class="nowrap m-when">{{ r.at|safe }}</td>
+        <td class="nowrap mono m-when">{{ r.at|safe }}</td>
         <td class="nowrap m-device">{% if r.user.is_empty() %}–{% else %}<a href="/audit?user={{ r.user|urlencode }}">{{ r.user }}</a>{% endif %}{% if !r.address.is_empty() %}<span class="sub">{{ r.address }}</span>{% endif %}</td>
         <td class="nowrap m-status"><span class="badge {{ r.level }}">{{ r.action }}</span></td>
         <td class="m-name">{% if let Some(href) = r.href %}<a href="{{ href }}"><strong>{{ r.name }}</strong></a>{% else %}<strong>{{ r.name }}</strong>{% endif %}{% if !r.kind.is_empty() %}<span class="sub">{{ r.kind }}</span>{% endif %}</td>
@@ -33,6 +40,7 @@
     </tbody>
   </table>
   </div>
+  <nav class="pager" data-table-pager aria-label="{{ t.get("table-pages") }}" hidden></nav>
   <p class="empty small" data-table-filter-empty hidden>{{ t.get("log-none-match") }}</p>
   {% endif %}
 </section>

@@ -15,8 +15,8 @@ Vorbild von opensecmon (Kopfleiste mit „Änderungen“, graue Flächen mit ruh
 Einstellungen im Benutzermenü mit eigener Unternavigation, Abzeichen „Neue Version“ und Seite Einstellungen → Aktualisierungen). Kein Tag, kein Release;
 seit 2026-11-09 23:08 auf dem Server installiert (Einzelheiten in `Serveradmin/CLAUDE.md`), der Nutzer testet und gibt Rückmeldung (Abschnitt P).
 
-**Notiert 2026-11-10 (Nutzer, noch nicht umgesetzt):** 0.6.0 weicht bei Grafiken und Graphen vom abgenommenen Entwurf ab, das soll angeglichen werden
-(Liste in Abschnitt P, „Abweichungen vom Entwurf“). Neu geplant ist eine **Docker-Version** (Vorhaben Q), damit opennetmon auf beliebiger Hardware läuft.
+**Notiert 2026-11-10 (Nutzer):** 0.6.0 weicht bei Grafiken und Graphen vom abgenommenen Entwurf ab, das wird angeglichen (Liste in Abschnitt P,
+„Abweichungen vom Entwurf“; Schritte 1–5 erledigt 2026-11-10, als Nächstes das Test-Paket, empfohlen 0.6.1). Neu geplant ist eine **Docker-Version** (Vorhaben Q), damit opennetmon auf beliebiger Hardware läuft.
 
 **Stand bei v0.5.7 (2026-10-30):**
 
@@ -1042,11 +1042,11 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
 *Rahmen und Bauteile*
 1. **Symbole** (erledigt in Schritt 2): Lucide (ISC, `assets/icons.js` im Entwurf) statt eigener einfacher Formen (`src/web/icons.rs`, `static/icons/`), auf allen Seiten.
    Die Lizenz kommt in `THIRD-PARTY-LICENSES.txt`; damit entfällt die oben genannte Abweichung „eigene Symbole“.
-2. **Knöpfe in den Seitenköpfen:** „Pausieren“ und „Protokoll“ sind im Entwurf umrandete Knöpfe mit Symbol, in 0.6.0 Textknöpfe ohne Symbol.
-3. **„Automatisch“:** im Entwurf ein Schalter und ein Aktualisieren-Symbol ohne Rahmen; in 0.6.0 ein Kästchen und ein umrandeter Knopf.
-4. **Fira Code für Zahlen, Zeiten und Adressen:** gilt für die Spalten „Aktuell“, „Seit“, „Zeitpunkt“, die Ausfallzeit, die Adresse im Gerätekopf und die
+2. (erledigt in Schritt 5) **Knöpfe in den Seitenköpfen:** „Pausieren“ und „Protokoll“ sind im Entwurf umrandete Knöpfe mit Symbol, in 0.6.0 Textknöpfe ohne Symbol.
+3. (erledigt in Schritt 5) **„Automatisch“:** im Entwurf ein Schalter und ein Aktualisieren-Symbol ohne Rahmen; in 0.6.0 ein Kästchen und ein umrandeter Knopf.
+4. (erledigt in Schritt 5) **Fira Code für Zahlen, Zeiten und Adressen:** gilt für die Spalten „Aktuell“, „Seit“, „Zeitpunkt“, die Ausfallzeit, die Adresse im Gerätekopf und die
    Zeitstempel der Messwerte. In 0.6.0 stehen sie meist in Fira Sans.
-5. **Getönte Zeilen:** Zeilen mit Warnung oder Ausfall sind im Entwurf auch in der Sensorliste und auf der Geräteseite getönt; in 0.6.0 nur in den Messwerten.
+5. (erledigt in Schritt 5) **Getönte Zeilen:** Zeilen mit Warnung oder Ausfall sind im Entwurf auch in der Sensorliste und auf der Geräteseite getönt; in 0.6.0 nur in den Messwerten.
 6. **Handy:** In der Kopfleiste fehlen in 0.6.0 die drei Statuszähler; der Entwurf zeigt sie neben der Suche.
    **Kein Fehler (2026-11-10):** Die Zähler sind da; in den Vergleichsbildern fehlten sie nur, weil die Seiten mit curl ohne
    `Accept: text/html` geholt wurden und die Zähler nur bei Seitenaufrufen berechnet werden.
@@ -1061,21 +1061,21 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    - „In Ordnung“ steht im Entwurf ohne Rahmen.
    - Auf- und Zuklappen geht im Entwurf mit einem Pfeil, in 0.6.0 mit einem Kästchen „–“.
    - Die Zähler stehen im Entwurf direkt neben den Aktionen, in 0.6.0 in einer eigenen Spalte weiter links.
-10. **Sensorliste:** Das Feld „Sensoren filtern“ in der Karte fehlt in 0.6.0, dort gibt es nur die Suche in der Kopfleiste.
+10. (erledigt in Schritt 5) **Sensorliste:** Das Feld „Sensoren filtern“ in der Karte fehlt in 0.6.0, dort gibt es nur die Suche in der Kopfleiste.
 
 *Geräteseite*
 
-11. **Statuszeile:** Der Entwurf nennt auch das SNMP-Profil („· Netz SNMPv3“ bzw. „kein SNMP – nur Ping“), 0.6.0 nicht.
-12. **Kopf der Sensorkarte:** Der Entwurf hat „Reihenfolge ändern“ als Textknopf, 0.6.0 nur ein Symbol. Die Spalte heißt im Entwurf „Letzte Stunde“
+11. (erledigt in Schritt 5) **Statuszeile:** Der Entwurf nennt auch das SNMP-Profil („· Netz SNMPv3“ bzw. „kein SNMP – nur Ping“), 0.6.0 nicht.
+12. (erledigt in Schritt 5) **Kopf der Sensorkarte:** Der Entwurf hat „Reihenfolge ändern“ als Textknopf, 0.6.0 nur ein Symbol. Die Spalte heißt im Entwurf „Letzte Stunde“
     (0.6.0: „1 Stunde“), und die Aktionsspalte hat keine Überschrift.
-13. **Verlaufsspalte:** im Entwurf überlagerte Linien ohne Endpunkt und ein kräftiges Zustandsband (grün/rot); in 0.6.0 Linien mit Punkt am Ende und ein
+13. (erledigt in Schritt 5) **Verlaufsspalte:** im Entwurf überlagerte Linien ohne Endpunkt und ein kräftiges Zustandsband (grün/rot); in 0.6.0 Linien mit Punkt am Ende und ein
     blasses Band.
-14. **Zeilenaktionen:** im Entwurf Pausieren und Bearbeiten, in 0.6.0 Pausieren und Löschen.
-15. **Handy:** Im Entwurf steht der Status oben rechts in der Karte, ohne Aktionen; in 0.6.0 steht er unter dem Namen, mit Aktionen.
+14. (erledigt in Schritt 5) **Zeilenaktionen:** im Entwurf Pausieren und Bearbeiten, in 0.6.0 Pausieren und Löschen.
+15. (erledigt in Schritt 5) **Handy:** Im Entwurf steht der Status oben rechts in der Karte, ohne Aktionen; in 0.6.0 steht er unter dem Namen, mit Aktionen.
 
 *Sensorseite*
 
-16. **Kopf:** Zeitraum, Pausieren, Protokoll, Aktionen und „Automatisch“ stehen im Entwurf in einer Leiste links unter der Statuszeile, in 0.6.0 rechts
+16. (erledigt in Schritt 5) **Kopf:** Zeitraum, Pausieren, Protokoll, Aktionen und „Automatisch“ stehen im Entwurf in einer Leiste links unter der Statuszeile, in 0.6.0 rechts
     neben dem Titel.
 17. (erledigt in Schritt 3) **Kacheln:**
     - Aktuelle Werte und Verfügbarkeit in **einer Reihe**; Nutzer 2026-11-10: außer beim Ping.
@@ -1098,17 +1098,17 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
     - Statt des Stufengraphen ein Band „Zustand im Zeitraum“ (`.bigband`, 36 px) mit Legende.
     - Die Kacheln „Aktuell“ und die drei Verfügbarkeiten in einer Reihe.
     - **Fehler in 0.6.0:** Die Achse des Stufengraphen beschriftet Zustände doppelt („down (2)“, „down“, „down“, „up“, „up (1)“).
-21. **Messwerte:** Zeitstempel in Fira Code (siehe 4). Die zusätzlichen Zeilen von 0.6.0 (Summe, Mittelwert, Minimum, Maximum, Volumen) bleiben.
+21. (erledigt in Schritt 5) **Messwerte:** Zeitstempel in Fira Code (siehe 4). Die zusätzlichen Zeilen von 0.6.0 (Summe, Mittelwert, Minimum, Maximum, Volumen) bleiben.
 
 *Berichte, Änderungen, Einstellungen*
 
-22. **Berichte:**
+22. (erledigt in Schritt 5) **Berichte:**
     - Verfügbarkeit wie im Entwurf (`.lvl`): OK nur als grüner Text ohne Symbol, Warnung und Ausfall getönt.
     - Knopf „CSV“ mit Download-Symbol rechts statt „CSV herunterladen“.
     - Unterzeile des Geräts in einer Zeile („Netzwerk / Kern · Basis: Ping“).
 23. **Änderungen:** Aktion als einfacher Text statt Abzeichen, Auswahl „Benutzer“ statt Textfilter, Hinweis „Aufbewahrung … Tage“. 0.6.0 zeigt zusätzlich die
     Adresse unter dem Benutzer. **Entschieden (Nutzer 2026-11-10): bleibt wie in 0.6.0.**
-24. **Einstellungen:**
+24. (erledigt in Schritt 5) **Einstellungen:**
     - Seitentitel „Einstellungen“ über der Unternavigation.
     - Die Listen als Karte mit Titel und Knopf „Neu …“ im Kartenkopf.
     - SNMP-Profile mit den Spalten Version, Sicherheit, Benutzer und Geräte und den Aktionen Bearbeiten und Löschen; 0.6.0 hat Einstellungen, Passwörter und
@@ -1121,11 +1121,13 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
       wie „2 Tage 3 Std. 12 Min.“ passen nicht hinein.
     - Lösung: Die Spalte wird so breit wie ihr Inhalt (`max-content`), dazu „seit …“ wie in Punkt 8.
     - Im Entwurf stößt die Dauer ebenfalls an den Rand.
-26. **Protokoll: Anzahl der Einträge wählbar** wie bei den Messwerten der Sensorseite:
+26. (erledigt in Schritt 5) **Protokoll: Anzahl der Einträge wählbar** wie bei den Messwerten der Sensorseite:
     - Auswahl „Zeilen“ mit 50, 100 und 500, dazu Seiten vor und zurück (`static/pager.js`).
     - Heute zeigt die Seite bis zu `status::LOG_ENTRIES` (500) Einträge auf einmal.
-    - Die Auswahl gilt auch mit `?device=`/`?sensor=` und zusammen mit Filter und Sortierung. Der Filter durchsucht dann nur die angezeigte Seite, oder er
-      wird serverseitig, das wird bei der Umsetzung entschieden.
+    - Die Auswahl gilt auch mit `?device=`/`?sensor=` und zusammen mit Filter und Sortierung.
+    - **Umgesetzt im Browser:** Die Seite lädt weiter alle Einträge (Protokoll bis 500, Änderungen bis 2000), `static/table-filter.js` zeigt die Treffer
+      des Filters seitenweise. So durchsucht der Filter alles, nicht nur die angezeigte Seite; ohne JavaScript bleibt die Tabelle vollständig. Die Auswahl
+      erscheint erst ab mehr als 50 Einträgen und wird je Tabelle im Browser gemerkt.
     - Entschieden (Nutzer, 2026-11-10): „Änderungen“ (`/audit`) bekommt dieselbe Auswahl.
 
 *Gleich oder in 0.6.0 bewusst anders (bleibt, solange der Nutzer nichts anderes sagt):*
@@ -1166,7 +1168,21 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    - Link-Status u. Ä. (nur Statuswerte): Band „Zustand im Zeitraum“ mit Legende und Zeiten statt des Stufengraphen; damit ist auch die doppelte
      Achsenbeschriftung weg.
    - Im Browser geprüft (1440 px hell/dunkel, schmal per Skript); bei 390 px headless nicht prüfbar, weil die Seite dort keine Messdaten laden kann.
-5. **Rest der Liste:** Verlaufsspalte der Geräteseite, Berichte, Zeitraumwahl, Karte „Messwerte“.
+5. **Rest der Liste** – **erledigt 2026-11-10** (Punkte 2–5, 10–16, 21, 22, 24, 26), noch nicht im Test-Paket:
+   - Seitenköpfe: Pausieren/Protokoll umrandet mit Symbol, Menüeinträge mit Symbol, „Automatisch“ als Schalter, Aktualisieren ohne Rahmen; auf der
+     Sensorseite die ganze Leiste unter der Statuszeile.
+   - Fira Code für Zahlen, Zeiten und Adressen (Unterzeilen bleiben Fira Sans); Zeilen mit Warnung/Ausfall in allen Tabellen getönt.
+   - Sensorliste mit Feld „Sensoren filtern“. Geräteseite: Statuszeile mit SNMP-Profil (nur für Admins, wie im Gerätebaum) bzw. „kein SNMP – nur Ping“,
+     Textknopf „Reihenfolge ändern“, Spalte „Letzte Stunde“, Zeilenaktionen Pausieren und Bearbeiten, auf dem Handy Status oben rechts ohne Aktionen.
+   - Punkt 13: Der „Punkt am Ende“ ist ein einzelner Messwert nach einer Lücke (z. B. nach einem Neustart), kein eigenes Zeichen; er bleibt, damit
+     einzelne Werte sichtbar sind. Bei lückenlosen Daten sind die Linien durchgehend. Das Band ist eckig wie im Entwurf und bleibt kräftig.
+   - Berichte mit `.lvl` (OK grüner Text, Warnung/Ausfall getönt), Knopf „CSV“ mit Download-Symbol rechts, Unterzeile in einer Zeile (der Wortlaut der
+     Basis bleibt „nach „Ping““ statt „Basis: Ping“, damit die CSV-Spalte gleich bleibt).
+   - Einstellungen: Titel „Einstellungen“ über der Unternavigation (nur auf der ersten Seite eines Bereichs, Formulare behalten ihren Titel), jeder
+     Bereich eine Karte mit Titel, Erklärung und „Neu …“ im Kartenkopf (springt bei Benutzern und Wartungsfenstern zum Formular darunter);
+     SNMP-Profile mit Version, Sicherheit, Benutzer, Geräte, Bearbeiten und Löschen.
+   - Protokoll und Änderungen: „Zeilen“ 50/100/500 mit Seiten (Punkt 26).
+   - Im Browser geprüft bei 1440 px hell und dunkel und bei 390 px (headless).
 6. **Test-Paket bauen**, empfohlen als 0.6.1, damit auf dem Server eindeutig ist, was läuft; ein Release 0.6.0 gäbe es dann nicht. Der Nutzer testet auf dem
    Server.
 7. **Release auf Ansage:**

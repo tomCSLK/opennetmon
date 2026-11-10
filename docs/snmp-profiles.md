@@ -3,6 +3,10 @@
 SNMP credentials are stored as reusable **profiles**. A device refers to a profile.
 The pages under `/credentials` are only accessible to administrators (viewers get 403).
 
+The list (Settings → SNMP profiles) is a card with “New profile” in its head and the columns name, version, security (e.g. “authNoPriv · MD5”,
+“authPriv · SHA-256 / AES-128”, “Community” for v2c), user, number of devices using the profile, and the icons edit and delete (the latter leads to
+“Delete profile” at the end of the edit page; only possible while no device uses the profile). No column shows a secret.
+
 ## Profile types
 
 | Type | Fields |

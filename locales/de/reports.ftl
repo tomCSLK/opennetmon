@@ -9,7 +9,8 @@ report-period-24h = 24 Std.
 report-period-7d = 7 Tage
 report-period-30d = 30 Tage
 report-show = Anzeigen
-report-csv = CSV herunterladen
+report-csv = CSV
+report-csv-title = Bericht als CSV-Datei herunterladen
 report-hint = Verfügbar = In Ordnung oder Warnung, nicht verfügbar = Ausfall. Pausierte Zeit, Wartungsfenster und Zeiten ohne Abfrage zählen nicht mit. Ein Gerät richtet sich nach seinem Master-Sensor, sonst nach dem Ping-Sensor, sonst nach dem Mittel seiner Sensoren. Monate in der Zeitzone des Servers, gezählt wird stundenweise ab dem Update auf diese Version.
 report-empty = Noch keine Geräte oder Sensoren.
 report-availability = Verfügbarkeit

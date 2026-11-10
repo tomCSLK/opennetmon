@@ -26,7 +26,15 @@ struct ListTemplate {
     t: Lang,
     layout: Layout,
     profiles: Vec<ProfileView>,
+    /// Devices per profile.
+    devices: std::collections::HashMap<i64, i64>,
     flash: Option<String>,
+}
+
+impl ListTemplate {
+    fn device_count(&self, id: &i64) -> i64 {
+        self.devices.get(id).copied().unwrap_or(0)
+    }
 }
 
 /// Non-secret values that are echoed back into the form.
@@ -228,6 +236,7 @@ pub async fn list(
         layout: user.layout(),
         t: user.lang,
         profiles: store::list_profiles(&state.pool).await?,
+        devices: store::device_counts(&state.pool).await?,
         flash: flash(user.lang, query.msg.as_deref()),
     };
     Ok(Html(page.render()?))
@@ -498,9 +507,12 @@ mod tests {
         let list = send(&h.app, get("/credentials?msg=created", Some(&admin))).await;
         assert_eq!(list.status, StatusCode::OK);
         assert!(list.body.contains("Omada Switches"));
+        // Columns version, security, user and devices (none yet); no secrets.
         assert!(
             list.body
-                .contains("SNMPv3 · authNoPriv · MD5 · Benutzer monitor")
+                .contains("<td class=\"m-msg\">authNoPriv · MD5</td>")
+                && list.body.contains("<td class=\"mono m-hide\">monitor</td>")
+                && list.body.contains("<td class=\"num right m-hide\">0</td>")
         );
         assert!(list.body.contains("Profil angelegt."));
 
@@ -733,6 +745,12 @@ mod tests {
         let (admin, csrf) = login(&h, "anna").await;
         let form = send(&h.app, get("/credentials/new", Some(&admin))).await;
         assert!(form.body.contains("<h1>New profile</h1>"));
+        // The shared title "Settings" heads only the first page of a section, not its forms.
+        assert!(!form.body.contains("<h1>Settings</h1>"));
+        let list = send(&h.app, get("/credentials", Some(&admin))).await;
+        assert!(
+            list.body.contains("<h1>Settings</h1>") && list.body.contains("<h2>SNMP profiles</h2>")
+        );
         assert!(form.body.contains("authNoPriv (authentication only)"));
         let refused = send(
             &h.app,

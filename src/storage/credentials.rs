@@ -237,6 +237,16 @@ pub async fn list_profiles(pool: &SqlitePool) -> Result<Vec<ProfileView>> {
     .collect()
 }
 
+/// How many devices use each profile (profiles without devices are missing).
+pub async fn device_counts(pool: &SqlitePool) -> Result<std::collections::HashMap<i64, i64>> {
+    let rows: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT profile_id, COUNT(*) FROM devices WHERE profile_id IS NOT NULL GROUP BY profile_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().collect())
+}
+
 /// Returns true if a profile was deleted. A profile that devices still use is refused.
 pub async fn delete_profile(pool: &SqlitePool, id: i64) -> Result<bool> {
     let in_use: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE profile_id = ?")

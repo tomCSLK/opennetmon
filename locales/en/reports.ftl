@@ -9,7 +9,8 @@ report-period-24h = 24 h
 report-period-7d = 7 days
 report-period-30d = 30 days
 report-show = Show
-report-csv = Download CSV
+report-csv = CSV
+report-csv-title = Download the report as a CSV file
 report-hint = Available = OK or warning, unavailable = down. Paused time, maintenance windows and time without polls do not count. A device follows its master sensor, else its ping sensor, else the mean of its sensors. Months in the time zone of the server; counted per hour since the update to this version.
 report-empty = No devices or sensors yet.
 report-availability = Availability

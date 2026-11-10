@@ -22,18 +22,18 @@
     <form method="post" action="/resume/group/{{ summary.id }}">
       <input type="hidden" name="csrf_token" value="{{ layout.csrf_token }}">
       <input type="hidden" name="back" value="{{ back }}">
-      <button type="submit" class="secondary">{{ t.get("resume") }}</button>
+      <button type="submit" class="secondary">{{ crate::web::icon("play", "")|safe }} {{ t.get("resume") }}</button>
     </form>
     {% else %}
-    <a class="button ghost" href="/pause/group/{{ summary.id }}?back={{ back }}">{{ t.get("pause") }}</a>
+    <a class="button secondary" href="/pause/group/{{ summary.id }}?back={{ back }}">{{ crate::web::icon("pause", "")|safe }} {{ t.get("pause") }}</a>
     {% endif %}
     <details class="more-actions setup" open>
       {% call icons::more_summary(t) %}{% endcall %}
       <div class="more-items">
-    <a class="button ghost" href="/groups/{{ summary.id }}/edit?back={{ back }}">{{ t.get("group-edit") }}</a>
-    <a class="button ghost" href="/dependency/group/{{ summary.id }}">{{ t.get("dependency") }}</a>
-    <a class="button ghost" href="/maintenance/group/{{ summary.id }}">{{ t.get("maintenance") }}</a>
-    {% if !rows.is_empty() %}<a class="button ghost" href="/groups/{{ summary.id }}/order?back={{ back }}">{{ t.get("order-change") }}</a>{% endif %}
+    <a class="button ghost" href="/groups/{{ summary.id }}/edit?back={{ back }}">{{ crate::web::icon("pencil", "")|safe }} {{ t.get("group-edit") }}</a>
+    <a class="button ghost" href="/dependency/group/{{ summary.id }}">{{ crate::web::icon("pulse", "")|safe }} {{ t.get("dependency") }}</a>
+    <a class="button ghost" href="/maintenance/group/{{ summary.id }}">{{ crate::web::icon("schedules", "")|safe }} {{ t.get("maintenance") }}</a>
+    {% if !rows.is_empty() %}<a class="button ghost" href="/groups/{{ summary.id }}/order?back={{ back }}">{{ crate::web::icon("order", "")|safe }} {{ t.get("order-change") }}</a>{% endif %}
     <a class="button secondary" href="/groups/new?parent={{ summary.id }}&back={{ back }}">
       {{ crate::web::icon("folder", "")|safe }}
       {{ t.get("group-new-sub") }}

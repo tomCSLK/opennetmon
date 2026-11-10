@@ -1228,6 +1228,12 @@ mod tests {
         assert_eq!(page.status, StatusCode::OK);
         assert!(page.body.contains("Ping"));
         assert!(!page.body.contains("Sensor hinzufügen") && !page.body.contains("/pause/"));
+        // The SNMP profile is named to admins only; rows offer pausing and editing (deleting is on the sensor page).
+        assert!(!page.body.contains("<span>Fake</span>"));
+        let own = send(&h.app, get(&path, Some(&admin))).await;
+        assert!(own.body.contains(" · <span>Fake</span>"));
+        assert!(own.body.contains("/sensors/1/edit\" title=\"Bearbeiten\""));
+        assert!(!own.body.contains("href=\"/sensors/1#delete\""));
 
         for (target, body) in [
             (path.clone(), format!("csrf_token={vcsrf}&kind=ping")),
@@ -2051,7 +2057,10 @@ mod tests {
             get(&format!("/devices/{device}/sensors"), Some(&viewer)),
         )
         .await;
-        assert!(page.body.contains("<th class=\"col-trend\">1 Stunde</th>"));
+        assert!(
+            page.body
+                .contains("<th class=\"col-trend\">Letzte Stunde</th>")
+        );
         // Ping: the latest value, its channel as tooltip, a line linking to the detail page.
         assert!(
             page.body
