@@ -1025,37 +1025,136 @@ vom Entwurf und vom Plan:
 - `README.md`: Bild der neuen Oberfläche (`docs/assets/`), Erklärvideo; Logo `docs/assets/opennetmon-logo.jpg` noch das alte.
 - opensecmon soll denselben Hinweis auf neue Versionen bekommen (eigenes Projekt).
 
-**Abweichungen vom Entwurf (Rückmeldung des Nutzers 2026-11-10 beim Test von 0.6.0: Grafiken, Graphen usw. weichen vom Entwurf ab; erst notiert,
-Umsetzung nach „go“):** Die Seiten sollen dem abgenommenen Entwurf (`docs/entwurf/`, nur lokal) entsprechen. Bekannt aus dem Vergleich der Quelltexte
-(Entwurf `assets/pages.js`, `assets/app.css`, `assets/icons.js` gegen 0.6.0):
+**Abweichungen vom Entwurf (Rückmeldung des Nutzers 2026-11-10 beim Test von 0.6.0: Grafiken, Graphen usw. weichen vom Entwurf ab).**
+Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
+- Testaufbau: Wegwerf-Instanz mit 7 Geräten, 15 Sensoren (Ping, Interface-Traffic und -Status über den lokalen SNMP-Test-Agenten, lokale Werte) und
+  künstlichem Verlauf über 24 Stunden bzw. 30 Tage, dazu Zustände OK, Warnung, Ausfall und pausiert.
+- Verglichen bei 1440 px hell und dunkel im Browser, bei 390 px mit Chrome ohne Fenster.
+- Dunkel weicht in denselben Punkten ab wie hell.
+- Der Entwurf hat keine Anmeldeseite.
+- Bei 390 px fehlt in den Bildern von 0.6.0 der Graph, weil die Seite dort ohne Anmeldung keine Messdaten laden kann.
 
-- **Symbole:** Der Entwurf nutzt Lucide (ISC, `assets/icons.js`), 0.6.0 eigene einfache Formen (`src/web/icons.rs`, `static/icons/`). Auf Lucide umstellen
-  (Namen wie im Entwurf), Lizenz in `THIRD-PARTY-LICENSES.txt`; damit entfällt die oben genannte Abweichung „eigene Symbole“.
-- **Graph der Sensorseite:** Im Entwurf eine Karte „Verlauf“ (Kopf mit Zeitraum), vier waagrechte Gitterlinien, Einheit oben links, erste Reihe `--s1` mit
-  leichter Fläche, zweite Reihe `--s2` gestrichelt, Zeiten ohne Antwort rot getönt (`.gap`), Fadenkreuz mit Hinweiskasten, Legende unter dem Graphen
-  („Eingehend“/„Ausgehend“). 0.6.0 zeigt uPlot mit Legende oben und eigener Achsenaufteilung. Zu entscheiden: uPlot an den Entwurf angleichen (Zoom, Lücken
-  und viele Punkte bleiben; Empfehlung) oder eigenes SVG wie im Entwurf (uPlot entfiele).
-- **Sensoren ohne Messverlauf** (z. B. Link-Status): Der Entwurf zeigt statt des Graphen ein Band „Zustand im Zeitraum“ (`.bigband`, 36 px) mit Legende,
-  0.6.0 einen Graphen der Zustände.
-- **Kacheln der Sensorseite:** Im Entwurf eine Reihe (`.tiles t4`/`t5`) aus aktuellen Werten (Pfeilsymbol für Eingehend/Ausgehend) und Verfügbarkeit
-  24 Stunden, 7 Tage und 30 Tage. 0.6.0 hat zwei getrennte Reihen `value-tile`. **Nutzer (2026-11-10):** möglichst in einer Reihe, außer beim Ping. Der
-  Ping hat fünf Kanäle (Antwortzeit, Min, Max, Jitter, Verlust) plus drei Verfügbarkeiten, das passt nicht in eine Reihe; dort bleiben es zwei Reihen. Gilt
-  sinngemäß für andere Sensoren mit vielen Kanälen: eine Reihe nur, solange sie lesbar bleibt (Regel bei der Umsetzung festlegen, z. B. höchstens fünf Kacheln).
-- **Graphen des Ping (Nutzer, 2026-11-10):** 0.6.0 zeichnet je Einheit einen eigenen Graphen (`static/chart.js` gruppiert nach `unit`). Beim Ping sind das
-  zwei: Millisekunden (Antwortzeit, Min, Max, Jitter) und Prozent (Verlust). Sie sollen zu **einem** Graphen werden, z. B. Millisekunden auf der linken
-  Achse und der Verlust auf einer zweiten Achse rechts, als Balken oder Stufenlinie in der Farbe für Ausfall.
-- **Kacheln der Übersicht und der Sensorliste:** Im Entwurf mit Unterzeile (z. B. „13 Geräte“, „96 % aller Sensoren“, „Grenzwert überschritten“,
-  „keine Antwort oder Fehler“, „von Hand oder per Zeitplan“) und dem Wert in Fira Code. 0.6.0 hat keine Unterzeile; auch den Satz der Kacheln abgleichen.
-- **Zähler im Gerätebaum:** Im Entwurf Symbol und Zahl in Fira Code; „In Ordnung“ ist nur grüner Text, Warnung, Ausfall und Pausiert sind getönt und umrandet.
-  0.6.0 zeigt Zeichen und Text (`pill-long`/`pill-short`).
-- **Prüfen:** Verlaufsspalte der Geräteseite („Letzte Stunde“), Verfügbarkeit in den Berichten (`.lvl`), Zeitraumwahl als Segmentschalter (`.seg`) und die
-  Karte „Messwerte“ (im Entwurf „Zeitraum“ und „Zeilen“ im Kartenkopf).
+**Liste vom Nutzer freigegeben (2026-11-10)**, mit drei Entscheidungen:
+- Punkt 23 bleibt wie in 0.6.0, also mit Textfilter, Abzeichen und Adresse.
+- Punkt 18: uPlot wird angeglichen, nicht ersetzt.
+- Punkt 26: Protokoll und Änderungen bekommen beide die Auswahl der Zeilen.
 
-Vorgehen bei der Umsetzung:
+*Rahmen und Bauteile*
+1. **Symbole:** Lucide (ISC, `assets/icons.js` im Entwurf) statt eigener einfacher Formen (`src/web/icons.rs`, `static/icons/`), auf allen Seiten.
+   Die Lizenz kommt in `THIRD-PARTY-LICENSES.txt`; damit entfällt die oben genannte Abweichung „eigene Symbole“.
+2. **Knöpfe in den Seitenköpfen:** „Pausieren“ und „Protokoll“ sind im Entwurf umrandete Knöpfe mit Symbol, in 0.6.0 Textknöpfe ohne Symbol.
+3. **„Automatisch“:** im Entwurf ein Schalter und ein Aktualisieren-Symbol ohne Rahmen; in 0.6.0 ein Kästchen und ein umrandeter Knopf.
+4. **Fira Code für Zahlen, Zeiten und Adressen:** gilt für die Spalten „Aktuell“, „Seit“, „Zeitpunkt“, die Ausfallzeit, die Adresse im Gerätekopf und die
+   Zeitstempel der Messwerte. In 0.6.0 stehen sie meist in Fira Sans.
+5. **Getönte Zeilen:** Zeilen mit Warnung oder Ausfall sind im Entwurf auch in der Sensorliste und auf der Geräteseite getönt; in 0.6.0 nur in den Messwerten.
+6. **Handy:** In der Kopfleiste fehlen in 0.6.0 die drei Statuszähler; der Entwurf zeigt sie neben der Suche.
 
-1. Jede Seite des Entwurfs neben 0.6.0 legen: 1440 und 390 px, hell und dunkel, mit ähnlichen Wegwerf-Daten.
-2. Die Abweichungen vollständig auflisten, die Rückmeldungen des Nutzers vom Server ergänzen und die Liste mit ihm abgleichen.
-3. Die Abweichungen beheben, als neues Test-Paket (kein Release ohne Ansage).
+*Übersicht und Sensorliste*
+
+7. **Kacheln:** In 0.6.0 fehlt die Unterzeile (z. B. „13 Geräte“, „91 % aller Sensoren“, „Grenzwert überschritten“, „keine Antwort oder Fehler“,
+   „von Hand oder per Zeitplan“). Der Wert ist im Entwurf fetter (600 statt 500).
+8. **„Braucht Aufmerksamkeit“:** Die Dauer steht im Entwurf als „seit …“.
+9. **Gerätebaum:**
+   - Die Zähler zeigen im Entwurf nur Symbol und Zahl; 0.6.0 schreibt bei einem einzigen Zustand „1 Sensor“.
+   - „In Ordnung“ steht im Entwurf ohne Rahmen.
+   - Auf- und Zuklappen geht im Entwurf mit einem Pfeil, in 0.6.0 mit einem Kästchen „–“.
+   - Die Zähler stehen im Entwurf direkt neben den Aktionen, in 0.6.0 in einer eigenen Spalte weiter links.
+10. **Sensorliste:** Das Feld „Sensoren filtern“ in der Karte fehlt in 0.6.0, dort gibt es nur die Suche in der Kopfleiste.
+
+*Geräteseite*
+
+11. **Statuszeile:** Der Entwurf nennt auch das SNMP-Profil („· Netz SNMPv3“ bzw. „kein SNMP – nur Ping“), 0.6.0 nicht.
+12. **Kopf der Sensorkarte:** Der Entwurf hat „Reihenfolge ändern“ als Textknopf, 0.6.0 nur ein Symbol. Die Spalte heißt im Entwurf „Letzte Stunde“
+    (0.6.0: „1 Stunde“), und die Aktionsspalte hat keine Überschrift.
+13. **Verlaufsspalte:** im Entwurf überlagerte Linien ohne Endpunkt und ein kräftiges Zustandsband (grün/rot); in 0.6.0 Linien mit Punkt am Ende und ein
+    blasses Band.
+14. **Zeilenaktionen:** im Entwurf Pausieren und Bearbeiten, in 0.6.0 Pausieren und Löschen.
+15. **Handy:** Im Entwurf steht der Status oben rechts in der Karte, ohne Aktionen; in 0.6.0 steht er unter dem Namen, mit Aktionen.
+
+*Sensorseite*
+
+16. **Kopf:** Zeitraum, Pausieren, Protokoll, Aktionen und „Automatisch“ stehen im Entwurf in einer Leiste links unter der Statuszeile, in 0.6.0 rechts
+    neben dem Titel.
+17. **Kacheln:**
+    - Aktuelle Werte und Verfügbarkeit in **einer Reihe**; Nutzer 2026-11-10: außer beim Ping.
+    - Die Werte sind größer und fetter (28 px/600 statt 22 px/500).
+    - Pfeilsymbole bei Eingehend und Ausgehend.
+    - 0.6.0 zieht Reihen mit ein oder zwei Kacheln über die ganze Breite.
+    - Der Ping hat fünf Kanäle (Antwortzeit, Min, Max, Jitter, Verlust) und drei Verfügbarkeiten und bleibt bei zwei Reihen. Bei anderen Sensoren mit vielen
+      Kanälen gilt eine Grenze, z. B. höchstens fünf Kacheln je Reihe.
+18. **Graph:** im Entwurf eine Karte „Verlauf“ mit Kopf (Zeitraum). Weiter:
+    - die Einheit einmal oben links statt an jeder Achsenbeschriftung
+    - nur waagrechte Gitterlinien (fünf) und etwa sechs Zeitmarken (0.6.0: senkrechte Linien zu jeder Stunde)
+    - die erste Reihe `--s1` mit leichter Fläche, die zweite `--s2` gestrichelt ohne Fläche (0.6.0: beide mit Fläche)
+    - Zeiten ohne Antwort rot getönt (`.gap`), in 0.6.0 weiß
+    - die Legende unten links mit Linienmuster statt der uPlot-Legende „Zeit: --“ mit Kästchen in der Mitte
+    - ein Hinweiskasten am Fadenkreuz
+    - **Entschieden (Nutzer 2026-11-10):** uPlot behalten und angleichen (Zoom, Lücken und viele Punkte bleiben), kein eigenes SVG.
+19. **Ping:** **ein** Graph (Nutzer 2026-11-10): Millisekunden links, Verlust auf einer zweiten Achse rechts, als Balken oder Stufenlinie in der Farbe für
+    Ausfall. 0.6.0 zeichnet je Einheit einen Graphen (`static/chart.js` gruppiert nach `unit`), also zwei; alle vier ms-Reihen haben eine Fläche und wirken trüb.
+20. **Sensoren ohne Messverlauf** (Link-Status u. Ä.):
+    - Statt des Stufengraphen ein Band „Zustand im Zeitraum“ (`.bigband`, 36 px) mit Legende.
+    - Die Kacheln „Aktuell“ und die drei Verfügbarkeiten in einer Reihe.
+    - **Fehler in 0.6.0:** Die Achse des Stufengraphen beschriftet Zustände doppelt („down (2)“, „down“, „down“, „up“, „up (1)“).
+21. **Messwerte:** Zeitstempel in Fira Code (siehe 4). Die zusätzlichen Zeilen von 0.6.0 (Summe, Mittelwert, Minimum, Maximum, Volumen) bleiben.
+
+*Berichte, Änderungen, Einstellungen*
+
+22. **Berichte:**
+    - Verfügbarkeit wie im Entwurf (`.lvl`): OK nur als grüner Text ohne Symbol, Warnung und Ausfall getönt.
+    - Knopf „CSV“ mit Download-Symbol rechts statt „CSV herunterladen“.
+    - Unterzeile des Geräts in einer Zeile („Netzwerk / Kern · Basis: Ping“).
+23. **Änderungen:** Aktion als einfacher Text statt Abzeichen, Auswahl „Benutzer“ statt Textfilter, Hinweis „Aufbewahrung … Tage“. 0.6.0 zeigt zusätzlich die
+    Adresse unter dem Benutzer. **Entschieden (Nutzer 2026-11-10): bleibt wie in 0.6.0.**
+24. **Einstellungen:**
+    - Seitentitel „Einstellungen“ über der Unternavigation.
+    - Die Listen als Karte mit Titel und Knopf „Neu …“ im Kartenkopf.
+    - SNMP-Profile mit den Spalten Version, Sicherheit, Benutzer und Geräte und den Aktionen Bearbeiten und Löschen; 0.6.0 hat Einstellungen, Passwörter und
+      nur Bearbeiten.
+
+*Rückmeldungen des Nutzers vom Server (2026-11-10)*
+
+25. **Fehler: „Braucht Aufmerksamkeit“ schneidet die Dauer rechts ab.**
+    - Ursache: Die letzte Spalte ist fest 7rem breit (`.attention .arow` in `static/app.css`) und bricht nicht um (`white-space: nowrap`), längere Dauern
+      wie „2 Tage 3 Std. 12 Min.“ passen nicht hinein.
+    - Lösung: Die Spalte wird so breit wie ihr Inhalt (`max-content`), dazu „seit …“ wie in Punkt 8.
+    - Im Entwurf stößt die Dauer ebenfalls an den Rand.
+26. **Protokoll: Anzahl der Einträge wählbar** wie bei den Messwerten der Sensorseite:
+    - Auswahl „Zeilen“ mit 50, 100 und 500, dazu Seiten vor und zurück (`static/pager.js`).
+    - Heute zeigt die Seite bis zu `status::LOG_ENTRIES` (500) Einträge auf einmal.
+    - Die Auswahl gilt auch mit `?device=`/`?sensor=` und zusammen mit Filter und Sortierung. Der Filter durchsucht dann nur die angezeigte Seite, oder er
+      wird serverseitig, das wird bei der Umsetzung entschieden.
+    - Entschieden (Nutzer, 2026-11-10): „Änderungen“ (`/audit`) bekommt dieselbe Auswahl.
+
+*Gleich oder in 0.6.0 bewusst anders (bleibt, solange der Nutzer nichts anderes sagt):*
+- gleich: Kopfleiste, Benutzermenü, Farben, Schriften, Protokoll, Aufbau der Kartenköpfe
+- bewusst anders: der Hinweis „3 Geräte mit Ausfall“ im Kopf der Übersicht, auf dem Handy die Karten von „Braucht Aufmerksamkeit“ (Dauer oben rechts) und
+  „Aktionen“ als Menü statt der einzelnen Knöpfe (Vorhaben D)
+
+**Schrittplan (mit dem Nutzer abgestimmt 2026-11-10; P vor Q, weil Q auf Antworten wartet und die Abweichungen das Release aufhalten):**
+
+1. **Vergleich ohne Code-Änderung** (erledigt 2026-11-10, Liste oben, freigegeben): jede Seite des Entwurfs neben 0.6.0 legen, in einer
+   Wegwerf-Instanz mit ähnlichen Daten.
+   - Seiten: Übersicht, Sensorliste, Gerät, Sensor (Traffic, Ping, Link-Status), Protokoll, Berichte, Änderungen, Einstellungen, Anmeldung.
+   - Jeweils bei 1440 und 390 px, hell und dunkel.
+   - Ergebnis: eine Liste hier in P. Der Nutzer ergänzt seine Befunde vom Server und gibt frei, was geändert wird.
+2. **Symbole auf Lucide** (ISC, in die Lizenzliste; begonnen 2026-11-10). Betrifft alle Seiten, daher zuerst.
+3. **Kacheln und Zähler:**
+   - Übersicht und Sensorliste mit Unterzeile.
+   - Sensorseite in einer Reihe, beim Ping zwei Reihen.
+   - Zähler im Gerätebaum wie im Entwurf.
+4. **Graphen:**
+   - uPlot an den Entwurf angleichen.
+   - Ping in einem Graphen mit zweiter Achse für den Verlust.
+   - Zustandsband für Sensoren ohne Messverlauf.
+5. **Rest der Liste:** Verlaufsspalte der Geräteseite, Berichte, Zeitraumwahl, Karte „Messwerte“.
+6. **Test-Paket bauen**, empfohlen als 0.6.1, damit auf dem Server eindeutig ist, was läuft; ein Release 0.6.0 gäbe es dann nicht. Der Nutzer testet auf dem
+   Server.
+7. **Release auf Ansage:**
+   - vorher Push
+   - README-Bild der neuen Oberfläche und neues Logo im README
+   - Release-Notes auf Englisch
+   - das Erklärvideo kann später kommen
 
 ### Q. Docker-Version (Container-Image) – notiert 2026-11-10, Umsetzung nach „go“
 
@@ -1102,6 +1201,18 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
 - Basis: `scratch`/distroless (klein, ohne Shell) oder Alpine (mit Shell zum Nachsehen)?
 - Standard: HTTP hinter einem Proxy oder eingebautes HTTPS?
 - Soll der geplante Launcher später auch den Container anbieten?
+
+**Schrittplan (Fortsetzung der Nummern aus P, abgestimmt 2026-11-10):**
+
+8. **Antworten des Nutzers** zu den Fragen oben.
+9. **Vorarbeiten im Programm** (unabhängig von den Antworten; könnten vorgezogen werden, falls die Anfrage eilt):
+   - Zeitzonendaten einbetten.
+   - Unterbefehl für den Healthcheck.
+   - Sicherung nach Zeitplan im Programm.
+   - Erkennung „läuft im Container“ für den Hinweis auf neue Versionen.
+10. **Build für arm64:** musl-Cross-Build mit einem Werkzeug wie `cargo-zigbuild`, Installation nur nach OK. Nebenbei entsteht das `.deb` für arm64.
+11. **Image und Doku:** `Containerfile`, `compose.yaml` und `docs/docker.md`; Test mit Podman, auf Wunsch auch auf dem Pi.
+12. **Veröffentlichung** mit dem nächsten Release, auf Ansage.
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
