@@ -2,13 +2,13 @@
 
 ## Overview (home page)
 
-Below the tiles, the home page shows a **tree like in PRTG**: groups with ⊟/⊞ boxes to expand and collapse them, below them first the group's own
-devices, then the subgroups, nested to any depth and connected by dotted lines. Each entry is a compact row with the icon of its device type (tooltip: the type);
-on the right, in a fixed column, is the **sensor label**: if all active sensors are in the same state, a single label such as “✓ 9 sensors” (green OK,
-yellow warning, red down, grey unknown), otherwise one label per state with the count, worst first (✕ down, ! warning, ? unknown, ✓ OK).
-Paused sensors appear as an outlined label ‖ at the end; the tooltip names count and state. Groups show the sum of their whole subtree (also when
-collapsed) and the number of devices. For devices, name and labels lead to the sensor page; the name of a group leads to its **group page** (below),
-while the ⊟/⊞ box and the rest of the row expand and collapse it. Whether a group is expanded or collapsed is remembered in the
+The tiles show the sensor counts with a short line below (number of devices, share of OK sensors, what the state means). Below them, the
+home page shows a **tree like in PRTG**: groups with a chevron to expand and collapse them, below them first the group's own
+devices, then the subgroups, nested to any depth and connected by lines. Each entry is a compact row with the icon of its device type (tooltip: the type);
+on the right, next to the actions, are the **sensor counters**: one per state with symbol and count, worst first (down, warning, unknown, OK;
+red, yellow and grey ones outlined, OK in green without a frame). Paused sensors come last; the tooltip names count and state. Groups show the sum of their
+whole subtree (also when collapsed) and the number of devices. For devices, name and counters lead to the sensor page; the name of a group leads to its
+**group page** (below), while the chevron and the rest of the row expand and collapse it. Whether a group is expanded or collapsed is remembered in the
 browser (`localStorage`; without storage all groups are open). “No devices in this group.” only appears for groups that are really empty.
 The order is described below.
 Devices without a group come first under “Without group” (if there are no groups: “All devices”). Viewers see name, address and interval;
@@ -28,10 +28,10 @@ The action messages (“Device created.” etc.) come in through `?msg=` and are
   always asks for confirmation, only an uploaded MIB file is deleted at once (it can be uploaded again).
 - Up to 899 px the navigation moves to a bar at the bottom of the screen; the header keeps the logo, the search, the status counts and the user menu,
   and the settings pages show their sections as tabs that scroll sideways. The status tiles come two per row below the total.
-- Up to 560 px the tree hides the row actions and the address line, and sensor labels show just their count.
+- Up to 560 px the tree hides the row actions and the address line.
 - Up to 640 px the lists (sensors, status lists, log, events, users, profiles, templates, MIB files) turn into one block per row (`table.m-cards`
   with a layout class such as `m-sensors` or `m-log`, cells marked `m-name`, `m-status`, `m-value` …, `m-hide` for left-out columns); sortable column heads
-  become a bar of sort links. On the detail page the period selector spans the width, value tiles come two per row and the measurement table drops the
+  become a bar of sort links. On the detail page the period selector spans the width, value tiles come two per row (an odd last one across both) and the measurement table drops the
   volume columns and the sum row.
 - The tables on the setup pages (interface and value discovery, “This server”, template rules) still scroll inside their frame.
 

@@ -225,8 +225,9 @@ form.sections > .hint, form.sections > .form-actions { margin-top: 0; }
 .tile { display: block; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text); }
 .tile-label { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 13px; font-weight: 500; }
-.tile-value { margin-top: 4px; font-family: var(--font-mono); font-size: 28px; font-weight: 500; line-height: 1.2;
+.tile-value { margin-top: 4px; font-family: var(--font-mono); font-size: 28px; font-weight: 600; line-height: 1.2;
   font-variant-numeric: tabular-nums; }
+.tile-sub { margin-top: 2px; color: var(--text-3); font-size: 12px; }
 .tile.status-up .tile-label { color: var(--ok); }
 .tile.status-warning.active .tile-label, .tile.status-warning.active .tile-value { color: var(--warn); }
 .tile.status-down.active .tile-label, .tile.status-down.active .tile-value { color: var(--err); }
@@ -275,13 +276,12 @@ summary.tree-row:hover { background: var(--surface-3); }
 .tree > .node:last-child > .tree-row, .tree > details.node:last-child:not([open]) > summary { border-bottom: 0; }
 summary.tree-row { cursor: pointer; list-style: none; }
 summary.tree-row::-webkit-details-marker { display: none; }
-/* The box with minus/plus, as in a classic tree. */
-.tree-toggle { position: relative; width: 11px; height: 11px; flex: none; border: 1px solid var(--text-3); border-radius: 2px;
-  background: var(--surface); }
-.tree-toggle::before, .tree-toggle::after { content: ""; position: absolute; background: var(--text-2); }
-.tree-toggle::before { left: 2px; right: 2px; top: 4px; height: 1px; }
-.tree-toggle::after { top: 2px; bottom: 2px; left: 4px; width: 1px; }
-details[open] > summary .tree-toggle::after { display: none; }
+/* The chevron of a group: points down when open, right when closed. */
+.tree-toggle { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; margin-left: -2px; color: var(--text-2);
+  border-radius: var(--radius-sm); }
+.tree-toggle svg.icon { width: 16px; height: 16px; transition: transform .12s; }
+summary.tree-row:hover .tree-toggle { background: var(--hover); }
+details:not([open]) > summary .tree-toggle svg.icon { transform: rotate(-90deg); }
 .tree-icon { color: var(--text-3); width: 16px; height: 16px; }
 .tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-name strong { font-weight: 600; }
@@ -291,23 +291,23 @@ details[open] > summary .tree-toggle::after { display: none; }
 .tree-pause { margin-left: 8px; color: var(--muted); font-size: 13px; }
 .tree-pause::before { content: "‖ "; font-weight: 700; }
 .tree-row.paused .device-name, .tree-row.paused .tree-name strong, .tree-row.paused .tree-icon { color: var(--muted); }
-.pills { display: flex; gap: 4px; width: 14rem; flex: none; }
+.pills { display: flex; gap: 4px; flex: none; justify-content: flex-end; }
 a.pills:hover { text-decoration: none; }
 a.pills:hover .pill { border-color: currentColor; }
-/* The counters of a tree row; the symbol replaces the character in the markup (kept for text browsers). */
-.pill { display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 6px; border: 1px solid transparent;
-  border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The counters of a tree row: symbol and number; the symbol replaces the character in the markup (kept for text browsers). */
+.pill { display: inline-flex; align-items: center; gap: 3px; min-width: 44px; height: 22px; padding: 0 6px; border: 1px solid transparent;
+  border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 12px; font-weight: 500; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
 .pill::before { width: 13px; height: 13px; }
-.pill > [aria-hidden] { display: none; }
-.pill-short { display: none; }
+.pill > .pill-glyph { display: none; }
 .tree-actions { display: flex; gap: .25rem; width: 5.7rem; flex: none; justify-content: flex-end; }
 .tree-actions form { margin: 0; }
 .tree-actions .icon-only { padding: .25rem; }
 .tree-actions svg.icon { width: 16px; height: 16px; }
 .tree-empty { margin: 0; display: flex; align-items: center; min-height: var(--row); padding: 0 12px; color: var(--muted);
   font-size: 13px; border-bottom: 1px solid var(--border); }
-/* Children hang off the toggle box of their group with dotted lines. */
-.children { margin-left: calc(12px + 5px); }
+/* Children hang off the chevron of their group with lines. */
+.children { margin-left: calc(12px + 8px); }
 .children > .node { position: relative; }
 .children > .node > .tree-row, .children > .tree-empty { padding-left: 1.1rem; }
 .children > .node::before, .children > .tree-empty::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
@@ -428,12 +428,19 @@ form.inline-note .muted { font-size: .85rem; }
 .ranges a:last-child { border-right: 0; }
 .ranges a:hover { background: var(--hover); color: var(--text); text-decoration: none; }
 .ranges a[aria-current="page"] { background: var(--selected); color: var(--text); }
+/* Tiles of the sensor page in rows of up to five (`cols-N`, see `web::sensor_detail::value_rows`); each row fills the width. */
 .values { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-/* Five tiles (ping) in one row rather than four and one left over */
-@media (min-width: 1100px) { .values:has(> :nth-child(5):last-child) { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 900px) {
+  .values.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .values.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .values.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .values.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
 .value-tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
-.value-tile .label { color: var(--text-2); font-size: 13px; font-weight: 500; }
-.value-tile .value { margin-top: 4px; font-family: var(--font-mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.value-tile .label { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 13px; font-weight: 500; }
+.value-tile .label svg.icon { width: 14px; height: 14px; flex: none; }
+.value-tile .value { margin-top: 4px; font-family: var(--font-mono); font-size: 28px; font-weight: 600; line-height: 1.2;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .value-tile .when { margin-top: 2px; color: var(--text-3); font-size: 12px; }
 .status-line { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; color: var(--muted); }
 #charts { min-height: 120px; }
@@ -517,14 +524,14 @@ label.rows-select select { width: auto; }
   .u-legend.u-inline tr { display: flex; align-items: center; margin-right: 0; }
   .u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr { width: calc(50% - .375rem); }
   .u-legend.u-inline tbody:has(> tr:nth-child(4)) > tr:first-child { width: 100%; }
-  /* five tiles: two per row, the last across both */
-  .values > :nth-child(5):last-child { grid-column: 1 / -1; }
+  /* two tiles per row; an odd last one across both */
+  .values > :nth-child(odd):last-child { grid-column: 1 / -1; }
   /* Range choice across the full width; latest values two per row. */
   .page-head .ranges { display: flex; width: 100%; }
   .ranges a { flex: 1; padding: .35rem .4rem; text-align: center; white-space: nowrap; }
   .values { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .6rem; }
   .value-tile { padding: .7rem .85rem; }
-  .value-tile .value { font-size: 1.2rem; }
+  .value-tile .value { font-size: 22px; }
 }
 
 /* ---------- login ---------- */
@@ -550,7 +557,6 @@ a.button.secondary { color: var(--text); }
 /* ---------- small screens ---------- */
 @media (max-width: 900px) {
   .form-grid, .threshold-grid { grid-template-columns: 1fr; }
-  .pills { width: 11rem; }
 }
 @media (max-width: 640px) {
   .more-actions { position: relative; }
@@ -575,9 +581,6 @@ a.button.secondary { color: var(--text); }
   .tree-meta, .tree-actions { display: none; }
   .tree-row { padding-top: .3rem; padding-bottom: .3rem; }
   .tree-name { white-space: normal; overflow-wrap: anywhere; }
-  .pills { width: auto; }
-  .pill-long { display: none; }
-  .pill-short { display: inline; }
   h1 { font-size: 20px; }
 }
 /* Tables marked .m-cards show each row as a small block on phones, laid out per table with grid areas
@@ -779,8 +782,10 @@ pre.codebox { margin: 0; padding: 12px; font-size: 13px; line-height: 1.6; white
 .updsteps .hint { margin-top: 12px; }
 
 /* ---------- overview: needs attention ---------- */
-.attention .arow { display: grid; grid-template-columns: 7.5rem minmax(0, 1.2fr) minmax(0, 1.6fr) 7rem; align-items: center; gap: 12px;
-  min-height: var(--row-h); padding: 5px 16px; }
+/* One grid for all rows (subgrid), so the duration column fits the longest duration and the columns stay aligned. */
+.attention .arows { display: grid; grid-template-columns: 7.5rem minmax(0, 1.2fr) minmax(0, 1.6fr) max-content; column-gap: 12px; }
+.attention .arow { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; min-height: var(--row-h);
+  padding: 5px 16px; }
 .attention .arow + .arow { border-top: 1px solid var(--border); }
 .attention .a-name { min-width: 0; overflow-wrap: anywhere; }
 .attention .a-name strong { font-weight: 500; }
@@ -833,6 +838,7 @@ dl.keys dd { margin: 0; }
   .settings-split { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .subnav { position: static; display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
   .subnav a { border: 1px solid var(--border); white-space: nowrap; }
+  .attention .arows { display: block; }
   .attention .arow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "status age" "name name" "msg msg"; gap: 2px 12px;
     padding: 8px 12px; }
   .attention .a-status { grid-area: status; }

@@ -41,14 +41,16 @@
     <h2 id="attention-title">{{ t.get("attention-title") }}</h2>
     <span class="muted small">{{ t.get2("attention-count", "count", attention_total, "total", totals.total()) }}</span>
   </div>
+  <div class="arows">
   {% for a in attention %}
   <div class="arow">
     <div class="a-status"><span class="badge status-{{ a.status.as_str() }}">{{ a.status_label }}</span></div>
     <div class="a-name"><a href="/sensors/{{ a.id }}"><strong>{{ a.name }}</strong></a> <span class="muted">· <a class="quiet" href="/devices/{{ a.device_id }}/sensors">{{ a.device_name }}</a></span></div>
     <div class="a-msg">{{ a.message }}</div>
-    <div class="a-age" title="{{ t.get("status-list-since") }}">{{ a.duration }}</div>
+    <div class="a-age">{{ t.get1("attention-since", "duration", a.duration.as_str()) }}</div>
   </div>
   {% endfor %}
+  </div>
   {% if attention_total > attention.len() %}
   <div class="card-foot"><a href="/status/all">{{ t.get1("attention-more", "count", attention_total - attention.len()) }}</a></div>
   {% endif %}

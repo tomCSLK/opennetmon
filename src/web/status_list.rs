@@ -318,6 +318,8 @@ pub struct Tile {
     pub kind: &'static str,
     pub label: String,
     pub count: usize,
+    /// The line under the number, e.g. "7 Geräte" or "92 % aller Sensoren".
+    pub sub: String,
     pub href: String,
     /// Status colour, plus `active` for warnings and failures that are there.
     pub class: String,
@@ -340,18 +342,33 @@ impl Tile {
 }
 
 /// The tiles for sensor counts in the order of [`Filter::ALL`] (all, up, warning, down,
-/// inactive/unknown), each linking to its list, limited to `group` when given.
+/// inactive/unknown), each linking to its list, limited to `group` when given; `devices` is the
+/// number of devices in that scope (the line under "Sensoren").
 pub fn tiles(
     t: Lang,
     counts: [usize; 5],
+    devices: usize,
     current: Option<Filter>,
     group: Option<i64>,
 ) -> Vec<Tile> {
     let scope = group.map(|g| format!("?group={g}")).unwrap_or_default();
+    let total = counts[0];
+    let sub = |f: Filter, count: usize| match f {
+        Filter::All => t.get1("count-devices", "count", devices),
+        Filter::Up if total == 0 => t.get("no-sensors"),
+        Filter::Up => t.get1("tile-share", "percent", share(count, total)),
+        Filter::Warning if count == 0 => t.get("tile-warning-none"),
+        Filter::Warning => t.get("tile-warning"),
+        Filter::Down if count == 0 => t.get("tile-down-none"),
+        Filter::Down => t.get("tile-down"),
+        Filter::Inactive if count == 0 => t.get("tile-inactive-none"),
+        Filter::Inactive => t.get("tile-inactive"),
+    };
     Filter::ALL
         .into_iter()
         .zip(counts)
         .map(|(f, count)| Tile {
+            sub: sub(f, count),
             kind: f.as_str(),
             // The first tile is "Sensoren" as on the overview; the page title says "Alle Sensoren".
             label: t.get(if f == Filter::All {
@@ -365,6 +382,15 @@ pub fn tiles(
             current: current == Some(f),
         })
         .collect()
+}
+
+/// `part` as a whole-number percentage of `total`; 100 only when all are in it, 0 only when none are.
+fn share(part: usize, total: usize) -> usize {
+    match part {
+        0 => 0,
+        p if p >= total => 100,
+        p => ((p * 100 + total / 2) / total).clamp(1, 99),
+    }
 }
 
 pub struct Column {
@@ -543,7 +569,14 @@ pub async fn list(
     sort_rows(&mut rows, key, dir);
 
     let group = scope.as_ref().map(|(id, _)| *id);
-    let tiles = tiles(t, counts, Some(filter), group);
+    let device_count = devices
+        .values()
+        .filter(|d| match &scope {
+            Some((_, ids)) => d.group_id.is_some_and(|g| ids.contains(&g)),
+            None => true,
+        })
+        .count();
+    let tiles = tiles(t, counts, device_count, Some(filter), group);
     let mut group_param = group.map(|g| format!("group={g}&")).unwrap_or_default();
     let clear_href = format!(
         "/status/{}{}",
@@ -601,6 +634,41 @@ pub async fn list(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The share under "In Ordnung" is 100 % or 0 % only when it is exactly so.
+    #[test]
+    fn shares_round_but_never_to_all_or_none() {
+        assert_eq!(share(0, 0), 0);
+        assert_eq!(share(0, 7), 0);
+        assert_eq!(share(7, 7), 100);
+        assert_eq!(share(10, 15), 67);
+        assert_eq!(share(199, 200), 99);
+        assert_eq!(share(1, 300), 1);
+    }
+
+    #[test]
+    fn tiles_say_what_their_numbers_mean() {
+        let sub = |counts, devices| -> Vec<String> {
+            tiles(Lang::De, counts, devices, None, None)
+                .into_iter()
+                .map(|tile| tile.sub)
+                .collect()
+        };
+        assert_eq!(
+            sub([15, 10, 1, 3, 1], 7),
+            [
+                "7 Geräte",
+                "67 % aller Sensoren",
+                "Grenzwert überschritten",
+                "keine Antwort oder Fehler",
+                "von Hand oder per Zeitplan"
+            ]
+        );
+        assert_eq!(
+            sub([0, 0, 0, 0, 0], 1),
+            ["1 Gerät", "keine Sensoren", "keine", "keiner", "keine"]
+        );
+    }
 
     fn row(
         id: i64,
@@ -771,7 +839,7 @@ mod tests {
         ));
         assert!(
             page.body
-                .contains("Pausiert / unbekannt</div><div class=\"tile-value\">1</div></a>")
+                .contains("Pausiert / unbekannt</div><div class=\"tile-value\">1</div><div class=\"tile-sub\">von Hand oder per Zeitplan</div></a>")
         );
         assert!(
             !home

@@ -49,10 +49,65 @@ impl RangeQuery {
     }
 }
 
-struct ChannelView {
+/// A tile of the sensor page: a latest value or an availability.
+struct ValueTile {
+    /// Symbol before the label (`web::icon` name), empty for none.
+    icon: &'static str,
     label: String,
-    latest: String,
-    latest_at: String,
+    value: String,
+    /// The line under the value: a `<time>` (markup) or plain text.
+    when_html: String,
+    when_text: String,
+}
+
+/// A row of tiles; `label` names it for screen readers.
+struct ValueRow {
+    label: String,
+    tiles: Vec<ValueTile>,
+}
+
+/// At most this many tiles stand in a row.
+const TILES_PER_ROW: usize = 5;
+
+/// The latest values and the availability in one row when they fit, as in the draft; otherwise
+/// the values in rows of at most [`TILES_PER_ROW`] (shared out evenly) and the availability below.
+fn value_rows(t: Lang, values: Vec<ValueTile>, availability: Vec<ValueTile>) -> Vec<ValueRow> {
+    if values.len() + availability.len() <= TILES_PER_ROW {
+        let label = format!(
+            "{} · {}",
+            t.get("detail-latest"),
+            t.get("report-availability")
+        );
+        let tiles = values.into_iter().chain(availability).collect();
+        return vec![ValueRow { label, tiles }];
+    }
+    let rows = values.len().div_ceil(TILES_PER_ROW).max(1);
+    let per_row = values.len().div_ceil(rows).max(1);
+    let mut out = Vec::new();
+    let mut values = values.into_iter().peekable();
+    while values.peek().is_some() {
+        out.push(ValueRow {
+            label: t.get("detail-latest"),
+            tiles: values.by_ref().take(per_row).collect(),
+        });
+    }
+    if !availability.is_empty() {
+        out.push(ValueRow {
+            label: t.get("report-availability"),
+            tiles: availability,
+        });
+    }
+    out
+}
+
+/// The symbol of a channel tile: arrows for the two directions, a pulse for a lone value.
+fn channel_icon(key: &str, lone: bool) -> &'static str {
+    match key {
+        "in" | "sync_down" => "arrow-down",
+        "out" | "sync_up" => "arrow-up",
+        _ if lone => "pulse",
+        _ => "",
+    }
 }
 
 pub(crate) struct StateRow {
@@ -128,7 +183,8 @@ struct DetailTemplate {
     /// What the sensor depends on, e.g. "abhängig von „Ping“ (Router)"; empty without dependency.
     dependency: Vec<String>,
     last_poll: String,
-    channels: Vec<ChannelView>,
+    /// The tiles of latest values and availability, in rows.
+    value_rows: Vec<ValueRow>,
     ranges: Vec<RangeLink>,
     /// How far back the table can reach in this range; no choice when there is only one.
     spans: Vec<SpanOption>,
@@ -141,8 +197,6 @@ struct DetailTemplate {
     interval: u32,
     /// The ratings of named status values, shown to readers (admins change them in the settings).
     states: Option<StatesView>,
-    /// Availability for 24 h, 7 and 30 days: (label, value, downtime).
-    availability: Vec<(String, String, String)>,
 }
 
 fn now_ms() -> i64 {
@@ -177,18 +231,21 @@ async fn render(
     let mibs = state.mib_index();
     let value_format = ValueFormat::for_sensor(&sensor.spec, &mibs);
     let states = states_view(&sensor, &value_format);
+    let lone = sensor.channels.len() == 1;
     let channels = sensor
         .channels
         .iter()
-        .map(|c| ChannelView {
+        .map(|c| ValueTile {
+            icon: channel_icon(&c.key, lone),
             label: user.lang.msg(&channel_label(&c.key)),
-            latest: latest.get(&c.id).map_or_else(
+            value: latest.get(&c.id).map_or_else(
                 || "–".to_owned(),
                 |(_, v)| value_format.format(user.lang, c.unit, *v),
             ),
-            latest_at: latest
+            when_html: latest
                 .get(&c.id)
                 .map_or_else(String::new, |(ts, _)| time_html(*ts)),
+            when_text: user.lang.get("detail-no-value"),
         })
         .collect();
     let state_row = status_store::get_state(&state.pool, sensor.id).await?;
@@ -207,9 +264,25 @@ async fn render(
         .map(|e| event_view(user.lang, e))
         .collect();
     let (events_total, _) = status_store::event_totals(&state.pool, sensor.id).await?;
-    let availability = crate::web::reports::sensor_summary(state, user.lang, sensor.id).await?;
+    let availability = crate::web::reports::sensor_summary(state, user.lang, sensor.id)
+        .await?
+        .into_iter()
+        .map(|(period, value, down)| ValueTile {
+            icon: "",
+            label: user
+                .lang
+                .get1("report-availability-of", "period", period.as_str()),
+            value,
+            when_html: String::new(),
+            when_text: if down.is_empty() {
+                String::new()
+            } else {
+                user.lang.get1("report-downtime-of", "time", down.as_str())
+            },
+        })
+        .collect();
     let page = DetailTemplate {
-        availability,
+        value_rows: value_rows(user.lang, channels, availability),
         layout: user.layout(),
         t: user.lang,
         description: crate::web::sensor_text::describe(user.lang, &sensor.spec, &mibs),
@@ -226,7 +299,6 @@ async fn render(
         pause: why.as_ref().map(|w| crate::web::pause::note(user.lang, w)),
         dependency,
         last_poll: state_row.map_or_else(String::new, |s| time_html(s.last_poll_ms)),
-        channels,
         ranges: Range::ALL
             .into_iter()
             .map(|r| RangeLink {
@@ -714,6 +786,55 @@ pub async fn save_states(
 mod tests {
     use super::*;
     use crate::devices::{DeviceInput, Polling};
+
+    fn tiles(n: usize) -> Vec<ValueTile> {
+        (0..n)
+            .map(|i| ValueTile {
+                icon: "",
+                label: i.to_string(),
+                value: String::new(),
+                when_html: String::new(),
+                when_text: String::new(),
+            })
+            .collect()
+    }
+
+    /// Up to five tiles share one row; otherwise the values fill rows of at most five, shared out
+    /// evenly, and the availability follows in a row of its own.
+    #[test]
+    fn tiles_stand_in_rows_of_at_most_five() {
+        let sizes = |values, availability| -> Vec<usize> {
+            value_rows(Lang::De, tiles(values), tiles(availability))
+                .iter()
+                .map(|r| r.tiles.len())
+                .collect()
+        };
+        assert_eq!(sizes(1, 3), [4]);
+        assert_eq!(sizes(2, 3), [5]);
+        assert_eq!(sizes(3, 3), [3, 3]);
+        assert_eq!(sizes(5, 3), [5, 3]);
+        assert_eq!(sizes(7, 3), [4, 3, 3]);
+        assert_eq!(sizes(11, 3), [4, 4, 3, 3]);
+        assert_eq!(sizes(0, 3), [3]);
+        assert_eq!(sizes(6, 0), [3, 3]);
+    }
+
+    #[test]
+    fn directions_have_arrows_and_a_lone_value_a_pulse() {
+        assert_eq!(channel_icon("in", false), "arrow-down");
+        assert_eq!(channel_icon("sync_up", false), "arrow-up");
+        assert_eq!(channel_icon("rtt", true), "pulse");
+        assert_eq!(channel_icon("rtt", false), "");
+        // Every symbol it names exists (an unknown name would be drawn as a dot).
+        let dot = crate::web::icon_shapes("nope");
+        for name in ["in", "out", "sync_down", "sync_up"]
+            .map(|k| channel_icon(k, false))
+            .into_iter()
+            .chain([channel_icon("rtt", true)])
+        {
+            assert_ne!(crate::web::icon_shapes(name), dot, "{name}");
+        }
+    }
     use crate::sensors::spec::SensorSpec;
     use crate::status::Assessment;
     use crate::storage::devices::save_device;

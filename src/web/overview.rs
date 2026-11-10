@@ -71,45 +71,32 @@ impl Counts {
     /// The status labels of a tree row, worst first: one per status with its count, inactive sensors
     /// last. A lone active status (or only inactive sensors) reads "N Sensoren" like in PRTG.
     fn pills(&self, t: Lang) -> Vec<Pill> {
-        let active: Vec<_> = [
-            (self.down, "down", "✕", "count-down"),
-            (self.warning, "warning", "!", "count-warning"),
-            (self.unknown, "unknown", "?", "count-unknown"),
-            (self.up, "up", "✓", "count-up"),
+        [
+            (self.down, Status::Down, "✕", "count-down"),
+            (self.warning, Status::Warning, "!", "count-warning"),
+            (self.unknown, Status::Unknown, "?", "count-unknown"),
+            (self.up, Status::Up, "✓", "count-up"),
+            (self.paused, Status::Paused, "‖", "count-inactive"),
         ]
         .into_iter()
         .filter(|(n, ..)| *n > 0)
-        .collect();
-        // "N Sensoren" for a lone active status, or for inactive sensors when nothing else is there.
-        let lone_active = active.len() == 1;
-        let lone_paused = active.is_empty();
-        let paused = (self.paused > 0).then_some((self.paused, "paused", "‖", "count-inactive"));
-        active
-            .into_iter()
-            .map(|k| (k, lone_active))
-            .chain(paused.map(|k| (k, lone_paused)))
-            .map(|((n, class, glyph, title), lone)| Pill {
-                class,
-                glyph,
-                text: if lone {
-                    t.get1("count-sensors", "count", n)
-                } else {
-                    n.to_string()
-                },
-                count: n.to_string(),
-                title: t.get1(title, "count", n),
-            })
-            .collect()
+        .map(|(n, status, glyph, title)| Pill {
+            class: status.as_str(),
+            glyph,
+            count: n,
+            label: t.get(status.label_id()),
+            title: t.get1(title, "count", n),
+        })
+        .collect()
     }
 }
 
-/// A status label of a tree row (`text` is the count, or "N Sensoren" when it stands alone).
+/// A counter of a tree row: symbol and number, as in the draft; the status name is for screen readers.
 pub struct Pill {
     pub class: &'static str,
     pub glyph: &'static str,
-    pub text: String,
-    /// Just the number: shown instead of "N Sensoren" on small screens.
-    pub count: String,
+    pub count: usize,
+    pub label: String,
     pub title: String,
 }
 
@@ -459,7 +446,13 @@ pub async fn home(
         t: user.lang,
         ungrouped,
         groups: tops,
-        tiles: crate::web::status_list::tiles(user.lang, totals.tile_counts(), None, None),
+        tiles: crate::web::status_list::tiles(
+            user.lang,
+            totals.tile_counts(),
+            device_count,
+            None,
+            None,
+        ),
         totals,
         device_count,
         devices_down,
@@ -531,7 +524,7 @@ pub async fn group(
         status_class: status.as_str(),
         status_label: t.get(status.label_id()),
         trail: group_trail(&state.pool, group.parent_id).await?,
-        tiles: crate::web::status_list::tiles(t, counts.tile_counts(), None, Some(id)),
+        tiles: crate::web::status_list::tiles(t, counts.tile_counts(), n, None, Some(id)),
         rows,
         summary,
         devices_down,
@@ -552,7 +545,12 @@ mod tests {
             counts
                 .pills(Lang::De)
                 .iter()
-                .map(|p| format!("{} {} {} ({})", p.class, p.glyph, p.text, p.title))
+                .map(|p| {
+                    format!(
+                        "{} {} {} {} ({})",
+                        p.class, p.glyph, p.count, p.label, p.title
+                    )
+                })
                 .collect()
         };
         let mixed = Counts {
@@ -565,27 +563,19 @@ mod tests {
         assert_eq!(
             text(mixed),
             [
-                "down ✕ 2 (2 Ausfall)",
-                "warning ! 1 (1 Warnung)",
-                "up ✓ 8 (8 in Ordnung)",
-                "paused ‖ 5 (5 pausiert)"
+                "down ✕ 2 Ausfall (2 Ausfall)",
+                "warning ! 1 Warnung (1 Warnung)",
+                "up ✓ 8 In Ordnung (8 in Ordnung)",
+                "paused ‖ 5 Pausiert (5 pausiert)"
             ]
         );
         assert_eq!((mixed.total(), mixed.active()), (16, 11));
+        // A lone status is a number too, as in the draft (no "9 Sensoren").
         let healthy = Counts {
             up: 9,
-            paused: 2,
             ..Counts::default()
         };
-        assert_eq!(
-            text(healthy),
-            ["up ✓ 9 Sensoren (9 in Ordnung)", "paused ‖ 2 (2 pausiert)"]
-        );
-        let prepared = Counts {
-            paused: 1,
-            ..Counts::default()
-        };
-        assert_eq!(text(prepared), ["paused ‖ 1 Sensor (1 pausiert)"]);
+        assert_eq!(text(healthy), ["up ✓ 9 In Ordnung (9 in Ordnung)"]);
         assert!(Counts::default().pills(Lang::De).is_empty());
     }
 

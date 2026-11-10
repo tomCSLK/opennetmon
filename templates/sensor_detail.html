@@ -68,25 +68,17 @@
 <p class="flash" role="status">{{ message }}</p>
 {% endif %}
 
-<section class="values" aria-label="{{ t.get("detail-latest") }}">
-  {% for c in channels %}
+{% for row in value_rows %}
+<section class="values cols-{{ row.tiles.len() }}" aria-label="{{ row.label }}">
+  {% for tile in row.tiles %}
   <div class="value-tile">
-    <div class="label">{{ c.label }}</div>
-    <div class="value">{{ c.latest }}</div>
-    <div class="when">{% if c.latest_at.is_empty() %}{{ t.get("detail-no-value") }}{% else %}{{ c.latest_at|safe }}{% endif %}</div>
+    <div class="label">{% if !tile.icon.is_empty() %}{{ crate::web::icon(tile.icon, "")|safe }}{% endif %}{{ tile.label }}</div>
+    <div class="value">{{ tile.value }}</div>
+    <div class="when">{% if tile.when_html.is_empty() %}{{ tile.when_text }}{% else %}{{ tile.when_html|safe }}{% endif %}</div>
   </div>
   {% endfor %}
 </section>
-
-<section class="values" aria-label="{{ t.get("report-availability") }}">
-  {% for (label, value, down) in availability %}
-  <div class="value-tile">
-    <div class="label">{{ t.get1("report-availability-of", "period", label.as_str()) }}</div>
-    <div class="value">{{ value }}</div>
-    <div class="when">{% if !down.is_empty() %}{{ t.get1("report-downtime-of", "time", down.as_str()) }}{% endif %}</div>
-  </div>
-  {% endfor %}
-</section>
+{% endfor %}
 
 <section class="card">
   <div id="charts" data-src="/sensors/{{ sensor.id }}/data?range={{ range }}" data-empty="{{ t.get("detail-no-samples") }}"></div>

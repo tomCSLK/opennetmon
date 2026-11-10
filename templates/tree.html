@@ -3,8 +3,9 @@
 {% import "pause_note.html" as pause %}
 {% import "icons.html" as icons %}
 
-{# On small screens a pill shows just its number (`count`); the title names it in full. #}
-{% macro pills(list) %}{% for p in list %}<span class="pill status-{{ p.class }}" title="{{ p.title }}"><span aria-hidden="true">{{ p.glyph }}</span> {% if p.text == p.count %}{{ p.text }}{% else %}<span class="pill-long">{{ p.text }}</span><span class="pill-short">{{ p.count }}</span>{% endif %}</span>{% endfor %}{% endmacro %}
+{# A pill shows symbol and number; the character before it is for text browsers (the CSS draws the symbol),
+   the status name for screen readers, the title names it in full. #}
+{% macro pills(list) %}{% for p in list %}<span class="pill status-{{ p.class }}" title="{{ p.title }}"><span class="pill-glyph" aria-hidden="true">{{ p.glyph }} </span>{{ p.count }}<span class="visually-hidden"> {{ p.label }}</span></span>{% endfor %}{% endmacro %}
 
 {# The icon of a device kind (`DeviceKind`); its name is the tooltip. #}
 {% macro device_icon(kind, t) %}<svg class="icon tree-icon" viewBox="0 0 24 24" role="img" aria-label="{{ t.get(kind.label_id()) }}"><title>{{ t.get(kind.label_id()) }}</title>{{ crate::web::icon_shapes(kind.as_str())|safe }}</svg>{% endmacro %}
@@ -40,7 +41,7 @@
 {% macro group_start(s, layout, t, edit, back) %}
 <details class="node" id="group-{{ s.id }}" data-group="{{ s.id }}" open>
   <summary class="tree-row{% if s.pause.is_some() %} paused{% endif %}">
-    <span class="tree-toggle" aria-hidden="true"></span>
+    <span class="tree-toggle" aria-hidden="true">{{ crate::web::icon("chevron-down", "")|safe }}</span>
     {{ crate::web::icon("folder", "tree-icon")|safe }}
     <span class="tree-name">{% if edit %}<a class="group-name" href="/groups/{{ s.id }}"><strong>{{ s.name }}</strong></a>{% else %}<strong>{{ s.name }}</strong>{% endif %} <span class="tree-meta">{{ t.get1("count-devices", "count", s.devices) }}</span>{% if let Some(n) = s.pause %}<span class="tree-pause">{% call pause::note(n, t) %}{% endcall %}</span>{% endif %}</span>
     <span class="pills">{% call pills(s.pills.as_slice()) %}{% endcall %}</span>

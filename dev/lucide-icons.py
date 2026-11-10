@@ -12,7 +12,7 @@ Usage (from the repository root; the package stays outside the repository):
     # https://registry.npmjs.org/lucide-static/<version>
     tar -xzf lucide-static-<version>.tgz -C <dir>
     python3 -I dev/lucide-icons.py <dir>/package
-then update the version in dev/third-party-licenses.py and run it.
+then run `cargo fmt`, update the version in dev/third-party-licenses.py and run it.
 """
 
 import json
@@ -65,6 +65,7 @@ NAMES = {
     "folder": "folder",
     "refresh": "refresh-cw",
     "test": "activity",
+    "pulse": "activity",
     "download": "download",
     "arrow-up": "arrow-up",
     "arrow-down": "arrow-down",

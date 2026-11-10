@@ -8,6 +8,13 @@ overview-devices-down =
 overview-order-groups = Arrange groups
 overview-sensor-status = Sensor status
 overview-paused-unknown = Paused / unknown
+tile-share = { $percent } % of all sensors
+tile-warning = threshold exceeded
+tile-warning-none = none
+tile-down = no response or error
+tile-down-none = none
+tile-inactive = by hand or by schedule
+tile-inactive-none = none
 overview-empty = No devices yet.
 overview-empty-hint = Create a device – with an SNMP profile or “No SNMP – ping and services”:
 group-new = New group
@@ -98,6 +105,7 @@ device-kind-internet = Internet service
 
 attention-title = Needs attention
 attention-count = { $count } of { $total } sensors
+attention-since = for { $duration }
 attention-more =
     { $count ->
         [one] 1 more in the sensor list

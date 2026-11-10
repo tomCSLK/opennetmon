@@ -8,6 +8,13 @@ overview-devices-down =
 overview-order-groups = Gruppen anordnen
 overview-sensor-status = Sensorstatus
 overview-paused-unknown = Pausiert / unbekannt
+tile-share = { $percent } % aller Sensoren
+tile-warning = Grenzwert überschritten
+tile-warning-none = keine
+tile-down = keine Antwort oder Fehler
+tile-down-none = keiner
+tile-inactive = von Hand oder per Zeitplan
+tile-inactive-none = keine
 overview-empty = Noch keine Geräte angelegt.
 overview-empty-hint = Lege ein Gerät an – mit SNMP-Profil oder „Kein SNMP – Ping und Dienste“:
 group-new = Neue Gruppe
@@ -98,6 +105,7 @@ device-kind-internet = Internetdienst
 
 attention-title = Braucht Aufmerksamkeit
 attention-count = { $count } von { $total } Sensoren
+attention-since = seit { $duration }
 attention-more =
     { $count ->
         [one] 1 weiterer in der Sensorliste

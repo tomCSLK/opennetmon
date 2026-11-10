@@ -1985,7 +1985,11 @@ mod tests {
         .unwrap();
         let home = send(&h.app, get("/", Some(&admin))).await;
         assert!(home.body.contains("status-down") && home.body.contains("Ausfall"));
-        assert!(home.body.contains("1 Sensor<") && home.body.contains("1 Ausfall"));
+        assert!(
+            home.body
+                .contains("1<span class=\"visually-hidden\"> Ausfall</span>")
+                && home.body.contains("1 Ausfall")
+        );
         let page = send(
             &h.app,
             get(&format!("/devices/{device}/sensors"), Some(&admin)),

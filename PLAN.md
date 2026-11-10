@@ -1048,13 +1048,15 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    Zeitstempel der Messwerte. In 0.6.0 stehen sie meist in Fira Sans.
 5. **Getönte Zeilen:** Zeilen mit Warnung oder Ausfall sind im Entwurf auch in der Sensorliste und auf der Geräteseite getönt; in 0.6.0 nur in den Messwerten.
 6. **Handy:** In der Kopfleiste fehlen in 0.6.0 die drei Statuszähler; der Entwurf zeigt sie neben der Suche.
+   **Kein Fehler (2026-11-10):** Die Zähler sind da; in den Vergleichsbildern fehlten sie nur, weil die Seiten mit curl ohne
+   `Accept: text/html` geholt wurden und die Zähler nur bei Seitenaufrufen berechnet werden.
 
 *Übersicht und Sensorliste*
 
-7. **Kacheln:** In 0.6.0 fehlt die Unterzeile (z. B. „13 Geräte“, „91 % aller Sensoren“, „Grenzwert überschritten“, „keine Antwort oder Fehler“,
+7. (erledigt in Schritt 3) **Kacheln:** In 0.6.0 fehlt die Unterzeile (z. B. „13 Geräte“, „91 % aller Sensoren“, „Grenzwert überschritten“, „keine Antwort oder Fehler“,
    „von Hand oder per Zeitplan“). Der Wert ist im Entwurf fetter (600 statt 500).
-8. **„Braucht Aufmerksamkeit“:** Die Dauer steht im Entwurf als „seit …“.
-9. **Gerätebaum:**
+8. (erledigt in Schritt 3) **„Braucht Aufmerksamkeit“:** Die Dauer steht im Entwurf als „seit …“.
+9. (erledigt in Schritt 3) **Gerätebaum:**
    - Die Zähler zeigen im Entwurf nur Symbol und Zahl; 0.6.0 schreibt bei einem einzigen Zustand „1 Sensor“.
    - „In Ordnung“ steht im Entwurf ohne Rahmen.
    - Auf- und Zuklappen geht im Entwurf mit einem Pfeil, in 0.6.0 mit einem Kästchen „–“.
@@ -1075,7 +1077,7 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
 
 16. **Kopf:** Zeitraum, Pausieren, Protokoll, Aktionen und „Automatisch“ stehen im Entwurf in einer Leiste links unter der Statuszeile, in 0.6.0 rechts
     neben dem Titel.
-17. **Kacheln:**
+17. (erledigt in Schritt 3) **Kacheln:**
     - Aktuelle Werte und Verfügbarkeit in **einer Reihe**; Nutzer 2026-11-10: außer beim Ping.
     - Die Werte sind größer und fetter (28 px/600 statt 22 px/500).
     - Pfeilsymbole bei Eingehend und Ausgehend.
@@ -1114,7 +1116,7 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
 
 *Rückmeldungen des Nutzers vom Server (2026-11-10)*
 
-25. **Fehler: „Braucht Aufmerksamkeit“ schneidet die Dauer rechts ab.**
+25. (erledigt in Schritt 3) **Fehler: „Braucht Aufmerksamkeit“ schneidet die Dauer rechts ab.**
     - Ursache: Die letzte Spalte ist fest 7rem breit (`.attention .arow` in `static/app.css`) und bricht nicht um (`white-space: nowrap`), längere Dauern
       wie „2 Tage 3 Std. 12 Min.“ passen nicht hinein.
     - Lösung: Die Spalte wird so breit wie ihr Inhalt (`max-content`), dazu „seit …“ wie in Punkt 8.
@@ -1140,13 +1142,16 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    - Ergebnis: eine Liste hier in P. Der Nutzer ergänzt seine Befunde vom Server und gibt frei, was geändert wird.
 2. **Symbole auf Lucide** (ISC, in die Lizenzliste) – **erledigt 2026-11-10**, noch nicht im Test-Paket.
    - Lucide 1.61.0 (npm `lucide-static`, Prüfsumme gegen die Registry geprüft). `dev/lucide-icons.py` erzeugt daraus `src/web/lucide.rs`
-     (55 Symbole), die Statussymbole `static/icons/*.svg` und `static/icons/LICENSE-lucide.txt`; Lizenz in `THIRD-PARTY-LICENSES.txt`.
+     (danach `cargo fmt`), die Statussymbole `static/icons/*.svg` und `static/icons/LICENSE-lucide.txt`; Lizenz in `THIRD-PARTY-LICENSES.txt`.
    - Alle Inline-Symbole der Templates laufen über `web::icon`/`web::icon_shapes`; nur der Switch ist eine eigene Form (Lucide hat keinen).
    - Im Browser geprüft: Übersicht, Gerät, Sensor, Einstellungen, Benutzermenü, hell und dunkel.
-3. **Kacheln und Zähler:**
-   - Übersicht und Sensorliste mit Unterzeile.
-   - Sensorseite in einer Reihe, beim Ping zwei Reihen.
-   - Zähler im Gerätebaum wie im Entwurf.
+3. **Kacheln und Zähler** – **erledigt 2026-11-10** (Punkte 6–9, 17 und 25), noch nicht im Test-Paket:
+   - Statuskacheln mit Unterzeile, Wert 600; Gerätebaum mit Zählern nur als Symbol und Zahl direkt vor den Aktionen, Pfeil statt ⊟/⊞.
+   - „Braucht Aufmerksamkeit“ mit „seit …“, Dauer-Spalte so breit wie nötig.
+   - Sensorseite: Werte und Verfügbarkeit in einer Reihe (Traffic 5, Link-Status 4), sonst Reihen zu höchstens fünf (Ping 5 + 3,
+     Arbeitsspeicher 3 + 3); Wert 28 px/600, Pfeile bei Eingehend/Ausgehend; auf dem Handy zwei je Reihe, eine einzelne letzte über
+     die ganze Breite.
+   - Im Browser geprüft bei 1440 px hell und dunkel und bei 390 px.
 4. **Graphen:**
    - uPlot an den Entwurf angleichen.
    - Ping in einem Graphen mit zweiter Achse für den Verlust.
