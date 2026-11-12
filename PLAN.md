@@ -3,7 +3,12 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-11-12, Release v0.5.9, Test-Paket 0.6.1 auf dem Server, Test-Paket 0.6.2 gebaut)
+## Stand (2026-11-12, Release v0.6.2)
+
+**v0.6.2** released 2026-11-12 (Auftrag des Nutzers: „die letzte Version kannst du jetzt veröffentlichen, die passt“): neue Oberfläche (Vorhaben P)
+mit den Korrekturen aus dem Test von 0.6.1, dazu die Korrekturen aus dem Test-Paket 0.5.10. Keine Migration seit 0.5.9 (weiter 0001–0025), Rückweg
+auf 0.5.9 ohne Sicherung möglich. Releases 0.6.0 und 0.6.1 gibt es nicht (nur Test-Pakete). Das `.deb` des Releases (SHA-256 `6a4743d2…`) ist neu
+gebaut und unterscheidet sich deshalb in der Prüfsumme vom Test-Paket 0.6.2 (`b3eca8b0…`); inhaltlich gleich bis auf das README.
 
 **Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
 opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
@@ -1022,9 +1027,8 @@ vom Entwurf und vom Plan:
 
 **Offen:**
 
-- Test-Paket 0.6.2 (0.6.1 mit Korrekturen: Text in Knöpfen, Höhe der Graphen; Schritt 6 unten) installieren und testen, danach Release auf
-  Ansage (Release-Notes Englisch).
-- `README.md`: Bild der neuen Oberfläche (`docs/assets/`), Erklärvideo; Logo `docs/assets/opennetmon-logo.jpg` noch das alte.
+- Released als v0.6.2 (2026-11-12). Weitere Rückmeldungen aus dem Test kommen ins nächste Test-Paket.
+- `README.md`: Bild der neuen Oberfläche (Demo-Instanz mit erfundenen Daten) und neues Erklärvideo; das Logo ist seit v0.6.2 das neue.
 - opensecmon soll denselben Hinweis auf neue Versionen bekommen (eigenes Projekt).
 
 **Abweichungen vom Entwurf (Rückmeldung des Nutzers 2026-11-10 beim Test von 0.6.0: Grafiken, Graphen usw. weichen vom Entwurf ab).**
@@ -1198,11 +1202,9 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
      - `app.css?v=4` und `chart.js?v=3`, damit Browser die neuen Dateien laden.
    - **Test-Paket 0.6.2** – gebaut 2026-11-12: `target/debian/opennetmon_0.6.2-1_amd64.deb` (SHA-256 `b3eca8b0…`, kein Tag), nach fmt, clippy
      und Tests; keine neue Migration (weiter `0025`), Units und Paketdateien wie 0.6.0/0.6.1. Installation durch den Nutzer, danach Test.
-7. **Release auf Ansage:**
-   - vorher Push
-   - README-Bild der neuen Oberfläche und neues Logo im README
-   - Release-Notes auf Englisch
-   - das Erklärvideo kann später kommen
+7. **Release** – **erledigt 2026-11-12 als v0.6.2** (Auftrag des Nutzers). Vorher Push von `main`, neues Logo im README (`static/favicon.svg`,
+   das alte Bild `docs/assets/opennetmon-logo.jpg` entfernt), Release-Notes auf Englisch. Noch offen: ein Bild der neuen Oberfläche im README
+   (braucht eine Demo-Instanz mit erfundenen Daten) und ein neues Erklärvideo; das README sagt, dass das Video noch die Oberfläche von 0.5.6 zeigt.
 
 ### Q. Docker-Version (Container-Image) – notiert 2026-11-10, entschieden 2026-11-12, Umsetzung nach „go“
 

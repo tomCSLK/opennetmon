@@ -144,13 +144,12 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-12):
 
-- **v0.5.9** released (2026-11-08); auf dem Server läuft **Test-Paket 0.6.1** (kein Tag), gebaut ist **Test-Paket 0.6.2** (2026-11-12, kein Tag,
-  Korrekturen aus dem Test, `PLAN.md` P Schritt 6); die Installation macht der Nutzer.
+- **v0.6.2** released (2026-11-12, neue Oberfläche, keine Migration seit 0.5.9); auf dem Server läuft das Test-Paket 0.6.2
+  (inhaltlich gleich, andere Prüfsumme; Betrieb in `Serveradmin`, Abschnitt 4.3). Offen im README: Bild der neuen Oberfläche, neues Erklärvideo.
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
   ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag). Beschreibung in `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P).
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
-  Schrittplan in `PLAN.md` (P), Schritte 1–5 erledigt und im **Test-Paket 0.6.1** (`target/debian/opennetmon_0.6.1-1_amd64.deb`). Die Installation auf
-  dem Server macht der Nutzer, danach Test und Rückmeldung; Release (Schritt 7) nur auf Ansage.
+  Schrittplan in `PLAN.md` (P), Schritte 1–7 erledigt, released als **v0.6.2**.
 - **Vorhaben Q** (Docker-Version zusätzlich zum `.deb`): entschieden 2026-11-12 (GHCR, amd64/arm64, `scratch`, HTTPS als Standard, Bau in der CI
   beim Tag), Schrittplan in `PLAN.md` (Q); Umsetzung nach „go“.
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
