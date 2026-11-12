@@ -4,8 +4,8 @@ Agentloses Netzwerk-Monitoring per SNMP mit Weboberfläche, inspiriert vom Bedie
 (Bedienung nur im Browser), entwickelt wird auf Zorin OS. Repo `tomCSLK/opennetmon`, **öffentlich**, Lizenz **AGPL-3.0-or-later**, Copyright Thomas Cieslik.
 „PRTG“ ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert und steht in keiner Verbindung zu Paessler.
 Name seit 2026-10-19 (vorher „netmon“, markenrechtlich geschützt). Logo seit 0.6.0 „Logo C“ (Monitor mit Pulslinie, Makro `logo` in `templates/icons.html`),
-daraus `static/favicon.svg`, `static/favicon-32.png`/`-64.png` und `static/logo-mark.png`; das alte Logo (`~/Bilder/opennetmon_Logo_v1.jpeg`) steht nur noch
-in `docs/assets/opennetmon-logo.jpg` (README).
+daraus `static/favicon.svg` (auch Logo im README), `static/favicon-32.png`/`-64.png` und `static/logo-mark.png`; das alte Logo liegt nur noch
+in `~/Bilder/opennetmon_Logo_v1.jpeg` und in der Git-Historie.
 
 ## Wo steht was
 

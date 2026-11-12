@@ -1,6 +1,6 @@
 # opennetmon
 
-<p align="center"><img src="docs/assets/opennetmon-logo.jpg" alt="opennetmon – Network Monitoring" width="600"></p>
+<p align="center"><img src="static/favicon.svg" alt="opennetmon logo: a monitor with a pulse line" width="96"></p>
 
 Agentless network monitoring over SNMP with a web interface, inspired by the way PRTG is operated.
 A single, statically linked binary (Rust) with SQLite – meant to run on a headless Ubuntu server and to be used in the browser.
@@ -19,6 +19,7 @@ https://github.com/user-attachments/assets/c8c321df-8603-4b73-a534-f170a33c8944
 
 88 seconds with voice-over and captions: overview, interface discovery, graphs, ping with five packets, service checks, settings,
 dependencies, maintenance windows, reports and the phone view (version 0.5.6, recorded on a demo network with made-up data).
+Since 0.6 the user interface looks different (new layout, header with search, light and dark theme); a new recording will follow.
 
 ## Try it – testers welcome
 
