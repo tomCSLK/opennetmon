@@ -151,7 +151,8 @@ Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in 
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
   Schrittplan in `PLAN.md` (P), Schritte 1–5 erledigt und im **Test-Paket 0.6.1** (`target/debian/opennetmon_0.6.1-1_amd64.deb`). Die Installation auf
   dem Server macht der Nutzer, danach Test und Rückmeldung; Release (Schritt 7) nur auf Ansage.
-- **Vorhaben Q** (notiert 2026-11-10): Docker-Version (Image für amd64/arm64) zusätzlich zum `.deb`, Umsetzung nach „go“.
+- **Vorhaben Q** (Docker-Version zusätzlich zum `.deb`): entschieden 2026-11-12 (GHCR, amd64/arm64, `scratch`, HTTPS als Standard, Bau in der CI
+  beim Tag), Schrittplan in `PLAN.md` (Q); Umsetzung nach „go“.
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,

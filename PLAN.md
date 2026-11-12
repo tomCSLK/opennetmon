@@ -1204,7 +1204,7 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    - Release-Notes auf Englisch
    - das Erklärvideo kann später kommen
 
-### Q. Docker-Version (Container-Image) – notiert 2026-11-10, Umsetzung nach „go“
+### Q. Docker-Version (Container-Image) – notiert 2026-11-10, entschieden 2026-11-12, Umsetzung nach „go“
 
 **Anlass:** Wunsch des Nutzers (2026-11-10): eine Docker-Version, damit opennetmon theoretisch auf jeder Hardware einsetzbar ist. Ein Docker-Image ist
 beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt seiner. Bis dahin stand „Docker-Betrieb“ unter „zurückgestellt“.
@@ -1242,25 +1242,80 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
   `latest`). Die CI-Regel „Actions nur von `actions/*`“ gilt weiter: gebaut wird mit `docker buildx` bzw. `podman` in `run`-Schritten oder lokal in
   `dev/release.sh`, nicht mit fremden Actions.
 
-**Mit dem Nutzer zu klären** (er liest sich erst ein und antwortet später, Stand 2026-11-10):
+**Entscheidungen (2026-11-12, der Nutzer hat die Wahl überlassen):**
 
-- Registry: GHCR öffentlich, zusätzlich Docker Hub?
-- Architekturen: reichen amd64 und arm64?
-- Basis: `scratch`/distroless (klein, ohne Shell) oder Alpine (mit Shell zum Nachsehen)?
-- Standard: HTTP hinter einem Proxy oder eingebautes HTTPS?
-- Soll der geplante Launcher später auch den Container anbieten?
+- **Registry:** nur GitHub Container Registry, `ghcr.io/tomcslk/opennetmon`. Sie gehört zum Repo, braucht kein weiteres Konto und keinen
+  zusätzlichen Token, und Abrufe sind nicht gedrosselt. Docker Hub erst auf Nachfrage (Spiegel, dann mit eigenem Token). Tags `X.Y.Z`, `X.Y` und `latest`.
+  Neue Pakete auf GHCR sind zuerst privat: Das Öffentlich-Schalten macht der Nutzer einmal in den Paket-Einstellungen (Browser, auf Ansage).
+- **Architekturen:** `linux/amd64` und `linux/arm64` (Pi 4/5, NAS, ARM-Server). Kein `arm/v7`: zu wenig Nutzen für den Aufwand, auf Nachfrage später.
+- **Basis:** `scratch`, darin nur das statische Binary, `LICENSE`, `THIRD-PARTY-LICENSES.txt` und ein leeres Datenverzeichnis. Das sind etwa 20 MB, ohne
+  Shell und ohne Paketverwaltung, also ohne fremde CVEs im Image. Zum Nachsehen dienen die Unterbefehle (`docker exec opennetmon opennetmon user list` …).
+  Alpine würde Größe und Angriffsfläche nur für eine Shell vergrößern. Benutzer UID/GID `10001`, kein Root.
+- **Standard HTTPS:** eingebaut auf Port 8443, wie beim `.deb`. Beim ersten Start entsteht ein selbst signiertes Zertifikat im Volume, Cookies
+  `Secure`. HTTP hinter einem Reverse Proxy ist eine dokumentierte Umstellung über Umgebungsvariablen (Beispiel mit Traefik/Caddy in `docs/docker.md`).
+  Begründung: Wer das Image nur startet, soll keine Passwörter im Klartext durchs LAN schicken.
+- **Volumes:**
+  - `/var/lib/opennetmon` für Datenbank und Sicherungen
+  - `/etc/opennetmon` für `secret.key`, Zertifikat und eine optionale `config.toml`
+  Damit liegt der Schlüssel getrennt von Datenbank und Sicherungen (vgl. L).
+- **Konfiguration:** im Image vollständig über `OPENNETMON_*`-Umgebungsvariablen. Damit erben `docker exec … opennetmon user add` usw. dieselben
+  Einstellungen ohne `--config`. Eine Datei bleibt möglich über `OPENNETMON_CONFIG`.
+- **Erster Start:** Fehlende `secret.key` und ein fehlendes Zertifikat erzeugt das Programm selbst, aber nur mit `generate_missing = true` (im Image
+  gesetzt; im `.deb` aus, dort erledigt das weiter `postinst`). Den ersten Admin legt der Nutzer an mit
+  `docker exec -it opennetmon opennetmon user add <name> --role admin` (wie beim `.deb` kein Standardbenutzer).
+- **Ping:** unprivilegierte ICMP-Sockets, keine Capability.
+  - Docker (ab 20.10) erlaubt sie im Container-Netz schon.
+  - Podman setzt standardmäßig `ping_group_range = 0 0` (nur Root). Deshalb setzt `compose.yaml` `sysctls: net.ipv4.ping_group_range: "0 2147483647"` für beide.
+  - Bei `network_mode: host` geht das nicht (dann gilt der Wert des Hosts), das wird dokumentiert.
+- **Netz:** Standard ist das Bridge-Netz (SNMP und Ping ins LAN gehen über NAT), `network_mode: host` ist eine dokumentierte Option.
+- **Sicherung:** im Programm nach Zeitplan, wenn `backup_dir` gesetzt ist (im Image `/var/lib/opennetmon/backups`). Täglich, standardmäßig um 03:30
+  Ortszeit, mit `backup_keep` = 14 wie das Skript des `.deb`. Im `.deb` bleibt es aus, dort läuft weiter der systemd-Timer.
+- **Healthcheck:** neuer Unterbefehl `opennetmon healthcheck`. Er fragt `/healthz` auf der eigenen Adresse ab: über Loopback, bei HTTPS ohne
+  Zertifikatsprüfung, weil die Gegenstelle der eigene Prozess ist. Im Image steht er als `HEALTHCHECK`.
+- **Zeitzonen:** die tzdb ins Binary einbetten (jiff, Feature `tzdb-bundle-always`; Lizenz prüfen). Sie dient nur als Ersatz, wenn
+  `/usr/share/zoneinfo` fehlt. Die Zeitzone kommt aus `TZ` oder `time_zone`.
+- **Sensoren „Dieser Server“:** im Container messen CPU, RAM, Laufzeit und Temperaturen meist den Host. `/proc/stat`, `/proc/meminfo` und
+  `/sys/class/hwmon` zeigen dort ohne lxcfs die Werte des Hosts. Datenträger und Netzwerkschnittstellen zeigen dagegen die des Containers.
+  Das wird beim Test geprüft und in `docs/docker.md` beschrieben; ein Einhängen von `/proc` des Hosts gibt es zunächst nicht.
+- **Hinweis auf neue Versionen:** Das Image setzt `OPENNETMON_PACKAGING=container`. Abzeichen und Einstellungen → Aktualisierungen nennen dann
+  `docker compose pull && docker compose up -d` statt `apt install`.
+- **`compose.yaml` als Beispiel**, sicher voreingestellt:
+  - `read_only: true`
+  - `cap_drop: [ALL]`
+  - `security_opt: [no-new-privileges:true]`
+  - `restart: unless-stopped`
+  - die zwei Volumes und Port `8443:8443`
+- **Bau und Veröffentlichung:** über einen eigenen Workflow `.github/workflows/container.yml`, ausgelöst durch den Tag `vX.Y.Z`. Den pusht nur
+  `dev/release.sh --publish`, also bleibt es „nur auf Ansage“.
+  - Das musl-Binary entsteht nativ auf `ubuntu-24.04` und `ubuntu-24.04-arm` (für öffentliche Repos kostenlos). Es gibt keinen Cross-Build und lokal
+    keine zusätzlichen Werkzeuge (zig, cross), Schritt 10 entfällt damit.
+  - Das Image entsteht ohne `RUN`-Schritte (nur `COPY`), also ohne Emulation.
+  - Vor dem Push gibt es je Architektur einen Rauchtest: Container starten, `/healthz`, `user add`, Anmeldung.
+  - Danach Push nach GHCR mit `GITHUB_TOKEN` (`packages: write`) und das Manifest für beide Architekturen per `docker buildx imagetools create`.
+  - Zusätzlich lädt der Workflow arm64-Archiv und arm64-`.deb` an das Release (`gh release upload`).
+  - Nur `actions/checkout` (auf Hash gepinnt), sonst `run`-Schritte; die CI-Regel bleibt erfüllt. Optional Herkunftsnachweis mit
+    `actions/attest-build-provenance` (auch `actions/*`).
+- **Launcher:** bietet den Container vorerst nicht an (er installiert `.deb`/Installer); später neu entscheiden.
 
-**Schrittplan (Fortsetzung der Nummern aus P, abgestimmt 2026-11-10):**
+**Schrittplan (Fortsetzung der Nummern aus P):**
 
-8. **Antworten des Nutzers** zu den Fragen oben.
-9. **Vorarbeiten im Programm** (unabhängig von den Antworten; könnten vorgezogen werden, falls die Anfrage eilt):
-   - Zeitzonendaten einbetten.
-   - Unterbefehl für den Healthcheck.
-   - Sicherung nach Zeitplan im Programm.
-   - Erkennung „läuft im Container“ für den Hinweis auf neue Versionen.
-10. **Build für arm64:** musl-Cross-Build mit einem Werkzeug wie `cargo-zigbuild`, Installation nur nach OK. Nebenbei entsteht das `.deb` für arm64.
-11. **Image und Doku:** `Containerfile`, `compose.yaml` und `docs/docker.md`; Test mit Podman, auf Wunsch auch auf dem Pi.
-12. **Veröffentlichung** mit dem nächsten Release, auf Ansage.
+8. ✔ Entscheidungen (oben, 2026-11-12).
+9. **Vorarbeiten im Programm** (lokal, mit Tests):
+   - alle Einstellungen auch als `OPENNETMON_*` und `OPENNETMON_CONFIG`
+   - `generate_missing` für Schlüssel und Zertifikat
+   - tzdb als Ersatz
+   - `opennetmon healthcheck`
+   - Sicherung nach Zeitplan (`backup_dir`, `backup_keep`, `backup_time`)
+   - `OPENNETMON_PACKAGING` für den Hinweis auf neue Versionen
+   - Texte de/en, `docs/configuration.md`
+10. ~~Build für arm64 lokal~~ entfällt (nativ in der CI, siehe oben).
+11. **Image und Doku:** `Containerfile`, `compose.yaml`, `docs/docker.md` und ein Abschnitt im README.
+    - Lokaler Test mit Podman (amd64, ohne Root): erster Start, Admin anlegen, Anmeldung, Ping und SNMP ins LAN, Neustart, Update auf ein neueres
+      Image, `read_only`, Healthcheck, Sicherung.
+    - Auf Wunsch zusätzlich auf dem Pi (arm64).
+    - Der Workflow `container.yml` wird mit dem nächsten Push sichtbar; ein Probelauf ohne Push des Images (`workflow_dispatch` mit `push=false`) ist möglich.
+12. **Veröffentlichung** mit dem nächsten Release, auf Ansage. Der Workflow läuft beim Tag, danach schaltet der Nutzer das Paket auf GHCR öffentlich.
+    Release-Notes und README nennen `docker compose`.
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
