@@ -142,14 +142,15 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ## Stand und offene Punkte
 
-Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-10):
+Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-12):
 
-- **v0.5.9** released (2026-11-08); auf dem Server seit 2026-11-09 Test-Paket 0.6.0.
+- **v0.5.9** released (2026-11-08); auf dem Server läuft **Test-Paket 0.6.1** (gebaut 2026-11-10, kein Tag), der Nutzer testet; Korrekturen aus
+  dem Test in `PLAN.md` (P, Schritt 6).
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
-  ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag); der Nutzer testet es auf dem Server und gibt Rückmeldung, Release nur auf Ansage. Beschreibung in
-  `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P). Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`).
-  Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und Schrittplan in `PLAN.md` (P), Schritte 1–5 erledigt (2026-11-10),
-  als Nächstes ein Test-Paket (empfohlen 0.6.1).
+  ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag). Beschreibung in `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P).
+  Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
+  Schrittplan in `PLAN.md` (P), Schritte 1–5 erledigt und im **Test-Paket 0.6.1** (`target/debian/opennetmon_0.6.1-1_amd64.deb`). Die Installation auf
+  dem Server macht der Nutzer, danach Test und Rückmeldung; Release (Schritt 7) nur auf Ansage.
 - **Vorhaben Q** (notiert 2026-11-10): Docker-Version (Image für amd64/arm64) zusätzlich zum `.deb`, Umsetzung nach „go“.
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.

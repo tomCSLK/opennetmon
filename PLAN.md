@@ -3,7 +3,7 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-11-10, Release v0.5.9, Test-Paket 0.6.0 auf dem Server)
+## Stand (2026-11-12, Release v0.5.9, Test-Paket 0.6.1 auf dem Server, Korrekturen aus dem Test in Arbeit)
 
 **Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
 opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
@@ -16,7 +16,8 @@ Einstellungen im Benutzermenü mit eigener Unternavigation, Abzeichen „Neue Ve
 seit 2026-11-09 23:08 auf dem Server installiert (Einzelheiten in `Serveradmin/CLAUDE.md`), der Nutzer testet und gibt Rückmeldung (Abschnitt P).
 
 **Notiert 2026-11-10 (Nutzer):** 0.6.0 weicht bei Grafiken und Graphen vom abgenommenen Entwurf ab, das wird angeglichen (Liste in Abschnitt P,
-„Abweichungen vom Entwurf“; Schritte 1–5 erledigt 2026-11-10, als Nächstes das Test-Paket, empfohlen 0.6.1). Neu geplant ist eine **Docker-Version** (Vorhaben Q), damit opennetmon auf beliebiger Hardware läuft.
+„Abweichungen vom Entwurf“; Schritte 1–5 erledigt 2026-11-10 und im **Test-Paket 0.6.1** (2026-11-10, kein Tag); die Installation auf dem Server
+macht der Nutzer, danach Test und Rückmeldung). Neu geplant ist eine **Docker-Version** (Vorhaben Q), damit opennetmon auf beliebiger Hardware läuft.
 
 **Stand bei v0.5.7 (2026-10-30):**
 
@@ -955,7 +956,7 @@ unter 1 Balken warnen) und am pendelnden Ping-Sensor (Paketverlust) prüfen – 
 Verworfen: alle Wechsel ins HTML schreiben und im Browser blättern (bei N = 1000 je Sensor und Neuladen alle 30 s unnötig groß); nur die 20 auf
 50 erhöhen (löst das Verdrängen nicht).
 
-### P. Neue Oberfläche nach dem Vorbild von opensecmon – umgesetzt 2026-11-09 im Test-Paket 0.6.0, auf dem Server im Test
+### P. Neue Oberfläche nach dem Vorbild von opensecmon – umgesetzt 2026-11-09 im Test-Paket 0.6.0, an den Entwurf angeglichen im Test-Paket 0.6.1
 
 Anlass: Nutzerwunsch (2026-11-09), die Oberfläche von opensecmon (`../opensecmon/`) auch für opennetmon zu verwenden; Farben und Logo von
 opennetmon dürfen ersetzt werden. Klickbarer Entwurf in `docs/entwurf/` (README dort, erfundene Daten, lokal geprüft hell/dunkel und bei 1440/1024/390 px).
@@ -1021,7 +1022,8 @@ vom Entwurf und vom Plan:
 
 **Offen:**
 
-- Rückmeldung des Nutzers zum Test-Paket 0.6.0 (seit 2026-11-09 auf dem Server), danach ggf. Korrekturen und Release auf Ansage (Release-Notes Englisch).
+- Test des Pakets 0.6.1 läuft (an den Entwurf angeglichen, Schrittplan unten); erste Korrekturen (Text in Knöpfen, Höhe der Graphen) unter
+  Schritt 6, danach Release auf Ansage (Release-Notes Englisch).
 - `README.md`: Bild der neuen Oberfläche (`docs/assets/`), Erklärvideo; Logo `docs/assets/opennetmon-logo.jpg` noch das alte.
 - opensecmon soll denselben Hinweis auf neue Versionen bekommen (eigenes Projekt).
 
@@ -1142,19 +1144,19 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    - Seiten: Übersicht, Sensorliste, Gerät, Sensor (Traffic, Ping, Link-Status), Protokoll, Berichte, Änderungen, Einstellungen, Anmeldung.
    - Jeweils bei 1440 und 390 px, hell und dunkel.
    - Ergebnis: eine Liste hier in P. Der Nutzer ergänzt seine Befunde vom Server und gibt frei, was geändert wird.
-2. **Symbole auf Lucide** (ISC, in die Lizenzliste) – **erledigt 2026-11-10**, noch nicht im Test-Paket.
+2. **Symbole auf Lucide** (ISC, in die Lizenzliste) – **erledigt 2026-11-10**, im Test-Paket 0.6.1.
    - Lucide 1.61.0 (npm `lucide-static`, Prüfsumme gegen die Registry geprüft). `dev/lucide-icons.py` erzeugt daraus `src/web/lucide.rs`
      (danach `cargo fmt`), die Statussymbole `static/icons/*.svg` und `static/icons/LICENSE-lucide.txt`; Lizenz in `THIRD-PARTY-LICENSES.txt`.
    - Alle Inline-Symbole der Templates laufen über `web::icon`/`web::icon_shapes`; nur der Switch ist eine eigene Form (Lucide hat keinen).
    - Im Browser geprüft: Übersicht, Gerät, Sensor, Einstellungen, Benutzermenü, hell und dunkel.
-3. **Kacheln und Zähler** – **erledigt 2026-11-10** (Punkte 6–9, 17 und 25), noch nicht im Test-Paket:
+3. **Kacheln und Zähler** – **erledigt 2026-11-10** (Punkte 6–9, 17 und 25), im Test-Paket 0.6.1:
    - Statuskacheln mit Unterzeile, Wert 600; Gerätebaum mit Zählern nur als Symbol und Zahl direkt vor den Aktionen, Pfeil statt ⊟/⊞.
    - „Braucht Aufmerksamkeit“ mit „seit …“, Dauer-Spalte so breit wie nötig.
    - Sensorseite: Werte und Verfügbarkeit in einer Reihe (Traffic 5, Link-Status 4), sonst Reihen zu höchstens fünf (Ping 5 + 3,
      Arbeitsspeicher 3 + 3); Wert 28 px/600, Pfeile bei Eingehend/Ausgehend; auf dem Handy zwei je Reihe, eine einzelne letzte über
      die ganze Breite.
    - Im Browser geprüft bei 1440 px hell und dunkel und bei 390 px.
-4. **Graphen** – **erledigt 2026-11-10** (Punkte 18–20), noch nicht im Test-Paket:
+4. **Graphen** – **erledigt 2026-11-10** (Punkte 18–20), im Test-Paket 0.6.1:
    - uPlot angeglichen (`static/chart.js` neu): Karte „Verlauf“ mit Zeitraum im Kopf, Einheit einmal über der Achse, fünf waagrechte Linien ab 0 in
      runden Schritten, etwa sechs Zeitmarken, erste Reihe mit leichter Fläche, weitere gestrichelt, eigene Legende unten links, Hinweiskasten am
      Fadenkreuz; Zoom per Ziehen bleibt.
@@ -1168,7 +1170,7 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
    - Link-Status u. Ä. (nur Statuswerte): Band „Zustand im Zeitraum“ mit Legende und Zeiten statt des Stufengraphen; damit ist auch die doppelte
      Achsenbeschriftung weg.
    - Im Browser geprüft (1440 px hell/dunkel, schmal per Skript); bei 390 px headless nicht prüfbar, weil die Seite dort keine Messdaten laden kann.
-5. **Rest der Liste** – **erledigt 2026-11-10** (Punkte 2–5, 10–16, 21, 22, 24, 26), noch nicht im Test-Paket:
+5. **Rest der Liste** – **erledigt 2026-11-10** (Punkte 2–5, 10–16, 21, 22, 24, 26), im Test-Paket 0.6.1:
    - Seitenköpfe: Pausieren/Protokoll umrandet mit Symbol, Menüeinträge mit Symbol, „Automatisch“ als Schalter, Aktualisieren ohne Rahmen; auf der
      Sensorseite die ganze Leiste unter der Statuszeile.
    - Fira Code für Zahlen, Zeiten und Adressen (Unterzeilen bleiben Fira Sans); Zeilen mit Warnung/Ausfall in allen Tabellen getönt.
@@ -1183,8 +1185,17 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
      SNMP-Profile mit Version, Sicherheit, Benutzer, Geräte, Bearbeiten und Löschen.
    - Protokoll und Änderungen: „Zeilen“ 50/100/500 mit Seiten (Punkt 26).
    - Im Browser geprüft bei 1440 px hell und dunkel und bei 390 px (headless).
-6. **Test-Paket bauen**, empfohlen als 0.6.1, damit auf dem Server eindeutig ist, was läuft; ein Release 0.6.0 gäbe es dann nicht. Der Nutzer testet auf dem
-   Server.
+6. **Test-Paket 0.6.1** – **erledigt 2026-11-10:** `target/debian/opennetmon_0.6.1-1_amd64.deb` (SHA-256 `97ed859a…`, kein Tag), gebaut mit
+   `dev/deb.sh` nach fmt, clippy und Tests; die Version ist 0.6.1, damit auf dem Server eindeutig ist, was läuft (ein Release 0.6.0 gibt es damit nicht).
+   Die Installation auf dem Server macht der Nutzer (Ablauf in `Serveradmin`, Abschnitt 4.3), danach Test und Rückmeldung.
+   - **Rückmeldung 2026-11-12** (0.6.1 auf dem Server), umgesetzt, noch nicht in einem Paket:
+     - Text in den Knöpfen saß zu hoch: Fira Sans hat oben mehr Raum als unten (Oberlänge 0,935, Unterlänge 0,265), die Großbuchstaben lagen
+       1,4 px über der Mitte. Knöpfe, Zeitbereiche, Datei-Knopf, Menüeinträge und das Abzeichen „Neue Version“ haben jetzt oben 2 px mehr
+       Innenabstand als unten, ihre Symbole rücken mit `margin-top: -2px` zurück in die Mitte (gemessen: Abweichung höchstens 0,4 px).
+     - Graphen zu niedrig (viel Leerraum über der Kurve): die Achse rundete in den Stufen 1, 2, 2,5, 5, 10 auf, die Kurve füllte teils nur die
+       halbe Höhe. Jetzt Stufen 1, 1,2, 1,5, 2, 2,5, 3, 4, 5, 6, 7,5, 8, 10 (`niceStep` in `static/chart.js`), weiter vier Schritte ab 0; die
+       größte Spitze füllt mindestens drei Viertel der Höhe.
+     - `app.css?v=4` und `chart.js?v=3`, damit Browser die neuen Dateien laden.
 7. **Release auf Ansage:**
    - vorher Push
    - README-Bild der neuen Oberfläche und neues Logo im README

@@ -45,11 +45,14 @@
     });
   }
 
-  // Four steps of a round size from 0, e.g. 0, 2.5, 5, 7.5, 10 for a largest value of 9.
+  // Four steps of a round size from 0, e.g. 0, 3, 6, 9, 12 for a largest value of 10.1. The sizes lie close
+  // together (at most a third apart), so the largest value fills at least three quarters of the height.
+  var STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10];
   function niceStep(max) {
     if (!(max > 0)) { return 0.25; }
     var raw = max / 4, e = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / e;
-    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e;
+    for (var k = 0; k < STEPS.length; k += 1) { if (m <= STEPS[k] * (1 + 1e-9)) { return STEPS[k] * e; } }
+    return 10 * e;
   }
 
   function inPeriod(data, ts, status) {
