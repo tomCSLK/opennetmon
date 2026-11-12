@@ -144,8 +144,8 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-12):
 
-- **v0.5.9** released (2026-11-08); auf dem Server läuft **Test-Paket 0.6.1** (gebaut 2026-11-10, kein Tag), der Nutzer testet; Korrekturen aus
-  dem Test in `PLAN.md` (P, Schritt 6).
+- **v0.5.9** released (2026-11-08); auf dem Server läuft **Test-Paket 0.6.1** (kein Tag), gebaut ist **Test-Paket 0.6.2** (2026-11-12, kein Tag,
+  Korrekturen aus dem Test, `PLAN.md` P Schritt 6); die Installation macht der Nutzer.
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
   ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag). Beschreibung in `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P).
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und

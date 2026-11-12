@@ -3,7 +3,7 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-11-12, Release v0.5.9, Test-Paket 0.6.1 auf dem Server, Korrekturen aus dem Test in Arbeit)
+## Stand (2026-11-12, Release v0.5.9, Test-Paket 0.6.1 auf dem Server, Test-Paket 0.6.2 gebaut)
 
 **Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
 opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
@@ -1022,8 +1022,8 @@ vom Entwurf und vom Plan:
 
 **Offen:**
 
-- Test des Pakets 0.6.1 läuft (an den Entwurf angeglichen, Schrittplan unten); erste Korrekturen (Text in Knöpfen, Höhe der Graphen) unter
-  Schritt 6, danach Release auf Ansage (Release-Notes Englisch).
+- Test-Paket 0.6.2 (0.6.1 mit Korrekturen: Text in Knöpfen, Höhe der Graphen; Schritt 6 unten) installieren und testen, danach Release auf
+  Ansage (Release-Notes Englisch).
 - `README.md`: Bild der neuen Oberfläche (`docs/assets/`), Erklärvideo; Logo `docs/assets/opennetmon-logo.jpg` noch das alte.
 - opensecmon soll denselben Hinweis auf neue Versionen bekommen (eigenes Projekt).
 
@@ -1188,7 +1188,7 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
 6. **Test-Paket 0.6.1** – **erledigt 2026-11-10:** `target/debian/opennetmon_0.6.1-1_amd64.deb` (SHA-256 `97ed859a…`, kein Tag), gebaut mit
    `dev/deb.sh` nach fmt, clippy und Tests; die Version ist 0.6.1, damit auf dem Server eindeutig ist, was läuft (ein Release 0.6.0 gibt es damit nicht).
    Die Installation auf dem Server macht der Nutzer (Ablauf in `Serveradmin`, Abschnitt 4.3), danach Test und Rückmeldung.
-   - **Rückmeldung 2026-11-12** (0.6.1 auf dem Server), umgesetzt, noch nicht in einem Paket:
+   - **Rückmeldung 2026-11-12** (0.6.1 auf dem Server), umgesetzt im **Test-Paket 0.6.2** (siehe unten):
      - Text in den Knöpfen saß zu hoch: Fira Sans hat oben mehr Raum als unten (Oberlänge 0,935, Unterlänge 0,265), die Großbuchstaben lagen
        1,4 px über der Mitte. Knöpfe, Zeitbereiche, Datei-Knopf, Menüeinträge und das Abzeichen „Neue Version“ haben jetzt oben 2 px mehr
        Innenabstand als unten, ihre Symbole rücken mit `margin-top: -2px` zurück in die Mitte (gemessen: Abweichung höchstens 0,4 px).
@@ -1196,6 +1196,8 @@ Ergebnis von Schritt 1 (Vergleich am 2026-11-10):
        halbe Höhe. Jetzt Stufen 1, 1,2, 1,5, 2, 2,5, 3, 4, 5, 6, 7,5, 8, 10 (`niceStep` in `static/chart.js`), weiter vier Schritte ab 0; die
        größte Spitze füllt mindestens drei Viertel der Höhe.
      - `app.css?v=4` und `chart.js?v=3`, damit Browser die neuen Dateien laden.
+   - **Test-Paket 0.6.2** – gebaut 2026-11-12: `target/debian/opennetmon_0.6.2-1_amd64.deb` (SHA-256 `b3eca8b0…`, kein Tag), nach fmt, clippy
+     und Tests; keine neue Migration (weiter `0025`), Units und Paketdateien wie 0.6.0/0.6.1. Installation durch den Nutzer, danach Test.
 7. **Release auf Ansage:**
    - vorher Push
    - README-Bild der neuen Oberfläche und neues Logo im README
