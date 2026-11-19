@@ -5,7 +5,7 @@ It runs on any Linux host with amd64 or arm64 (Raspberry Pi 4/5, many NAS, ARM s
 
 | | |
 |---|---|
-| Image | `ghcr.io/tomcslk/opennetmon` (GitHub Container Registry), from the first release that ships it |
+| Image | `ghcr.io/tomcslk/opennetmon` (GitHub Container Registry), since 0.7.0 |
 | Tags | `X.Y.Z` (one release), `X.Y` (newest patch release of that line), `latest` (newest release) |
 | Architectures | `linux/amd64`, `linux/arm64` |
 | Content | The static binary, `LICENSE` and `THIRD-PARTY-LICENSES.txt` in `/usr/share/doc/opennetmon/`. Nothing else: no shell, no package manager, about 26 MB |

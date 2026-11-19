@@ -63,7 +63,7 @@ Regeln, die überall gelten:
 - Die Tabelle `devices` wird vom Programm einmal neu aufgebaut (`storage::migrate`); neue Gerätefelder deshalb in eine eigene Tabelle (Beispiel `device_identity`).
 - Keine Inline-Styles (CSP), Breiten z. B. als SVG-Attribute. Ausnahme: HTML-Mails (`templates/mail/`), dort Styles am Element. Graphen lesen ihre Farben aus den CSS-Variablen und zeichnen beim Event `opennetmon:theme` neu.
 - Handy-Tabellen (`table.m-cards` + Layoutklasse): jede Zellklasse braucht einen Bereich im Layout, sonst entsteht eine schmale Zusatzspalte.
-- Messdaten: Zeitstempel intern UTC in ms, Anzeige in der Zeitzone des Browsers (`web::time_html`, `static/time.js`), E-Mails in UTC. Counter → Rate:
+- Messdaten: Zeitstempel intern UTC in ms, Anzeige in der Zeitzone des Browsers (`web::time_html`, `static/time.js`), E-Mails seit 0.6.3 in der Zeitzone des Servers (`schedule::time_zone()`). Counter → Rate:
   bei Wrap, Reset oder Neustart (`sysUpTime` kleiner) **keinen** Wert schreiben statt eines Ausreißers. Aufbewahrung: Rohwerte 7 Tage, Stundenwerte 1 Jahr,
   Tageswerte unbegrenzt (konfigurierbar).
 
@@ -143,12 +143,15 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ## Stand und offene Punkte
 
-Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-12):
+Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–R); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-19):
+
+- **v0.7.0** released (2026-11-19): HTML-Mails mit Kennzahlen und Graph (R), Migration 0026, `lettre` 0.11.24, erstmals das Container-Image
+  `ghcr.io/tomcslk/opennetmon` (Q). Offen: Paket auf GHCR öffentlich schalten (Nutzer), Server von Test-Paket 0.6.3 auf 0.7.0 (Serveradmin 4.3).
 
 - **v0.6.2** released (2026-11-12, neue Oberfläche, keine Migration seit 0.5.9); auf dem Server läuft das Test-Paket 0.6.2
   (inhaltlich gleich, andere Prüfsumme; Betrieb in `Serveradmin`, Abschnitt 4.3). Offen im README: Bild der neuen Oberfläche, neues Erklärvideo.
 - **Test-Paket 0.6.3** (2026-11-19, kein Tag): HTML-Mails mit Kennzahlen und Graph (**Vorhaben R**, Stufen 1 und 2; Wochenbericht später),
-  Migration 0026, `lettre` 0.11.24; Installation und Test der Mails durch den Nutzer stehen aus.
+  Migration 0026, `lettre` 0.11.24; seit 2026-11-19 20:35 auf dem Server, Test-Mail in Gmail geprüft (Rechner, Handy, dunkel: passt); offen eine echte Ausfall-/Wieder-in-Ordnung-Mail mit Graph.
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
   ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag). Beschreibung in `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P).
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
