@@ -190,6 +190,38 @@ Everything above works with Podman: `podman compose` (with `podman-compose` or `
 same options. Rootless Podman needs no changes; ports below 1024 are not allowed there, 8443 is fine. The health check needs an image in Docker
 format, which the published image is (Podman's own builds need `--format docker`, as `dev/container.sh` does).
 
+## Synology
+
+**Not tested on a Synology yet.** The image uses only standard Docker options, so it should run there as well; reports are welcome.
+
+- **Models:** you need *Container Manager* (DSM 7.2 and later) or the older *Docker* package. Synology offers it for its Intel and AMD models
+  (most "+" models) and for some ARM models; the image covers both (`amd64`, `arm64`). Synology's package center shows whether your model has it.
+- **Project:** in Container Manager, create a project (Project → Create), choose a folder such as `/volume1/docker/opennetmon` and paste
+  [`compose.yaml`](../compose.yaml). Prefer `:0.7` over `:latest` to get fixes but no jump to a new minor version without your decision.
+- **Folders instead of volumes:** the named volumes of `compose.yaml` need no preparation. If you want the data in a shared folder instead, the
+  folders must belong to UID 10001, otherwise the server cannot write and does not start:
+
+  ```yaml
+      volumes:
+        - /volume1/docker/opennetmon/config:/etc/opennetmon
+        - /volume1/docker/opennetmon/data:/var/lib/opennetmon
+  ```
+
+  ```bash
+  sudo mkdir -p /volume1/docker/opennetmon/config /volume1/docker/opennetmon/data
+  sudo chown -R 10001:10001 /volume1/docker/opennetmon/config /volume1/docker/opennetmon/data
+  sudo chmod 700 /volume1/docker/opennetmon/config /volume1/docker/opennetmon/data
+  ```
+
+- **First administrator:** the image has no shell, so the terminal of Container Manager cannot open one. Enable SSH (Control Panel → Terminal &
+  SNMP), sign in and run `sudo docker ps` to see the container's name (in a project usually `<project>-opennetmon-1`), then
+  `sudo docker exec -it <name> opennetmon user add admin --role admin`. The same way: `… opennetmon user passwd <name>`, `… opennetmon backup …`.
+- **Port:** if port 8443 is taken on the NAS, change the left side of the mapping, e.g. `"8444:8443"`, and open `https://<NAS address>:8444`.
+- **Backups:** the daily backups land in the data volume or folder, on the same disks as the database. Copy them and the config folder with
+  the key elsewhere, e.g. with Hyper Backup (see [Backups](#backups)).
+- **"This server" sensors** show the CPU, memory and temperatures of the NAS, but not its volumes. Monitor the NAS itself over SNMP instead
+  (DSM: Control Panel → Terminal & SNMP → SNMP, preferably SNMPv3).
+
 ## Building the image yourself
 
 ```bash
