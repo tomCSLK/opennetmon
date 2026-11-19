@@ -10,6 +10,11 @@ mit den Korrekturen aus dem Test von 0.6.1, dazu die Korrekturen aus dem Test-Pa
 auf 0.5.9 ohne Sicherung möglich. Releases 0.6.0 und 0.6.1 gibt es nicht (nur Test-Pakete). Das `.deb` des Releases (SHA-256 `6a4743d2…`) ist neu
 gebaut und unterscheidet sich deshalb in der Prüfsumme vom Test-Paket 0.6.2 (`b3eca8b0…`); inhaltlich gleich bis auf das README.
 
+**Test-Paket 0.6.3 (2026-11-19, kein Tag, Auftrag des Nutzers „committen, pushen und Test-Paket 0.6.3 bauen“):** neue HTML-Mails mit
+Kennzahlen und Graph (Vorhaben R, Stufen 1 und 2), Einstellung „Adresse der Oberfläche“ mit **Migration 0026** (Rückweg auf 0.6.2 nur über die
+Sicherung vor dem Update), `lettre` 0.11.24 (sechs Lücken im Mailversand), Vorarbeiten für das Container-Image (Q). Installation auf dem Server
+durch den Nutzer, danach Test der Mails in echten Mailprogrammen und Rückmeldung.
+
 **Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
 opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
 Tag, lief bis 2026-11-09 auf dem Server) enthält zwei Korrekturen: lokale Temperatursensoren überstehen einen umbenannten hwmon-Baustein und das Ziel ist auf der

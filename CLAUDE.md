@@ -147,6 +147,8 @@ Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in 
 
 - **v0.6.2** released (2026-11-12, neue Oberfläche, keine Migration seit 0.5.9); auf dem Server läuft das Test-Paket 0.6.2
   (inhaltlich gleich, andere Prüfsumme; Betrieb in `Serveradmin`, Abschnitt 4.3). Offen im README: Bild der neuen Oberfläche, neues Erklärvideo.
+- **Test-Paket 0.6.3** (2026-11-19, kein Tag): HTML-Mails mit Kennzahlen und Graph (**Vorhaben R**, Stufen 1 und 2; Wochenbericht später),
+  Migration 0026, `lettre` 0.11.24; Installation und Test der Mails durch den Nutzer stehen aus.
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
   ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag). Beschreibung in `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P).
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
