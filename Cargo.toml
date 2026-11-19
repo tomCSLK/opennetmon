@@ -20,8 +20,10 @@ http-body-util = "0.1.5"
 hyper = { version = "1", features = ["client", "http1", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "server", "server-graceful", "service", "tokio"] }
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
+png = "0.18" # chart image for alert e-mails (src/chart_png.rs): PNG encoder, already in the tree via tiny-skia
 rand = "0.9"
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "ring"] }
+resvg = { version = "0.50", default-features = false, features = ["text"] } # SVG -> PNG for src/chart_png.rs, without raster images and system fonts
 rpassword = "7.5.4"
 rust-embed = { version = "8.13.0", features = ["mime-guess"] }
 rustix = { version = "1.1.5", features = ["fs"] }

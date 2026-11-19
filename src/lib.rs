@@ -5,6 +5,7 @@ pub mod audit;
 pub mod auth;
 pub mod availability;
 pub mod backup;
+pub mod chart_png;
 pub mod config;
 pub mod credentials;
 pub mod crypto;
