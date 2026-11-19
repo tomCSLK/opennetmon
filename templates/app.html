@@ -20,7 +20,7 @@
     <summary class="updbadge" title="{{ t.get1("update-badge", "version", update.version.as_str()) }}">{{ crate::web::icon("update", "")|safe }}<span class="t">{{ t.get1("update-badge", "version", update.version.as_str()) }}</span></summary>
     <div class="updpop" role="dialog" aria-label="{{ t.get1("update-badge", "version", update.version.as_str()) }}">
       <p><strong>{{ t.get2("update-released", "version", update.version.as_str(), "installed", crate::web::VERSION) }}</strong></p>
-      <p>{{ t.get("update-how") }}</p>
+      <p>{% if layout.container %}{{ t.get("update-how-container") }}{% else %}{{ t.get("update-how") }}{% endif %}</p>
       <div class="actions">
         <a class="button secondary small" href="{{ update.url }}" target="_blank" rel="noopener noreferrer">{{ crate::web::icon("external", "")|safe }}{{ t.get("update-whats-new") }}</a>
         <a class="button small" href="/settings/updates">{{ t.get("update-guide") }}</a>

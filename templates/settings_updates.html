@@ -21,7 +21,7 @@
     <dt>{{ t.get("updates-checked") }}</dt>
     <dd>{% if let Some(when) = checked %}{{ when|safe }}{% else if check_on %}<span class="muted">{{ t.get("updates-not-yet") }}</span>{% else %}<span class="muted">–</span>{% endif %}</dd>
     <dt>{{ t.get("updates-check") }}</dt>
-    <dd>{% if check_on %}{{ t.get("updates-check-on") }}{% else %}{{ t.get("updates-check-off") }}{% endif %} <span class="muted">{{ t.get("updates-check-hint") }}</span></dd>
+    <dd>{% if check_on %}{{ t.get("updates-check-on") }}{% else %}{{ t.get("updates-check-off") }}{% endif %} <span class="muted">{% if container %}{{ t.get("updates-check-hint-container") }}{% else %}{{ t.get("updates-check-hint") }}{% endif %}</span></dd>
     <dt>{{ t.get("source-code") }}</dt>
     <dd><a href="{{ crate::web::SOURCE_URL }}">{{ crate::web::SOURCE_URL }}</a> (AGPL-3.0-or-later)</dd>
   </dl>
@@ -30,6 +30,13 @@
 
 <section class="card updsteps">
   <h2>{{ t.get("updates-how") }}</h2>
+  {% if container %}
+  <p>{{ t.get("updates-step-container") }}</p>
+  <pre class="codebox">docker compose exec opennetmon opennetmon backup /var/lib/opennetmon/backups/before-{{ version }}.db
+docker compose pull
+docker compose up -d</pre>
+  <p class="hint">{{ t.get("updates-after-container") }}</p>
+  {% else %}
   <ol>
     <li>{{ t.get1("updates-step-download", "file", package.as_str()) }}</li>
     <li>{{ t.get("updates-step-install") }}</li>
@@ -38,6 +45,7 @@
 sudo systemctl start opennetmon-backup
 sudo apt install ./{{ package }}</pre>
   <p class="hint">{{ t.get("updates-after") }}</p>
+  {% endif %}
 </section>
 
 {% if check_on %}<p class="hint">{{ t.get1("updates-privacy", "version", crate::web::VERSION) }}</p>{% endif %}

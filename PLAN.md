@@ -1302,14 +1302,17 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
 **Schrittplan (Fortsetzung der Nummern aus P):**
 
 8. ✔ Entscheidungen (oben, 2026-11-12).
-9. **Vorarbeiten im Programm** (lokal, mit Tests):
-   - alle Einstellungen auch als `OPENNETMON_*` und `OPENNETMON_CONFIG`
-   - `generate_missing` für Schlüssel und Zertifikat
-   - tzdb als Ersatz
-   - `opennetmon healthcheck`
-   - Sicherung nach Zeitplan (`backup_dir`, `backup_keep`, `backup_time`)
-   - `OPENNETMON_PACKAGING` für den Hinweis auf neue Versionen
-   - Texte de/en, `docs/configuration.md`
+9. ✔ **Vorarbeiten im Programm** (2026-11-19, „go mit schritt 9“; noch kein Paket, kein Release):
+   - alle Einstellungen auch als `OPENNETMON_*` (leerer Wert löscht eine optionale Einstellung) und die Datei per `OPENNETMON_CONFIG`
+   - `generate_missing` für Schlüssel und Zertifikat (Modul `first_start`)
+   - tzdb eingebettet als Ersatz (jiff `tzdb-bundle-always`, neue Abhängigkeit `jiff-tzdb`, Unlicense OR MIT)
+   - `opennetmon healthcheck` (Modul `healthcheck`)
+   - Sicherung nach Zeitplan im Programm (`backup_dir`, `backup_keep`, `backup_time`; Modul `backup`, holt eine verpasste Sicherung nach)
+   - `packaging = "container"`: Abzeichen und Einstellungen → Aktualisierungen nennen `docker compose pull`
+   - Texte de/en, neue `docs/configuration.md` (alle Einstellungen mit Variable), README und `deploy/config.example.toml` ergänzt
+   - Geprüft: fmt, clippy, alle Tests; Probelauf nur mit Variablen und leerem `/usr/share/zoneinfo` (`unshare`): Schlüssel und Zertifikat
+     entstehen (0600), Zone `Europe/Berlin` aus `TZ` über die eingebettete tzdb, `healthcheck` 0 bzw. 1 ohne Server.
+   - Für das `.deb` ändert sich nichts (alle neuen Schalter aus); `config.toml` des Pakets hat nur zusätzliche Kommentarzeilen.
 10. ~~Build für arm64 lokal~~ entfällt (nativ in der CI, siehe oben).
 11. **Image und Doku:** `Containerfile`, `compose.yaml`, `docs/docker.md` und ein Abschnitt im README.
     - Lokaler Test mit Podman (amd64, ohne Root): erster Start, Admin anlegen, Anmeldung, Ping und SNMP ins LAN, Neustart, Update auf ein neueres

@@ -43,3 +43,11 @@ retention_audit_days = 365                  # audit log: changes by administrato
 # Look once a day on GitHub for a newer release and show "Version x.y.z available" to administrators in the sidebar.
 # GitHub sees the address of this server once a day; nothing else is sent. Nothing is installed automatically.
 update_check = true
+
+# Not needed with this package (it creates key and certificate during installation and backs up with the timer
+# opennetmon-backup.timer); the container image uses them. All settings: docs/configuration.md.
+# generate_missing = false                  # create a missing key file and certificate at startup
+# backup_dir = "/var/lib/opennetmon/backups" # daily backup by the server itself
+# backup_keep = 14
+# backup_time = "03:30"
+# packaging = "deb"                         # "container": the update notice names docker compose pull

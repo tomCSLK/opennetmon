@@ -96,7 +96,8 @@ and manual `#[ignore]` tests against real devices (`tests/omada_manual.rs`).
 
 ## Configuration
 
-TOML file (`--config`) plus environment variables (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`).
+TOML file (`--config` or `OPENNETMON_CONFIG`) plus environment variables: every key also as `OPENNETMON_<KEY>`, e.g. `OPENNETMON_LISTEN`, which wins
+over the file ([`docs/configuration.md`](docs/configuration.md) lists all of them).
 Example with all keys and their defaults (the installed `/etc/opennetmon/config.toml` instead uses `listen = "0.0.0.0:8443"` with the two `tls_` keys, see below):
 
 ```toml
@@ -117,6 +118,11 @@ retention_audit_days = 365                 # audit log (changes, sign-ins)
 update_check = false                       # once a day ask GitHub for a newer release (on in the installed config)
 # client_ip_header = "x-forwarded-for"     # behind a reverse proxy: where the real client address is (or "x-real-ip")
 # time_zone = "Europe/Berlin"              # zone of the maintenance windows; unset = the system's
+generate_missing = false                   # create a missing key file and certificate at startup (container image)
+# backup_dir = "/var/lib/opennetmon/backups" # daily backup by the server itself (container image); the .deb uses a timer
+backup_keep = 14
+backup_time = "03:30"
+packaging = "deb"                          # or "container": which update steps the pages show
 ```
 
 ## Running on a server
@@ -174,6 +180,7 @@ Please report vulnerabilities privately, not as an issue: see [`SECURITY.md`](SE
 | [`docs/charts-and-thresholds.md`](docs/charts-and-thresholds.md) | Detail page, charts, thresholds, status values, rollups |
 | [`docs/reports.md`](docs/reports.md) | Availability: counting, reports, CSV |
 | [`docs/operations.md`](docs/operations.md) | Installation, proxy, update and notice of new versions, backup, troubleshooting |
+| [`docs/configuration.md`](docs/configuration.md) | All settings, as file keys and environment variables; backups and health check without systemd |
 | [`docs/device-templates.md`](docs/device-templates.md) | Device templates: create from a device, apply when adding a device or later |
 | [`docs/mibs.md`](docs/mibs.md) | MIB files, custom OID by name, finding values |
 | [`docs/notifications.md`](docs/notifications.md) | E-mail settings, rules, test SMTP server |

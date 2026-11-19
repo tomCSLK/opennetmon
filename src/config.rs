@@ -8,10 +8,32 @@ use serde::Deserialize;
 
 use crate::auth::throttle::ClientIpHeader;
 
+/// Environment variable with the path of the config file (used when `--config` is not given).
+pub const ENV_CONFIG: &str = "OPENNETMON_CONFIG";
 const ENV_LISTEN: &str = "OPENNETMON_LISTEN";
 const ENV_DATABASE_PATH: &str = "OPENNETMON_DATABASE_PATH";
 const ENV_LOG_FILTER: &str = "OPENNETMON_LOG_FILTER";
 const ENV_SECRET_KEY_FILE: &str = "OPENNETMON_SECRET_KEY_FILE";
+const ENV_TLS_CERT_FILE: &str = "OPENNETMON_TLS_CERT_FILE";
+const ENV_TLS_KEY_FILE: &str = "OPENNETMON_TLS_KEY_FILE";
+const ENV_GENERATE_MISSING: &str = "OPENNETMON_GENERATE_MISSING";
+const ENV_COOKIE_SECURE: &str = "OPENNETMON_COOKIE_SECURE";
+const ENV_SESSION_TTL_HOURS: &str = "OPENNETMON_SESSION_TTL_HOURS";
+const ENV_SESSION_IDLE_MINUTES: &str = "OPENNETMON_SESSION_IDLE_MINUTES";
+const ENV_CLIENT_IP_HEADER: &str = "OPENNETMON_CLIENT_IP_HEADER";
+const ENV_POLLER_ENABLED: &str = "OPENNETMON_POLLER_ENABLED";
+const ENV_POLL_CONCURRENCY: &str = "OPENNETMON_POLL_CONCURRENCY";
+const ENV_RETENTION_RAW_DAYS: &str = "OPENNETMON_RETENTION_RAW_DAYS";
+const ENV_RETENTION_HOURLY_DAYS: &str = "OPENNETMON_RETENTION_HOURLY_DAYS";
+const ENV_RETENTION_AUDIT_DAYS: &str = "OPENNETMON_RETENTION_AUDIT_DAYS";
+const ENV_UPDATE_CHECK: &str = "OPENNETMON_UPDATE_CHECK";
+const ENV_TIME_ZONE: &str = "OPENNETMON_TIME_ZONE";
+const ENV_BACKUP_DIR: &str = "OPENNETMON_BACKUP_DIR";
+const ENV_BACKUP_KEEP: &str = "OPENNETMON_BACKUP_KEEP";
+const ENV_BACKUP_TIME: &str = "OPENNETMON_BACKUP_TIME";
+const ENV_PACKAGING: &str = "OPENNETMON_PACKAGING";
+/// Most backups `backup_keep` may ask for.
+const MAX_BACKUP_KEEP: u32 = 1_000;
 const MAX_SESSION_TTL_HOURS: u64 = 24 * 90;
 const MAX_SESSION_IDLE_MINUTES: u64 = 24 * 60;
 const MAX_POLL_CONCURRENCY: usize = 256;
@@ -49,6 +71,10 @@ pub struct Config {
     pub tls_cert_file: Option<PathBuf>,
     /// Private key of that certificate (PEM, mode 0600, readable by the service user).
     pub tls_key_file: Option<PathBuf>,
+    /// Create a missing `secret_key_file` and a missing certificate (self-signed, when both TLS files are
+    /// set and neither exists) when the server starts. Off by default: the `.deb` and the installer create
+    /// them; the container image switches it on.
+    pub generate_missing: bool,
     /// Mark session cookies `Secure`. Keep `true` behind a TLS reverse proxy; only plain-HTTP development needs `false`.
     pub cookie_secure: bool,
     /// Absolute session lifetime in hours.
@@ -73,8 +99,29 @@ pub struct Config {
     /// Look once a day on GitHub whether a newer release exists and tell administrators in the sidebar
     /// (GitHub sees the address of the server; nothing else is sent). Off unless set; the shipped config sets it.
     pub update_check: bool,
-    /// Time zone of the weekly maintenance windows, e.g. `Europe/Berlin`; unset = the system's (`/etc/localtime`).
+    /// Time zone of the weekly maintenance windows and the backup time, e.g. `Europe/Berlin`; unset = the
+    /// system's (`TZ`, else `/etc/localtime`).
     pub time_zone: Option<String>,
+    /// Directory for a daily backup made by the server itself (the container image sets it); unset = none
+    /// (the `.deb` uses a systemd timer instead).
+    pub backup_dir: Option<PathBuf>,
+    /// How many of those backups are kept (1 to 1000); older ones are deleted.
+    pub backup_keep: u32,
+    /// Local time of that backup, `HH:MM` (24 hours).
+    pub backup_time: String,
+    /// How this copy was installed; decides which update steps the pages show.
+    pub packaging: Packaging,
+}
+
+/// How opennetmon was installed, for the update steps on the pages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Packaging {
+    /// The `.deb` package or the installer: update with `apt install`.
+    #[default]
+    Deb,
+    /// The container image: update with `docker compose pull`.
+    Container,
 }
 
 impl Default for Config {
@@ -86,6 +133,7 @@ impl Default for Config {
             secret_key_file: PathBuf::from("/etc/opennetmon/secret.key"),
             tls_cert_file: None,
             tls_key_file: None,
+            generate_missing: false,
             cookie_secure: true,
             session_ttl_hours: 168,
             session_idle_minutes: 30,
@@ -97,6 +145,10 @@ impl Default for Config {
             retention_audit_days: 365,
             update_check: false,
             time_zone: None,
+            backup_dir: None,
+            backup_keep: 14,
+            backup_time: "03:30".to_owned(),
+            packaging: Packaging::Deb,
         }
     }
 }
@@ -126,23 +178,74 @@ impl Config {
             None => Self::default(),
         };
 
-        if let Some(value) = env(ENV_LISTEN) {
-            config.listen =
-                value
-                    .parse()
-                    .map_err(|e: std::net::AddrParseError| ConfigError::InvalidEnv {
-                        name: ENV_LISTEN,
-                        reason: e.to_string(),
-                    })?;
+        let env = Env(&env);
+        if let Some(value) = env.parsed(ENV_LISTEN)? {
+            config.listen = value;
         }
-        if let Some(value) = env(ENV_DATABASE_PATH) {
+        if let Some(value) = env.text(ENV_DATABASE_PATH) {
             config.database_path = PathBuf::from(value);
         }
-        if let Some(value) = env(ENV_LOG_FILTER) {
+        if let Some(value) = env.text(ENV_LOG_FILTER) {
             config.log_filter = value;
         }
-        if let Some(value) = env(ENV_SECRET_KEY_FILE) {
+        if let Some(value) = env.text(ENV_SECRET_KEY_FILE) {
             config.secret_key_file = PathBuf::from(value);
+        }
+        if let Some(value) = env.optional(ENV_TLS_CERT_FILE) {
+            config.tls_cert_file = value.map(PathBuf::from);
+        }
+        if let Some(value) = env.optional(ENV_TLS_KEY_FILE) {
+            config.tls_key_file = value.map(PathBuf::from);
+        }
+        if let Some(value) = env.parsed(ENV_GENERATE_MISSING)? {
+            config.generate_missing = value;
+        }
+        if let Some(value) = env.parsed(ENV_COOKIE_SECURE)? {
+            config.cookie_secure = value;
+        }
+        if let Some(value) = env.parsed(ENV_SESSION_TTL_HOURS)? {
+            config.session_ttl_hours = value;
+        }
+        if let Some(value) = env.parsed(ENV_SESSION_IDLE_MINUTES)? {
+            config.session_idle_minutes = value;
+        }
+        if let Some(value) = env.optional(ENV_CLIENT_IP_HEADER) {
+            config.client_ip_header = value
+                .map(|v| env.keyword(ENV_CLIENT_IP_HEADER, &v))
+                .transpose()?;
+        }
+        if let Some(value) = env.parsed(ENV_POLLER_ENABLED)? {
+            config.poller_enabled = value;
+        }
+        if let Some(value) = env.parsed(ENV_POLL_CONCURRENCY)? {
+            config.poll_concurrency = value;
+        }
+        if let Some(value) = env.parsed(ENV_RETENTION_RAW_DAYS)? {
+            config.retention_raw_days = value;
+        }
+        if let Some(value) = env.parsed(ENV_RETENTION_HOURLY_DAYS)? {
+            config.retention_hourly_days = value;
+        }
+        if let Some(value) = env.parsed(ENV_RETENTION_AUDIT_DAYS)? {
+            config.retention_audit_days = value;
+        }
+        if let Some(value) = env.parsed(ENV_UPDATE_CHECK)? {
+            config.update_check = value;
+        }
+        if let Some(value) = env.optional(ENV_TIME_ZONE) {
+            config.time_zone = value;
+        }
+        if let Some(value) = env.optional(ENV_BACKUP_DIR) {
+            config.backup_dir = value.map(PathBuf::from);
+        }
+        if let Some(value) = env.parsed(ENV_BACKUP_KEEP)? {
+            config.backup_keep = value;
+        }
+        if let Some(value) = env.text(ENV_BACKUP_TIME) {
+            config.backup_time = value;
+        }
+        if let Some(value) = env.text(ENV_PACKAGING) {
+            config.packaging = env.keyword(ENV_PACKAGING, &value)?;
         }
 
         config.validate()?;
@@ -155,6 +258,11 @@ impl Config {
             self.tls_cert_file.as_deref()?,
             self.tls_key_file.as_deref()?,
         ))
+    }
+
+    /// Minutes after local midnight of the daily backup (`backup_time`, checked by [`Config::validate`]).
+    pub fn backup_minute(&self) -> u16 {
+        parse_time_of_day(&self.backup_time).unwrap_or(3 * 60 + 30)
     }
 
     fn validate(&self) -> Result<(), ConfigError> {
@@ -219,7 +327,84 @@ impl Config {
                 "time_zone is not a known time zone (e.g. \"Europe/Berlin\", see timedatectl list-timezones)",
             ));
         }
+        if self
+            .backup_dir
+            .as_ref()
+            .is_some_and(|dir| dir.as_os_str().is_empty())
+        {
+            return Err(ConfigError::Invalid("backup_dir must not be empty"));
+        }
+        if !(1..=MAX_BACKUP_KEEP).contains(&self.backup_keep) {
+            return Err(ConfigError::Invalid(
+                "backup_keep must be between 1 and 1000",
+            ));
+        }
+        if parse_time_of_day(&self.backup_time).is_none() {
+            return Err(ConfigError::Invalid(
+                "backup_time must be a time of day like \"03:30\"",
+            ));
+        }
         Ok(())
+    }
+}
+
+/// `HH:MM` (24 hours) as minutes after midnight.
+fn parse_time_of_day(text: &str) -> Option<u16> {
+    let (hours, minutes) = text.trim().split_once(':')?;
+    let digits = |s: &str| (1..=2).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_digit());
+    if !digits(hours) || minutes.len() != 2 || !digits(minutes) {
+        return None;
+    }
+    let (hours, minutes): (u16, u16) = (hours.parse().ok()?, minutes.parse().ok()?);
+    (hours < 24 && minutes < 60).then_some(hours * 60 + minutes)
+}
+
+/// Reads the `OPENNETMON_*` variables. An empty value of an optional setting (a path, the proxy header,
+/// the time zone) unsets it, e.g. `OPENNETMON_TLS_CERT_FILE=` switches off a certificate from the file.
+struct Env<'a, F: Fn(&str) -> Option<String>>(&'a F);
+
+impl<F: Fn(&str) -> Option<String>> Env<'_, F> {
+    fn text(&self, name: &str) -> Option<String> {
+        (self.0)(name)
+    }
+
+    /// `Some(None)` for an empty value.
+    fn optional(&self, name: &str) -> Option<Option<String>> {
+        self.text(name)
+            .map(|value| Some(value).filter(|v| !v.trim().is_empty()))
+    }
+
+    fn parsed<T>(&self, name: &'static str) -> Result<Option<T>, ConfigError>
+    where
+        T: std::str::FromStr,
+        T::Err: std::fmt::Display,
+    {
+        self.text(name)
+            .map(|value| {
+                value
+                    .trim()
+                    .parse()
+                    .map_err(|e: T::Err| ConfigError::InvalidEnv {
+                        name,
+                        reason: e.to_string(),
+                    })
+            })
+            .transpose()
+    }
+
+    /// A value of a setting that takes one of a few words (as in the file, e.g. `x-forwarded-for`).
+    fn keyword<T: serde::de::DeserializeOwned>(
+        &self,
+        name: &'static str,
+        value: &str,
+    ) -> Result<T, ConfigError> {
+        use serde::de::IntoDeserializer;
+        let word: serde::de::value::StrDeserializer<'_, serde::de::value::Error> =
+            value.trim().into_deserializer();
+        T::deserialize(word).map_err(|e| ConfigError::InvalidEnv {
+            name,
+            reason: e.to_string(),
+        })
     }
 }
 
@@ -430,6 +615,130 @@ mod tests {
         ] {
             let err = Config::from_sources(Some(bad), no_env).unwrap_err();
             assert!(matches!(err, ConfigError::Invalid(_)), "{bad}");
+        }
+    }
+
+    /// Every setting can come from the environment; the exhaustive literal makes a new setting show up here.
+    #[test]
+    fn every_setting_has_an_environment_variable() {
+        let env = |name: &str| {
+            let value = match name {
+                ENV_LISTEN => "0.0.0.0:9443",
+                ENV_DATABASE_PATH => "/data/x.db",
+                ENV_LOG_FILTER => "debug",
+                ENV_SECRET_KEY_FILE => "/conf/secret.key",
+                ENV_TLS_CERT_FILE => "/conf/cert.pem",
+                ENV_TLS_KEY_FILE => "/conf/key.pem",
+                ENV_GENERATE_MISSING => "true",
+                ENV_COOKIE_SECURE => "false",
+                ENV_SESSION_TTL_HOURS => "12",
+                ENV_SESSION_IDLE_MINUTES => "0",
+                ENV_CLIENT_IP_HEADER => "x-real-ip",
+                ENV_POLLER_ENABLED => "false",
+                ENV_POLL_CONCURRENCY => "3",
+                ENV_RETENTION_RAW_DAYS => "2",
+                ENV_RETENTION_HOURLY_DAYS => "30",
+                ENV_RETENTION_AUDIT_DAYS => "40",
+                ENV_UPDATE_CHECK => "true",
+                ENV_TIME_ZONE => "Europe/Berlin",
+                ENV_BACKUP_DIR => "/data/backups",
+                ENV_BACKUP_KEEP => "7",
+                ENV_BACKUP_TIME => "4:05",
+                ENV_PACKAGING => "container",
+                _ => return None,
+            };
+            Some(value.to_owned())
+        };
+        let config = Config::from_sources(None, env).unwrap();
+        let expected = Config {
+            listen: "0.0.0.0:9443".parse().unwrap(),
+            database_path: PathBuf::from("/data/x.db"),
+            log_filter: "debug".to_owned(),
+            secret_key_file: PathBuf::from("/conf/secret.key"),
+            tls_cert_file: Some(PathBuf::from("/conf/cert.pem")),
+            tls_key_file: Some(PathBuf::from("/conf/key.pem")),
+            generate_missing: true,
+            cookie_secure: false,
+            session_ttl_hours: 12,
+            session_idle_minutes: 0,
+            client_ip_header: Some(ClientIpHeader::XRealIp),
+            poller_enabled: false,
+            poll_concurrency: 3,
+            retention_raw_days: 2,
+            retention_hourly_days: 30,
+            retention_audit_days: 40,
+            update_check: true,
+            time_zone: Some("Europe/Berlin".to_owned()),
+            backup_dir: Some(PathBuf::from("/data/backups")),
+            backup_keep: 7,
+            backup_time: "4:05".to_owned(),
+            packaging: Packaging::Container,
+        };
+        assert_eq!(config, expected);
+        assert_eq!(config.backup_minute(), 4 * 60 + 5);
+    }
+
+    #[test]
+    fn an_empty_variable_unsets_an_optional_setting() {
+        let file = "tls_cert_file = \"/c.pem\"\ntls_key_file = \"/k.pem\"\ntime_zone = \"UTC\"";
+        let env = |name: &str| {
+            [ENV_TLS_CERT_FILE, ENV_TLS_KEY_FILE, ENV_TIME_ZONE]
+                .contains(&name)
+                .then(String::new)
+        };
+        let config = Config::from_sources(Some(file), env).unwrap();
+        assert_eq!(config.tls_files(), None);
+        assert_eq!(config.time_zone, None);
+    }
+
+    #[test]
+    fn invalid_environment_values_name_the_variable() {
+        for (name, value) in [
+            (ENV_COOKIE_SECURE, "yes"),
+            (ENV_POLL_CONCURRENCY, "many"),
+            (ENV_CLIENT_IP_HEADER, "forwarded"),
+            (ENV_PACKAGING, "snap"),
+        ] {
+            let env = |n: &str| (n == name).then(|| value.to_owned());
+            let err = Config::from_sources(None, env).unwrap_err();
+            assert!(
+                matches!(err, ConfigError::InvalidEnv { name: n, .. } if n == name),
+                "{name}: {err}"
+            );
+        }
+        // Range checks apply to the environment as to the file.
+        let env = |n: &str| (n == ENV_POLL_CONCURRENCY).then(|| "0".to_owned());
+        assert!(matches!(
+            Config::from_sources(None, env).unwrap_err(),
+            ConfigError::Invalid(_)
+        ));
+    }
+
+    #[test]
+    fn the_backup_is_off_by_default_and_its_settings_are_checked() {
+        let config = Config::from_sources(None, no_env).unwrap();
+        assert_eq!(config.backup_dir, None);
+        assert_eq!((config.backup_keep, config.backup_minute()), (14, 210));
+        assert!(!config.generate_missing);
+        assert_eq!(config.packaging, Packaging::Deb);
+        let ok = "backup_dir = \"/b\"\nbackup_keep = 1000\nbackup_time = \"23:59\"";
+        assert_eq!(
+            Config::from_sources(Some(ok), no_env)
+                .unwrap()
+                .backup_minute(),
+            23 * 60 + 59
+        );
+        for bad in [
+            "backup_dir = \"\"",
+            "backup_keep = 0",
+            "backup_keep = 1001",
+            "backup_time = \"24:00\"",
+            "backup_time = \"3:5\"",
+            "backup_time = \"0330\"",
+            "backup_time = \"-1:30\"",
+            "packaging = \"snap\"",
+        ] {
+            assert!(Config::from_sources(Some(bad), no_env).is_err(), "{bad}");
         }
     }
 

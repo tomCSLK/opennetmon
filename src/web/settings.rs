@@ -32,15 +32,20 @@ struct UpdatesTemplate {
     checked: Option<String>,
     /// The package file of the newer release, or a placeholder.
     package: String,
+    /// The newer version, or a placeholder (name of the backup before a container update).
+    version: String,
+    /// Whether this copy runs from the container image (other update steps).
+    container: bool,
 }
 
 pub async fn updates(State(state): State<AppState>, user: CurrentUser) -> Result<Html<String>> {
     user.require_admin()?;
     let release = state.latest_release.get();
-    let package = format!(
-        "opennetmon_{}-1_amd64.deb",
-        release.as_ref().map_or("<version>", |r| r.version.as_str())
-    );
+    let version = release
+        .as_ref()
+        .map_or("<version>", |r| r.version.as_str())
+        .to_owned();
+    let package = format!("opennetmon_{version}-1_amd64.deb");
     let page = UpdatesTemplate {
         layout: user.layout(),
         t: user.lang,
@@ -48,6 +53,8 @@ pub async fn updates(State(state): State<AppState>, user: CurrentUser) -> Result
         check_on: state.update_check,
         checked: state.latest_release.checked_ms().map(time_html),
         package,
+        version,
+        container: state.packaging == crate::config::Packaging::Container,
     };
     Ok(Html(page.render()?))
 }

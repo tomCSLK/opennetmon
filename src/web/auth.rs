@@ -53,6 +53,8 @@ pub struct CurrentUser {
     pub session_left: Option<i64>,
     /// A newer release (administrators only), see [`crate::update_check`].
     pub update: Option<crate::update_check::Release>,
+    /// Whether this copy runs from the container image (`packaging = "container"`), for the update steps.
+    pub container: bool,
     /// Address of the client (behind a proxy from `client_ip_header`), for the audit log.
     pub address: Option<std::net::IpAddr>,
     /// Path of the request, for the navigation of the settings.
@@ -91,6 +93,7 @@ impl CurrentUser {
             is_admin: self.role.is_admin(),
             session_left: self.session_left,
             update: self.update.clone(),
+            container: self.container,
             path: self.path.clone(),
             counts: self.counts,
         }
@@ -108,6 +111,7 @@ impl CurrentUser {
             csrf_token: s.csrf_token,
             session_left,
             update: None,
+            container: false,
             address: None,
             path: String::new(),
             counts: None,
@@ -206,6 +210,7 @@ impl FromRequestParts<AppState> for CurrentUser {
         user.path = parts.uri.path().to_owned();
         if user.role.is_admin() {
             user.update = state.latest_release.get();
+            user.container = state.packaging == crate::config::Packaging::Container;
         }
         // The counters of the header; a page without them is better than no page.
         if is_page(parts) {
@@ -767,6 +772,29 @@ mod tests {
         assert!(!page.contains("9.1.0"));
     }
 
+    #[tokio::test]
+    async fn in_the_container_the_update_steps_name_docker_compose() {
+        let h = harness(false).await;
+        let (admin, _) = login(&h, "anna").await;
+        let mut state = h.state.clone();
+        state.packaging = crate::config::Packaging::Container;
+        state.latest_release.set(Some(crate::update_check::Release {
+            version: "9.1.0".to_owned(),
+            url: "https://github.com/example/opennetmon/releases/tag/v9.1.0".to_owned(),
+        }));
+        let app = crate::web::router(state);
+        let page = send(&app, get("/", Some(&admin))).await.body;
+        assert!(page.contains("docker compose pull"), "{page}");
+        assert!(!page.contains("mit apt installieren"));
+        let updates = send(&app, get("/settings/updates", Some(&admin)))
+            .await
+            .body;
+        assert!(updates.contains("docker compose pull\ndocker compose up -d"));
+        assert!(updates.contains("/var/lib/opennetmon/backups/before-9.1.0.db"));
+        assert!(!updates.contains("apt install"));
+        assert!(updates.contains("OPENNETMON_UPDATE_CHECK"));
+    }
+
     #[test]
     fn viewer_cannot_pass_admin_check() {
         let user = |role| CurrentUser {
@@ -778,6 +806,7 @@ mod tests {
             csrf_token: "t".to_owned(),
             session_left: None,
             update: None,
+            container: false,
             address: None,
             path: String::new(),
             counts: None,

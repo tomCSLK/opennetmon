@@ -296,6 +296,15 @@ mod tests {
         TimeZone::get("Europe/Berlin").unwrap()
     }
 
+    /// The binary carries the time zone database (jiff, feature `tzdb-bundle-always`); jiff uses it when
+    /// the system has none, e.g. in the container image built `FROM scratch`.
+    #[test]
+    fn the_time_zone_database_is_bundled() {
+        let bundled = jiff::tz::TimeZoneDatabase::bundled();
+        assert!(bundled.get("Europe/Berlin").is_ok());
+        assert!(bundled.get("America/New_York").is_ok());
+    }
+
     fn at(text: &str) -> i64 {
         parse_local(text, &berlin()).unwrap()
     }

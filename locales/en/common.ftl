@@ -40,6 +40,7 @@ keys-close = Close
 update-badge = New version { $version }
 update-released = opennetmon { $version } has been released (installed: { $installed }).
 update-how = On a server: download the package from the release page, check it against SHA256SUMS and install it with apt (back up first).
+update-how-container = In the container: pull the new image with docker compose pull and restart the container (back up first).
 update-whats-new = What's new?
 update-guide = Instructions
 update-foot = Only administrators see this notice. opennetmon downloads and installs nothing by itself.
@@ -55,10 +56,13 @@ updates-check = Check
 updates-check-on = once a day at GitHub
 updates-check-off = switched off
 updates-check-hint = (switch update_check in /etc/opennetmon/config.toml)
+updates-check-hint-container = (variable OPENNETMON_UPDATE_CHECK of the container)
 updates-how = How to update
 updates-step-download = Download { $file } and SHA256SUMS from the release page.
 updates-step-install = On the server, check, back up and install:
 updates-after = Configuration, key and data stay, the service restarts, new migrations run at startup. Going back to an older version needs the backup, because migrations only run forward.
+updates-step-container = In the folder with the compose.yaml, back up, pull the new image and restart the container:
+updates-after-container = Database, backups, key and certificate live in the volumes and stay; new migrations run at startup. Going back to an older version needs the backup, because migrations only run forward.
 updates-privacy = Once a day GitHub sees the address of this server and opennetmon/{ $version }; nothing else is sent. opennetmon downloads and installs nothing by itself; the service lacks the rights to do so.
 
 ## Roles

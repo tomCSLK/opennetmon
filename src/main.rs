@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::{Context, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use opennetmon::auth::{self, Role};
-use opennetmon::config::Config;
+use opennetmon::config::{self, Config};
 use opennetmon::crypto::SecretBox;
 use opennetmon::i18n::Lang;
 use opennetmon::maintenance::Retention;
@@ -19,7 +19,7 @@ use tracing_subscriber::EnvFilter;
 #[derive(Parser)]
 #[command(version, about = "Agentless SNMP network monitor")]
 struct Args {
-    /// Path to the TOML config file (defaults and OPENNETMON_* environment variables apply without it)
+    /// Path to the TOML config file (else OPENNETMON_CONFIG; defaults and OPENNETMON_* environment variables apply without it)
     #[arg(short, long, global = true)]
     config: Option<PathBuf>,
     #[command(subcommand)]
@@ -44,6 +44,9 @@ enum Command {
         /// Target file; created with mode 0600
         target: PathBuf,
     },
+    /// Ask the running server for /healthz on its own address; exit status 0 when it is healthy
+    /// (for container health checks; the certificate of built-in HTTPS is not checked)
+    Healthcheck,
 }
 
 #[derive(Subcommand)]
@@ -111,7 +114,12 @@ impl From<RoleArg> for Role {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let config = Config::load(args.config.as_deref()).context("loading configuration")?;
+    let config_path = args.config.clone().or_else(|| {
+        std::env::var_os(config::ENV_CONFIG)
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from)
+    });
+    let config = Config::load(config_path.as_deref()).context("loading configuration")?;
 
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(&config.log_filter))
@@ -122,6 +130,15 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let command = args.command.unwrap_or(Command::Serve);
+    if let Command::Healthcheck = command {
+        return match opennetmon::healthcheck::check(&config).await {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                eprintln!("unhealthy: {e}");
+                std::process::exit(1);
+            }
+        };
+    }
     if let Command::Key(KeyCommand::Generate) = command {
         SecretBox::generate_key_file(&config.secret_key_file).context("creating key file")?;
         println!("Key file created: {}", config.secret_key_file.display());
@@ -185,11 +202,29 @@ async fn main() -> anyhow::Result<()> {
     match command {
         Command::Serve => serve(config, pool).await,
         Command::User(cmd) => manage_users(&pool, cmd).await,
-        Command::Key(_) | Command::Tls(_) | Command::Backup { .. } => Ok(()),
+        Command::Key(_) | Command::Tls(_) | Command::Backup { .. } | Command::Healthcheck => Ok(()),
     }
 }
 
 async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
+    if config.generate_missing {
+        let created = opennetmon::first_start::create_missing(&config)
+            .map_err(anyhow::Error::msg)
+            .context("creating missing files (generate_missing)")?;
+        if created.key_file {
+            tracing::warn!(
+                path = %config.secret_key_file.display(),
+                "created a new encryption key; back it up separately from the database"
+            );
+        }
+        if let Some(cert) = created.certificate {
+            tracing::info!(
+                names = %cert.names.join(", "),
+                fingerprint = %cert.fingerprint,
+                "created a self-signed certificate; browsers warn once, compare this fingerprint"
+            );
+        }
+    }
     let secrets = SecretBox::from_key_file(&config.secret_key_file).with_context(|| {
         format!(
             "loading the encryption key (create one with `opennetmon key generate`; config key secret_key_file = {})",
@@ -248,6 +283,24 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
         "maintenance windows use this time zone"
     );
 
+    let backups = config.backup_dir.clone().map(|dir| {
+        tracing::info!(
+            dir = %dir.display(),
+            time = %config.backup_time,
+            keep = config.backup_keep,
+            "daily backup"
+        );
+        opennetmon::backup::spawn(
+            pool.clone(),
+            opennetmon::backup::Plan {
+                dir,
+                keep: config.backup_keep,
+                minute: config.backup_minute(),
+            },
+            opennetmon::schedule::time_zone().clone(),
+        )
+    });
+
     let secrets = Arc::new(secrets);
     let poller = if config.poller_enabled {
         Some(Poller::spawn(
@@ -296,6 +349,9 @@ async fn serve(config: Config, pool: SqlitePool) -> anyhow::Result<()> {
     };
     if let Some(poller) = poller {
         poller.stop().await;
+    }
+    if let Some(backups) = backups {
+        backups.abort();
     }
     served?;
     tracing::info!("opennetmon stopped");

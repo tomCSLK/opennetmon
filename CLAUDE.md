@@ -48,7 +48,7 @@ jeder Sitzung gebraucht wird. Die ausführliche Fassung bis 2026-11-09 steht in 
 
 | Bereich | Module |
 |---|---|
-| Start und Querschnitt | `main`, `config` (TOML + `OPENNETMON_*`), `tls`, `crypto` (`SecretBox`), `credentials`, `auth` (Rollen, Argon2, Tokens, `throttle`), `i18n`, `error` |
+| Start und Querschnitt | `main`, `config` (TOML + `OPENNETMON_*` für jede Einstellung), `first_start`, `healthcheck`, `backup`, `tls`, `crypto` (`SecretBox`), `credentials`, `auth` (Rollen, Argon2, Tokens, `throttle`), `i18n`, `error` |
 | SNMP und Sensoren | `snmp` (Client, `probe`, `identity`, `testagent`), `discovery`, `mib` (Lexer, Parser, Index, Katalog), `value_discovery`, `sensors` (Trait `Sensor`: snmp, ping, local, service, dns, fritzbox, huawei; `counter`, `spec`), `http_client` |
 | Ablauf | `poller` (eine Aufgabe je Gerät, Intervall je Sensor), `status` (Schwellwerte, Zustandsautomat), `alerting` und `mail`, `maintenance` (Rollups, Aufbewahrung), `update_check` |
 | Fachlogik | `devices`, `templates` (Gerätevorlagen), `pause` (Pausen und Abhängigkeiten), `schedule` (Wartungsfenster), `availability`, `audit`, `ordering` |
@@ -151,7 +151,7 @@ Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in 
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
   Schrittplan in `PLAN.md` (P), Schritte 1–7 erledigt, released als **v0.6.2**.
 - **Vorhaben Q** (Docker-Version zusätzlich zum `.deb`): entschieden 2026-11-12 (GHCR, amd64/arm64, `scratch`, HTTPS als Standard, Bau in der CI
-  beim Tag), Schrittplan in `PLAN.md` (Q); Umsetzung nach „go“.
+  beim Tag), Schrittplan in `PLAN.md` (Q). Schritt 9 (Vorarbeiten im Programm) erledigt 2026-11-19; Schritt 11 (Image, `compose.yaml`, Doku) nach „go“.
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,

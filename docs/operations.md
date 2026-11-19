@@ -262,7 +262,8 @@ In general: the server should not be reachable from the internet unless necessar
 
 ## Configuration
 
-`/etc/opennetmon/config.toml`; all keys are explained in `deploy/config.example.toml`. After changes, `sudo systemctl restart opennetmon`.
+`/etc/opennetmon/config.toml`; all keys are explained in `deploy/config.example.toml` and, with their environment variables, in
+[`configuration.md`](configuration.md). After changes, `sudo systemctl restart opennetmon`.
 Only **behind a reverse proxy**, additionally set `client_ip_header = "x-forwarded-for"` (see above).
 Weekly maintenance windows use the time zone of the system (`timedatectl`; many Ubuntu servers run in UTC) unless `time_zone = "Europe/Berlin"` is set;
 the log at startup says which zone is in use.

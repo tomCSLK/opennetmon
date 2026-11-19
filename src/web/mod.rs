@@ -78,6 +78,8 @@ pub struct AppState {
     pub latest_release: crate::update_check::Latest,
     /// Whether the update check runs (config `update_check`), for the page Settings → Updates.
     pub update_check: bool,
+    /// How this copy was installed (config `packaging`), for the update steps.
+    pub packaging: crate::config::Packaging,
 }
 
 impl AppState {
@@ -93,6 +95,7 @@ impl AppState {
             mibs: Arc::new(std::sync::RwLock::new(crate::mib::bundled_index())),
             latest_release: crate::update_check::Latest::default(),
             update_check: config.update_check,
+            packaging: config.packaging,
             session_ttl_secs: i64::try_from(config.session_ttl_hours.saturating_mul(3600))
                 .unwrap_or(i64::MAX),
             session_idle_secs: (config.session_idle_minutes > 0)
@@ -573,6 +576,8 @@ pub struct Layout {
     pub session_left: Option<i64>,
     /// A newer release found by the update check; shown to administrators only.
     pub update: Option<crate::update_check::Release>,
+    /// Whether this copy runs from the container image: the update steps name `docker compose pull`.
+    pub container: bool,
     /// Path of the request.
     pub path: String,
     /// Sensors up, in warning and down, for the counters in the header (`None`: not shown).

@@ -62,8 +62,9 @@ Ziel und Sprachentscheidung · Python-Fallback (verworfen)
   neue Versionen gelten nach einem Update sofort, ohne Versionsnummern in den Adressen pflegen zu müssen
 - SNMP: `snmp2` mit Features `tokio`, `crypto-rust` (keine OpenSSL-Abhängigkeit) und **`heap_buffers`** (Pflicht: sonst liegt ein 64-KB-Puffer
   auf dem Stack und überläuft in Tokio-Threads mit 2 MB Stack)
-- Zeitzonen: `jiff` 0.2 (Wartungsfenster in Ortszeit über Sommerzeitwechsel hinweg; Zone aus `/etc/localtime` bzw. Config `time_zone`, tzdb aus
-  `/usr/share/zoneinfo`)
+- Zeitzonen: `jiff` 0.2 (Wartungsfenster und Sicherungszeit in Ortszeit über Sommerzeitwechsel hinweg; Zone aus Config `time_zone`, sonst `TZ`,
+  sonst `/etc/localtime`; tzdb aus `/usr/share/zoneinfo`, mit Feature `tzdb-bundle-always` (Crate `jiff-tzdb`, Unlicense OR MIT, seit Q Schritt 9)
+  eingebettet als Ersatz, wenn das System keine hat, z. B. im Image `FROM scratch`; jiff nimmt die Systemdaten zuerst)
 - Dateisysteme: `rustix` (Feature `fs`, sicheres `statvfs` ohne `unsafe`; war über tempfile schon im Lock) für die Sensoren „Dieser Server“
 - Ping: `surge-ping` (0.9, ein Socket je Adressfamilie für alle Ziele); bevorzugt unprivilegierte ICMP-Sockets (`net.ipv4.ping_group_range`), sonst `CAP_NET_RAW`
 - DB: SQLite über `sqlx` (Migrations in `migrations/`, WAL-Modus)
@@ -109,7 +110,18 @@ Mandantenfähigkeit, Omada-Controller-API, Herstellermibs außer gezielt benöti
 ## Architektur
 
 Ein Binary, ein Prozess, Module:
-- `config` – TOML-Datei + ENV-Overrides (`OPENNETMON_LISTEN`, `OPENNETMON_DATABASE_PATH`, `OPENNETMON_LOG_FILTER`, `OPENNETMON_SECRET_KEY_FILE`); `poller_enabled`, `poll_concurrency`
+- `config` – TOML-Datei (`--config`, sonst `OPENNETMON_CONFIG`) + ENV-Overrides für **jede** Einstellung (`OPENNETMON_<SCHLÜSSEL>`, Helfer `Env`: leerer Wert
+  löscht eine optionale Einstellung, Wörter wie `x-forwarded-for` über serde); Test `every_setting_has_an_environment_variable` mit vollständigem
+  Struct-Literal, damit neue Felder auffallen. Seit Q Schritt 9: `generate_missing`, `backup_dir`/`backup_keep`/`backup_time` (`backup_minute`),
+  `packaging` (`Packaging::Deb`/`Container`). Liste für Anwender: `docs/configuration.md` (bei neuen Schlüsseln mitpflegen)
+- `first_start` – `create_missing` (bei `generate_missing`): fehlende `secret.key` und, wenn beide `tls_`-Dateien fehlen, ein selbst signiertes Zertifikat;
+  vorhandene Dateien bleiben, nur eine von beiden Zertifikatsdateien ist ein Fehler. Aufruf am Anfang von `serve`
+- `backup` – Sicherung durch den Server selbst (bei `backup_dir`, für das Image ohne systemd): `spawn` mit `Plan` und der Zone der Wartungsfenster,
+  `next_run` (Ortszeit, Lücke beim Sommerzeitbeginn nach vorn), `run` schreibt `opennetmon-JJJJMMTT-HHMMSS.db.part` per `storage::backup_to` und benennt um,
+  `prune` löscht nur Dateien mit genau diesem Namensmuster über `backup_keep`; fehlt beim Start eine Sicherung der letzten 25 h, eine nach fünf Minuten
+  (wie `Persistent=true` des Timers). Im `.deb` aus (dort `opennetmon-backup.timer`)
+- `healthcheck` – Unterbefehl `opennetmon healthcheck`: `url` (0.0.0.0/:: → Loopback), `http_client::fetch` ohne Zertifikatsprüfung (Gegenstelle ist der
+  eigene Prozess), Exit 0/1; läuft vor dem Öffnen der Datenbank. Für `HEALTHCHECK` im Image
 - `i18n` – Sprachen (`Lang`: `code`, `native_name`, `from_accept_language`, `get`/`get1`/`get2`/`fmt`/`msg`), `Msg` (Katalog-ID mit Variablen oder
   `Msg::Text` unverändert; `Display` = Deutsch für Logs), Sprache der Anfrage als Task-Local (`scope`, `current`, `set_current`; gesetzt von der
   Middleware `web::request_language` aus `Accept-Language` und vom `CurrentUser`-Extractor aus `users.language`); gespeicherte Meldungen als
@@ -181,6 +193,7 @@ Ein Binary, ein Prozess, Module:
 - `update_check` – Hinweis auf neue Versionen (Config `update_check`, Code-Standard aus, ausgelieferte Config an): `spawn` fragt fünf Minuten nach dem Start, dann
   täglich `api.github.com/repos/<repository>/releases/latest` (`api_url` aus `CARGO_PKG_REPOSITORY`, Vorabversionen zählen nicht, Link muss auf die Releases
   des Repos zeigen), Ergebnis in `AppState::latest_release` (`Latest`), `CurrentUser.update` nur für Admins, Anzeige als Abzeichen `.updbadge` in der Kopfleiste (`templates/app.html`) und auf der Seite `/settings/updates` (`web::settings`, zeigt auch den Zeitpunkt der letzten Suche, `Latest::checked_ms`);
+  mit `packaging = "container"` (`AppState::packaging`, `CurrentUser.container`, `Layout::container`) nennen beide `docker compose pull` statt `apt install`;
   Fehler nur auf `debug` (`docs/operations.md`, „Notice of new versions“)
 - `sensors` – Trait `Sensor` (`poll` mit `PollContext`, liefert `Measurement` aus `ChannelReading`s und optional `note` als Meldung bei Erfolg; `value: None` = kein Sample) + Implementierung je Sensortyp: `sensors::snmp` (Uptime, Interface-Traffic mit 64-Bit-Fallback auf 32 Bit, Interface-Status, OID Gauge/Counter), `sensors::ping` (`PingClients`, geteilte ICMP-Sockets; seit 0.5.6 wie PRTG mehrere Pakete je Abfrage: `PingCheck.packets` 1–10, Standard 5, JSON in `sensors.params` (fehlt = 5), gestaffelt alle 100 ms und parallel wartend in einem `JoinSet`, Kanäle `rtt` (Mittel), `rtt_min`, `rtt_max`, `jitter`, `loss` (%, neue Sensoren warnen über 20 %, `PING_WARN_LOSS`); Fehlschlag nur ohne jede Antwort; Migration `0024` legt die Kanäle bei alten Sensoren ohne Grenzwerte an; `storage::current_sensors_table` baut `sensors` neu, wenn die CHECK-Regel noch keine Zeile für `ping` hat; Listen und Mini-Graphen nur `rtt` (`SensorSpec::in_lists`), Tabelle auf dem Handy ohne Min/Max/Jitter (`SensorSpec::minor`); Vorlagen `Basic.packets`), `sensors::local` („Dieser Server“: `LocalMetric` CPU, Load, Speicher, Uptime, Dateisystem, Temperatur (`find_temperature` weicht bei umbenanntem Chip `_<zahl>` aus, Ziel auf der Einstellungsseite wählbar), Traffic aus `/proc`, `/sys` und `statvfs`; Typ `local`, Spalte `sensors.target`, Tabelle einmalig neu aufgebaut von `storage::migrate`/`allow_local_sensors`; Seite `web::server_values` unter `/devices/<id>/server`, erreichbar über den Typ „Dieser Server“ in „Sensor hinzufügen“ (jedes Gerät) und als Knopf bei Gerätetyp Server, Loopback-Adresse oder vorhandenen lokalen Sensoren; die Unit setzt kein `ProcSubset=pid`; `docs/sensors.md`), `sensors::service` (Dienste ohne SNMP, 2026-10-27: `http`, `tcp`, `dns`, `tls`; Einstellungen als JSON in `sensors.params`, `SensorSpec::params`/`from_params`;
   Fehlschläge als `SensorError::Check(Msg)`; Zertifikat mit Kanal `days`, `Unit::Days`, Grenzen 14/3 Tage über `SensorSpec::default_thresholds`; Formular mit
@@ -260,7 +273,7 @@ Vollständige Anleitung: `docs/operations.md`. Dateien unter `deploy/`:
 - Ping über `net.ipv4.ping_group_range` (`deploy/99-opennetmon-ping.conf`); Alternative `CAP_NET_RAW` (Hinweis in der Unit); der Poller warnt beim Start, wenn keine ICMP-Sockets möglich sind
 - `opennetmon backup <datei>` (SQLite `VACUUM INTO`, Modus 0600, überschreibt nie, ohne Schlüssel) und `deploy/opennetmon-backup.sh` + `.timer` (täglich, 14 Kopien)
 - Reverse-Proxy-Beispiele: `deploy/Caddyfile.example`, `deploy/nginx.conf.example` (mit Login-Begrenzung)
-- Health-Endpoint `/healthz` (ohne Auth, ohne interne Details; `curl -sk https://127.0.0.1:8443/healthz`)
+- Health-Endpoint `/healthz` (ohne Auth, ohne interne Details; `curl -sk https://127.0.0.1:8443/healthz` oder `opennetmon healthcheck`)
 - Paket getestet im Podman-Container (Image `opennetmon-debtest`, Ubuntu 24.04 mit systemd; `/usr/sbin/policy-rc.d` darin löschen): Installation, Update, remove, purge, Umstieg
 
 ## Releases und README
