@@ -1042,7 +1042,9 @@ vom Entwurf und vom Plan:
 **Offen:**
 
 - Released als v0.6.2 (2026-11-12). Weitere Rückmeldungen aus dem Test kommen ins nächste Test-Paket.
-- `README.md`: Bild der neuen Oberfläche (Demo-Instanz mit erfundenen Daten) und neues Erklärvideo; das Logo ist seit v0.6.2 das neue.
+- `README.md`: ✔ Bilder der neuen Oberfläche (2026-11-19, Abschnitt „Screenshots“, `docs/images/`, Übersicht und Traffic über 7 Tage, hell/dunkel per
+  `<picture>`, Version 0.7.0). Demo-Instanz mit erfundenen Daten (Adressen 192.0.2.x/198.51.100.x, Poller aus), Skripte lokal und gitignored in
+  `dev/data/demo/` (`seed.py` füllt die DB, `shot.mjs` macht Screenshots über Chrome headless und CDP mit Node, ohne npm). Offen: neues Erklärvideo.
 - opensecmon soll denselben Hinweis auf neue Versionen bekommen (eigenes Projekt).
 
 **Abweichungen vom Entwurf (Rückmeldung des Nutzers 2026-11-10 beim Test von 0.6.0: Grafiken, Graphen usw. weichen vom Entwurf ab).**

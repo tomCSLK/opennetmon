@@ -13,13 +13,27 @@ A single, statically linked binary (Rust) with SQLite – meant to run on a head
 > **Language:** The user interface is available in German and English (language per user, by default the browser's).
 > The documentation in [`docs/`](docs/) is in English; only the internal planning files (`PLAN.md`, `CLAUDE.md`) are written in German.
 
+## Screenshots
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">
+  <img src="docs/images/overview-light.png" alt="Overview: status tiles, the sensors that need attention and the device tree with groups">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/sensor-dark.png">
+  <img src="docs/images/sensor-light.png" alt="Sensor page: traffic of a router over seven days with current values and availability">
+</picture>
+
+Overview and a traffic sensor over seven days, in the light or dark theme depending on your GitHub setting (version 0.7.0, made-up demo data).
+
 ## See it in action
 
 https://github.com/user-attachments/assets/c8c321df-8603-4b73-a534-f170a33c8944
 
 88 seconds with voice-over and captions: overview, interface discovery, graphs, ping with five packets, service checks, settings,
 dependencies, maintenance windows, reports and the phone view (version 0.5.6, recorded on a demo network with made-up data).
-Since 0.6 the user interface looks different (new layout, header with search, light and dark theme); a new recording will follow.
+Since 0.6 the user interface looks like the screenshots above; a new recording will follow.
 
 ## Try it – testers welcome
 
