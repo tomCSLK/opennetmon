@@ -8,8 +8,10 @@
 **v0.7.0** released 2026-11-19 (Auftrag des Nutzers: „Freigabe für ein Release 0.7.0 als deb und docker“): Inhalt wie das Test-Paket 0.6.3
 (HTML-Mails mit Kennzahlen und Graph, Vorhaben R Stufen 1 und 2; „Adresse der Oberfläche“ mit **Migration 0026**; `lettre` 0.11.24), dazu erstmals
 das Container-Image `ghcr.io/tomcslk/opennetmon` (amd64/arm64, Vorhaben Q Schritt 12) und `compose.yaml` im Release. Vorher vom Nutzer auf dem
-Server geprüft: Test-Mail in Gmail (Rechner, Handy, dunkel) und eine echte Ausfallmail („sehr gut“). Nach dem Release schaltet der Nutzer das
-Paket auf GHCR öffentlich (Browser).
+Server geprüft: Test-Mail in Gmail (Rechner, Handy, dunkel) und eine echte Ausfallmail („sehr gut“). Workflow-Run 44603665421: amd64 und
+arm64 gebaut, Rauchtest bestanden, Tags `0.7.0`, `0.7`, `latest` (Manifest-Liste `sha256:47253b2f…`). Das Paket auf GHCR war sofort öffentlich
+(Sichtbarkeit vom öffentlichen Repo geerbt), ohne Anmeldung geprüft: `podman pull …:latest` und `--version` → 0.7.0. Der Server läuft noch mit
+dem Test-Paket 0.6.3 (inhaltsgleich bis auf die Versionsnummer); Update auf 0.7.0 über `Serveradmin` 4.3, nach OK.
 
 **v0.6.2** released 2026-11-12 (Auftrag des Nutzers: „die letzte Version kannst du jetzt veröffentlichen, die passt“): neue Oberfläche (Vorhaben P)
 mit den Korrekturen aus dem Test von 0.6.1, dazu die Korrekturen aus dem Test-Paket 0.5.10. Keine Migration seit 0.5.9 (weiter 0001–0025), Rückweg
@@ -1346,7 +1348,7 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
       unter Docker auf beiden bestanden; damit sind Docker und arm64 geprüft.
     - **Nicht geprüft:** `docker compose` selbst (hier nicht installiert; dieselben Optionen mit `podman run` getestet), Ping/SNMP unter arm64
       im echten Netz (z. B. auf dem Pi), ein Update mit Migration (seit 0.5.9 gibt es keine).
-12. ✔ **Veröffentlichung** mit v0.7.0 (2026-11-19, Auftrag des Nutzers). Der Workflow läuft beim Tag, danach schaltet der Nutzer das Paket auf GHCR öffentlich.
+12. ✔ **Veröffentlichung** mit v0.7.0 (2026-11-19, Auftrag des Nutzers); das GHCR-Paket war ohne weiteren Schritt öffentlich. Der Workflow läuft beim Tag, danach schaltet der Nutzer das Paket auf GHCR öffentlich.
     Release-Notes und README nennen `docker compose`.
 
 ### R. Moderne E-Mail-Benachrichtigungen (HTML mit Kennzahlen und Graph) – entschieden 2026-11-19, „go“ für Stufe 1 und 2

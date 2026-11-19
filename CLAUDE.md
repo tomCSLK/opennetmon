@@ -146,7 +146,7 @@ cargo build --release --target x86_64-unknown-linux-musl
 Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–R); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-19):
 
 - **v0.7.0** released (2026-11-19): HTML-Mails mit Kennzahlen und Graph (R), Migration 0026, `lettre` 0.11.24, erstmals das Container-Image
-  `ghcr.io/tomcslk/opennetmon` (Q). Offen: Paket auf GHCR öffentlich schalten (Nutzer), Server von Test-Paket 0.6.3 auf 0.7.0 (Serveradmin 4.3).
+  `ghcr.io/tomcslk/opennetmon` (Q). Image öffentlich und ohne Anmeldung abrufbar. Offen: Server von Test-Paket 0.6.3 auf 0.7.0 (Serveradmin 4.3, nach OK).
 
 - **v0.6.2** released (2026-11-12, neue Oberfläche, keine Migration seit 0.5.9); auf dem Server läuft das Test-Paket 0.6.2
   (inhaltlich gleich, andere Prüfsumme; Betrieb in `Serveradmin`, Abschnitt 4.3). Offen im README: Bild der neuen Oberfläche, neues Erklärvideo.
