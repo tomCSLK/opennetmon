@@ -124,8 +124,10 @@ async fn main() -> anyhow::Result<()> {
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(&config.log_filter))
         .context("invalid log filter")?;
+    // Colours only on a terminal; journald and `docker logs` would show the escape codes.
     tracing_subscriber::fmt()
         .with_env_filter(filter)
+        .with_ansi(std::io::stderr().is_terminal())
         .with_writer(std::io::stderr)
         .init();
 
