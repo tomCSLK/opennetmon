@@ -1330,9 +1330,10 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
       Temperaturen des Hosts, keine Dateisysteme, nur die Schnittstelle des Containers; Podman meldet `healthy`; die nachgeholte Sicherung kam nach
       fünf Minuten (Name in Ortszeit, 0600); Container gelöscht und mit denselben Volumes neu angelegt (wie ein Update): Daten, Schlüssel und
       Anmeldung erhalten, keine erneute Sicherung, Seite „Aktualisierungen“ mit `docker compose`.
-    - **Nicht geprüft:** Docker selbst (hier nur Podman; die CI nutzt Docker), arm64 (erst im Workflow oder auf dem Pi), `docker compose`
-      (hier nicht installiert; dieselben Optionen mit `podman run` getestet), ein Update mit Migration (seit 0.5.9 gibt es keine).
-    - Der Workflow `container.yml` läuft erst nach dem Push auf GitHub; ein Probelauf über „Run workflow“ baut und testet ohne Push.
+    - **Probelauf in der CI** (2026-11-19, Run 44582539339, von Hand, ohne Push): amd64 und arm64 nativ gebaut (26,3 bzw. 25,0 MB), Rauchtest
+      unter Docker auf beiden bestanden; damit sind Docker und arm64 geprüft.
+    - **Nicht geprüft:** `docker compose` selbst (hier nicht installiert; dieselben Optionen mit `podman run` getestet), Ping/SNMP unter arm64
+      im echten Netz (z. B. auf dem Pi), ein Update mit Migration (seit 0.5.9 gibt es keine).
 12. **Veröffentlichung** mit dem nächsten Release, auf Ansage. Der Workflow läuft beim Tag, danach schaltet der Nutzer das Paket auf GHCR öffentlich.
     Release-Notes und README nennen `docker compose`.
 
