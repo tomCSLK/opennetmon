@@ -34,6 +34,7 @@ struct FormValues {
     recipients: String,
     notify_warnings: bool,
     language: Lang,
+    ui_url: String,
 }
 
 impl From<MailView> for FormValues {
@@ -49,6 +50,7 @@ impl From<MailView> for FormValues {
             recipients: v.recipients,
             notify_warnings: v.notify_warnings,
             language: v.language,
+            ui_url: v.ui_url,
         }
     }
 }
@@ -116,6 +118,8 @@ pub struct MailForm {
     notify_warnings: Option<String>,
     #[serde(default)]
     language: String,
+    #[serde(default)]
+    ui_url: String,
 }
 
 fn now_ms() -> i64 {
@@ -138,6 +142,7 @@ impl MailForm {
             recipients: self.recipients.clone(),
             notify_warnings: self.notify_warnings.is_some(),
             language: Lang::parse(&self.language).unwrap_or(Lang::De),
+            ui_url: self.ui_url.clone(),
         }
     }
 
@@ -162,6 +167,7 @@ impl MailForm {
             recipients: self.recipients.clone(),
             notify_warnings: self.notify_warnings.is_some(),
             language,
+            ui_url: self.ui_url.clone(),
         })
     }
 }
@@ -282,6 +288,7 @@ fn mail_changes(old: &MailView, new: &MailView, password_changed: bool) -> Chang
             old.language.native_name(),
             new.language.native_name(),
         )
+        .field("audit-field-ui-url", &old.ui_url, &new.ui_url)
 }
 
 pub async fn save(
@@ -341,16 +348,16 @@ pub async fn send_test(
     user.require_admin()?;
     user.verify_csrf(&form.csrf_token)?;
     let config = store::load_config(&state.pool, &state.secrets).await?;
-    let mail_lang = config.language;
-    let subject = format!("[opennetmon] {}", mail_lang.get("mail-test-subject"));
-    let body = format!("{}\n", mail_lang.get("mail-test-body"));
-    let outcome = mail::send(&config, &subject, &body).await;
+    let clock = mail::view::Clock::local(config.language, now_ms());
+    let message = mail::testmail::compose(&config, &user.username, &clock);
+    let subject = &message.subject;
+    let outcome = mail::send(&config, &message).await;
     let error = outcome.as_ref().err().map(mail::MailError::user_message);
     store::record_notification(
         &state.pool,
         now_ms(),
         Kind::Test,
-        &subject,
+        subject,
         &config.recipients,
         error.as_ref(),
     )
@@ -499,6 +506,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_ui_address_is_checked_saved_and_audited() {
+        let h = harness(true).await;
+        let (admin, csrf) = login(&h, "anna").await;
+        let page = send(&h.app, get("/settings/mail", Some(&admin))).await;
+        assert!(page.body.contains("Adresse der Oberfläche (optional)"));
+        assert!(
+            page.body
+                .contains("name=\"ui_url\" type=\"url\" value=\"\"")
+        );
+
+        // Invalid addresses are explained and change nothing.
+        for bad in [
+            "javascript%3Aalert(1)",
+            "https%3A%2F%2Fu%3Apw%40onm.example.org",
+            "https%3A%2F%2Fonm.example.org%2F%3Fa%3D1",
+            "https%3A%2F%2Fonm.example.org%2F%23x",
+        ] {
+            let body = form(&csrf, 25, &format!("&ui_url={bad}"));
+            let reply = send(&h.app, post("/settings/mail", Some(&admin), &body)).await;
+            assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+            assert!(
+                reply
+                    .body
+                    .contains("Die Adresse der Oberfläche muss mit http://"),
+                "{bad}"
+            );
+        }
+        let view = crate::storage::mail::get_view(&h.state.pool).await.unwrap();
+        assert!(view.ui_url.is_empty() && !view.enabled);
+
+        // Without the CSRF token nothing is saved either.
+        let body = form("falsch", 25, "&ui_url=https%3A%2F%2Fonm.example.org");
+        let reply = send(&h.app, post("/settings/mail", Some(&admin), &body)).await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        let (viewer, vcsrf) = login(&h, "bert").await;
+        let body = form(&vcsrf, 25, "&ui_url=https%3A%2F%2Fonm.example.org");
+        let reply = send(&h.app, post("/settings/mail", Some(&viewer), &body)).await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN, "admins only");
+        assert!(
+            crate::storage::mail::get_view(&h.state.pool)
+                .await
+                .unwrap()
+                .ui_url
+                .is_empty()
+        );
+
+        // A valid one is stored without the trailing slash, shown and audited.
+        let body = form(&csrf, 25, "&ui_url=https%3A%2F%2Fonm.example.org%2F");
+        let reply = send(&h.app, post("/settings/mail", Some(&admin), &body)).await;
+        assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        let config = crate::storage::mail::load_config(&h.state.pool, &h.state.secrets)
+            .await
+            .unwrap();
+        assert_eq!(config.ui_url.as_deref(), Some("https://onm.example.org"));
+        let page = send(&h.app, get("/settings/mail", Some(&admin))).await;
+        assert!(page.body.contains("value=\"https://onm.example.org\""));
+        let audit = crate::storage::audit::list(&h.state.pool, 1).await.unwrap();
+        let text = Lang::De.msg(&audit[0].detail);
+        assert!(
+            text.contains("Adresse der Oberfläche: – → https://onm.example.org"),
+            "{text}"
+        );
+
+        // Emptying the field removes it again.
+        let body = form(&csrf, 25, "&ui_url=");
+        send(&h.app, post("/settings/mail", Some(&admin), &body)).await;
+        let config = crate::storage::mail::load_config(&h.state.pool, &h.state.secrets)
+            .await
+            .unwrap();
+        assert_eq!(config.ui_url, None);
+    }
+
+    #[tokio::test]
     async fn invalid_settings_are_explained_and_nothing_changes() {
         let h = harness(true).await;
         let (admin, csrf) = login(&h, "anna").await;
@@ -613,11 +693,12 @@ mod tests {
         .await;
         // The page stays German, the mail is English.
         assert!(page.body.contains("Test-E-Mail an admin@example.org"));
-        let data = &smtp.received()[0].data;
+        let mail = &smtp.received()[0];
+        let text = mail.part("text/plain").unwrap();
         assert!(
-            data.contains("Subject: [opennetmon] Test e-mail")
-                && data.contains("This is a test e-mail"),
-            "{data}"
+            mail.data.contains("Subject: [opennetmon] Test e-mail")
+                && text.contains("The e-mail settings work"),
+            "{text}"
         );
 
         let missing = form(&csrf, smtp.port, "").replace("&language=de", "");

@@ -1,0 +1,12 @@
+{#- The test mail of the e-mail settings (src/mail/testmail.rs). -#}
+{% extends "mail/base.html" %}
+{% import "mail/macros.html" as m %}
+{% block content %}
+{% call m::head(head) %}{% endcall %}
+{% call m::facts(facts) %}{% endcall %}
+<tr><td class="px" style="padding:0 28px 20px">{% call m::heading(t.get("mail-test-look")) %}{% endcall %}
+<div style="font-size:14px;line-height:2">{% for chip in chips %}{% call m::chip(chip) %}{% endcall %} {% endfor %}</div>
+<div class="t2" style="font-size:14px;color:#444d59;margin-top:6px">{{ t.get("mail-test-look-text") }}</div>
+</td></tr>
+{% call m::buttons(buttons) %}{% endcall %}
+{% endblock %}

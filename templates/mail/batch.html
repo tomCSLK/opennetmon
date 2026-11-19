@@ -1,0 +1,42 @@
+{#- Several status changes in one mail (src/alerting/compose.rs). -#}
+{% extends "mail/base.html" %}
+{% import "mail/macros.html" as m %}
+{% block content %}
+<tr><td class="px" style="padding:20px 28px 4px">
+<div class="t1 h1" style="font-size:22px;line-height:1.3;font-weight:600;color:#15181c">{{ title }}</div>
+<div class="t2" style="font-size:14px;color:#444d59;margin-top:2px">{{ subtitle }}</div>
+</td></tr>
+<tr><td class="px" style="padding:12px 28px 16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+{%- for c in counters %}
+<td class="stack" width="33%" valign="top" style="padding:0 8px 8px 0">
+<div class="{{ c.tone.cls() }}-bg" style="border:1px solid {{ c.tone.line() }};background:{{ c.tone.bg() }};border-radius:6px;padding:8px 12px">
+<span class="{{ c.tone.cls() }}" style="font-size:22px;font-weight:600;color:{{ c.tone.fg() }}">{{ c.tone.sym() }} {{ c.count }}</span>
+<span class="{{ c.tone.cls() }}" style="font-size:13px;color:{{ c.tone.fg() }}"> {{ c.word }}</span></div></td>
+{%- endfor %}
+</tr></table></td></tr>
+{%- if let Some(cause) = cause %}
+<tr><td class="px" style="padding:0 28px 20px">{% call m::heading(t.get("mail-cause")) %}{% endcall %}
+<div class="soft" style="background:#f0f2f4;border:1px solid #dde1e6;border-radius:6px;padding:10px 12px;font-size:14px">
+<span class="t1" style="color:#15181c;font-weight:600">{{ cause.title }}</span> <span class="t2" style="color:#444d59">{{ cause.text|nb }}</span></div>
+</td></tr>
+{%- endif %}
+<tr><td class="px" style="padding:0 28px 20px">{% call m::heading(t.get("mail-all-changes")) %}{% endcall %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">
+{%- for row in rows %}
+<tr>
+<td class="bd" valign="top" style="padding:8px 8px 8px 0;border-top:1px solid #dde1e6;width:1%">{% call m::chip(row.chip) %}{% endcall %}</td>
+<td class="bd" valign="top" style="padding:8px 0;border-top:1px solid #dde1e6">
+<div class="t1" style="font-weight:600;color:#15181c">{{ row.title }}</div>
+<div class="t2" style="font-size:13px;color:#444d59">{{ row.message|nb }} <span class="t3" style="color:#636c78">· {{ row.when }}</span></div>
+{%- if let Some(chart) = row.chart %}
+<div style="margin-top:6px;max-width:220px">{% call m::bars(chart, false) %}{% endcall %}</div>
+{%- endif %}
+</td></tr>
+{%- endfor %}
+</table>
+{%- if !more.is_empty() %}
+<div class="t3" style="font-size:13px;color:#636c78;margin-top:6px">{{ more }}</div>
+{%- endif %}
+</td></tr>
+{% call m::buttons(buttons) %}{% endcall %}
+{% endblock %}

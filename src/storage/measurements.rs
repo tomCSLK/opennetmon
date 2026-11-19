@@ -340,6 +340,27 @@ pub async fn bucket_averages(
     Ok(out)
 }
 
+/// The highest (or with `highest = false` the lowest) raw sample of a channel in `[from_ms, to_ms)`:
+/// `(ts_ms, value)`, the earliest of equal values. Raw samples are kept 7 days.
+pub async fn extreme(
+    pool: &SqlitePool,
+    channel_id: i64,
+    from_ms: i64,
+    to_ms: i64,
+    highest: bool,
+) -> Result<Option<(i64, f64)>> {
+    let order = if highest { "DESC" } else { "ASC" };
+    Ok(sqlx::query_as(&format!(
+        "SELECT ts, value FROM samples WHERE channel_id = ? AND ts >= ? AND ts < ? \
+         ORDER BY value {order}, ts LIMIT 1"
+    ))
+    .bind(channel_id)
+    .bind(from_ms)
+    .bind(to_ms)
+    .fetch_optional(pool)
+    .await?)
+}
+
 /// The newest raw sample per channel: `channel_id -> (ts_ms, value)`.
 pub async fn latest_values(
     pool: &SqlitePool,

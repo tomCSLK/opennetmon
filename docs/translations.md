@@ -17,8 +17,8 @@ The user interface is multilingual; **German is the source language**, English c
 - `sensors::format` formats values, units and threshold fields per language (decimal comma or point, “Std.”/“h”).
 - Stored messages (sensor state, event log, e-mail send log) are kept as an encoded `Msg` in the database (`Msg::encode`/`decode`) and thus appear in the
   viewer's language. Older entries from before the switch stay plain German text.
-- Notification mails have **one** language for all recipients, set on the page “E-mail” (`MailConfig.language`, `alerting::compose(t, …)`);
-  times in mails stay UTC.
+- Notification mails have **one** language for all recipients, set on the page “E-mail” (`MailConfig.language`, `alerting::compose::Context`);
+  times in mails are local times of the server's time zone, named in the mail. Dates in mails use `mail-date` (German `19.11.2026`, English `11/19/2026`).
 - Catalogs per area: `common` (frame, status, shared words), `users`, `devices` (groups, devices, overview), `sensors` (sensors, discovery, detail page),
   `values` (find values, known tables), `mibs`, `templates`, `credentials`, `mail`, `order`, `js` and others such as `server` (values of this server).
 

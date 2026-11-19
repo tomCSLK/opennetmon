@@ -79,6 +79,7 @@ audit-field-enabled = Aktiv
 audit-field-smtp-host = SMTP-Server
 audit-field-security = Verschlüsselung
 audit-field-from = Absender
+audit-field-ui-url = Adresse der Oberfläche
 audit-field-recipients = Empfänger
 audit-field-notify-warnings = Warnungen melden
 audit-field-dependency = Abhängigkeit

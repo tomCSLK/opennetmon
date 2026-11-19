@@ -23,7 +23,7 @@ Ziel und Sprachentscheidung · Python-Fallback (verworfen)
   `--control-h` 32 px und `--control-h-sm` 28 px, Tabellenzeilen `--row-h` 34 px. Fira Sans sitzt hoch in ihrer Zeile: Knöpfe und ähnliche
   Bedienelemente haben oben 2 px mehr Innenabstand als unten, ihre Symbole `margin-top: -2px` (Großbuchstaben und Symbole mittig). Alte Variablennamen (`--muted`, `--down` …) sind Aliase der neuen Tokens.
   Schema folgt dem System; Umschalter (Mond/Sonne) in der Kopfleiste und im Benutzermenü wechselt hell/dunkel, landet er auf dem Schema des Systems, folgt
-  die Seite wieder dem System (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js`). Keine Inline-Styles (CSP): Breiten z. B. des Statusbands der
+  die Seite wieder dem System (`static/theme.js` im `<head>` gegen Aufblitzen, `static/app.js`). Keine Inline-Styles (CSP; Ausnahme nur die HTML-Mails in `templates/mail/`): Breiten z. B. des Statusbands der
   Mini-Graphen als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen und zeichnen bei Schemawechsel neu (Event `opennetmon:theme`).
 - Rahmen (`templates/app.html`): Kopfleiste 48 px mit Logo, Navigation Übersicht/Protokoll/Berichte/Änderungen (Admins; aktiver Eintrag per `data-match`
   in `static/app.js`), Suche (`/status/all?q=`, Taste `/`), Abzeichen „Neue Version“ (nur Admins, `details.updmenu` mit Hinweis und Links), Statuschip
@@ -76,6 +76,13 @@ Ziel und Sprachentscheidung · Python-Fallback (verworfen)
   `GracefulShutdown`, weil `axum::serve` kein TLS kann), `tower` (`map_request` für `ConnectInfo`), `rcgen` 0.14 (selbst signiertes Zertifikat, Features `crypto`,
   `pem`, `ring`) und `time` (Gültigkeit; kam mit rcgen)
 - Mail: `lettre` 0.11 (Features `builder`, `smtp-transport`, `tokio1`, `tokio1-rustls-tls`; ohne native-tls/OpenSSL, damit der musl-Build statisch bleibt)
+- Graph als Bild für Mails (`chart_png`, Vorhaben R Stufe 2): `resvg` 0.50 (Apache-2.0 OR MIT; nur Feature `text`, ohne `raster-images`, `system-fonts`,
+  `memmap-fonts`, `svgz`) rendert ein vom Modul gebautes SVG (560 × 196 px, mit Faktor 2 gezeichnet, also 1120 × 392 px, ohne Alpha, ca. 20 KB); es zieht
+  `usvg`, `tiny-skia` (BSD-3-Clause) und für den Textsatz `fontdb`, `harfrust`, `skrifa` mit, dazu `png` 0.18 (MIT OR Apache-2.0, kam mit `tiny-skia`,
+  jetzt direkt, um RGB ohne Alpha mit höchster Kompression zu schreiben). Reines Rust ohne OpenSSL und C-Bibliotheken, der musl-Build bleibt
+  statisch. Schrift: nur die beiden eingebetteten Dateien `fonts/FiraSans-Regular.ttf` und `-Medium.ttf` (Fira Sans 4.203, OFL-1.1, `include_bytes!`,
+  Lizenztext `fonts/OFL-fira-sans.txt`, in `dev/third-party-licenses.py` unter `BUNDLED`), nie Systemschriften. Ablauf `ChartSpec` → `render_svg` →
+  `render_png`; Regeln (y-Bereich, Lücken, Beschriftung) stehen im Kopf von `src/chart_png.rs`. Rechenlast: in `spawn_blocking` aufrufen.
 - HTTP-Client (`http_client`, für die Dienst-Sensoren, später Push und Update-Hinweis): `hyper` mit Feature `client` (eine Verbindung je Anfrage, HTTP/1.1),
   `http-body-util`, `tokio-rustls`, `webpki-roots` (Mozilla-Wurzeln; alle drei waren schon im Build); `x509-parser` 0.18 (ohne Default-Features) für Ablauf
   und Aussteller der Zertifikate
@@ -204,8 +211,50 @@ Ein Binary, ein Prozess, Module:
   (`storage::current_sensors_table`, kopiert die vorhandenen Spalten) nicht mehr auf, der `ELSE`-Zweig erlaubt `params`. `sensors::counter`: `CounterTracker` berechnet Raten aus 32-/64-Bit-Countern; Reset, Neustart (`sysUpTime` kleiner), unbestätigter 32-Bit-Wrap und unplausible Raten liefern `Rate::Skipped` statt eines Werts
 - `maintenance` – Rollups (`samples_1h`, `samples_1d`) und Aufbewahrung (Config `retention_raw_days`, `retention_hourly_days`), vom Poller periodisch gestartet
 - `status` – `Thresholds` (je Kanal warn/down über/unter, strikt, sofort ohne Entprellung), `ValueState`/`ChannelRules` (Bewertung benannter Statuswerte je Kanal, Tabelle `value_states`, Migration `0012`), `suggest_status` (Vorschlag aus dem Namen, beim Anlegen über `web::sensor_text::rate_new_sensor`), `assess_with` (Messergebnis + Grenzen + Bewertungen → `Assessment`; `assess` ohne Bewertungen), `advance` (Zustandsautomat: erster Fehler `Warning`, ab dem zweiten `Down`, Erfolg sofort `Up`), `device_status`; `storage::status::record_poll` schreibt Messwerte, Zustand und Ereignislog (`sensor_status`, `events`) in einer Transaktion
-- `alerting` – `AlertEvent`, `is_alertworthy`, `compose` (in der Mail-Sprache `MailConfig.language`), `deliver`; `Notifier`-Aufgabe sammelt Wechsel 10 s lang zu einer Mail; vom Poller über eine `mpsc`-Queue gespeist (nie blockierend)
-- `mail` – SMTP-Einstellungen, Validierung, Versand mit `lettre` (rustls, kein OpenSSL); `storage::mail` – Einstellungen (Passwort verschlüsselt, Kontext `smtp.password`) und Sendelog `notifications`; Seite `web::mail_settings`
+- `alerting` – `AlertEvent`, `is_alertworthy`, `deliver`; `Notifier`-Aufgabe sammelt Wechsel 10 s lang zu einer Mail; vom Poller über eine `mpsc`-Queue gespeist (nie blockierend).
+  Seit Vorhaben R (Stufe 1) zweiteilig: `alerting::details::gather` liest je Mail, was über den Wechsel hinaus drinsteht (`Details`): Gruppenpfad und
+  Adresse (`list_devices`, `list_groups`), Beginn des vorigen Zustands (`storage::status::previous_change`), letzter Wert des Hauptkanals
+  (`latest_values`; Hauptkanal = erster Kanal, dessen letzter Wert eine Grenze verletzt, sonst der erste in `in_lists`; Zustandskanäle nur mit
+  bewertetem Namen), Grenzwerte, Verfügbarkeit 7 Tage (`storage::availability::totals`, `reports::percent_text`), Ausfälle 7 Tage
+  (`storage::status::count_changes_to`, Dauer aus `Totals::down_ms`), Verlauf 6 h (Stufe 2: als PNG über `details::picture` –
+  Rohwerte des Hauptkanals aus `storage::sensors::samples_since`, `max_gap_ms` = 2,5 × Intervall, Ausfälle = `Down`-Strecken aus
+  `sparkline::periods`, Beschriftung „keine Antwort“/„Ausfall“ bzw. Dauer nach der Erholung, Grenzlinien „Warnung 75 °C“, Bit-Raten in
+  k/M/Gbit/s, Bytes in GB, °C orange (`Colour::Secondary`), Dezimalkomma nach Mailsprache, Zone `schedule::time_zone()`;
+  `chart_png::render_png` in `tokio::task::spawn_blocking`; ohne Werte oder bei Fehler Warnung im Log und `History::png = None`, dann
+  zeigt die Mail die Balken; nur Einzelwechsel, die Sammelmail behält ihre Mini-Balken; die Balken werden immer mitberechnet;
+  im Template `<img src="cid:chart@opennetmon" width="560">` auf weißem Kasten, Alt-Text aus `compose::picture_alt`, als zweites
+  `InlineImage` neben dem Logo in `multipart/related`; als Balken-Ersatz und für die Sammelmail: Verlauf 6 h (`status_history` + `sparkline::periods` → `view::bucket_status`,
+  `bucket_averages` → `view::value_bars`, Statussensoren `view::status_bars`; Eimer mindestens 5 min bzw. zwei Abfragen, also 72 Balken bei 60 s))
+  und Abhängige (`Pauses::paused_through` beim Ausfall, `Pauses::dependents` strukturell bei der Erholung); dazu Mittelwert der Eimer
+  (`average`, Erholung), bei einer Warnung die überschrittene Grenze (`beyond`), die Tendenz der letzten 2 h aus den Eimern mit Spanne davor
+  (`trend`), den Höchst- bzw. Tiefstwert der 7 Tage vor dem Wechsel aus den Rohwerten (`storage::measurements::extreme`) und bis zu 5 weitere
+  aktivierte Sensoren des Geräts mit letztem Wert und Zustand (`others`). `answers` (Ping, HTTP, TCP, DNS): eine Erholung mit bloßem „OK“
+  zeigt „Antwortet wieder – <Wert>“, sonst „Wieder in Ordnung – <Wert>“. Jede fehlgeschlagene Abfrage wird mit
+  `tracing::warn!` übergangen (`soft`), die Mail geht immer raus. In einer Sammelmail bekommen nur die ersten `MINI_ROWS` = 10 Wechsel (in
+  Mail-Reihenfolge) einen kleinen Verlauf (24 Eimer à 15 min), die übrigen nur Gruppe und Adresse. `alerting::compose::compose(&Context, &[Item])`
+  schreibt daraus reine Funktion `Mail` (Betreff, Klartext, HTML mit Templates `mail/alert.html` bzw. `mail/batch.html`); Sammelmail höchstens
+  `MAX_ROWS` = 30 Zeilen, Rest gezählt (Gmail kürzt ab ca. 100 KB; Test `a_long_burst_is_capped_and_stays_small` hält < 90 KB).
+- `mail` – SMTP-Einstellungen, Validierung, Versand mit `lettre` (rustls, kein OpenSSL); `storage::mail` – Einstellungen (Passwort verschlüsselt, Kontext `smtp.password`) und Sendelog `notifications`; Seite `web::mail_settings`.
+  `mail::Mail { subject, text, html: Option, inline: Vec<InlineImage> }`; `build_message` baut ohne HTML `text/plain`, mit HTML
+  `multipart/alternative` (Text, HTML) und, sobald Bilder dabei sind, das HTML in `multipart/related` mit den Bildern als `Attachment::new_inline`
+  (`Content-ID`); Stufe 2 kann so ein zweites PNG anhängen. Der Betreff läuft durch `mail::header_text` (Steuerzeichen und Zeilenumbrüche raus,
+  höchstens 250 Zeichen). `mail::view`: Bausteine der Mails (Farbtöne `Tone`, `Chip`, `Head`, `Fact`, `Button`, `Links`, Balken `Bar`/`Chart`,
+  `Clock` für Ortszeit, `Frame`, Fußzeilen); Logo `src/mail/logo.png` (Logo C als Umriss, 66×66 transparent, gezeigt
+  in 22×22; bewusst nicht unter `static/`, das ausgeliefert wird) per `include_bytes!` als `cid:logo@opennetmon`. Template-Filter `nb`
+  (`view::filters`): Leerzeichen nach einer Ziffer wird geschütztes Leerzeichen („90 °C“, „3 Std.“ brechen nicht um), nur im HTML.
+  Dauern über `view::duration` (unter 1 min Sekunden, unter 1 Tag Minuten, ab 1 Tag Tage und Stunden). `mail::testmail` schreibt die
+  Test-E-Mail (Server:Port, Verschlüsselung, „mit/ohne Anmeldung“, nie Benutzername oder Passwort, Empfänger, gemeldete Wechsel, Sprache).
+  Zeiten in Mails: Ortszeit in `schedule::time_zone()` (wie Wartungsfenster), Zone in Fußzeile und Klartext genannt.
+  **Adresse der Oberfläche** (`mail_settings.ui_url`, Migration `0026`, optional): `mail::parse_ui_url` lässt nur absolute `http(s)`-Adressen ohne
+  Benutzerangaben, Abfrage und Anker zu (ASCII, höchstens `MAX_UI_URL_CHARS` = 200, Pfad nur `[A-Za-z0-9-._~/%]` ohne `//` und `..`), gespeichert
+  ohne Schrägstrich am Ende; Änderung im Änderungsprotokoll (`audit-field-ui-url`). Links baut nur `view::Links` aus dieser Basis plus festen Pfaden
+  und numerischen Ids (`/sensors/<id>`, `/sensors/<id>/edit`, `/devices/<id>/sensors`, `/log?sensor=<id>`, `/log`, `/reports?period=7d&view=sensors`,
+  `/settings/mail`, `/`); ohne Adresse enthalten die Mails keinen Link.
+  **Templates `templates/mail/`** (`base.html`, `macros.html`, `alert.html`, `batch.html`, `test.html`): Tabellen-Layout mit Styles **an den
+  Elementen** – die bewusste Ausnahme von der Regel „keine Inline-Styles“, die nur für die Weboberfläche (CSP) gilt; Mailprogramme werfen
+  `<style>`-Blöcke teils weg. Ein `<style>`-Block nur für Dunkelmodus (`prefers-color-scheme`, Klassen `bg`, `card`, `t1`–`t3`, `err`/`warn`/`ok`/`off` …)
+  und den Handy-Umbruch (`.stack`). Escaping von askama bleibt an (Gerät, Sensor, Gruppe, Meldung sind fremder Text). Keine externen Quellen, keine
+  Skripte, kein `data:` (nur die Vorschau `cargo test --lib mail_preview -- --ignored` schreibt `target/mail-preview/*.html` mit `data:`-Logo).
 - `web` – axum-Router, Handler, Templates (`templates/`), eingebettete Assets (`static/`), Login (`web::auth`,
   Extractor `CurrentUser`; POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`), Startseite als Gruppenbaum
   (`web::overview`: Gruppen mit Sprungmarke `#group-<id>`; ein Baum wie in PRTG mit Linien und Pfeil zum Auf- und Zuklappen, Untergruppen als `Row::Start`/`End` verschachtelt mit Summen über den Teilbaum, Zähler je Zustand nur als Symbol und Zahl direkt vor den Aktionen (`Counts::pills`, Zustandsname nur für Screenreader), aufklappbar, Zustand in `localStorage` über `static/app.js`; Baum-Makros gemeinsam in `templates/tree.html`), Gruppenseite `/groups/<id>`
@@ -222,7 +271,7 @@ Ein Binary, ein Prozess, Module:
 - Retention (konfigurierbar): Rohdaten 7 Tage, Stundenwerte 1 Jahr, Tageswerte unbegrenzt
 - Counter → Rate: Differenz / Zeitdelta; Counter-Wrap und Reset (z. B. Gerätereboot, `sysUpTime` kleiner) erkennen
   und dann **keinen** Wert schreiben statt eines Ausreißers
-- Zeitstempel intern UTC; Anzeige in der Zeitzone des Browsers (`<time class="ts">` aus `web::time_html`, umgeschrieben von `static/time.js`; Graphen in `static/chart.js`; E-Mails bleiben UTC)
+- Zeitstempel intern UTC; Anzeige in der Zeitzone des Browsers (`<time class="ts">` aus `web::time_html`, umgeschrieben von `static/time.js`; Graphen in `static/chart.js`; E-Mails seit Vorhaben R in der Zeitzone des Servers, `schedule::time_zone()`, mit genannter Zone)
 - Access Points liefern nur 32-Bit-Counter (`ifTable`, kein `ifXTable`): Wrap bei 32 Bit sauber behandeln, Intervall passend wählen
 - Interface-Indizes der Switches sind nicht fortlaufend (z. B. 49153): Namen über `ifName`/`ifDescr` auswerten
 

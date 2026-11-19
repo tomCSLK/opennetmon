@@ -1017,6 +1017,7 @@ mod tests {
             recipients: "admin@example.org".to_owned(),
             notify_warnings: true,
             language: crate::i18n::Lang::De,
+            ui_url: String::new(),
         };
         crate::storage::mail::save(&env.pool, &env.secrets, &input.check().unwrap())
             .await
@@ -1073,11 +1074,13 @@ mod tests {
             1,
             "all changes of the burst in one mail: {mails:?}"
         );
-        assert!(mails[0].data.contains("dev / Uptime"), "{}", mails[0].data);
-        assert!(mails[0].data.contains("Ausfall"), "{}", mails[0].data);
+        let text = mails[0].part("text/plain").unwrap();
+        let subject = mails[0].subject();
+        assert!(text.contains("dev · Uptime"), "{text}");
+        assert!(subject.contains("Ausfälle"), "{subject}");
         assert!(
-            !mails[0].data.contains("erste Abfrage -> In Ordnung"),
-            "first Up readings are not news"
+            !subject.contains("in Ordnung") && !text.contains("IN ORDNUNG"),
+            "first Up readings are not news: {text}"
         );
     }
 
@@ -1100,6 +1103,7 @@ mod tests {
             recipients: "admin@example.org".to_owned(),
             notify_warnings: true,
             language: crate::i18n::Lang::De,
+            ui_url: String::new(),
         };
         crate::storage::mail::save(&env.pool, &env.secrets, &input.check().unwrap())
             .await
@@ -1205,13 +1209,24 @@ mod tests {
             2,
             "the router's warning and its outage: {mails:?}"
         );
-        let outage = &mails[1].data;
-        assert!(outage.contains("Ausfall: dev / Uptime"), "{outage}");
+        let outage = mails[1].part("text/plain").unwrap();
         assert!(
-            outage.contains("Dadurch pausiert: 1 Sensor an 1 Ger"),
+            mails[1]
+                .subject()
+                .starts_with("[opennetmon] Ausfall: dev · Uptime"),
+            "{}",
+            mails[1].subject()
+        );
+        assert!(
+            outage.contains("Dadurch pausiert: 1 Sensor an 1 Gerät"),
             "{outage}"
         );
-        assert!(!mails.iter().any(|m| m.data.contains("switch /")));
+        assert!(
+            outage.contains("  - switch (127.0.0.1), 1 Sensor"),
+            "{outage}"
+        );
+        assert!(!mails.iter().any(|m| m.subject().contains("switch ·")
+            || m.part("text/plain").unwrap().contains("switch · ")));
 
         // The router is back: the switch runs again and starts afresh, without a recovery mail.
         for device in [router, switch] {
@@ -1234,7 +1249,13 @@ mod tests {
         notifier.finish(Duration::from_secs(5)).await;
         let mails = smtp.received();
         assert_eq!(mails.len(), 3, "only the router's recovery: {mails:?}");
-        assert!(mails[2].data.contains("Wieder in Ordnung: dev / Uptime"));
+        assert!(
+            mails[2]
+                .subject()
+                .starts_with("[opennetmon] Wieder in Ordnung: dev · Uptime"),
+            "{}",
+            mails[2].subject()
+        );
         let log = crate::storage::pauses::dependency_entries(&env.pool)
             .await
             .unwrap();

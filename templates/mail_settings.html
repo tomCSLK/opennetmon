@@ -74,6 +74,9 @@
         {% endfor %}
       </select>
       <p class="hint">{{ t.get("mail-language-hint") }}</p>
+      <label for="ui_url">{{ t.get("mail-ui-url") }}</label>
+      <input id="ui_url" name="ui_url" type="url" value="{{ form.ui_url }}" maxlength="200" autocapitalize="off" spellcheck="false" placeholder="https://opennetmon.example.org">
+      <p class="hint">{{ t.get("mail-ui-url-hint") }}</p>
     </fieldset>
 
     <button type="submit">{{ t.get("save") }}</button>

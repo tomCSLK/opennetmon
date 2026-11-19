@@ -35,7 +35,7 @@ jeder Sitzung gebraucht wird. Die ausführliche Fassung bis 2026-11-09 steht in 
 
 - Ein Binary, ein Prozess: `tokio`, `axum`, `tower-http`; Seiten serverseitig mit `askama`; Graphen mit uPlot; sonst wenige eigene Skripte in `static/`.
   Kein npm, kein WASM, kein htmx, kein CDN: JS, CSS und Schriften lokal, per `rust-embed` (Feature `mime-guess`) ins Binary.
-- SQLite über `sqlx` (WAL, Migrationen in `migrations/`, zurzeit `0001`–`0025`; Feature `macros` für `migrate!`, keine Compile-Time-Queries).
+- SQLite über `sqlx` (WAL, Migrationen in `migrations/`, zurzeit `0001`–`0026`; Feature `macros` für `migrate!`, keine Compile-Time-Queries).
 - SNMP über `snmp2` mit den Features `tokio`, `crypto-rust` und **`heap_buffers`** (Pflicht, sonst läuft der Stack in Tokio-Threads über). `snmp2` hat
   keinen eingebauten Timeout: jede Anfrage mit `tokio::time::timeout` begrenzen.
 - HTTPS eingebaut (`tokio-rustls`, `rcgen`), Mail mit `lettre` über rustls, Übersetzungen mit Fluent, Zeitzonen mit `jiff`. Kein OpenSSL, damit der
@@ -61,7 +61,7 @@ Regeln, die überall gelten:
 - POST-Handler prüfen `verify_csrf`, Admin-Handler `require_admin`; jede Änderung durch einen Admin ruft danach `audit::record` auf. Secrets nie als Wert ins
   Änderungsprotokoll (nur „geändert“), nie loggen, nie ins HTML (Formulare zeigen nur „gesetzt/nicht gesetzt“).
 - Die Tabelle `devices` wird vom Programm einmal neu aufgebaut (`storage::migrate`); neue Gerätefelder deshalb in eine eigene Tabelle (Beispiel `device_identity`).
-- Keine Inline-Styles (CSP), Breiten z. B. als SVG-Attribute. Graphen lesen ihre Farben aus den CSS-Variablen und zeichnen beim Event `opennetmon:theme` neu.
+- Keine Inline-Styles (CSP), Breiten z. B. als SVG-Attribute. Ausnahme: HTML-Mails (`templates/mail/`), dort Styles am Element. Graphen lesen ihre Farben aus den CSS-Variablen und zeichnen beim Event `opennetmon:theme` neu.
 - Handy-Tabellen (`table.m-cards` + Layoutklasse): jede Zellklasse braucht einen Bereich im Layout, sonst entsteht eine schmale Zusatzspalte.
 - Messdaten: Zeitstempel intern UTC in ms, Anzeige in der Zeitzone des Browsers (`web::time_html`, `static/time.js`), E-Mails in UTC. Counter → Rate:
   bei Wrap, Reset oder Neustart (`sysUpTime` kleiner) **keinen** Wert schreiben statt eines Ausreißers. Aufbewahrung: Rohwerte 7 Tage, Stundenwerte 1 Jahr,

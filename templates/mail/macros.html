@@ -1,0 +1,88 @@
+{#- Parts of the HTML mails; see `src/mail/view.rs`. -#}
+
+{% macro chip(c) -%}
+<span class="{{ c.tone.cls() }} {{ c.tone.cls() }}-bg" style="display:inline-block;padding:2px 8px;border:1px solid {{ c.tone.line() }};border-radius:4px;background:{{ c.tone.bg() }};color:{{ c.tone.fg() }};font-size:12px;font-weight:600;white-space:nowrap">{{ c.tone.sym() }} {{ c.text }}</span>
+{%- endmacro %}
+
+{% macro heading(title) -%}
+<div class="t3" style="font-size:12px;font-weight:600;color:#636c78;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px">{{ title|nb }}</div>
+{%- endmacro %}
+
+{# Status chip with time, title and a line below (group path and address, or a note). #}
+{% macro head(h) -%}
+<tr><td class="px" style="padding:20px 28px 6px">{% call chip(h.chip) %}{% endcall %} <span class="t3" style="font-size:13px;color:#636c78;margin-left:6px">{{ h.when }}</span></td></tr>
+<tr><td class="px" style="padding:4px 28px 16px">
+<div class="t1 h1" style="font-size:22px;line-height:1.3;font-weight:600;color:#15181c">{{ h.title }}</div>
+<div class="t2" style="font-size:14px;color:#444d59;margin-top:2px">
+{%- for group in h.path %}{% if !loop.first %} <span class="t3" style="color:#636c78">›</span> {% endif %}{{ group }}{% endfor %}
+{%- if !h.host.is_empty() %}{% if !h.path.is_empty() %} · {% endif %}<span class="mono" style="font-family:Consolas,Menlo,'Courier New',monospace">{{ h.host }}</span>{% endif %}
+{%- for (text, bold) in h.note %}{% if *bold %}<b>{{ text }}</b>{% else %}{{ text }}{% endif %}{% endfor %}</div>
+</td></tr>
+{%- endmacro %}
+
+{% macro message(tone, text) -%}
+<tr><td class="px" style="padding:0 28px 16px"><div class="{{ tone.cls() }}-bg" style="border:1px solid {{ tone.line() }};background:{{ tone.bg() }};border-radius:6px;padding:10px 12px">
+<span class="{{ tone.cls() }}" style="font-size:14px;font-weight:600;color:{{ tone.fg() }}">{{ text|nb }}</span></div></td></tr>
+{%- endmacro %}
+
+{# Key figures in two columns, one below the other on phones. #}
+{% macro facts(list) -%}
+{%- if !list.is_empty() %}
+<tr><td class="px" style="padding:4px 28px 8px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+{%- for pair in list.chunks(2) %}
+<tr>
+{%- for f in pair %}
+<td class="stack" width="50%" valign="top" style="padding:0 8px 12px 0">
+<div class="t3" style="font-size:12px;color:#636c78">{{ f.label }}</div>
+<div class="t1" style="font-size:15px;font-weight:600;color:#15181c">{{ f.value|nb }}</div>
+{%- if !f.sub.is_empty() %}
+<div class="t3" style="font-size:12px;color:#636c78">{{ f.sub|nb }}</div>
+{%- endif %}
+</td>
+{%- endfor %}
+{%- if pair.len() == 1 %}
+<td class="stack"></td>
+{%- endif %}
+</tr>
+{%- endfor %}
+</table></td></tr>
+{%- endif %}
+{%- endmacro %}
+
+{% macro buttons(list) -%}
+{%- if !list.is_empty() %}
+<tr><td class="px" style="padding:0 28px 16px">
+{%- for b in list %}
+{%- if b.primary %}
+<a class="btn" href="{{ b.href }}" style="display:inline-block;padding:9px 16px;border-radius:6px;background:#1c5ea8;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;margin:0 8px 8px 0">{{ b.label }}</a>
+{%- else %}
+<a class="btn2" href="{{ b.href }}" style="display:inline-block;padding:8px 15px;border-radius:6px;border:1px solid #dde1e6;background:#ffffff;color:#1c5ea8;font-size:14px;font-weight:600;text-decoration:none;margin:0 8px 8px 0">{{ b.label }}</a>
+{%- endif %}
+{%- endfor %}
+</td></tr>
+{%- endif %}
+{%- endmacro %}
+
+{# History as table cells: each column a stretch of time, the bar an inner table (Outlook respects the
+   height of a cell, not of a div). `axis`: times and legend below. #}
+{% macro bars(chart, axis) -%}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed;height:{{ chart.height }}px"><tr>
+{%- for b in chart.bars %}
+<td valign="bottom"{% if let Some(tone) = b.tint %} class="{{ tone.cls() }}-bg" style="padding:0 1px 0 0;background:{{ tone.bg() }}"{% else %} style="padding:0 1px 0 0"{% endif %}>
+{%- if b.height > 0 -%}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td class="{{ b.class }}" height="{{ b.height }}" style="height:{{ b.height }}px;line-height:{{ b.height }}px;font-size:0;background:{{ b.color }}">&nbsp;</td></tr></table>
+{%- endif -%}
+</td>
+{%- endfor %}
+</tr></table>
+{%- if axis %}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:4px"><tr>
+<td class="t3" style="font-size:12px;color:#636c78">{{ chart.start }}</td>
+<td class="t3" align="center" style="font-size:12px;color:#636c78">
+{%- for item in chart.legend %}{% if !loop.first %} &nbsp; {% endif %}
+{%- if let Some(tone) = item.tone %}<span class="{{ tone.cls() }}" style="color:{{ tone.fg() }};font-weight:600">┄ {{ item.text|nb }}</span>{% else %}{{ item.text|nb }}{% endif %}
+{%- endfor %}</td>
+<td class="t3" align="right" style="font-size:12px;color:#636c78">{{ chart.end }}</td>
+</tr></table>
+{%- endif %}
+{%- endmacro %}

@@ -11,7 +11,7 @@
 //! Maintenance windows ([`crate::schedule`]) pause the objects their schedule applies to (inherited
 //! like a dependency) while a window is open; a manual pause comes first.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use crate::i18n::Msg;
 use crate::schedule::Assignment;
@@ -634,33 +634,91 @@ impl Pauses {
         self.sensor_info.get(&id)
     }
 
+    /// The sensor a sensor paused through a dependency waits for in the end (through chains: the
+    /// router that is down, not the switch paused behind it); `None` if it is not paused that way.
+    fn dependency_root(&self, id: i64, device_id: i64) -> Option<i64> {
+        let mut root = self.sensor(id, device_id).and_then(|w| w.dependency())?;
+        for _ in 0..self.sensor_info.len() {
+            let next = self
+                .sensor_info
+                .get(&root)
+                .and_then(|r| self.sensor(root, r.device_id))
+                .and_then(|w| w.dependency());
+            match next {
+                Some(next) if next != root => root = next,
+                _ => break,
+            }
+        }
+        Some(root)
+    }
+
     /// The sensors that pause others through dependencies, each with what it pauses (also through
     /// chains: what a paused switch pauses counts for the router that is down).
     pub fn dependency_roots(&self) -> HashMap<i64, Affected> {
         let mut roots: HashMap<i64, Affected> = HashMap::new();
         for (id, info) in &self.sensor_info {
-            let Some(mut root) = self
-                .sensor(*id, info.device_id)
-                .and_then(|w| w.dependency())
-            else {
+            let Some(root) = self.dependency_root(*id, info.device_id) else {
                 continue;
             };
-            for _ in 0..self.sensor_info.len() {
-                let next = self
-                    .sensor_info
-                    .get(&root)
-                    .and_then(|r| self.sensor(root, r.device_id))
-                    .and_then(|w| w.dependency());
-                match next {
-                    Some(next) if next != root => root = next,
-                    _ => break,
-                }
-            }
             let affected = roots.entry(root).or_default();
             affected.sensors += 1;
             affected.devices.insert(info.device_id);
         }
         roots
+    }
+
+    /// What `root` pauses through dependencies now (also through chains): sensors per device.
+    pub fn paused_through(&self, root: i64) -> BTreeMap<i64, usize> {
+        let mut out = BTreeMap::new();
+        for (id, info) in &self.sensor_info {
+            if self.dependency_root(*id, info.device_id) == Some(root) {
+                *out.entry(info.device_id).or_insert(0) += 1;
+            }
+        }
+        out
+    }
+
+    /// The sensors that depend on `root` (directly, as the master sensor of their device, or through
+    /// chains), whether paused now or not, per device. Sensors paused for another reason (by hand,
+    /// with their device or group, in a maintenance window) are left out: they do not run again
+    /// when `root` recovers.
+    pub fn dependents(&self, root: i64) -> BTreeMap<i64, usize> {
+        let masters: HashMap<i64, i64> = self
+            .sensor_info
+            .iter()
+            .filter(|(_, info)| info.master)
+            .map(|(id, info)| (info.device_id, *id))
+            .collect();
+        // Who depends on whom, reversed: target -> the sensors that depend on it.
+        let mut reverse: HashMap<i64, Vec<i64>> = HashMap::new();
+        for (id, info) in &self.sensor_info {
+            let mut targets = vec![self.effective(Target::Sensor(*id)).sensor];
+            targets.push(masters.get(&info.device_id).copied());
+            for target in targets.into_iter().flatten().filter(|t| t != id) {
+                reverse.entry(target).or_default().push(*id);
+            }
+        }
+        let mut seen: HashSet<i64> = HashSet::from([root]);
+        let mut queue = VecDeque::from([root]);
+        let mut out = BTreeMap::new();
+        while let Some(target) = queue.pop_front() {
+            for &id in reverse.get(&target).into_iter().flatten() {
+                if !seen.insert(id) {
+                    continue;
+                }
+                queue.push_back(id);
+                let Some(info) = self.sensor_info.get(&id) else {
+                    continue;
+                };
+                let other_pause = self
+                    .sensor(id, info.device_id)
+                    .is_some_and(|w| w.dependency().is_none());
+                if !other_pause {
+                    *out.entry(info.device_id).or_insert(0) += 1;
+                }
+            }
+        }
+        out
     }
 
     /// Whether some sensor would, through dependencies, depend on itself.
@@ -1041,6 +1099,20 @@ mod tests {
         let router = &roots[&130];
         assert_eq!(router.sensors, 4, "100, 110, 111 and 120");
         assert_eq!(router.devices, HashSet::from([10, 11, 12]));
+        let per_device: Vec<(i64, usize)> = p.paused_through(130).into_iter().collect();
+        assert_eq!(per_device, [(10, 1), (11, 2), (12, 1)]);
+        assert!(p.paused_through(110).is_empty(), "the switch is no root");
+        // The same sensors depend on the router, also once it is fine again …
+        set_state(&mut p, 130, observed(Status::Up, 0, None));
+        assert_eq!(
+            p.dependents(130),
+            BTreeMap::from([(10, 1), (11, 2), (12, 1)])
+        );
+        // … except those paused by hand: they do not run again with it.
+        p.sensors.insert(120, pause(None, "").unwrap());
+        assert_eq!(p.dependents(130), BTreeMap::from([(10, 1), (11, 2)]));
+        p.sensors.remove(&120);
+        set_state(&mut p, 130, observed(Status::Down, 2, None));
 
         // The router paused by hand (or with its device or group) pauses them too.
         set_state(&mut p, 130, observed(Status::Up, 0, None));

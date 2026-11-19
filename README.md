@@ -69,7 +69,7 @@ Working state after MVP step 6 of 6. Details and order: [`PLAN.md`](PLAN.md).
 - **MIB files:** standard MIBs built in, vendor MIBs (e.g. TP-Link) by upload, listed by vendor (from the enterprise number of their objects) with problems first and a filter; custom OID sensors by name instead of a string of numbers, with type, unit and plain text for status values from the MIB.
 - **Charts:** [uPlot](https://github.com/leeoniya/uPlot), bundled locally (no CDN); all times (charts and tables) in the browser's time zone.
 - **Log:** warnings, outages, recoveries, pauses, dependencies and maintenance windows of all sensors, searchable and sortable by every column; the “Log” button of a device or sensor opens just its entries.
-- **Notifications:** e-mail on down, warning and recovery; simultaneous changes (e.g. a failed device) arrive as one mail. SMTP server, login and recipients can be changed in the UI at any time (test mail included).
+- **Notifications:** e-mail on down, warning and recovery; simultaneous changes (e.g. a failed device) arrive as one mail. The mails come as HTML with a plain-text part: status, key figures (value, limits, 7-day availability), the last 6 hours as bars, what an outage pauses through dependencies, and – once the address of the web interface is set – buttons into the UI; times in the server's time zone, no remote images. SMTP server, login and recipients can be changed in the UI at any time (test mail included).
 - **Data:** SQLite in WAL mode; raw values 7 days, hourly values 1 year, daily values forever (configurable).
 
 ## Quick start (development)
@@ -197,7 +197,7 @@ Please report vulnerabilities privately, not as an issue: see [`SECURITY.md`](SE
 | [`docs/configuration.md`](docs/configuration.md) | All settings, as file keys and environment variables; backups and health check without systemd |
 | [`docs/device-templates.md`](docs/device-templates.md) | Device templates: create from a device, apply when adding a device or later |
 | [`docs/mibs.md`](docs/mibs.md) | MIB files, custom OID by name, finding values |
-| [`docs/notifications.md`](docs/notifications.md) | E-mail settings, rules, test SMTP server |
+| [`docs/notifications.md`](docs/notifications.md) | E-mail settings, rules, what the mails contain, test SMTP server |
 | [`docs/translations.md`](docs/translations.md) | Translations: Fluent catalogs, rules, texts in JavaScript, adding a language |
 | [`docs/decisions/0001-language.md`](docs/decisions/0001-language.md) | Decision for Rust (spike results) |
 

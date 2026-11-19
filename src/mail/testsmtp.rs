@@ -16,6 +16,102 @@ pub struct Received {
     pub auth_user: Option<String>,
 }
 
+impl Received {
+    /// The subject with encoded words (RFC 2047, as lettre writes them) decoded.
+    pub fn subject(&self) -> String {
+        let mut lines = self
+            .data
+            .lines()
+            .skip_while(|l| !l.starts_with("Subject: "));
+        let mut raw = lines
+            .next()
+            .map(|l| l["Subject: ".len()..].to_owned())
+            .unwrap_or_default();
+        for line in lines.take_while(|l| l.starts_with(' ') || l.starts_with('\t')) {
+            raw.push_str(line);
+        }
+        decode_words(&raw)
+    }
+
+    /// The decoded body of the first part of this content type (`text/plain`, `text/html`); for a
+    /// mail without parts, the body.
+    pub fn part(&self, content_type: &str) -> Option<String> {
+        let marker = format!("Content-Type: {content_type}");
+        let start = self.data.find(&marker)?;
+        let block = self.data[..start].rfind("\n\n").map_or(0, |i| i + 2);
+        let (headers, body) = self.data[block..].split_once("\n\n")?;
+        let is_boundary = |line: &str| {
+            line.len() > 6
+                && line.starts_with("--")
+                && line[2..]
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        };
+        let body = body
+            .lines()
+            .take_while(|l| !is_boundary(l))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let bytes = if headers.contains("Content-Transfer-Encoding: quoted-printable") {
+            decode_quoted_printable(&body)
+        } else if headers.contains("Content-Transfer-Encoding: base64") {
+            base64::engine::general_purpose::STANDARD
+                .decode(body.replace('\n', ""))
+                .unwrap_or_default()
+        } else {
+            body.as_bytes().to_vec()
+        };
+        Some(String::from_utf8_lossy(&bytes).into_owned())
+    }
+}
+
+fn decode_quoted_printable(text: &str) -> Vec<u8> {
+    let joined = text.replace("=\n", "");
+    let bytes = joined.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'='
+            && i + 2 < bytes.len()
+            && let Ok(byte) = u8::from_str_radix(&joined[i + 1..i + 3], 16)
+        {
+            out.push(byte);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Decodes `=?utf-8?b?…?=` words (also inside a word, as lettre splits them); white space between
+/// two encoded words is dropped.
+fn decode_words(raw: &str) -> String {
+    const START: &str = "=?utf-8?b?";
+    let mut out = String::new();
+    let mut rest = raw;
+    let mut after_word = false;
+    while let Some(i) = rest.find(START) {
+        let before = &rest[..i];
+        if !(after_word && before.trim().is_empty()) {
+            out.push_str(before);
+        }
+        let after = &rest[i + START.len()..];
+        let Some(end) = after.find("?=") else {
+            break;
+        };
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&after[..end])
+            .unwrap_or_default();
+        out.push_str(&String::from_utf8_lossy(&bytes));
+        rest = &after[end + 2..];
+        after_word = true;
+    }
+    out.push_str(rest);
+    out
+}
+
 #[derive(Clone, Default)]
 pub struct Behavior {
     /// `(user, password)` required via `AUTH PLAIN` before `MAIL FROM`.

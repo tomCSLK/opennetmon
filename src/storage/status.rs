@@ -297,6 +297,39 @@ pub async fn events_newer_than(pool: &SqlitePool, sensor_id: i64, id: i64) -> Re
     )
 }
 
+/// The time of the last change of a sensor before `before_ms`: when the status it left at
+/// `before_ms` began (`None` if no older change is kept).
+pub async fn previous_change(
+    pool: &SqlitePool,
+    sensor_id: i64,
+    before_ms: i64,
+) -> Result<Option<i64>> {
+    Ok(sqlx::query_scalar(
+        "SELECT ts_ms FROM events WHERE sensor_id = ? AND ts_ms < ? ORDER BY ts_ms DESC, id DESC LIMIT 1",
+    )
+    .bind(sensor_id)
+    .bind(before_ms)
+    .fetch_optional(pool)
+    .await?)
+}
+
+/// How many changes of a sensor to `status` happened since `from_ms`.
+pub async fn count_changes_to(
+    pool: &SqlitePool,
+    sensor_id: i64,
+    status: Status,
+    from_ms: i64,
+) -> Result<i64> {
+    Ok(sqlx::query_scalar(
+        "SELECT COUNT(*) FROM events WHERE sensor_id = ? AND to_status = ? AND ts_ms >= ?",
+    )
+    .bind(sensor_id)
+    .bind(status.as_str())
+    .bind(from_ms)
+    .fetch_one(pool)
+    .await?)
+}
+
 /// An entry of the problem log: a change to warning or down, or back to up from one of them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LogEntry {
@@ -520,6 +553,24 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!((up.from, up.to), (Some(Status::Down), Status::Up));
+        // What the recovery mail reads: the outage began with the change before it.
+        assert_eq!(
+            previous_change(&pool, sensor, 5_000).await.unwrap(),
+            Some(3_000)
+        );
+        assert_eq!(previous_change(&pool, sensor, 1_000).await.unwrap(), None);
+        assert_eq!(
+            count_changes_to(&pool, sensor, Status::Down, 0)
+                .await
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            count_changes_to(&pool, sensor, Status::Down, 3_001)
+                .await
+                .unwrap(),
+            0
+        );
 
         let events = recent_events(&pool, 10).await.unwrap();
         let path: Vec<_> = events.iter().map(|e| e.to).collect();

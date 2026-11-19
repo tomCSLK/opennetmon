@@ -33,7 +33,7 @@ Without a file the defaults below apply, so a server can also be configured with
 | `retention_hourly_days` | `OPENNETMON_RETENTION_HOURLY_DAYS` | `365` | Days hourly values and status events are kept, at least `retention_raw_days`, at most 36500. Daily values are kept forever. |
 | `retention_audit_days` | `OPENNETMON_RETENTION_AUDIT_DAYS` | `365` | Days entries of the audit log are kept, 1 to 36500. |
 | `update_check` | `OPENNETMON_UPDATE_CHECK` | `false` | Ask GitHub once a day for a newer release and tell administrators ([`operations.md`](operations.md#notice-of-new-versions)). On in the shipped config and in the container image. |
-| `time_zone` | `OPENNETMON_TIME_ZONE` | unset | Time zone of the maintenance windows and of `backup_time`, e.g. `Europe/Berlin`. Unset: the system's (`TZ`, else `/etc/localtime`, else UTC). The log at startup names the zone in use. |
+| `time_zone` | `OPENNETMON_TIME_ZONE` | unset | Time zone of the maintenance windows, of `backup_time` and of the times in notification mails, e.g. `Europe/Berlin`. Unset: the system's (`TZ`, else `/etc/localtime`, else UTC). The log at startup names the zone in use. |
 | `backup_dir` | `OPENNETMON_BACKUP_DIR` | unset | Directory for a daily backup made by the server itself. Unset: none. The container image sets `/var/lib/opennetmon/backups`; the `.deb` uses its systemd timer instead (see [Backups](#backups)). |
 | `backup_keep` | `OPENNETMON_BACKUP_KEEP` | `14` | How many of those backups are kept, 1 to 1000. |
 | `backup_time` | `OPENNETMON_BACKUP_TIME` | `03:30` | Local time of that backup, `HH:MM`. |

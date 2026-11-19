@@ -1337,6 +1337,53 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
 12. **Veröffentlichung** mit dem nächsten Release, auf Ansage. Der Workflow läuft beim Tag, danach schaltet der Nutzer das Paket auf GHCR öffentlich.
     Release-Notes und README nennen `docker compose`.
 
+### R. Moderne E-Mail-Benachrichtigungen (HTML mit Kennzahlen und Graph) – entschieden 2026-11-19, „go“ für Stufe 1 und 2
+
+Entwurf (lokal, gitignored): `docs/entwurf/mail/index.html`, abgenommen vom Nutzer am 2026-11-19: Gestaltung „passt sehr gut“, Graph in
+zwei Stufen (erst HTML-Balken, dann eingebettetes Bild), Zeitraum 6 Stunden, Wochenbericht **später** (eigener Punkt, nicht in R).
+
+- Mails als `multipart/alternative` (Klartext + HTML), das HTML mit Tabellen und Styles am Element (in Mails erlaubt; die CSP-Regel gilt für
+  Webseiten), Dunkelmodus über `prefers-color-scheme`, keine externen Bilder, kein Skript. Bilder (Logo, Graph) als `cid:`-Anhang
+  (`multipart/related`).
+- Inhalte: Zustand mit Symbol und Wort, Ortszeit (Zone der Wartungsfenster), Gerät · Sensor, Gruppe, Adresse, Meldung, Kennzahlen (seit wann bzw.
+  Dauer, letzter guter/aktueller Wert, Grenzwerte, Verfügbarkeit und Ausfälle 7 Tage), Auswirkung (pausierte Geräte), Knöpfe in die Oberfläche;
+  Sammelmail mit Zählern, vermuteter Ursache und Mini-Verläufen; Test-E-Mail im neuen Aussehen; Betreff mit Meldung, Vorschauzeile.
+- Neue optionale Einstellung **Adresse der Oberfläche** (Einstellungen → E-Mail); ohne sie keine Knöpfe und Links.
+- **Stufe 1:** alles außer dem großen Graphen; Verläufe als HTML-Balken, keine neue Abhängigkeit.
+- **Stufe 2:** großer Graph (6 h) als PNG, vom Server gezeichnet (`resvg`/`tiny-skia` o. Ä., Lizenz prüfen), Schrift Fira Sans im Programm.
+- Umsetzung durch Agenten, das Hauptmodell koordiniert und prüft; Commits erst nach Prüfung und auf Ansage.
+
+**Stufe 1 umgesetzt (2026-11-19, noch nicht committet, kein Paket):**
+
+- Alarm- und Test-Mails als `multipart/alternative` (Klartext + HTML), Logo als `cid:`-Bild in `multipart/related` (`mail::Mail` mit
+  `inline: Vec<InlineImage>`, bereit für das PNG aus Stufe 2). Templates `templates/mail/` (Basis, Makros, Einzelwechsel, Sammelmail, Test).
+- Einzelwechsel: Band und Chip, Ortszeit mit Zone, Gerät · Sensor, Gruppenpfad, Adresse, Meldung, Kennzahlen (seit / vorher bzw. Ausfalldauer,
+  letzter bzw. aktueller Wert, Grenzwerte, Verfügbarkeit und Ausfälle 7 Tage; was fehlt, entfällt), Verlauf 6 h als HTML-Balken (Grenzfarben,
+  Ausfälle getönt, Statussensoren als farbige Spalten), Auswirkung (pausierte Geräte mit Sensorzahl bzw. „laufen wieder“), Knöpfe nur mit Adresse
+  der Oberfläche. Sammelmail: Zähler, vermutete Ursache, Zeilen schlimmste zuerst, Mini-Verläufe für die ersten 10, höchstens 30 Zeilen plus
+  „… und N weitere“. Test-Mail: Server, Port, Verschlüsselung, mit/ohne Anmeldung, Empfänger, gemeldete Wechsel, Sprache.
+- Betreff mit Meldung bzw. Ausfalldauer, Header bereinigt (`mail::header_text`); Vorschauzeile; Klartext mit Ortszeit und Zone.
+- Neue Einstellung „Adresse der Oberfläche“ (Migration `0026_mail_ui_url.sql`, `mail::parse_ui_url`, Änderungsprotokoll).
+- Zusatzdaten weich gelesen (`alerting::details`, Warnung im Log, Mail geht immer raus). Neu dafür: `Pauses::paused_through`/`dependents`,
+  `storage::status::previous_change`/`count_changes_to`.
+- Vorschau: `cargo test --lib mail_preview -- --ignored` → `target/mail-preview/{down,up,warning,batch,test}.{html,txt}`.
+- Nachbesserung nach Prüfung (2026-11-19, „genau wie im Entwurf“): Logo C als Umriss (`src/mail/logo.png`), Kopfzeile „Haus › Netzwerk ·
+  Adresse“, „vorher 3 Tage 3 Std. in Ordnung“, geschützte Leerzeichen zwischen Zahl und Einheit; Erholung mit „Antwortet wieder – Wert“,
+  „Durchschnitt 6 h“, getöntem Ausfall im Verlauf und dem Satz des Entwurfs zur Auswirkung; Warnung mit „Aktuell“, „Tendenz“, „Grenzwerte“,
+  „Höchstwert 7 Tage“ und „Weitere Kanäle dieses Geräts“ (bis zu 5 Sensoren); Test-Mail mit fettem Benutzernamen.
+- Abweichungen vom Entwurf: Verlauf der Sammelmail nur für die ersten 10 Zeilen (Größe); „Letzter Wert“ von Zustandskanälen nur mit bewertetem
+  Namen (sonst entfällt die Kennzahl, im Alerting gibt es keinen MIB-Index); die Auswirkung bei der Erholung ist ein Satz mit Namen (keine
+  Tabelle); Zeilen der Sammelmail zeigen „In Ordnung“ statt „Wieder in Ordnung“ (Statusname); „Höchstwert 7 Tage“ zählt nur bis vor den Wechsel
+  (wie im Entwurf kleiner als der aktuelle Wert); Grenzwerte als „Warnung über 75 °C“ statt „Warnung 75 °C“; die Tendenz fehlt, wenn vor den
+  letzten 2 Stunden keine Werte da sind; „Weitere Kanäle“ stehen nur im HTML, nicht im Klartext (wie im Entwurf).
+**Stufe 2 umgesetzt (2026-11-19, noch nicht committet, kein Paket):** großer Graph (6 h) als PNG in Ausfall-, Erholungs- und
+Warnungsmails (`chart_png`, `resvg` 0.50 + `png` 0.18, Fira Sans im Programm, Schriften auf Entscheidung des Nutzers vollständig).
+Rohwerte des Hauptkanals, Lücken ab 2,5 × Intervall, Ausfälle getönt mit „keine Antwort“/„Ausfall“ bzw. Dauer, Grenzlinien, °C orange;
+`<img src="cid:chart@opennetmon" width="560">` auf weißem Kasten mit Alt-Text, zweites `InlineImage` in `multipart/related`. Gerendert in
+`spawn_blocking`; ohne Werte oder bei Fehler Warnung im Log und die HTML-Balken aus Stufe 1. Sammelmail ohne Bilder (Mini-Balken).
+Binary (musl, gestrippt): 20 522 568 Bytes (Stand `HEAD`, ohne R) → 24 713 704 Bytes mit R Stufe 1 und 2 (+4,0 MiB, fast ganz Renderer
+und Schriften); statisch gelinkt (`static-pie`). Später, nicht in R: Wochenbericht.
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
 - **`lettre` 0.11.23 in v0.6.2 verwundbar** (RUSTSEC-2026-0560 bis -0565 vom 2026-11-17: u. a. STARTTLS-Antwortinjektion durch einen MITM,

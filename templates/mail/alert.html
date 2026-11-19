@@ -1,0 +1,50 @@
+{#- One status change (src/alerting/compose.rs). Device, group, sensor names and messages are foreign text:
+    escaped like everything else. -#}
+{% extends "mail/base.html" %}
+{% import "mail/macros.html" as m %}
+{% block content %}
+{% call m::head(head) %}{% endcall %}
+{%- if !message.is_empty() %}
+{% call m::message(tone, message) %}{% endcall %}
+{%- endif %}
+{% call m::facts(facts) %}{% endcall %}
+{%- if let Some(alt) = picture %}
+<tr><td class="px" style="padding:0 28px 20px">{% call m::heading(chart_title) %}{% endcall %}
+<div style="background:#ffffff;border-radius:6px"><img src="cid:chart@opennetmon" width="560" alt="{{ alt }}" style="display:block;width:100%;max-width:560px;height:auto;border:0;border-radius:6px"></div>
+</td></tr>
+{%- endif %}
+{%- if let Some(chart) = chart %}
+<tr><td class="px" style="padding:0 28px 20px">{% call m::heading(chart_title) %}{% endcall %}
+{% call m::bars(chart, true) %}{% endcall %}
+</td></tr>
+{%- endif %}
+{%- if let Some(impact) = impact %}
+<tr><td class="px" style="padding:0 28px 20px">{% call m::heading(t.get("mail-impact")) %}{% endcall %}
+<div class="t2" style="font-size:14px;color:#444d59;margin-bottom:8px">{{ impact.intro|nb }}</div>
+{%- if !impact.rows.is_empty() %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">
+{%- for row in impact.rows %}
+<tr><td class="bd t1" style="padding:6px 0;border-top:1px solid #dde1e6;color:#15181c">{% if let Some(chip) = impact.chip %}{% call m::chip(chip) %}{% endcall %} &nbsp;{% endif %}{{ row.name }}</td>
+<td class="bd t3 mono" style="padding:6px 8px;border-top:1px solid #dde1e6;color:#636c78;font-family:Consolas,Menlo,'Courier New',monospace;font-size:13px">{{ row.host }}</td>
+<td class="bd t2" align="right" style="padding:6px 0;border-top:1px solid #dde1e6;color:#444d59;white-space:nowrap">{{ row.count|nb }}</td></tr>
+{%- endfor %}
+</table>
+{%- endif %}
+{%- if !impact.more.is_empty() %}
+<div class="t3" style="font-size:13px;color:#636c78;margin-top:6px">{{ impact.more|nb }}</div>
+{%- endif %}
+</td></tr>
+{%- endif %}
+{%- if !others.is_empty() %}
+<tr><td class="px" style="padding:0 28px 20px">{% call m::heading(t.get("mail-other-sensors")) %}{% endcall %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">
+{%- for other in others %}
+<tr><td class="bd t1" style="padding:6px 0;border-top:1px solid #dde1e6;color:#15181c">{{ other.name }}</td>
+<td class="bd t1 mono" align="right" style="padding:6px 8px;border-top:1px solid #dde1e6;color:#15181c;font-family:Consolas,Menlo,'Courier New',monospace;font-size:13px;white-space:nowrap">{{ other.value|nb }}</td>
+<td class="bd" align="right" style="padding:6px 0;border-top:1px solid #dde1e6;white-space:nowrap">{% call m::chip(other.chip) %}{% endcall %}</td></tr>
+{%- endfor %}
+</table>
+</td></tr>
+{%- endif %}
+{% call m::buttons(buttons) %}{% endcall %}
+{% endblock %}

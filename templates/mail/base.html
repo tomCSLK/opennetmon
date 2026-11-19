@@ -1,0 +1,73 @@
+{#- Frame of every HTML mail. Mail programs ignore most style sheets: layout with tables, styles on the
+    elements (the CSP rule of the web pages does not apply here). The <style> below only adds the dark mode
+    (`prefers-color-scheme`) and the phone layout; the classes in the elements are its hooks. No scripts,
+    no external resources: the logo is an inline image (cid:). -#}
+<!doctype html>
+<html lang="{{ frame.lang_code }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ frame.title }}</title>
+<style>
+body{margin:0;padding:0;-webkit-text-size-adjust:100%}
+body,table,td,div,span,a{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+.mono{font-family:Consolas,Menlo,'Courier New',monospace!important}
+a{color:#1c5ea8}
+@media (max-width:520px){
+.stack{display:block!important;width:100%!important}
+.px{padding-left:16px!important;padding-right:16px!important}
+.h1{font-size:20px!important}
+}
+@media (prefers-color-scheme:dark){
+.bg{background:#101215!important}
+.card{background:#171a1e!important;border-color:#2a2f36!important}
+.soft{background:#1d2126!important;border-color:#2a2f36!important}
+.t1{color:#e5e8ec!important}.t2{color:#b0b8c2!important}.t3{color:#8d96a1!important}
+.bd{border-color:#2a2f36!important}
+.lnk{color:#7aaeea!important}
+.btn{background:#7aaeea!important;color:#0d1622!important}
+.btn2{background:#171a1e!important;color:#7aaeea!important;border-color:#3a414a!important}
+.err{color:#ff8d9d!important}.err-bg{background:#361920!important;border-color:#7a3542!important}
+.warn{color:#e8c45f!important}.warn-bg{background:#2f2814!important;border-color:#6b5a26!important}
+.ok{color:#73d29a!important}.ok-bg{background:#15291e!important;border-color:#2f5d43!important}
+.off{color:#a3b5c8!important}.off-bg{background:#1f262e!important;border-color:#44505d!important}
+.band-err{background:#ff8d9d!important}.band-warn{background:#e8c45f!important}
+.band-ok{background:#73d29a!important}.band-off{background:#a3b5c8!important}
+.bar{background:#7aaeea!important}
+}
+</style>
+</head>
+<body class="bg" style="margin:0;padding:0;background:#f4f5f7">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">{{ frame.preheader }}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
+<table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7">
+<tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px">
+<tr><td style="padding:0 4px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td class="t1" style="font-size:15px;font-weight:600;color:#15181c"><img src="cid:logo@opennetmon" width="22" height="22" alt="" style="vertical-align:-5px;border:0;margin-right:6px">opennetmon</td>
+{%- if !frame.host.is_empty() %}
+<td align="right" class="t3" style="font-size:12px;color:#636c78">{{ frame.host }}</td>
+{%- endif %}
+</tr></table>
+</td></tr>
+<tr><td class="card" style="background:#ffffff;border:1px solid #dde1e6;border-radius:8px;overflow:hidden">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+{%- if let Some(band) = frame.band %}
+<tr><td class="band-{{ band.cls() }}" height="4" style="height:4px;line-height:4px;font-size:0;background:{{ band.band() }}">&nbsp;</td></tr>
+{%- endif %}
+{% block content %}{% endblock %}
+</table>
+</td></tr>
+<tr><td class="t3" style="padding:14px 8px;font-size:12px;line-height:1.5;color:#636c78">
+{%- for line in frame.footer %}{% if !loop.first %} · {% endif %}{{ line|nb }}{% endfor %}
+{%- if let Some(href) = frame.settings %}<br>
+<a class="lnk" href="{{ href }}" style="color:#1c5ea8">{{ t.get("mail-footer-settings") }}</a>
+{%- endif %}
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

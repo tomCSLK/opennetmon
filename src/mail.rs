@@ -1,12 +1,17 @@
 //! Outgoing e-mail: settings, validation and the SMTP client. User-facing messages are catalog messages.
+//!
+//! A [`Mail`] is a plain-text part and, optionally, an HTML part with inline images (`cid:`); it goes
+//! out as `multipart/alternative` (text, then `multipart/related` with the HTML and its images).
 
+pub mod testmail;
 #[cfg(test)]
 pub(crate) mod testsmtp;
+pub mod view;
 
 use std::time::Duration;
 
 use lettre::message::header::ContentType;
-use lettre::message::{Mailbox, MessageBuilder};
+use lettre::message::{Attachment, Mailbox, MessageBuilder, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Address, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
@@ -20,6 +25,8 @@ const SMTP_TIMEOUT: Duration = Duration::from_secs(15);
 /// Upper bound for one complete delivery (connect, TLS, auth, transfer).
 const SEND_DEADLINE: Duration = Duration::from_secs(40);
 const MAX_ERROR_CHARS: usize = 300;
+/// Longest accepted address of the web interface.
+pub const MAX_UI_URL_CHARS: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Security {
@@ -82,6 +89,8 @@ pub struct MailInput {
     pub notify_warnings: bool,
     /// Language of the mails, the same for all recipients.
     pub language: Lang,
+    /// Address of the web interface for links in mails, as typed (empty = none).
+    pub ui_url: String,
 }
 
 /// Validated input, ready to store.
@@ -97,6 +106,8 @@ pub struct CheckedMail {
     pub recipients: Vec<String>,
     pub notify_warnings: bool,
     pub language: Lang,
+    /// Normalized by [`parse_ui_url`].
+    pub ui_url: Option<String>,
 }
 
 /// Splits and validates a recipient list; returns the normalized addresses.
@@ -135,6 +146,81 @@ fn shorten(text: &str) -> String {
     text.chars().take(40).filter(|c| !c.is_control()).collect()
 }
 
+/// The address of the web interface: an absolute `http://` or `https://` URL with a host, an
+/// optional port and an optional path, without user info, query or fragment. Returned with the
+/// scheme and host in lower case and without a trailing slash; empty input means "none". Links in
+/// mails are built from it plus fixed paths and numeric ids only.
+pub fn parse_ui_url(text: &str) -> Result<Option<String>, Msg> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let invalid = || Msg::new("mail-ui-url-invalid");
+    if text.chars().count() > MAX_UI_URL_CHARS || !text.is_ascii() {
+        return Err(invalid());
+    }
+    let lower = text.to_ascii_lowercase();
+    let (scheme, rest) = if lower.starts_with("https://") {
+        ("https", &text[8..])
+    } else if lower.starts_with("http://") {
+        ("http", &text[7..])
+    } else {
+        return Err(invalid());
+    };
+    let (authority, path) = rest.find('/').map_or((rest, ""), |i| rest.split_at(i));
+    if authority.contains('@') {
+        return Err(invalid());
+    }
+    let (host, port) = if let Some(inner) = authority.strip_prefix('[') {
+        // IPv6 literal: [2001:db8::1] or [2001:db8::1]:8443
+        let (ip, after) = inner.split_once(']').ok_or_else(invalid)?;
+        let ip: std::net::Ipv6Addr = ip.parse().map_err(|_| invalid())?;
+        (format!("[{ip}]"), after.strip_prefix(':'))
+    } else {
+        let (host, port) = match authority.split_once(':') {
+            Some((h, p)) => (h, Some(p)),
+            None => (authority, None),
+        };
+        (validate_host(host).map_err(|_| invalid())?, port)
+    };
+    let port = match port {
+        None => String::new(),
+        Some(p) => {
+            if p.is_empty() || p.len() > 5 || !p.bytes().all(|b| b.is_ascii_digit()) {
+                return Err(invalid());
+            }
+            match p.parse::<u16>() {
+                Ok(n) if n > 0 => format!(":{n}"),
+                _ => return Err(invalid()),
+            }
+        }
+    };
+    let path_ok = path
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b"-._~/%".contains(&b));
+    if !path_ok || path.contains("//") || path.split('/').any(|seg| seg == "..") {
+        return Err(invalid());
+    }
+    let path = path.trim_end_matches('/');
+    Ok(Some(format!("{scheme}://{host}{port}{path}")))
+}
+
+/// Text for a mail header: control characters (CR, LF, tabs …) become spaces, runs of white space
+/// one space, and the result is cut to `max` characters (with "…").
+pub fn header_text(text: &str, max: usize) -> String {
+    let cleaned: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let joined = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    if joined.chars().count() > max {
+        let cut: String = joined.chars().take(max.saturating_sub(1)).collect();
+        format!("{}…", cut.trim_end())
+    } else {
+        joined
+    }
+}
+
 impl MailInput {
     /// Checks the input. With notifications switched on, server, sender and at least one
     /// recipient are required; switched off, anything half-finished may be saved.
@@ -163,6 +249,7 @@ impl MailInput {
             text => parse_address(text)?,
         };
         let recipients = parse_recipients(&self.recipients)?;
+        let ui_url = parse_ui_url(&self.ui_url)?;
         if self.enabled {
             if host.is_empty() {
                 return Err(Msg::new("mail-host-missing"));
@@ -185,6 +272,7 @@ impl MailInput {
             recipients,
             notify_warnings: self.notify_warnings,
             language: self.language,
+            ui_url,
         })
     }
 }
@@ -202,6 +290,8 @@ pub struct MailConfig {
     pub recipients: Vec<String>,
     pub notify_warnings: bool,
     pub language: Lang,
+    /// Address of the web interface for buttons and links (see [`parse_ui_url`]); `None` = no links.
+    pub ui_url: Option<String>,
 }
 
 impl std::fmt::Debug for MailConfig {
@@ -235,13 +325,47 @@ impl MailError {
     }
 }
 
-fn build_message(config: &MailConfig, subject: &str, body: &str) -> Result<Message, MailError> {
+/// An image the HTML part shows with `<img src="cid:…">`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineImage {
+    /// Without angle brackets, e.g. `logo@opennetmon`.
+    pub content_id: String,
+    /// e.g. `image/png`.
+    pub content_type: &'static str,
+    pub data: Vec<u8>,
+}
+
+/// A complete mail: subject, plain text and optionally HTML with its inline images.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mail {
+    pub subject: String,
+    pub text: String,
+    /// `None`: a plain-text mail.
+    pub html: Option<String>,
+    pub inline: Vec<InlineImage>,
+}
+
+impl Mail {
+    /// A mail with only a text part.
+    pub fn plain(subject: impl Into<String>, text: impl Into<String>) -> Self {
+        Self {
+            subject: subject.into(),
+            text: text.into(),
+            html: None,
+            inline: Vec::new(),
+        }
+    }
+}
+
+fn build_message(config: &MailConfig, mail: &Mail) -> Result<Message, MailError> {
     let bad = |id: &'static str| MailError::Config(Msg::new(id));
+    let invalid = |e: String| MailError::Config(Msg::new("mail-message-invalid").with("detail", e));
     let from: Mailbox = config
         .from_address
         .parse::<Address>()
         .map(|a| Mailbox::new(Some("opennetmon".to_owned()), a))
         .map_err(|_| bad("mail-from-invalid"))?;
+    let subject = header_text(&mail.subject, 250);
     let mut builder: MessageBuilder = Message::builder().from(from).subject(subject);
     if config.recipients.is_empty() {
         return Err(MailError::Config(Msg::new("mail-no-recipients")));
@@ -252,12 +376,29 @@ fn build_message(config: &MailConfig, subject: &str, body: &str) -> Result<Messa
             .map_err(|_| bad("mail-recipient-invalid"))?;
         builder = builder.to(Mailbox::new(None, address));
     }
-    builder
-        .header(ContentType::TEXT_PLAIN)
-        .body(body.to_owned())
-        .map_err(|e| {
-            MailError::Config(Msg::new("mail-message-invalid").with("detail", e.to_string()))
-        })
+    let Some(html) = &mail.html else {
+        return builder
+            .header(ContentType::TEXT_PLAIN)
+            .body(mail.text.clone())
+            .map_err(|e| invalid(e.to_string()));
+    };
+    let html_part = SinglePart::html(html.clone());
+    let body = MultiPart::alternative().singlepart(SinglePart::plain(mail.text.clone()));
+    let body = if mail.inline.is_empty() {
+        body.singlepart(html_part)
+    } else {
+        let mut related = MultiPart::related().singlepart(html_part);
+        for image in &mail.inline {
+            let content_type =
+                ContentType::parse(image.content_type).map_err(|e| invalid(e.to_string()))?;
+            related = related.singlepart(
+                Attachment::new_inline(image.content_id.clone())
+                    .body(image.data.clone(), content_type),
+            );
+        }
+        body.multipart(related)
+    };
+    builder.multipart(body).map_err(|e| invalid(e.to_string()))
 }
 
 fn transport(config: &MailConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>, MailError> {
@@ -288,12 +429,12 @@ fn describe(error: impl std::fmt::Display) -> String {
     }
 }
 
-/// Sends one plain-text mail to all recipients.
-pub async fn send(config: &MailConfig, subject: &str, body: &str) -> Result<(), MailError> {
+/// Sends one mail to all recipients.
+pub async fn send(config: &MailConfig, mail: &Mail) -> Result<(), MailError> {
     if config.host.is_empty() {
         return Err(MailError::Config(Msg::new("mail-no-server")));
     }
-    let message = build_message(config, subject, body)?;
+    let message = build_message(config, mail)?;
     let transport = transport(config)?;
     match tokio::time::timeout(SEND_DEADLINE, transport.send(message)).await {
         Ok(Ok(_)) => Ok(()),
@@ -319,6 +460,7 @@ mod tests {
             recipients: "a@example.org".to_owned(),
             notify_warnings: true,
             language: Lang::De,
+            ui_url: String::new(),
         }
     }
 
@@ -334,6 +476,7 @@ mod tests {
             recipients: vec!["admin@example.org".to_owned(), "ops@example.org".to_owned()],
             notify_warnings: true,
             language: Lang::De,
+            ui_url: None,
         }
     }
 
@@ -441,8 +584,10 @@ mod tests {
         let smtp = TestSmtp::spawn(Behavior::default()).await;
         send(
             &config(smtp.port),
-            "[opennetmon] Ausfall: Test",
-            "Zeile 1\n.Zeile mit Punkt\nÄÖÜ",
+            &Mail::plain(
+                "[opennetmon] Ausfall: Test",
+                "Zeile 1\n.Zeile mit Punkt\nÄÖÜ",
+            ),
         )
         .await
         .unwrap();
@@ -476,11 +621,11 @@ mod tests {
         let mut c = config(smtp.port);
         c.username = Some("user".to_owned());
         c.password = Some(Secret::new("pw-123"));
-        send(&c, "s", "b").await.unwrap();
+        send(&c, &Mail::plain("s", "b")).await.unwrap();
         assert_eq!(smtp.received()[0].auth_user.as_deref(), Some("user"));
 
         c.password = Some(Secret::new("wrong-pw"));
-        let err = send(&c, "s", "b").await.unwrap_err();
+        let err = send(&c, &Mail::plain("s", "b")).await.unwrap_err();
         assert!(matches!(err, MailError::Send(_)), "{err:?}");
         assert!(!err.user_message().to_string().contains("wrong-pw"));
         assert_eq!(smtp.received().len(), 1);
@@ -493,7 +638,9 @@ mod tests {
             ..Behavior::default()
         })
         .await;
-        let err = send(&config(smtp.port), "s", "b").await.unwrap_err();
+        let err = send(&config(smtp.port), &Mail::plain("s", "b"))
+            .await
+            .unwrap_err();
         assert!(
             err.user_message()
                 .to_string()
@@ -505,7 +652,7 @@ mod tests {
         let port = closed.local_addr().unwrap().port();
         drop(closed);
         assert!(matches!(
-            send(&config(port), "s", "b").await,
+            send(&config(port), &Mail::plain("s", "b")).await,
             Err(MailError::Send(_))
         ));
     }
@@ -515,14 +662,116 @@ mod tests {
         let mut c = config(25);
         c.host.clear();
         assert!(matches!(
-            send(&c, "s", "b").await,
+            send(&c, &Mail::plain("s", "b")).await,
             Err(MailError::Config(_))
         ));
         let mut c = config(25);
         c.recipients.clear();
         assert!(matches!(
-            send(&c, "s", "b").await,
+            send(&c, &Mail::plain("s", "b")).await,
             Err(MailError::Config(_))
         ));
+    }
+
+    #[test]
+    fn the_ui_address_is_checked_and_normalised() {
+        let ok = |text: &str| parse_ui_url(text).unwrap();
+        assert_eq!(ok(""), None);
+        assert_eq!(ok("   "), None);
+        assert_eq!(
+            ok("https://opennetmon.example.org/").as_deref(),
+            Some("https://opennetmon.example.org")
+        );
+        assert_eq!(
+            ok("HTTP://192.0.2.5:8443/monitor/").as_deref(),
+            Some("http://192.0.2.5:8443/monitor")
+        );
+        assert_eq!(
+            ok("https://[2001:db8::1]:8443").as_deref(),
+            Some("https://[2001:db8::1]:8443")
+        );
+        for bad in [
+            "opennetmon.example.org",
+            "ftp://example.org",
+            "javascript:alert(1)",
+            "https://user:pw@example.org",
+            "https://example.org/?a=1",
+            "https://example.org/#top",
+            "https://example.org:0",
+            "https://example.org:70000",
+            "https://example.org:http",
+            "https://exa mple.org",
+            "https://example.org/a//b",
+            "https://example.org/../x",
+            "https://example.org/\"><script>",
+            "https://bücher.example",
+            "https://[::1",
+        ] {
+            assert_eq!(
+                parse_ui_url(bad),
+                Err(Msg::new("mail-ui-url-invalid")),
+                "{bad}"
+            );
+        }
+        let long = format!("https://example.org/{}", "a".repeat(MAX_UI_URL_CHARS));
+        assert!(parse_ui_url(&long).is_err());
+    }
+
+    #[test]
+    fn header_text_has_no_line_breaks_and_a_limit() {
+        assert_eq!(
+            header_text("Ausfall\r\nBcc: x@example.org\t ok", 100),
+            "Ausfall Bcc: x@example.org ok"
+        );
+        assert_eq!(header_text("\u{7}a\u{1b}b", 100), "a b");
+        assert_eq!(header_text("abcdefghij", 5), "abcd…");
+        assert_eq!(header_text("abc", 5), "abc");
+    }
+
+    #[tokio::test]
+    async fn html_mails_carry_text_html_and_the_inline_logo() {
+        let smtp = TestSmtp::spawn(Behavior::default()).await;
+        let mail = Mail {
+            subject: "[opennetmon] Test\r\nBcc: evil@example.org".to_owned(),
+            text: "Klartext".to_owned(),
+            html: Some(format!(
+                "<html><body><img src=\"cid:{}\">HTML-Teil</body></html>",
+                view::LOGO_CID
+            )),
+            inline: vec![view::logo()],
+        };
+        send(&config(smtp.port), &mail).await.unwrap();
+        let received = &smtp.received()[0];
+        let data = &received.data;
+        assert!(
+            data.contains("Content-Type: multipart/alternative"),
+            "{data}"
+        );
+        assert!(data.contains("Content-Type: multipart/related"), "{data}");
+        assert!(data.contains("Content-ID: <logo@opennetmon>"), "{data}");
+        assert!(data.contains("Content-Disposition: inline"), "{data}");
+        assert!(data.contains("Content-Type: image/png"), "{data}");
+        assert_eq!(
+            received.subject(),
+            "[opennetmon] Test Bcc: evil@example.org"
+        );
+        assert!(!data.contains("\nBcc:"), "no injected header");
+        assert_eq!(received.to, ["admin@example.org", "ops@example.org"]);
+        assert_eq!(received.part("text/plain").as_deref(), Some("Klartext"));
+        assert!(
+            received
+                .part("text/html")
+                .is_some_and(|h| h.contains("HTML-Teil") && h.contains("cid:logo@opennetmon"))
+        );
+
+        // Without images, no related part.
+        let smtp = TestSmtp::spawn(Behavior::default()).await;
+        let mail = Mail {
+            inline: Vec::new(),
+            ..mail
+        };
+        send(&config(smtp.port), &mail).await.unwrap();
+        let data = &smtp.received()[0].data;
+        assert!(data.contains("multipart/alternative") && !data.contains("multipart/related"));
     }
 }

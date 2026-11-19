@@ -25,6 +25,8 @@ pub struct MailView {
     pub recipients: String,
     pub notify_warnings: bool,
     pub language: Lang,
+    /// Address of the web interface (empty = none).
+    pub ui_url: String,
 }
 
 #[derive(FromRow)]
@@ -39,12 +41,13 @@ struct Row {
     recipients: String,
     notify_warnings: i64,
     language: String,
+    ui_url: Option<String>,
 }
 
 async fn fetch(pool: &SqlitePool) -> Result<Row> {
     Ok(sqlx::query_as::<_, Row>(
         "SELECT enabled, host, port, security, username, password_enc, from_address, recipients, \
-         notify_warnings, language FROM mail_settings WHERE id = 1",
+         notify_warnings, language, ui_url FROM mail_settings WHERE id = 1",
     )
     .fetch_one(pool)
     .await?)
@@ -75,6 +78,7 @@ pub async fn get_view(pool: &SqlitePool) -> Result<MailView> {
         recipients: row.recipients.replace(',', "\n"),
         notify_warnings: row.notify_warnings != 0,
         language: language(&row),
+        ui_url: row.ui_url.unwrap_or_default(),
         host: row.host,
         from_address: row.from_address,
     })
@@ -100,6 +104,7 @@ pub async fn load_config(pool: &SqlitePool, secrets: &SecretBox) -> Result<MailC
             .collect(),
         notify_warnings: row.notify_warnings != 0,
         language: language(&row),
+        ui_url: row.ui_url,
         username: row.username,
         password,
         host: row.host,
@@ -119,7 +124,7 @@ pub async fn save(pool: &SqlitePool, secrets: &SecretBox, input: &CheckedMail) -
     sqlx::query(
         "UPDATE mail_settings SET enabled = ?, host = ?, port = ?, security = ?, username = ?, \
          password_enc = ?, from_address = ?, recipients = ?, notify_warnings = ?, language = ?, \
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = 1",
+         ui_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = 1",
     )
     .bind(i64::from(input.enabled))
     .bind(&input.host)
@@ -131,6 +136,7 @@ pub async fn save(pool: &SqlitePool, secrets: &SecretBox, input: &CheckedMail) -
     .bind(input.recipients.join(","))
     .bind(i64::from(input.notify_warnings))
     .bind(input.language.code())
+    .bind(&input.ui_url)
     .execute(pool)
     .await?;
     Ok(())
@@ -277,6 +283,7 @@ mod tests {
             recipients: "a@example.org\nb@example.org".to_owned(),
             notify_warnings: false,
             language: Lang::En,
+            ui_url: "https://opennetmon.example.org/".to_owned(),
         }
         .check()
         .unwrap()
@@ -287,6 +294,7 @@ mod tests {
         let (_dir, pool) = db().await;
         let view = get_view(&pool).await.unwrap();
         assert!(!view.enabled && !view.password_set && view.host.is_empty());
+        assert!(view.ui_url.is_empty());
         assert_eq!(
             (
                 view.port,
@@ -312,6 +320,7 @@ mod tests {
         assert_eq!(view.recipients, "a@example.org\nb@example.org");
         assert!(!view.notify_warnings);
         assert_eq!(view.language, Lang::En);
+        assert_eq!(view.ui_url, "https://opennetmon.example.org");
 
         let config = load_config(&pool, &secrets).await.unwrap();
         assert_eq!(
@@ -319,6 +328,10 @@ mod tests {
             Some("pw-geheim-1")
         );
         assert_eq!(config.recipients, ["a@example.org", "b@example.org"]);
+        assert_eq!(
+            config.ui_url.as_deref(),
+            Some("https://opennetmon.example.org")
+        );
 
         let raw: Vec<u8> = sqlx::query_scalar("SELECT password_enc FROM mail_settings")
             .fetch_one(&pool)
