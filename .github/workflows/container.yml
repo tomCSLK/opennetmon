@@ -1,0 +1,91 @@
+name: Container image
+
+# Builds the image for amd64 and arm64 on native runners (no emulation), runs the smoke test of dev/container.sh on
+# each, and on a release tag pushes it to ghcr.io/tomcslk/opennetmon as X.Y.Z, X.Y and latest. The tag is pushed only
+# by dev/release.sh --publish, so images appear only with a release. Started by hand, it builds and tests without
+# pushing. docs/docker.md describes the image.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: image (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      ENGINE: docker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the stable toolchain and musl
+        run: |
+          rustup toolchain install stable --profile minimal --target "${{ matrix.target }}"
+          rustup default stable
+          sudo apt-get update -q && sudo apt-get install -y -q musl-tools
+      - name: Version
+        id: version
+        run: |
+          version=$(cargo metadata --format-version 1 --no-deps | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the version $version in Cargo.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build the static binary
+        run: cargo build --release --locked --target "${{ matrix.target }}"
+      - name: Build the image
+        run: dev/container.sh --binary "target/${{ matrix.target }}/release/opennetmon" --tag "opennetmon:ci"
+      - name: Smoke test
+        run: dev/container.sh --test-only opennetmon:ci
+      - name: Push ${{ steps.version.outputs.version }}-${{ matrix.arch }}
+        if: github.event_name == 'push'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag opennetmon:ci "$repo:$VERSION-${{ matrix.arch }}"
+          docker push "$repo:$VERSION-${{ matrix.arch }}"
+          docker logout ghcr.io
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  manifest:
+    name: multi-architecture tags
+    if: github.event_name == 'push'
+    needs: image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Tag X.Y.Z, X.Y and latest for both architectures
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.image.outputs.version }}
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx imagetools create \
+            --tag "$repo:$VERSION" --tag "$repo:${VERSION%.*}" --tag "$repo:latest" \
+            "$repo:$VERSION-amd64" "$repo:$VERSION-arm64"
+          docker buildx imagetools inspect "$repo:$VERSION"
+          docker logout ghcr.io

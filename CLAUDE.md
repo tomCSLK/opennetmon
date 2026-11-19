@@ -103,7 +103,7 @@ Regeln, die überall gelten:
 
 - **Vor jedem Abschluss einer Aufgabe:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings` und `cargo test` müssen fehlerfrei durchlaufen.
 - CI (`.github/workflows/ci.yml`): fmt, clippy, Tests, `third-party-licenses.py --check`, `cargo audit` (bei Push/PR und montags), DCO bei Pull Requests.
-  Actions nur von `actions/*`, auf Commit-Hash gepinnt. Beitragsregeln in `CONTRIBUTING.md`, Meldeweg für Lücken in `SECURITY.md`.
+  Actions nur von `actions/*`, auf Commit-Hash gepinnt. Container-Image: `.github/workflows/container.yml` (beim Tag, sonst nur von Hand ohne Push). Beitragsregeln in `CONTRIBUTING.md`, Meldeweg für Lücken in `SECURITY.md`.
 - Unit-Tests für Counter/Raten (inkl. Wrap/Reset), Statuslogik und Config; Handler-Tests mit `tower::ServiceExt::oneshot` und den Helfern aus
   `src/web/testutil.rs`; SNMP ohne Netz über den Fake-v2c-Agenten `src/snmp/testagent.rs`.
 - Gegen einen lokalen `snmpd`: `tests/snmp_local.rs` (überspringt sich ohne Agent oder ohne `OPENNETMON_TEST_V3_*`). Echte Omada-Geräte nur manuell:
@@ -129,6 +129,7 @@ cargo audit                                                            # bekannt
 dev/deb.sh                                                             # Debian-Paket bauen (target/debian/), braucht cargo install cargo-deb --locked
 dev/release.sh                                                         # Release bauen und prüfen (Archiv, .deb und SHA256SUMS in target/dist/)
 dev/release.sh --publish --notes <datei>                               # zusätzlich Tag vX.Y.Z pushen und GitHub-Release anlegen (nur auf Ansage)
+dev/container.sh --test                                                # Container-Image bauen (Podman/Docker) und Rauchtest; pusht nie
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
@@ -151,7 +152,9 @@ Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–Q); private Punkte in 
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
   Schrittplan in `PLAN.md` (P), Schritte 1–7 erledigt, released als **v0.6.2**.
 - **Vorhaben Q** (Docker-Version zusätzlich zum `.deb`): entschieden 2026-11-12 (GHCR, amd64/arm64, `scratch`, HTTPS als Standard, Bau in der CI
-  beim Tag), Schrittplan in `PLAN.md` (Q). Schritt 9 (Vorarbeiten im Programm) erledigt 2026-11-19; Schritt 11 (Image, `compose.yaml`, Doku) nach „go“.
+  beim Tag), Schrittplan in `PLAN.md` (Q). Schritte 9 (Vorarbeiten im Programm) und 11 (`Containerfile`, `compose.yaml`, `dev/container.sh`,
+  Workflow `container.yml`, `docs/docker.md`) erledigt 2026-11-19, lokal mit Podman getestet; offen Schritt 12: Veröffentlichung mit dem nächsten
+  Release (auf Ansage), danach das Paket auf GHCR öffentlich schalten (Nutzer, Browser).
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,

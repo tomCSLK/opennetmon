@@ -1294,7 +1294,9 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
   - Das Image entsteht ohne `RUN`-Schritte (nur `COPY`), also ohne Emulation.
   - Vor dem Push gibt es je Architektur einen Rauchtest: Container starten, `/healthz`, `user add`, Anmeldung.
   - Danach Push nach GHCR mit `GITHUB_TOKEN` (`packages: write`) und das Manifest für beide Architekturen per `docker buildx imagetools create`.
-  - Zusätzlich lädt der Workflow arm64-Archiv und arm64-`.deb` an das Release (`gh release upload`).
+  - ~~Zusätzlich lädt der Workflow arm64-Archiv und arm64-`.deb` an das Release.~~ Bei Schritt 11 herausgenommen (2026-11-19): `dev/deb.sh`,
+    `SHA256SUMS` und die Prüfung in `dev/release.sh` sind auf amd64 zugeschnitten, und die Seite „Aktualisierungen“ nennt `_amd64.deb`. Für das Image
+    nicht nötig; eigener Punkt unter „Kleinere offene Punkte“.
   - Nur `actions/checkout` (auf Hash gepinnt), sonst `run`-Schritte; die CI-Regel bleibt erfüllt. Optional Herkunftsnachweis mit
     `actions/attest-build-provenance` (auch `actions/*`).
 - **Launcher:** bietet den Container vorerst nicht an (er installiert `.deb`/Installer); später neu entscheiden.
@@ -1314,15 +1316,34 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
      entstehen (0600), Zone `Europe/Berlin` aus `TZ` über die eingebettete tzdb, `healthcheck` 0 bzw. 1 ohne Server.
    - Für das `.deb` ändert sich nichts (alle neuen Schalter aus); `config.toml` des Pakets hat nur zusätzliche Kommentarzeilen.
 10. ~~Build für arm64 lokal~~ entfällt (nativ in der CI, siehe oben).
-11. **Image und Doku:** `Containerfile`, `compose.yaml`, `docs/docker.md` und ein Abschnitt im README.
-    - Lokaler Test mit Podman (amd64, ohne Root): erster Start, Admin anlegen, Anmeldung, Ping und SNMP ins LAN, Neustart, Update auf ein neueres
-      Image, `read_only`, Healthcheck, Sicherung.
-    - Auf Wunsch zusätzlich auf dem Pi (arm64).
-    - Der Workflow `container.yml` wird mit dem nächsten Push sichtbar; ein Probelauf ohne Push des Images (`workflow_dispatch` mit `push=false`) ist möglich.
+11. ✔ **Image und Doku** (2026-11-19, „go mit schritt 11“): `Containerfile` und `compose.yaml` im Wurzelverzeichnis, `dev/container.sh` (baut für die
+    eigene Architektur aus einem vorbereiteten Kontext `target/container/` mit `rootfs/` und `state/`, Podman mit `--format docker` wegen
+    `HEALTHCHECK`; `--test` bzw. `--test-only` = Rauchtest), `.github/workflows/container.yml` (amd64/arm64 nativ, Rauchtest, Push nur beim Tag,
+    von Hand gestartet nur Bau und Test), `docs/docker.md`, Abschnitt im README, `release.sh` legt `compose.yaml` ins Release (mit `SHA256SUMS`).
+    Nebenbei: Logs ohne Farbcodes, wenn stderr kein Terminal ist (journald, `docker logs`).
+    - Image 26,3 MB, Benutzer 10001, Labels `org.opencontainers.image.*` (Quelle, Lizenz, Version, Revision).
+    - **Abweichung:** `ping_group_range` in `compose.yaml` ist `0 65535`, nicht `0 2147483647`: rootless Podman lehnt Gruppen außerhalb seines
+      Benutzer-Namensraums ab (`crun: … Invalid argument`).
+    - **Lokal geprüft mit Podman 4.9 ohne Root (amd64):** Rauchtest (erster Start mit Schlüssel und Zertifikat, Healthcheck, `user add`, Anmeldung
+      über HTTPS, `tls generate` überschreibt nicht, Neustart ohne neuen Schlüssel); SNMP v2c über NAT an den `snmpd` des Laptops
+      (slirp4netns, Host-Loopback 10.0.2.2) „Verbindung erfolgreich“; Ping an den Switch im LAN 2,99 ms; „Dieser Server“ zeigt Speicher, Laufzeit und
+      Temperaturen des Hosts, keine Dateisysteme, nur die Schnittstelle des Containers; Podman meldet `healthy`; die nachgeholte Sicherung kam nach
+      fünf Minuten (Name in Ortszeit, 0600); Container gelöscht und mit denselben Volumes neu angelegt (wie ein Update): Daten, Schlüssel und
+      Anmeldung erhalten, keine erneute Sicherung, Seite „Aktualisierungen“ mit `docker compose`.
+    - **Nicht geprüft:** Docker selbst (hier nur Podman; die CI nutzt Docker), arm64 (erst im Workflow oder auf dem Pi), `docker compose`
+      (hier nicht installiert; dieselben Optionen mit `podman run` getestet), ein Update mit Migration (seit 0.5.9 gibt es keine).
+    - Der Workflow `container.yml` läuft erst nach dem Push auf GitHub; ein Probelauf über „Run workflow“ baut und testet ohne Push.
 12. **Veröffentlichung** mit dem nächsten Release, auf Ansage. Der Workflow läuft beim Tag, danach schaltet der Nutzer das Paket auf GHCR öffentlich.
     Release-Notes und README nennen `docker compose`.
 
 ### Kleinere offene Punkte (ohne eigenen Plan)
+
+- **`lettre` 0.11.23 in v0.6.2 verwundbar** (RUSTSEC-2026-0560 bis -0565 vom 2026-11-17: u. a. STARTTLS-Antwortinjektion durch einen MITM,
+  SMTP-Befehlsinjektion durch fehlendes Dot-Stuffing, Absturz durch Antworten des Mailservers). Im Lockfile auf 0.11.24 angehoben (2026-11-19);
+  betrifft den Mailversand der laufenden v0.6.2 auf dem Server. Empfehlung: bald ein Release (0.6.3 oder mit dem Image als 0.7.0), auf Ansage.
+
+- **arm64-`.deb` und -Archiv** (aus Q herausgenommen, 2026-11-19): `dev/deb.sh` mit Ziel-Architektur, `release.sh`/`SHA256SUMS` für mehrere
+  Architekturen, Paketname auf der Seite „Aktualisierungen“ und im Update-Skript des Servers nach Architektur. Nur nach „go“.
 
 - **Ausnahme RUSTSEC-2026-0459** (SQLite in `libsqlite3-sys` 0.30, 2026-11-09 in `.cargo/audit.toml`, wie in opensecmon): entfernen, sobald eine
   sqlx-Version `libsqlite3-sys` >= 0.39 annimmt (Stand 2026-11-09: sqlx 0.8 braucht 0.30, sqlx 0.9.0 < 0.38), dann sqlx aktualisieren.

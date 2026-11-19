@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds, checks and (optionally) publishes a GitHub release of opennetmon: a tar.gz archive and a .deb package.
+# Builds, checks and (optionally) publishes a GitHub release of opennetmon: a tar.gz archive, a .deb package and compose.yaml.
+# The pushed tag also starts .github/workflows/container.yml, which builds and pushes the container image (docs/docker.md).
 #
 #   dev/release.sh                                  # build and check only; result in target/dist/
 #   dev/release.sh --publish --notes notes.md       # additionally tag vX.Y.Z, push the tag, create the release
@@ -78,7 +79,8 @@ for f in usr/bin/opennetmon usr/sbin/opennetmon-backup etc/opennetmon/config.tom
   grep -q " \./$f\$" <<<"$CONTENTS" || fail "$DEB does not contain /$f"
 done
 [ "$(dpkg-deb --field "$DIST/$DEB" Version)" = "$VERSION-1" ] || fail "$DEB has the wrong version"
-(cd "$DIST" && sha256sum "$NAME.tar.gz" "$DEB" > SHA256SUMS)
+cp compose.yaml "$DIST/"
+(cd "$DIST" && sha256sum "$NAME.tar.gz" "$DEB" compose.yaml > SHA256SUMS)
 
 step "installer dry run from the unpacked archive"
 CHECK="$DIST/check"
@@ -100,7 +102,7 @@ step "tagging $TAG and creating the GitHub release"
 git tag -a "$TAG" -m "opennetmon $VERSION"
 git push -q origin "$TAG"
 gh release create "$TAG" --verify-tag "${PRERELEASE[@]}" --title "opennetmon $VERSION" --notes-file "$NOTES" \
-  "$DIST/$NAME.tar.gz" "$DIST/$DEB" "$DIST/SHA256SUMS"
+  "$DIST/$NAME.tar.gz" "$DIST/$DEB" "$DIST/compose.yaml" "$DIST/SHA256SUMS"
 
 step "verifying the uploaded files"
 VERIFY=$(mktemp -d)

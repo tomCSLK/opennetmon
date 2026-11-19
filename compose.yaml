@@ -1,0 +1,38 @@
+# opennetmon in a container (docs/docker.md). Docker Compose or Podman.
+#
+#   docker compose up -d
+#   docker compose exec opennetmon opennetmon user add admin --role admin    # the first administrator
+#   docker compose logs opennetmon | grep fingerprint                         # compare it with the browser's warning
+#
+# Then open https://<address of this computer>:8443. Update: docker compose pull && docker compose up -d
+services:
+  opennetmon:
+    # latest follows every release; pin a version (e.g. :0.7.0) to update on your own schedule.
+    image: ghcr.io/tomcslk/opennetmon:latest
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    volumes:
+      - config:/etc/opennetmon       # key, certificate: back it up apart from the data
+      - data:/var/lib/opennetmon     # database, daily backups in backups/
+    environment:
+      TZ: Europe/Berlin              # time zone of maintenance windows and backups (default UTC)
+      # All settings: docs/configuration.md, e.g.
+      # OPENNETMON_BACKUP_TIME: "03:30"
+    # Ping without privileges: allow ICMP sockets for the groups 0 to 65535 (the image runs as 10001). Docker
+    # allows them in the container network already, Podman does not; rootless Podman only accepts groups of
+    # its user namespace, hence not a larger range. Remove it with network_mode: host.
+    sysctls:
+      net.ipv4.ping_group_range: "0 65535"
+    # network_mode: host               # instead of the port mapping, if devices must see the host's address
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  config:
+  data:

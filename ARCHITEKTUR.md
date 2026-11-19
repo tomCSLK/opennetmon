@@ -276,6 +276,20 @@ Vollständige Anleitung: `docs/operations.md`. Dateien unter `deploy/`:
 - Health-Endpoint `/healthz` (ohne Auth, ohne interne Details; `curl -sk https://127.0.0.1:8443/healthz` oder `opennetmon healthcheck`)
 - Paket getestet im Podman-Container (Image `opennetmon-debtest`, Ubuntu 24.04 mit systemd; `/usr/sbin/policy-rc.d` darin löschen): Installation, Update, remove, purge, Umstieg
 
+### Container-Image (Vorhaben Q, seit 2026-11-19)
+
+Anleitung für Anwender: `docs/docker.md`. `Containerfile` (Wurzel): `FROM scratch`, nur `COPY` (kein `RUN`, daher ohne Emulation für jede
+Architektur), `rootfs/` (Binary, Lizenzen, `/tmp` 1777) root-eigen, `state/` (`/etc/opennetmon`, `/var/lib/opennetmon`, 0700) mit `--chown=10001`,
+damit neue Volumes dem Dienstbenutzer gehören; `USER 10001:10001`, `HEALTHCHECK` mit `opennetmon healthcheck`, `ENTRYPOINT` das Binary, `CMD serve`.
+Alle Einstellungen per `ENV` (HTTPS auf 8443, `generate_missing`, `backup_dir`, `update_check`, `packaging=container`). Den Kontext baut
+`dev/container.sh` in `target/container/` (Podman mit `--format docker`, sonst fehlt `HEALTHCHECK`); `--test` startet wie `compose.yaml`
+(read-only, `cap_drop ALL`, `no-new-privileges`, `ping_group_range` `0 65535`) und prüft Start, Healthcheck, `user add`, Anmeldung, Neustart.
+`compose.yaml` (Wurzel) ist das Beispiel für Anwender und liegt jedem Release bei. Veröffentlichung: `.github/workflows/container.yml` beim Tag
+`vX.Y.Z` (prüft Tag = Version), je Architektur nativer Runner (`ubuntu-24.04`, `ubuntu-24.04-arm`), Rauchtest, Push `X.Y.Z-<arch>`, dann
+`docker buildx imagetools create` für `X.Y.Z`, `X.Y`, `latest`; von Hand gestartet nur Bau und Test. Neue GHCR-Pakete sind privat, bis der Nutzer
+sie öffentlich schaltet. Im Container gelten für „Dieser Server“ CPU, Last, Speicher, Laufzeit und Temperaturen des Hosts, keine Dateisysteme und
+nur die Schnittstellen des Containers.
+
 ## Releases und README
 
 Releases: Version in `Cargo.toml` erhöhen und committen, dann `dev/release.sh --publish --notes <datei>` (Release-Notizen auf **Englisch** seit 2026-10-22; v0.1.0–v0.4.1 sind zweisprachig, Englisch oben; prüft sauberen,

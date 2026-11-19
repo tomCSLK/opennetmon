@@ -153,6 +153,19 @@ the script to `/usr/local`). The browser warns about the self-signed certificate
 every start) before accepting it, or use your own certificate. [`docs/operations.md`](docs/operations.md) covers your own certificate (including a small private CA
 and Let's Encrypt), port 443, running behind Caddy or nginx instead, update, rollback, backup, restore and troubleshooting.
 
+### In a container (Docker, Podman)
+
+From the next release on, opennetmon is also published as an image for amd64 and arm64: `ghcr.io/tomcslk/opennetmon` (only the static binary,
+no shell, runs as an unprivileged user, read-only). With [`compose.yaml`](compose.yaml):
+
+```bash
+docker compose up -d
+docker compose exec opennetmon opennetmon user add admin --role admin
+```
+
+Then open `https://<address of this computer>:8443`. Key and certificate are created on the first start, the database is backed up daily inside
+the data volume. [`docs/docker.md`](docs/docker.md) covers settings, your own certificate, a reverse proxy, ping, backups and updates.
+
 ## Security
 
 - SNMP is used **read-only**.
@@ -180,6 +193,7 @@ Please report vulnerabilities privately, not as an issue: see [`SECURITY.md`](SE
 | [`docs/charts-and-thresholds.md`](docs/charts-and-thresholds.md) | Detail page, charts, thresholds, status values, rollups |
 | [`docs/reports.md`](docs/reports.md) | Availability: counting, reports, CSV |
 | [`docs/operations.md`](docs/operations.md) | Installation, proxy, update and notice of new versions, backup, troubleshooting |
+| [`docs/docker.md`](docs/docker.md) | Container image: compose, volumes, certificates, reverse proxy, ping, backups, updates |
 | [`docs/configuration.md`](docs/configuration.md) | All settings, as file keys and environment variables; backups and health check without systemd |
 | [`docs/device-templates.md`](docs/device-templates.md) | Device templates: create from a device, apply when adding a device or later |
 | [`docs/mibs.md`](docs/mibs.md) | MIB files, custom OID by name, finding values |

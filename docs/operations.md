@@ -1,5 +1,7 @@
 # Running on an Ubuntu server
 
+(For Docker or Podman, see [`docker.md`](docker.md).)
+
 opennetmon runs as a single service (`opennetmon.service`) and is reachable over HTTPS out of the box (`https://<server>:8443`, see “HTTPS and access
 from the network”); a reverse proxy is possible but not needed. There is just one binary and one SQLite database; no database server and no runtime
 environment are installed.
