@@ -146,8 +146,8 @@ cargo build --release --target x86_64-unknown-linux-musl
 Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–S); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-25):
 
 - **v0.7.1** released (2026-11-25): Vorhaben S (Graphen ohne Striche, bei Traffic „Gesamt“ als graue Fläche), `url` 2.5.9 (RUSTSEC-2026-0592),
-  keine Migration; Image `0.7.1`/`0.7`/`latest` auf GHCR. Auf dem Server das inhaltsgleiche Test-Paket 0.7.1-1 (noch `url` 2.5.8); das Release
-  nur mit `sudo opennetmon-update v0.7.1` (Serveradmin 4.3, nach OK), weil die Versionsnummer gleich ist.
+  keine Migration; Image `0.7.1`/`0.7`/`latest` auf GHCR. Seit 2026-11-25 21:29 als Release auf dem Server (Serveradmin 4.3).
+  Offen: neues Erklärvideo, später der Wochenbericht.
 - **v0.7.0** released (2026-11-19): HTML-Mails mit Kennzahlen und Graph (R), Migration 0026, `lettre` 0.11.24, erstmals das Container-Image
   `ghcr.io/tomcslk/opennetmon` (Q). Image öffentlich und ohne Anmeldung abrufbar. Lief 2026-11-19 bis 2026-11-25 auf dem Server.
   Danach: Abschnitt „Synology“ in `docs/docker.md` (ungetestet) und Bilder der neuen Oberfläche im README (Demo-Daten, `dev/data/demo/`).

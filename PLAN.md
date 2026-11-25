@@ -9,9 +9,9 @@
 ohne Striche, bei Traffic „Gesamt“ als graue Fläche), keine Migration. Der erste Lauf von `release.sh` brach bei `cargo audit` ab
 (RUSTSEC-2026-0592, `url` 2.5.8, vom 2026-11-20, über `lettre` und `sqlx`); `url` auf 2.5.9 angehoben, dann veröffentlicht. `.deb` SHA-256
 `4157e176…`, Archiv `6fbd22af…`, `compose.yaml` unverändert. Container-Workflow-Run 45693125017: amd64 und arm64, Rauchtest, Tags `0.7.1`,
-`0.7`, `latest` (ohne Anmeldung geprüft: `podman pull …:latest`, `--version` → 0.7.1). **Server:** dort läuft das Test-Paket 0.7.1-1 (`93f29e07…`,
-noch mit `url` 2.5.8); gleiche Versionsnummer, daher meldet `opennetmon-update` kein Update. Auf das Release nur ausdrücklich mit
-`sudo opennetmon-update v0.7.1` (`Serveradmin` 4.3, nach OK); sonst kommt die Korrektur mit dem nächsten Release.
+`0.7`, `latest` (ohne Anmeldung geprüft: `podman pull …:latest`, `--version` → 0.7.1). **Server:** seit 2026-11-25 21:29 das Release
+0.7.1-1 (vom Nutzer installiert, ersetzt das inhaltsgleiche Test-Paket `93f29e07…` mit `url` 2.5.8). Nur lesend geprüft: `/usr/bin/opennetmon`
+identisch mit dem Programm aus dem Release-`.deb` (SHA-256 `b38cf248…`), Dienst aktiv, keine Warnungen im Journal.
 
 **v0.7.0** released 2026-11-19 (Auftrag des Nutzers: „Freigabe für ein Release 0.7.0 als deb und docker“): Inhalt wie das Test-Paket 0.6.3
 (HTML-Mails mit Kennzahlen und Graph, Vorhaben R Stufen 1 und 2; „Adresse der Oberfläche“ mit **Migration 0026**; `lettre` 0.11.24), dazu erstmals
