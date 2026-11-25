@@ -25,7 +25,7 @@ A single, statically linked binary (Rust) with SQLite – meant to run on a head
   <img src="docs/images/sensor-light.png" alt="Sensor page: traffic of a router over seven days with current values and availability">
 </picture>
 
-Overview and a traffic sensor over seven days, in the light or dark theme depending on your GitHub setting (version 0.7.0, made-up demo data).
+Overview and a traffic sensor over seven days, in the light or dark theme depending on your GitHub setting (version 0.7.1, made-up demo data).
 
 ## See it in action
 
