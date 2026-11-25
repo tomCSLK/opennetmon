@@ -15,7 +15,7 @@ arm64 gebaut, Rauchtest bestanden, Tags `0.7.0`, `0.7`, `latest` (Manifest-Liste
 Commit `eeaa087`) und Bilder der neuen Oberfläche im README (Abschnitt P, „Offen“). Offen: neues Erklärvideo, später der Wochenbericht (R).
 
 **Test-Paket 0.7.1 (2026-11-25, kein Tag):** Vorhaben S (Graphen ohne Striche, bei Traffic „Gesamt“ als graue Fläche), keine Migration;
-noch nicht auf dem Server.
+seit 2026-11-25 21:01 auf dem Server (Prüfung ohne Befund), vom Nutzer geprüft („sieht gut aus, kann man als Release veröffentlichen“).
 
 **v0.6.2** released 2026-11-12 (Auftrag des Nutzers: „die letzte Version kannst du jetzt veröffentlichen, die passt“): neue Oberfläche (Vorhaben P)
 mit den Korrekturen aus dem Test von 0.6.1, dazu die Korrekturen aus dem Test-Paket 0.5.10. Keine Migration seit 0.5.9 (weiter 0001–0025), Rückweg

@@ -162,8 +162,8 @@ Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–S); private Punkte in 
   Workflow `container.yml`, `docs/docker.md`) erledigt 2026-11-19, lokal mit Podman getestet; Schritt 12 erledigt: veröffentlicht mit **v0.7.0**,
   das Paket auf GHCR war ohne weiteren Schritt öffentlich. Ausgelagert: arm64-`.deb` (nur nach „go“).
 - **Test-Paket 0.7.1** (2026-11-25, kein Tag, keine Migration): **Vorhaben S**, alle Graphen ohne Striche; bei Traffic zusätzlich „Gesamt“
-  (in + out, nur berechnet) als schattierte Fläche (hell dunkles Grau, dunkel helles Grau), sichtbar und abschaltbar. Offen: Installation
-  auf dem Server und Rückmeldung. Einzelheiten `PLAN.md` (S).
+  (in + out, nur berechnet) als schattierte Fläche (hell dunkles Grau, dunkel helles Grau), sichtbar und abschaltbar. Seit 2026-11-25 21:01
+  auf dem Server installiert, vom Nutzer geprüft („sieht gut aus“), Freigabe als Release v0.7.1. Einzelheiten `PLAN.md` (S).
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,
