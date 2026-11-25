@@ -14,6 +14,9 @@ arm64 gebaut, Rauchtest bestanden, Tags `0.7.0`, `0.7`, `latest` (Manifest-Liste
 0.7.0-1 auf dem Server (per `opennetmon-update`, Einzelheiten in `Serveradmin` 4.3). Danach: Abschnitt „Synology“ in `docs/docker.md` (ungetestet,
 Commit `eeaa087`) und Bilder der neuen Oberfläche im README (Abschnitt P, „Offen“). Offen: neues Erklärvideo, später der Wochenbericht (R).
 
+**Test-Paket 0.7.1 (2026-11-25, kein Tag):** Vorhaben S (Graphen ohne Striche, bei Traffic „Gesamt“ als graue Fläche), keine Migration;
+noch nicht auf dem Server.
+
 **v0.6.2** released 2026-11-12 (Auftrag des Nutzers: „die letzte Version kannst du jetzt veröffentlichen, die passt“): neue Oberfläche (Vorhaben P)
 mit den Korrekturen aus dem Test von 0.6.1, dazu die Korrekturen aus dem Test-Paket 0.5.10. Keine Migration seit 0.5.9 (weiter 0001–0025), Rückweg
 auf 0.5.9 ohne Sicherung möglich. Releases 0.6.0 und 0.6.1 gibt es nicht (nur Test-Pakete). Das `.deb` des Releases (SHA-256 `6a4743d2…`) ist neu
@@ -1402,7 +1405,15 @@ Rohwerte des Hauptkanals, Lücken ab 2,5 × Intervall, Ausfälle getönt mit „
 Binary (musl, gestrippt): 20 522 568 Bytes (Stand `HEAD`, ohne R) → 24 713 704 Bytes mit R Stufe 1 und 2 (+4,0 MiB, fast ganz Renderer
 und Schriften); statisch gelinkt (`static-pie`). Später, nicht in R: Wochenbericht.
 
-### S. Traffic-Graph wie in PRTG: Linien durchgezogen, Summe „Gesamt“ als Fläche – notiert 2026-11-25, entschieden 2026-11-25, Umsetzung nach „go“
+### S. Traffic-Graph wie in PRTG: Linien durchgezogen, Summe „Gesamt“ als Fläche – entschieden und umgesetzt 2026-11-25, im Test-Paket 0.7.1
+
+**Umgesetzt 2026-11-25** („go, umsetzen und Test-Paket bauen“): wie unten geplant. `sensor_detail::traffic_total` (Schlüssel `total`,
+Beschriftung `channel-total`, `area: true`), in `chart.js` keine Striche mehr, Fläche nur für `area`, Gesamt hell `#444d59`, dunkel `#b0b8c2`
+(`--s-total`, `--s-total-fill`), Linie 1,2 px, die übrigen Kanäle behalten ihre Farben (Ping unverändert). Geprüft mit der Demo-Instanz:
+hell, dunkel, 390 px, Gesamt aus (Achse schrumpft von 240 auf 200 Mbit/s), Ping. Bilder `docs/images/sensor-*.png` neu. **Test-Paket 0.7.1-1**
+(kein Tag, SHA-256 `93f29e07…`, `target/debian/`), keine Migration gegenüber 0.7.0. Offen: Installation auf dem Server (Nutzer bzw. `Serveradmin` 4.3
+nach OK) und Rückmeldung.
+
 
 **Wunsch des Nutzers (2026-11-25, Bildschirmfoto der Sensorseite „Traffic gigabitEthernet 1/0/8“, 24 Stunden):** Die rote Linie
 („Ausgehend“) soll wie die blaue durchgezogen sein. Dazu eine dritte Linie für den Gesamtdurchsatz wie in PRTG, **schwarz und schattiert**,
