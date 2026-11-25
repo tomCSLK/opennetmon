@@ -3,7 +3,15 @@
 > Dieser Plan ergänzt `CLAUDE.md`. Bei Widersprüchen gilt `CLAUDE.md`.
 > Der Name ist **opennetmon** (festgelegt am 2026-10-19 mit neuem Logo; vom 2026-10-16 bis dahin „netmon“). „PRTG" ist eine Marke von Paessler; opennetmon ist nur vom Bedienkonzept inspiriert.
 
-## Stand (2026-11-19, Release v0.7.0)
+## Stand (2026-11-25, Release v0.7.1)
+
+**v0.7.1** released 2026-11-25 (Nutzer: „ist installiert, sieht gut aus. kann man als release veröffentlichen“): Vorhaben S (alle Graphen
+ohne Striche, bei Traffic „Gesamt“ als graue Fläche), keine Migration. Der erste Lauf von `release.sh` brach bei `cargo audit` ab
+(RUSTSEC-2026-0592, `url` 2.5.8, vom 2026-11-20, über `lettre` und `sqlx`); `url` auf 2.5.9 angehoben, dann veröffentlicht. `.deb` SHA-256
+`4157e176…`, Archiv `6fbd22af…`, `compose.yaml` unverändert. Container-Workflow-Run 45693125017: amd64 und arm64, Rauchtest, Tags `0.7.1`,
+`0.7`, `latest` (ohne Anmeldung geprüft: `podman pull …:latest`, `--version` → 0.7.1). **Server:** dort läuft das Test-Paket 0.7.1-1 (`93f29e07…`,
+noch mit `url` 2.5.8); gleiche Versionsnummer, daher meldet `opennetmon-update` kein Update. Auf das Release nur ausdrücklich mit
+`sudo opennetmon-update v0.7.1` (`Serveradmin` 4.3, nach OK); sonst kommt die Korrektur mit dem nächsten Release.
 
 **v0.7.0** released 2026-11-19 (Auftrag des Nutzers: „Freigabe für ein Release 0.7.0 als deb und docker“): Inhalt wie das Test-Paket 0.6.3
 (HTML-Mails mit Kennzahlen und Graph, Vorhaben R Stufen 1 und 2; „Adresse der Oberfläche“ mit **Migration 0026**; `lettre` 0.11.24), dazu erstmals
@@ -14,8 +22,8 @@ arm64 gebaut, Rauchtest bestanden, Tags `0.7.0`, `0.7`, `latest` (Manifest-Liste
 0.7.0-1 auf dem Server (per `opennetmon-update`, Einzelheiten in `Serveradmin` 4.3). Danach: Abschnitt „Synology“ in `docs/docker.md` (ungetestet,
 Commit `eeaa087`) und Bilder der neuen Oberfläche im README (Abschnitt P, „Offen“). Offen: neues Erklärvideo, später der Wochenbericht (R).
 
-**Test-Paket 0.7.1 (2026-11-25, kein Tag):** Vorhaben S (Graphen ohne Striche, bei Traffic „Gesamt“ als graue Fläche), keine Migration;
-seit 2026-11-25 21:01 auf dem Server (Prüfung ohne Befund), vom Nutzer geprüft („sieht gut aus, kann man als Release veröffentlichen“).
+**Test-Paket 0.7.1 (2026-11-25, kein Tag):** Vorhaben S, seit 2026-11-25 21:01 auf dem Server, vom Nutzer geprüft; released als v0.7.1
+(dort zusätzlich `url` 2.5.9).
 
 **v0.6.2** released 2026-11-12 (Auftrag des Nutzers: „die letzte Version kannst du jetzt veröffentlichen, die passt“): neue Oberfläche (Vorhaben P)
 mit den Korrekturen aus dem Test von 0.6.1, dazu die Korrekturen aus dem Test-Paket 0.5.10. Keine Migration seit 0.5.9 (weiter 0001–0025), Rückweg
@@ -1405,14 +1413,14 @@ Rohwerte des Hauptkanals, Lücken ab 2,5 × Intervall, Ausfälle getönt mit „
 Binary (musl, gestrippt): 20 522 568 Bytes (Stand `HEAD`, ohne R) → 24 713 704 Bytes mit R Stufe 1 und 2 (+4,0 MiB, fast ganz Renderer
 und Schriften); statisch gelinkt (`static-pie`). Später, nicht in R: Wochenbericht.
 
-### S. Traffic-Graph wie in PRTG: Linien durchgezogen, Summe „Gesamt“ als Fläche – entschieden und umgesetzt 2026-11-25, im Test-Paket 0.7.1
+### S. Traffic-Graph wie in PRTG: Linien durchgezogen, Summe „Gesamt“ als Fläche – umgesetzt 2026-11-25, released in v0.7.1
 
 **Umgesetzt 2026-11-25** („go, umsetzen und Test-Paket bauen“): wie unten geplant. `sensor_detail::traffic_total` (Schlüssel `total`,
 Beschriftung `channel-total`, `area: true`), in `chart.js` keine Striche mehr, Fläche nur für `area`, Gesamt hell `#444d59`, dunkel `#b0b8c2`
 (`--s-total`, `--s-total-fill`), Linie 1,2 px, die übrigen Kanäle behalten ihre Farben (Ping unverändert). Geprüft mit der Demo-Instanz:
 hell, dunkel, 390 px, Gesamt aus (Achse schrumpft von 240 auf 200 Mbit/s), Ping. Bilder `docs/images/sensor-*.png` neu. **Test-Paket 0.7.1-1**
 (kein Tag, SHA-256 `93f29e07…`, `target/debian/`), keine Migration gegenüber 0.7.0. Offen: Installation auf dem Server (Nutzer bzw. `Serveradmin` 4.3
-nach OK) und Rückmeldung.
+nach OK) und Rückmeldung. Erledigt: installiert 2026-11-25 21:01, vom Nutzer geprüft, released als v0.7.1.
 
 
 **Wunsch des Nutzers (2026-11-25, Bildschirmfoto der Sensorseite „Traffic gigabitEthernet 1/0/8“, 24 Stunden):** Die rote Linie

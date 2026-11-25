@@ -143,10 +143,13 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ## Stand und offene Punkte
 
-Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–S); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-19):
+Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–S); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-25):
 
+- **v0.7.1** released (2026-11-25): Vorhaben S (Graphen ohne Striche, bei Traffic „Gesamt“ als graue Fläche), `url` 2.5.9 (RUSTSEC-2026-0592),
+  keine Migration; Image `0.7.1`/`0.7`/`latest` auf GHCR. Auf dem Server das inhaltsgleiche Test-Paket 0.7.1-1 (noch `url` 2.5.8); das Release
+  nur mit `sudo opennetmon-update v0.7.1` (Serveradmin 4.3, nach OK), weil die Versionsnummer gleich ist.
 - **v0.7.0** released (2026-11-19): HTML-Mails mit Kennzahlen und Graph (R), Migration 0026, `lettre` 0.11.24, erstmals das Container-Image
-  `ghcr.io/tomcslk/opennetmon` (Q). Image öffentlich und ohne Anmeldung abrufbar. Seit 2026-11-19 21:09 auf dem Server (Serveradmin 4.3).
+  `ghcr.io/tomcslk/opennetmon` (Q). Image öffentlich und ohne Anmeldung abrufbar. Lief 2026-11-19 bis 2026-11-25 auf dem Server.
   Danach: Abschnitt „Synology“ in `docs/docker.md` (ungetestet) und Bilder der neuen Oberfläche im README (Demo-Daten, `dev/data/demo/`).
   Offen: neues Erklärvideo, später der Wochenbericht.
 
@@ -161,9 +164,7 @@ Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–S); private Punkte in 
   beim Tag), Schrittplan in `PLAN.md` (Q). Schritte 9 (Vorarbeiten im Programm) und 11 (`Containerfile`, `compose.yaml`, `dev/container.sh`,
   Workflow `container.yml`, `docs/docker.md`) erledigt 2026-11-19, lokal mit Podman getestet; Schritt 12 erledigt: veröffentlicht mit **v0.7.0**,
   das Paket auf GHCR war ohne weiteren Schritt öffentlich. Ausgelagert: arm64-`.deb` (nur nach „go“).
-- **Test-Paket 0.7.1** (2026-11-25, kein Tag, keine Migration): **Vorhaben S**, alle Graphen ohne Striche; bei Traffic zusätzlich „Gesamt“
-  (in + out, nur berechnet) als schattierte Fläche (hell dunkles Grau, dunkel helles Grau), sichtbar und abschaltbar. Seit 2026-11-25 21:01
-  auf dem Server installiert, vom Nutzer geprüft („sieht gut aus“), Freigabe als Release v0.7.1. Einzelheiten `PLAN.md` (S).
+- **Vorhaben S** (Traffic-Graph wie PRTG): umgesetzt 2026-11-25, als Test-Paket 0.7.1 vom Nutzer geprüft, released in **v0.7.1**.
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,
