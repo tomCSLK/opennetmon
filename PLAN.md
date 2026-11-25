@@ -10,8 +10,9 @@
 das Container-Image `ghcr.io/tomcslk/opennetmon` (amd64/arm64, Vorhaben Q Schritt 12) und `compose.yaml` im Release. Vorher vom Nutzer auf dem
 Server geprüft: Test-Mail in Gmail (Rechner, Handy, dunkel) und eine echte Ausfallmail („sehr gut“). Workflow-Run 44603665421: amd64 und
 arm64 gebaut, Rauchtest bestanden, Tags `0.7.0`, `0.7`, `latest` (Manifest-Liste `sha256:47253b2f…`). Das Paket auf GHCR war sofort öffentlich
-(Sichtbarkeit vom öffentlichen Repo geerbt), ohne Anmeldung geprüft: `podman pull …:latest` und `--version` → 0.7.0. Der Server läuft noch mit
-dem Test-Paket 0.6.3 (inhaltsgleich bis auf die Versionsnummer); Update auf 0.7.0 über `Serveradmin` 4.3, nach OK.
+(Sichtbarkeit vom öffentlichen Repo geerbt), ohne Anmeldung geprüft: `podman pull …:latest` und `--version` → 0.7.0. Seit 2026-11-19 21:09 läuft
+0.7.0-1 auf dem Server (per `opennetmon-update`, Einzelheiten in `Serveradmin` 4.3). Danach: Abschnitt „Synology“ in `docs/docker.md` (ungetestet,
+Commit `eeaa087`) und Bilder der neuen Oberfläche im README (Abschnitt P, „Offen“). Offen: neues Erklärvideo, später der Wochenbericht (R).
 
 **v0.6.2** released 2026-11-12 (Auftrag des Nutzers: „die letzte Version kannst du jetzt veröffentlichen, die passt“): neue Oberfläche (Vorhaben P)
 mit den Korrekturen aus dem Test von 0.6.1, dazu die Korrekturen aus dem Test-Paket 0.5.10. Keine Migration seit 0.5.9 (weiter 0001–0025), Rückweg
@@ -22,7 +23,7 @@ gebaut und unterscheidet sich deshalb in der Prüfsumme vom Test-Paket 0.6.2 (`b
 Kennzahlen und Graph (Vorhaben R, Stufen 1 und 2), Einstellung „Adresse der Oberfläche“ mit **Migration 0026** (Rückweg auf 0.6.2 nur über die
 Sicherung vor dem Update), `lettre` 0.11.24 (sechs Lücken im Mailversand), Vorarbeiten für das Container-Image (Q). Seit 2026-11-19 20:35 auf dem Server
 (Betrieb in `Serveradmin`, 4.3), Test-Mail in Gmail vom Nutzer geprüft (Rechner, Handy, dunkler Modus: entspricht dem Entwurf;
-Gmail verlinkt den SMTP-Servernamen von sich aus, bisher so belassen); offen eine echte Ausfall- und Wieder-in-Ordnung-Mail mit Graph.
+Gmail verlinkt den SMTP-Servernamen von sich aus, bisher so belassen); echte Ausfallmail vom Nutzer geprüft („sehr gut“), danach released als v0.7.0.
 
 **Seit v0.5.7:** **v0.5.9** (2026-11-08) bringt die Sensoren für FRITZ!Box und Huawei-Router (N), den lesenden Inventar-Endpunkt mit Zugriffstoken für
 opensecmon (`docs/api.md`) und die Statuswechsel in Seiten (O); der Zweig `router-sensors` ist in `main` aufgegangen. Das **Test-Paket 0.5.10** (2026-11-08, kein
@@ -1350,7 +1351,8 @@ beim Nutzer angefragt worden. Sie kommt zusätzlich zum `.deb`, nicht statt sein
       unter Docker auf beiden bestanden; damit sind Docker und arm64 geprüft.
     - **Nicht geprüft:** `docker compose` selbst (hier nicht installiert; dieselben Optionen mit `podman run` getestet), Ping/SNMP unter arm64
       im echten Netz (z. B. auf dem Pi), ein Update mit Migration (seit 0.5.9 gibt es keine).
-12. ✔ **Veröffentlichung** mit v0.7.0 (2026-11-19, Auftrag des Nutzers); das GHCR-Paket war ohne weiteren Schritt öffentlich. Der Workflow läuft beim Tag, danach schaltet der Nutzer das Paket auf GHCR öffentlich.
+12. ✔ **Veröffentlichung** mit v0.7.0 (2026-11-19, Auftrag des Nutzers); das GHCR-Paket war ohne weiteren Schritt öffentlich (vom Repo geerbt). Der Workflow läuft beim Tag.
+    Danach `docs/docker.md` um einen Abschnitt „Synology“ ergänzt (Container Manager, Rechte der Ordner, erster Admin per SSH; ungetestet).
     Release-Notes und README nennen `docker compose`.
 
 ### R. Moderne E-Mail-Benachrichtigungen (HTML mit Kennzahlen und Graph) – entschieden 2026-11-19, „go“ für Stufe 1 und 2
@@ -1404,7 +1406,7 @@ und Schriften); statisch gelinkt (`static-pie`). Später, nicht in R: Wochenberi
 
 - **`lettre` 0.11.23 in v0.6.2 verwundbar** (RUSTSEC-2026-0560 bis -0565 vom 2026-11-17: u. a. STARTTLS-Antwortinjektion durch einen MITM,
   SMTP-Befehlsinjektion durch fehlendes Dot-Stuffing, Absturz durch Antworten des Mailservers). Im Lockfile auf 0.11.24 angehoben (2026-11-19);
-  betrifft den Mailversand der laufenden v0.6.2 auf dem Server. Empfehlung: bald ein Release (0.6.3 oder mit dem Image als 0.7.0), auf Ansage.
+  ✔ Behoben mit v0.7.0 (2026-11-19; auf dem Server schon seit dem Test-Paket 0.6.3).
 
 - **arm64-`.deb` und -Archiv** (aus Q herausgenommen, 2026-11-19): `dev/deb.sh` mit Ziel-Architektur, `release.sh`/`SHA256SUMS` für mehrere
   Architekturen, Paketname auf der Seite „Aktualisierungen“ und im Update-Skript des Servers nach Architektur. Nur nach „go“.

@@ -146,20 +146,21 @@ cargo build --release --target x86_64-unknown-linux-musl
 Maßgeblich ist `PLAN.md` (oben „Stand“, Vorhaben A–R); private Punkte in `CLAUDE.local.md`. Kurz (2026-11-19):
 
 - **v0.7.0** released (2026-11-19): HTML-Mails mit Kennzahlen und Graph (R), Migration 0026, `lettre` 0.11.24, erstmals das Container-Image
-  `ghcr.io/tomcslk/opennetmon` (Q). Image öffentlich und ohne Anmeldung abrufbar. Offen: Server von Test-Paket 0.6.3 auf 0.7.0 (Serveradmin 4.3, nach OK).
+  `ghcr.io/tomcslk/opennetmon` (Q). Image öffentlich und ohne Anmeldung abrufbar. Seit 2026-11-19 21:09 auf dem Server (Serveradmin 4.3).
+  Danach: Abschnitt „Synology“ in `docs/docker.md` (ungetestet) und Bilder der neuen Oberfläche im README (Demo-Daten, `dev/data/demo/`).
+  Offen: neues Erklärvideo, später der Wochenbericht.
 
-- **v0.6.2** released (2026-11-12, neue Oberfläche, keine Migration seit 0.5.9); auf dem Server läuft das Test-Paket 0.6.2
-  (inhaltlich gleich, andere Prüfsumme; Betrieb in `Serveradmin`, Abschnitt 4.3). Im README seit 2026-11-19 Bilder der neuen Oberfläche (Demo-Daten); offen ein neues Erklärvideo.
+- **v0.6.2** released (2026-11-12, neue Oberfläche, keine Migration seit 0.5.9).
 - **Test-Paket 0.6.3** (2026-11-19, kein Tag): HTML-Mails mit Kennzahlen und Graph (**Vorhaben R**, Stufen 1 und 2; Wochenbericht später),
-  Migration 0026, `lettre` 0.11.24; seit 2026-11-19 20:35 auf dem Server, Test-Mail in Gmail geprüft (Rechner, Handy, dunkel: passt); offen eine echte Ausfall-/Wieder-in-Ordnung-Mail mit Graph.
+  Migration 0026, `lettre` 0.11.24; lief 2026-11-19 20:35–21:09 auf dem Server, Test-Mail und echte Ausfallmail vom Nutzer geprüft; released als **v0.7.0**.
 - **Vorhaben P** (neue Oberfläche nach opensecmon: Kopfleiste, Benutzermenü mit Einstellungen, Abzeichen „Neue Version“, Suche, „Braucht Aufmerksamkeit“)
   ist umgesetzt im **Test-Paket 0.6.0** (2026-11-09, kein Tag). Beschreibung in `ARCHITEKTUR.md` („Design“), Abweichungen vom Entwurf in `PLAN.md` (P).
   Der Entwurf bleibt **lokal** (`/docs/entwurf/` in `.gitignore`). Laut Nutzer (2026-11-10) wichen Grafiken und Graphen vom Entwurf ab; Liste und
   Schrittplan in `PLAN.md` (P), Schritte 1–7 erledigt, released als **v0.6.2**.
 - **Vorhaben Q** (Docker-Version zusätzlich zum `.deb`): entschieden 2026-11-12 (GHCR, amd64/arm64, `scratch`, HTTPS als Standard, Bau in der CI
   beim Tag), Schrittplan in `PLAN.md` (Q). Schritte 9 (Vorarbeiten im Programm) und 11 (`Containerfile`, `compose.yaml`, `dev/container.sh`,
-  Workflow `container.yml`, `docs/docker.md`) erledigt 2026-11-19, lokal mit Podman getestet; offen Schritt 12: Veröffentlichung mit dem nächsten
-  Release (auf Ansage), danach das Paket auf GHCR öffentlich schalten (Nutzer, Browser).
+  Workflow `container.yml`, `docs/docker.md`) erledigt 2026-11-19, lokal mit Podman getestet; Schritt 12 erledigt: veröffentlicht mit **v0.7.0**,
+  das Paket auf GHCR war ohne weiteren Schritt öffentlich. Ausgelagert: arm64-`.deb` (nur nach „go“).
 - Später: Push (F), Zwei-Faktor-Anmeldung (K), Rotation von `secret.key` (L; bis dahin Schlüsseldatei getrennt von der Datenbank sichern), Anmeldeprofile
   für die FRITZ!Box (N), apt-Repository.
 - Repo: öffentlich seit 2026-10-22, mit Private vulnerability reporting, Dependabot, Secret Scanning und Push Protection. Alte Commits enthalten Site-Name,
