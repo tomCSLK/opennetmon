@@ -1402,6 +1402,53 @@ Rohwerte des Hauptkanals, Lücken ab 2,5 × Intervall, Ausfälle getönt mit „
 Binary (musl, gestrippt): 20 522 568 Bytes (Stand `HEAD`, ohne R) → 24 713 704 Bytes mit R Stufe 1 und 2 (+4,0 MiB, fast ganz Renderer
 und Schriften); statisch gelinkt (`static-pie`). Später, nicht in R: Wochenbericht.
 
+### S. Traffic-Graph wie in PRTG: Linien durchgezogen, Summe „Gesamt“ als Fläche – notiert 2026-11-25, entschieden 2026-11-25, Umsetzung nach „go“
+
+**Wunsch des Nutzers (2026-11-25, Bildschirmfoto der Sensorseite „Traffic gigabitEthernet 1/0/8“, 24 Stunden):** Die rote Linie
+(„Ausgehend“) soll wie die blaue durchgezogen sein. Dazu eine dritte Linie für den Gesamtdurchsatz wie in PRTG, **schwarz und schattiert**,
+in der Legende genauso abschaltbar. Eingehend und Ausgehend bekommen **keine** Schattierung, nur die Gesamtlinie.
+
+**Heute** (`static/chart.js`, Vorgabe des Entwurfs): der erste Kanal mit heller Fläche (Farbe mit Alpha `1a`, kaum sichtbar), alle weiteren
+gestrichelt (`dash [5, 3]`, Legende `.dash`). Das gilt für alle Graphen der Sensorseite, nicht nur für Traffic.
+
+**Umsetzung (Vorschlag):**
+
+1. **Gesamt als abgeleitete Reihe im Server**, nicht gespeichert: `web::sensor_detail::data` hängt bei Sensoren mit den Kanälen `in` und `out`
+   in bit/s (Interface-Traffic per SNMP, „Dieser Server“, FRITZ!Box, Huawei) eine Reihe `total` an, Wert je Zeitpunkt `in + out`, Lücke, wenn
+   einer der beiden fehlt. Keine Migration, keine neue Abfrage, gilt sofort auch rückwirkend: in 7 und 30 Tagen sind die Punkte
+   Stundenmittel, und die Summe der Mittel ist das Mittel der Summe. `SeriesJson` bekommt ein Feld `area: bool` (nur `total`), Beschriftung
+   über einen neuen Fluent-Schlüssel `channel-total` („Gesamt“/„Total“, beide Kataloge). Die Rechnung im Browser wäre auch möglich, aber im
+   Server bleibt `chart.js` frei von Sonderwissen über Kanäle und es lässt sich mit den Handler-Tests prüfen.
+2. **`chart.js`:** keine Striche mehr, alle Linien durchgezogen, 1,6 px. Fläche nur noch für Reihen mit `area` (nicht mehr für den ersten
+   Kanal). Die Gesamtreihe wird zuerst gezeichnet (Fläche hinter den beiden Linien), in der Legende wie bei PRTG vorn:
+   „Gesamt · Eingehend · Ausgehend“. Ein- und Ausblenden über die vorhandene Legende, gemerkt in `sessionStorage` je Sensor wie die übrigen
+   Kanäle. Der Hinweiskasten zeigt Gesamt mit.
+3. **Farbe:** neue CSS-Variablen `--s-total` und `--s-total-fill` in `static/app.css` (hell, dunkel per Medienabfrage und per `data-theme`).
+   Hell ein **passendes dunkles Grau** statt Schwarz (Entscheidung des Nutzers), Fläche etwa 12 % Deckkraft; dunkel ein **helles Grau** mit
+   etwa 15 % Fläche (Schwarz wäre dort unsichtbar). Beide Töne aus den Grautönen des Designs wählen. Die Legende bekommt für Gesamt ein gefülltes Kästchen statt eines Strichs.
+4. **y-Achse:** Mit Gesamt sichtbar reicht die Achse bis zur Summe. Blendet man Gesamt aus, soll die Achse auf Ein- und Ausgehend schrumpfen.
+   Prüfen, ob uPlot ausgeblendete Reihen beim Bereich schon weglässt; sonst im `range` der Skala nur die sichtbaren Reihen nehmen.
+5. **Nicht betroffen:** Mini-Graphen der Listen (eine Linie je Kanal, ohne Fläche), der Graph in den Mails (ein Kanal, behält seine Fläche),
+   die Tabelle „Messwerte“ (Rohwerte je Kanal) und die Kacheln oben.
+6. **Tests und Prüfung:**
+   - Handler-Test: Traffic-JSON enthält `total` = Summe, mit Lücke bei fehlendem Wert. Ein Sensor ohne `in`/`out` (Ping, Uptime) hat keins.
+   - Die Kataloge prüfen sich gegenseitig (`channel-total`).
+   - Im Browser mit der Demo-Instanz (`dev/data/demo/`): hell und dunkel, 1440 und 390 px, Gesamt aus- und einblenden, Hinweiskasten,
+     Ping-Graph (jetzt ohne Striche).
+   - fmt, clippy, test.
+7. **Doku:**
+   - Kopfkommentar von `chart.js`, `ARCHITEKTUR.md` (Detailseite) und `docs/sensors.md` (Traffic: Gesamt im Graphen).
+   - Danach das Bild `docs/images/sensor-*.png` im README mit der Demo-Instanz neu aufnehmen.
+
+**Entschieden (Nutzer, 2026-11-25):**
+
+- (a) Striche weg bei **allen** Graphen (auch Ping Min/Mittel/Max, mehrere OID-Kanäle): ja.
+- (b) Gesamt beim ersten Aufruf sichtbar, wie PRTG: ja.
+- (c) Gesamt als Kachel oben oder als Spalte in „Messwerte“: nein.
+- Farbe: hell dunkles Grau statt Schwarz, dunkel helles Grau.
+
+Aufwand klein (etwa ein bis zwei Stunden), keine neue Abhängigkeit, keine Migration. Danach ein Test-Paket, Release auf Ansage.
+
 ### Kleinere offene Punkte (ohne eigenen Plan)
 
 - **`lettre` 0.11.23 in v0.6.2 verwundbar** (RUSTSEC-2026-0560 bis -0565 vom 2026-11-17: u. a. STARTTLS-Antwortinjektion durch einen MITM,
