@@ -18,6 +18,10 @@ All sensor types implement the trait `Sensor` (`src/sensors/mod.rs`); the poller
 
 Traffic rates are in bit/s (octets × 8). A poll needs exactly one SNMP GET per sensor; counters also fetch `sysUpTime`.
 
+The chart of every sensor with the channels `in` and `out` in bit/s (interface traffic, network traffic of this server, FRITZ!Box,
+Huawei) also shows **Total** (in + out) as a grey shaded area behind the two lines, as in PRTG. It is computed for the chart only (not
+stored, so it covers the past as well) and can be hidden with a click on its legend entry like any channel. All lines are solid.
+
 ## This server (`src/sensors/local.rs`, page `web::server_values`)
 
 Sensors for the machine opennetmon itself runs on – without `snmpd`, without credentials, read-only. What is measured is stored in the column

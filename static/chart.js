@@ -1,6 +1,7 @@
-// Draws the chart of the sensor detail page with uPlot, as in the draft: the unit once above each axis,
-// horizontal grid lines only, the first channel with a light area and the others dashed, outages tinted
-// red, a legend below and a tooltip at the cursor. Channels of a second unit get an axis on the right
+// Draws the chart of the sensor detail page with uPlot: the unit once above each axis, horizontal grid
+// lines only, solid lines in the colours of the channels, outages tinted red, a legend below and a tooltip
+// at the cursor. Traffic sensors also get their total (in + out, from the server, `area`) as a grey shaded
+// area behind the two lines, as in PRTG. Channels of a second unit get an axis on the right
 // (ping: packet loss as red bars). A click on a legend entry hides or shows its channel; the choice holds
 // over the reloads of the tab (sessionStorage, per sensor). Sensors with status values only
 // (#charts[data-band]) get a band of their status over the range instead. Data comes from the JSON
@@ -137,6 +138,7 @@
   // One chart for up to two units: the first on the left axis, the second on the right.
   function buildChart(data, rows, units) {
     var palette = [css('--s1'), css('--s2'), css('--s3'), css('--s4')];
+    var total = css('--s-total'), totalFill = css('--s-total-fill');
     var err = css('--err'), text3 = css('--text-3'), border = css('--border');
     var font = '11px ' + (css('--font-sans') || 'sans-serif');
     var box = el('div', 'chart');
@@ -152,7 +154,7 @@
       stroke: text3, font: font, grid: { show: false }, ticks: { show: false }, values: xValues, gap: 6, size: 28,
       space: function (u, i, min, max, dim) { return Math.max(80, dim / 7); }
     }];
-    var shown = [];
+    var shown = [], lines = 0;
     units.forEach(function (unit, side) {
       var scale = side ? 'y2' : 'y';
       var list = data.series.map(function (s, i) { return { s: s, values: rows.cols[i] }; })
@@ -176,9 +178,12 @@
           : function (u, vals) { return vals.map(function (v) { return F.num(v / ax.div, 3); }); }
       });
       list.forEach(function (x) {
-        var n = shown.length, color = loss ? err : palette[n % palette.length];
+        // The total keeps the colours of the channels as they were (in blue, out orange).
+        var area = !!x.s.area && !loss && !state, n = lines;
+        if (!area && !loss) { lines += 1; }
+        var color = loss ? err : area ? total : palette[n % palette.length];
         var opts = {
-          label: x.s.label, scale: scale, stroke: color, width: 1.6, spanGaps: false,
+          label: x.s.label, scale: scale, stroke: color, width: area ? 1.2 : 1.6, spanGaps: false,
           points: { show: false }, show: hidden.indexOf(x.s.key) < 0
         };
         if (loss) {
@@ -186,15 +191,13 @@
           opts.paths = uPlot.paths.bars({ size: [0.7, 12] });
         } else if (state) {
           opts.paths = uPlot.paths.stepped({ align: 1 });
-        } else if (n === 0) {
-          opts.fill = color + '1a';
-        } else {
-          opts.dash = [5, 3];
+        } else if (area) {
+          opts.fill = totalFill;
         }
         series.push(opts);
         // Ping: no bar where nothing was lost.
         columns.push(loss ? x.values.map(function (v) { return v === 0 ? null : v; }) : x.values);
-        shown.push({ s: x.s, format: F.forSeries(x.s), cls: loss ? 'loss' : 'lg-' + (n % 4 + 1) + (n && !state ? ' dash' : '') });
+        shown.push({ s: x.s, format: F.forSeries(x.s), cls: loss ? 'loss' : area ? 'total' : 'lg-' + (n % 4 + 1) });
       });
     });
     var buttons = shown.map(function (x) {

@@ -463,6 +463,8 @@ struct SeriesJson {
     unit: &'static str,
     /// A channel the table of values hides on phones (ping: minimum, maximum, jitter).
     minor: bool,
+    /// Drawn as a shaded area behind the lines (the traffic total, see [`traffic_total`]).
+    area: bool,
     values: Vec<Option<f64>>,
 }
 
@@ -502,7 +504,16 @@ pub async fn data(
     let (sensor, device) = load(&state, id).await?;
     let range = query.range();
     let now = now_ms();
-    let chart = chart_data(&state.pool, &sensor.channels, range, now).await?;
+    let mut chart = chart_data(&state.pool, &sensor.channels, range, now).await?;
+    let total = traffic_total(&chart.series);
+    let has_total = total.is_some();
+    if let Some(total) = total {
+        chart.series.insert(0, total);
+    }
+    let mut series = series_json(&state, &sensor, user.lang, chart.series);
+    if has_total {
+        series[0].area = true;
+    }
     let from = now - range.duration_ms();
     let (start, changes) = status_store::status_history(&state.pool, sensor.id, from).await?;
     let periods = crate::web::sparkline::periods(start, &changes, from, now)
@@ -522,8 +533,36 @@ pub async fn data(
         step_secs: range.step_secs(),
         interval_secs: sensor.interval(device.polling.interval_secs),
         ts: chart.ts,
-        series: series_json(&state, &sensor, user.lang, chart.series),
+        series,
     }))
+}
+
+/// Key of the traffic total in the chart data; its label is `channel-total` ("Gesamt").
+const TOTAL_KEY: &str = "total";
+
+/// The sum of inbound and outbound traffic, for sensors with the channels `in` and `out` in bit/s
+/// (interface traffic over SNMP, this server, FRITZ!Box, Huawei). As in PRTG the chart shows it as a
+/// shaded area behind the two lines. It is derived for the chart only and never stored; it covers the
+/// past as well, since the sum of hourly averages is the average of the sums. A gap where either value
+/// is missing.
+fn traffic_total(series: &[ChartSeries]) -> Option<ChartSeries> {
+    let find = |key: &str| {
+        series
+            .iter()
+            .find(|s| s.key == key && s.unit == Unit::BitsPerSecond)
+    };
+    let (inbound, outbound) = (find("in")?, find("out")?);
+    let values = inbound
+        .values
+        .iter()
+        .zip(&outbound.values)
+        .map(|(a, b)| Some((*a)? + (*b)?))
+        .collect();
+    Some(ChartSeries {
+        key: TOTAL_KEY.to_owned(),
+        unit: Unit::BitsPerSecond,
+        values,
+    })
 }
 
 fn series_json(
@@ -541,6 +580,7 @@ fn series_json(
             labels: value_format.labels.clone(),
             unit: s.unit.as_str(),
             minor: sensor.spec.minor(&s.key),
+            area: false,
             key: s.key,
             values: s.values,
         })
@@ -1075,6 +1115,32 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_traffic_total_sums_in_and_out_with_gaps() {
+        let s = |key: &str, unit, values| ChartSeries {
+            key: key.to_owned(),
+            unit,
+            values,
+        };
+        let series = [
+            s("in", Unit::BitsPerSecond, vec![Some(1.0), None, Some(2.0)]),
+            s("out", Unit::BitsPerSecond, vec![Some(3.0), Some(4.0), None]),
+        ];
+        let total = traffic_total(&series).unwrap();
+        assert_eq!(total.key, "total");
+        assert_eq!(total.unit, Unit::BitsPerSecond);
+        assert_eq!(total.values, [Some(4.0), None, None]);
+        // Only both channels in bit/s make a total.
+        assert!(traffic_total(&series[..1]).is_none());
+        assert!(
+            traffic_total(&[
+                s("in", Unit::Percent, vec![Some(1.0)]),
+                s("out", Unit::Percent, vec![Some(1.0)]),
+            ])
+            .is_none()
+        );
+    }
+
     #[tokio::test]
     async fn the_json_endpoint_serves_aligned_series() {
         let h = harness(true).await;
@@ -1094,6 +1160,15 @@ mod tests {
         );
         let body = &reply.body;
         assert!(body.contains("\"range\":\"1h\""), "{body}");
+        // The traffic total first, as a shaded area: 12.5 Mbit/s in plus 3 kbit/s out.
+        let json: serde_json::Value = serde_json::from_str(body).unwrap();
+        let series = json["series"].as_array().unwrap();
+        assert_eq!(series.len(), 3, "{body}");
+        assert_eq!(series[0]["key"], "total");
+        assert_eq!(series[0]["label"], "Gesamt");
+        assert_eq!(series[0]["area"], true);
+        assert_eq!(series[1]["area"], false);
+        assert!(body.contains("12503000.0"), "{body}");
         assert!(
             body.contains("\"label\":\"Eingehend\"") && body.contains("\"unit\":\"bps\""),
             "{body}"

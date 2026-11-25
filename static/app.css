@@ -55,6 +55,8 @@
   --s2: #b45309;
   --s3: #6d28d9;
   --s4: #0f766e;
+  --s-total: #444d59;
+  --s-total-fill: rgba(68, 77, 89, .14);
   --shadow-1: 0 1px 2px rgba(16, 24, 32, .06);
   --shadow-2: 0 8px 28px rgba(16, 24, 32, .16), 0 1px 3px rgba(16, 24, 32, .08);
 
@@ -102,6 +104,8 @@
   --s2: #f0a24f;
   --s3: #b69cf5;
   --s4: #5fd0c0;
+  --s-total: #b0b8c2;
+  --s-total-fill: rgba(176, 184, 194, .16);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, .3);
   --shadow-2: 0 10px 32px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
 }
@@ -133,6 +137,8 @@
     --s2: #f0a24f;
     --s3: #b69cf5;
     --s4: #5fd0c0;
+    --s-total: #b0b8c2;
+    --s-total-fill: rgba(176, 184, 194, .16);
     --shadow-1: 0 1px 2px rgba(0, 0, 0, .3);
     --shadow-2: 0 10px 32px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
   }
@@ -484,7 +490,7 @@ form.inline-note .muted { font-size: .85rem; }
 .chart-legend .lg-2 { border-top-color: var(--s2); }
 .chart-legend .lg-3 { border-top-color: var(--s3); }
 .chart-legend .lg-4 { border-top-color: var(--s4); }
-.chart-legend .dash { border-top-style: dashed; }
+.chart-legend .total { height: 8px; border-top-color: var(--s-total); background: var(--s-total-fill); }
 .chart-legend .loss, .chart-legend [class*="st-"] { width: 12px; height: 10px; border: 0; border-radius: 2px; }
 .chart-legend .loss { background: color-mix(in srgb, var(--err) 45%, transparent); }
 .chart-legend .st-up { background: color-mix(in srgb, var(--ok) 55%, transparent); }
